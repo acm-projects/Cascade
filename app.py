@@ -9,11 +9,10 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from faster_whisper import WhisperModel
 from PIL import Image
-from sentence_transformers import SentenceTransformer 
+from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
 
-# app.py and index.html are both inside test1.
 PROJECT_DIR = Path(__file__).resolve().parent
 OUTPUTS = PROJECT_DIR / "outputs"
 OUTPUTS.mkdir(exist_ok=True)
@@ -54,7 +53,15 @@ def get_duration(video_path: Path) -> float:
     return float(json.loads(result.stdout)["format"]["duration"])
 
 
-@app.post("/upload") #this creates the address inside fastAPI app
+def srt_time(seconds):
+    milliseconds = round(seconds * 1000)
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, ms = divmod(remainder, 1_000)
+    return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
+
+
+@app.post("/upload")
 async def upload_video(
     video: UploadFile = File(...),
     search: str = Form(...),
@@ -64,10 +71,7 @@ async def upload_video(
         raise HTTPException(status_code=400, detail="Type what you want to find.")
 
     if mode not in ("speech", "visual"):
-        raise HTTPException(
-            status_code=400,
-            detail="Mode must be speech or visual.",
-        )
+        raise HTTPException(status_code=400, detail="Mode must be speech or visual.")
 
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
         raise HTTPException(
@@ -158,7 +162,7 @@ async def upload_video(
                 with Image.open(path) as image:
                     images.append(image.convert("RGB"))
 
-            # CLIP compares the meaning of your search with each picture.
+            # CLIP compares the search with each picture.
             query_embedding = visual_model.encode(
                 search, normalize_embeddings=True
             )
@@ -173,22 +177,63 @@ async def upload_video(
             clip_end = min(duration, clip_start + 15)
             match_text = f"Best visual match near {matched_second} seconds"
 
+            # Visual search did not need speech, but captions do.
+            segments, _ = whisper_model.transcribe(str(video_path))
+            transcript = [
+                {"start": s.start, "end": s.end, "text": s.text.strip()}
+                for s in segments
+                if s.text.strip()
+            ]
+
+        # Keep only speech inside the selected clip. Adjust timestamps so
+        # the captions start at 0 seconds in the new video.
+        subtitle_lines = []
+        for part in transcript:
+            start = max(part["start"], clip_start)
+            end = min(part["end"], clip_end)
+
+            if end <= start:
+                continue
+
+            subtitle_lines.append(
+                f"{len(subtitle_lines) + 1}\n"
+                f"{srt_time(start - clip_start)} --> "
+                f"{srt_time(end - clip_start)}\n"
+                f"{part['text']}\n"
+            )
+
+        if subtitle_lines:
+            (work_dir / "captions.srt").write_text(
+                "\n".join(subtitle_lines),
+                encoding="utf-8",
+            )
+
         filename = f"{uuid4().hex}.mp4"
         output_path = OUTPUTS / filename
 
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss", str(clip_start),
+            "-i", str(video_path),
+            "-t", str(clip_end - clip_start),
+        ]
+
+        # Burn subtitles onto the video if Whisper found speech.
+        if subtitle_lines:
+            command += ["-vf", "subtitles=filename=captions.srt"]
+
+        command += [
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
+
         try:
             subprocess.run(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-ss", str(clip_start),
-                    "-i", str(video_path),
-                    "-t", str(clip_end - clip_start),
-                    "-c:v", "libx264",
-                    "-c:a", "aac",
-                    "-movflags", "+faststart",
-                    str(output_path),
-                ],
+                command,
+                cwd=work_dir,
                 check=True,
                 capture_output=True,
                 text=True,
