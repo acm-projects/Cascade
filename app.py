@@ -66,12 +66,19 @@ async def upload_video(
     video: UploadFile = File(...),
     search: str = Form(...),
     mode: str = Form("speech"),
+    clip_length: int = Form(15),
 ):
     if not search.strip():
         raise HTTPException(status_code=400, detail="Type what you want to find.")
 
     if mode not in ("speech", "visual"):
         raise HTTPException(status_code=400, detail="Mode must be speech or visual.")
+
+    if clip_length not in (15, 30, 60):
+        raise HTTPException(
+            status_code=400,
+            detail="Choose 15, 30, or 60 seconds.",
+        )
 
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
         raise HTTPException(
@@ -118,11 +125,7 @@ async def upload_video(
             match = transcript[best_index]
 
             clip_start = max(0, match["start"] - 3)
-            clip_end = min(
-                duration,
-                max(match["end"] + 3, clip_start + 15),
-                clip_start + 30,
-            )
+            clip_end = min(duration, clip_start + clip_length)
             match_text = match["text"]
 
         else:
@@ -174,7 +177,7 @@ async def upload_video(
 
             matched_second = best_index * 3
             clip_start = max(0, matched_second - 5)
-            clip_end = min(duration, clip_start + 15)
+            clip_end = min(duration, clip_start + clip_length)
             match_text = f"Best visual match near {matched_second} seconds"
 
             # Visual search did not need speech, but captions do.

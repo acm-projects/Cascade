@@ -126,6 +126,12 @@
   <option value="speech">Spoken words</option>
   <option value="visual">What appears on screen</option>
 </select>
+<label for="clipLength">Clip length</label>
+<select id="clipLength">
+  <option value="15">15 seconds</option>
+  <option value="30">30 seconds</option>
+  <option value="60">60 seconds</option>
+</select>
     <button id="findButton" type="button">Find and create clip</button>
 
     <p id="status" role="status"></p>
@@ -187,6 +193,7 @@
       const formData = new FormData();
       formData.append("video", file);
       formData.append("search", search);
+      formData.append("clip_length", document.getElementById("clipLength").value);
       formData.append("mode", document.getElementById("searchMode").value);
 
       findButton.disabled = true;
