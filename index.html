@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cascade Clip Search</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 40px 20px;
+      font-family: Arial, sans-serif;
+      color: #17345c;
+      background: linear-gradient(135deg, #eaf3ff, #a8ceff);
+    }
+
+    main {
+      max-width: 750px;
+      margin: auto;
+      padding: 35px;
+      border-radius: 18px;
+      background: white;
+      box-shadow: 0 15px 40px rgba(27, 75, 139, 0.15);
+    }
+
+    h1 {
+      margin-bottom: 5px;
+      color: #1265c8;
+    }
+
+    .subtitle {
+      margin-bottom: 30px;
+      color: #587096;
+    }
+
+    label {
+      display: block;
+      margin: 22px 0 8px;
+      font-weight: bold;
+    }
+
+    input[type="file"],
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #b9cce6;
+      border-radius: 8px;
+      font: inherit;
+    }
+
+    button {
+      margin-top: 22px;
+      padding: 13px 22px;
+      border: 0;
+      border-radius: 8px;
+      color: white;
+      background: #1265c8;
+      font: inherit;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      max-height: 450px;
+      margin-top: 15px;
+      border-radius: 10px;
+      background: #111;
+    }
+
+    video[hidden] {
+      display: none;
+    }
+
+    #result {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 10px;
+      background: #edf5ff;
+    }
+
+    #result[hidden] {
+      display: none;
+    }
+
+    #status {
+      margin-top: 18px;
+      color: #587096;
+    }
+
+    #matchText {
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>Cascade</h1>
+    <p class="subtitle">Find a moment in your video and turn it into a subtitled clip.</p>
+
+    <label for="videoFile">1. Choose a video</label>
+    <input id="videoFile" type="file" accept="video/*">
+
+    <video id="videoPreview" controls hidden></video>
+
+    <label for="searchInput">2. What moment do you want to find?</label>
+    <input
+      id="searchInput"
+      type="text"
+      placeholder="Example: a funny yo-yo trick"
+    >
+    <label for="searchMode">3. Search using</label>
+<select id="searchMode">
+  <option value="speech">Spoken words</option>
+  <option value="visual">What appears on screen</option>
+</select>
+<label for="clipLength">Clip length</label>
+<select id="clipLength">
+  <option value="15">15 seconds</option>
+  <option value="30">30 seconds</option>
+  <option value="60">60 seconds</option>
+</select>
+    <button id="findButton" type="button">Find and create clip</button>
+
+    <p id="status" role="status"></p>
+
+    <section id="result" hidden>
+      <h2>Your clip</h2>
+      <p id="timestamps"></p>
+      <p id="matchText"></p>
+      <video id="clipPreview" controls hidden></video>
+    </section>
+  </main>
+
+  <script>
+    const videoFile = document.getElementById("videoFile");
+    const videoPreview = document.getElementById("videoPreview");
+    const searchInput = document.getElementById("searchInput");
+    const findButton = document.getElementById("findButton");
+    const status = document.getElementById("status");
+    const result = document.getElementById("result");
+    const timestamps = document.getElementById("timestamps");
+    const matchText = document.getElementById("matchText");
+    const clipPreview = document.getElementById("clipPreview");
+
+    let previewUrl = null;
+
+    videoFile.addEventListener("change", () => {
+      const file = videoFile.files[0];
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+      }
+
+      videoPreview.hidden = true;
+      result.hidden = true;
+
+      if (file) {
+        previewUrl = URL.createObjectURL(file);
+        videoPreview.src = previewUrl;
+        videoPreview.hidden = false;
+        status.textContent = "";
+      }
+    });
+
+    findButton.addEventListener("click", async () => {
+      const file = videoFile.files[0];
+      const search = searchInput.value.trim();
+
+      if (!file) {
+        status.textContent = "Choose a video first.";
+        return;
+      }
+
+      if (!search) {
+        status.textContent = "Type what you want to find.";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("video", file);
+      formData.append("search", search);
+      formData.append("clip_length", document.getElementById("clipLength").value);
+      formData.append("mode", document.getElementById("searchMode").value);
+
+      findButton.disabled = true;
+      status.textContent = "Finding your clip... This may take a few minutes.";
+      result.hidden = true;
+      clipPreview.hidden = true;
+
+      try {
+        const response = await fetch("/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        const responseText = await response.text();
+        if (!responseText) {
+        throw new Error("The server returned an empty response. Check the Terminal for the error.");
+        }
+        const data = JSON.parse(responseText);;
+
+        if (!response.ok) {
+          throw new Error(data.detail || "Could not create the clip.");
+        }
+
+        timestamps.textContent = `From ${data.start}s to ${data.end}s`;
+        matchText.textContent = data.mode === "visual"
+  ? data.match
+  : `Matched speech: “${data.match}”`;
+
+        clipPreview.src = data.clip_url;
+        clipPreview.hidden = false;
+        clipPreview.load();
+
+        result.hidden = false;
+        status.textContent = "Your clip is ready!";
+      } catch (error) {
+        status.textContent = `Something went wrong: ${error.message}`;
+      } finally {
+        findButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
