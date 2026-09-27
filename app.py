@@ -1,9 +1,9 @@
-from pathlib import Path # works for file paths, uploaded video and the outputs folder
-from tempfile import TemporaryDirectory # makes a temp folder while processing a video..python deletes after. 
-from uuid import uuid4 #gives each clip a unique filename
-import json # reads the video duration in JSON format
-import shutil # copies the uploded video to a file and checkes whether FFmpeg is installed 
-import subprocess #lets python run FFmpeg and ffprobe commands 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from uuid import uuid4
+import json
+import shutil
+import subprocess
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
