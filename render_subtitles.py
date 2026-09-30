@@ -1,118 +1,100 @@
-import json
-import os
-import shutil
-import imageio_ffmpeg
+from pathlib import Path
 
-# Fix FFmpeg PATH for Whisper and MoviePy on Windows
-ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-ffmpeg_dir = os.path.dirname(ffmpeg_exe)
-os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
-
-expected_ffmpeg = os.path.join(ffmpeg_dir, "ffmpeg.exe")
-if not os.path.exists(expected_ffmpeg) and os.path.exists(ffmpeg_exe):
-    try:
-        shutil.copy(ffmpeg_exe, expected_ffmpeg)
-    except Exception:
-        pass
-
-import whisper
+from faster_whisper import WhisperModel
 from moviepy import VideoFileClip, TextClip, CompositeVideoClip
+from sentence_transformers import SentenceTransformer, util
 
-# Map style names to specific aesthetic parameters
-STYLE_PRESETS = {
-    "hormozi": {"color": "yellow", "font_size": 42, "pos_y": 0.75},
-    "minimalist": {"color": "white", "font_size": 32, "pos_y": 0.85},
-    "bold_viral": {"color": "cyan", "font_size": 46, "pos_y": 0.70},
-    "cinematic": {"color": "gold", "font_size": 36, "pos_y": 0.80}
+
+STYLES = {
+    "hormozi": {"color": "yellow", "font_size": 42, "y": 0.75},
+    "minimalist": {"color": "white", "font_size": 32, "y": 0.85},
+    "bold_viral": {"color": "cyan", "font_size": 46, "y": 0.70},
+    "cinematic": {"color": "gold", "font_size": 36, "y": 0.80},
 }
 
-def generate_four_styled_clips(video_url: str, styles: list, tone: str = "engaging", audience: str = "gen-z"):
-    """
-    Main function called by FastAPI background worker in main.py.
-    Processes the source video and exports 4 separate clips with distinct styles.
-    """
-    input_video_path = "sample.mp4"
 
-    if not os.path.exists(input_video_path):
-        raise FileNotFoundError(f"Source video '{input_video_path}' not found.")
+def generate_four_styled_clips(video_path: str, query: str, output_dir: str):
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
 
-    print(f"Loading video '{input_video_path}'...")
-    full_video = VideoFileClip(input_video_path)
+    # Transcribe the uploaded video.
+    model = WhisperModel("tiny", device="cpu", compute_type="int8")
+    result, _ = model.transcribe(video_path)
+    segments = [
+        {"start": s.start, "end": s.end, "text": s.text}
+        for s in result
+        if s.text.strip()
+    ]
+    
+    if len(segments) < 4:
+        raise ValueError("The video needs at least four spoken segments.")
 
-    if full_video.audio is None:
-        raise ValueError("Video does not contain an audio track.")
+    # Find the four spoken moments closest to the search phrase.
+    search_model = SentenceTransformer("all-MiniLM-L6-v2")
+    query_vector = search_model.encode(query, convert_to_tensor=True)
+    segment_vectors = search_model.encode(
+        [segment["text"] for segment in segments],
+        convert_to_tensor=True,
+    )
+    scores = util.cos_sim(query_vector, segment_vectors)[0]
+    best_indices = scores.argsort(descending=True)[:4]
+    matches = [segments[int(index)] for index in best_indices]
 
-    print("Transcribing audio with Whisper...")
-    model = whisper.load_model("tiny")
-    transcription = model.transcribe(input_video_path)
+    filenames = []
 
-    font_path = "C:/Windows/Fonts/arialbd.ttf" if os.path.exists("C:/Windows/Fonts/arialbd.ttf") else "C:/Windows/Fonts/arial.ttf"
+    with VideoFileClip(video_path) as video:
+        if video.audio is None:
+            raise ValueError("The video has no audio track.")
 
-    # Divide video duration into 4 equal time blocks
-    total_duration = full_video.duration
-    clip_duration = total_duration / 4.0
-    output_filenames = []
+        for number, (match, style_name) in enumerate(
+            zip(matches, STYLES), start=1
+        ):
+            style = STYLES[style_name]
 
-    # Ensure at least 4 styles are mapped
-    selected_styles = styles if len(styles) >= 4 else ["hormozi", "minimalist", "bold_viral", "cinematic"]
+            start = max(0.0, float(match["start"]) - 3.0)
+            end = min(video.duration, start + 20.0)
+            start = max(0.0, end - 20.0)
+            sub_video = video.subclipped(start, end)
 
-    for i in range(4):
-        style_name = selected_styles[i]
-        style_config = STYLE_PRESETS.get(style_name, STYLE_PRESETS["hormozi"])
+            captions = []
+            for segment in segments:
+                caption_start = max(start, float(segment["start"]))
+                caption_end = min(end, float(segment["end"]))
 
-        start_time = i * clip_duration
-        end_time = (i + 1) * clip_duration
+                if caption_end <= caption_start:
+                    continue
 
-        print(f"Rendering Clip {i+1}/4 ({style_name.upper()}) from {start_time:.1f}s to {end_time:.1f}s...")
-
-        # Subclip the video segment
-        sub_video = full_video.subclipped(start_time, end_time)
-
-        # Filter transcript segments that belong inside this time block
-        text_clips = []
-        for segment in transcription.get("segments", []):
-            seg_start = segment["start"]
-            seg_end = segment["end"]
-            
-            if seg_start >= start_time and seg_end <= end_time:
-                rel_start = seg_start - start_time
-                rel_end = seg_end - start_time
-                text = segment["text"].strip()
-
-                txt_clip = (
+                caption = (
                     TextClip(
-                        text=text,
-                        font_size=style_config["font_size"],
-                        color=style_config["color"],
-                        font=font_path,
+                        text=segment["text"].strip(),
+                        font_size=style["font_size"],
+                        color=style["color"],
                         method="caption",
-                        size=(int(sub_video.w * 0.85), None)
+                        size=(int(sub_video.w * 0.85), None),
                     )
-                    .with_position(('center', style_config["pos_y"]), relative=True)
-                    .with_start(rel_start)
-                    .with_duration(rel_end - rel_start)
+                    .with_position(("center", style["y"]), relative=True)
+                    .with_start(caption_start - start)
+                    .with_duration(caption_end - caption_start)
                 )
-                text_clips.append(txt_clip)
+                captions.append(caption)
 
-        # Composite clip and reattach subclip audio
-        final_sub_clip = CompositeVideoClip([sub_video] + text_clips)
-        final_sub_clip = final_sub_clip.with_audio(sub_video.audio)
+            finished = CompositeVideoClip(
+                [sub_video, *captions]
+            ).with_audio(sub_video.audio)
 
-        output_filename = f"output_clip_{i+1}_{style_name}.mp4"
-        final_sub_clip.write_videofile(
-            output_filename,
-            fps=24,
-            codec="libx264",
-            audio_codec="aac"
-        )
-        output_filenames.append(output_filename)
+            filename = output / f"clip_{number}_{style_name}.mp4"
 
-    full_video.close()
-    return output_filenames
+            try:
+                finished.write_videofile(
+                    str(filename),
+                    codec="libx264",
+                    audio_codec="aac",
+                )
+                filenames.append(str(filename))
+            finally:
+                finished.close()
+                for caption in captions:
+                    caption.close()
+                sub_video.close()
 
-# Retain single-video function for standalone testing
-def generate_subtitled_video():
-    generate_four_styled_clips("sample.mp4", ["hormozi", "minimalist", "bold_viral", "cinematic"])
-
-if __name__ == "__main__":
-    generate_subtitled_video()
+    return filenames
