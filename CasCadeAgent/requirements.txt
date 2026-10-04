@@ -1,8 +1,0 @@
-fastapi
-uvicorn[standard]
-python-dotenv
-google-api-python-client
-openai-whisper
-anthropic
-yt-dlp
-python-multipart

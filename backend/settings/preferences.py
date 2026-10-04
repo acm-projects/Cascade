@@ -1,7 +1,8 @@
 import json
 import os
+from pathlib import Path
 
-PREFS_FILE = "preferences.json"
+PREFS_FILE = str(Path(__file__).resolve().parent / "preferences.json")
 
 def save_preferences(data):
     with open(PREFS_FILE, "w") as f:

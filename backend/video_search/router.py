@@ -5,13 +5,13 @@ import json
 import shutil
 import subprocess
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from faster_whisper import WhisperModel
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 
-app = FastAPI()
+router = APIRouter()
 
 PROJECT_DIR = Path(__file__).resolve().parent
 OUTPUTS = PROJECT_DIR / "outputs"
@@ -22,12 +22,12 @@ search_model = SentenceTransformer("all-MiniLM-L6-v2")
 visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
 
 
-@app.get("/")
-def show_website():
-    return FileResponse(PROJECT_DIR / "index.html")
+# Note: the standalone "/" page is now served via StaticFiles at /search-ui
+# (see backend/app.py) instead of a dedicated route here, since this router
+# is mounted under /api/search alongside the other features' APIs.
 
 
-@app.get("/clips/{filename}")
+@router.get("/clips/{filename}")
 def get_clip(filename: str):
     clip = OUTPUTS / filename
 
@@ -61,7 +61,7 @@ def srt_time(seconds):
     return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
 
 
-@app.post("/upload")
+@router.post("/upload")
 async def upload_video(
     video: UploadFile = File(...),
     search: str = Form(...),

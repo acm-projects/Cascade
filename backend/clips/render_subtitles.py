@@ -1,7 +1,11 @@
 import json
 import os
 import shutil
+from pathlib import Path
+
 import imageio_ffmpeg
+
+MODULE_DIR = Path(__file__).resolve().parent
 
 # Fix FFmpeg PATH for Whisper and MoviePy on Windows
 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -31,7 +35,9 @@ def generate_four_styled_clips(video_url: str, styles: list, tone: str = "engagi
     Main function called by FastAPI background worker in main.py.
     Processes the source video and exports 4 separate clips with distinct styles.
     """
-    input_video_path = "sample.mp4"
+    # NOTE: this still ignores the passed-in `video_url` and always renders the
+    # bundled sample clip, same as before the file was relocated for the merge.
+    input_video_path = str(MODULE_DIR / "sample.mp4")
 
     if not os.path.exists(input_video_path):
         raise FileNotFoundError(f"Source video '{input_video_path}' not found.")
@@ -99,8 +105,9 @@ def generate_four_styled_clips(video_url: str, styles: list, tone: str = "engagi
         final_sub_clip = final_sub_clip.with_audio(sub_video.audio)
 
         output_filename = f"output_clip_{i+1}_{style_name}.mp4"
+        output_path = str(MODULE_DIR / output_filename)
         final_sub_clip.write_videofile(
-            output_filename,
+            output_path,
             fps=24,
             codec="libx264",
             audio_codec="aac"
@@ -112,7 +119,9 @@ def generate_four_styled_clips(video_url: str, styles: list, tone: str = "engagi
 
 # Retain single-video function for standalone testing
 def generate_subtitled_video():
-    generate_four_styled_clips("sample.mp4", ["hormozi", "minimalist", "bold_viral", "cinematic"])
+    generate_four_styled_clips(
+        str(MODULE_DIR / "sample.mp4"), ["hormozi", "minimalist", "bold_viral", "cinematic"]
+    )
 
 if __name__ == "__main__":
     generate_subtitled_video()

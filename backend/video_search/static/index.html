@@ -202,7 +202,7 @@
       clipPreview.hidden = true;
 
       try {
-        const response = await fetch("/upload", {
+        const response = await fetch("/api/search/upload", {
           method: "POST",
           body: formData
         });

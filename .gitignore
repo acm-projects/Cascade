@@ -1,5 +1,6 @@
-outputs
+outputs/
 __pycache__/
 *.pyc
-app.py
 *.mp4
+.env
+**/.cache/

@@ -1,0 +1,22 @@
+# Shared
+fastapi
+uvicorn[standard]
+python-dotenv
+python-multipart
+pydantic
+jinja2
+
+# trends feature
+google-api-python-client
+openai-whisper
+anthropic
+yt-dlp
+
+# clips feature
+moviepy
+imageio_ffmpeg
+
+# video_search feature
+faster-whisper
+sentence-transformers
+pillow

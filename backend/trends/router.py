@@ -1,9 +1,8 @@
-"""FastAPI app for the video trend-analysis demo.
+"""Trend-analysis feature: compare an uploaded video against trending YouTube videos.
 
-Endpoints:
-  POST /api/analyze                    - upload a video + topic, starts a background job
-  GET  /api/analyze/{job_id}/status    - poll job progress / result
-  GET  /api/health                     - liveness check
+Mounted by backend/app.py under the /api/trends prefix. Endpoints:
+  POST /api/trends/analyze                  - upload a video + topic, starts a background job
+  GET  /api/trends/analyze/{job_id}/status  - poll job progress / result
 """
 
 from __future__ import annotations
@@ -11,28 +10,20 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import shutil
 import tempfile
 import threading
 import uuid
 from pathlib import Path
 
-from dotenv import load_dotenv
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+from . import pipeline
+from . import youtube_trends
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-
-import pipeline
-import youtube_trends
-
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("video_trend_demo")
 
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:8000")
+router = APIRouter()
 
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
 ALLOWED_VIDEO_MIME_PREFIXES = ("video/",)
@@ -47,16 +38,6 @@ TRENDING_LIMIT = 5
 STEPS_PER_TRENDING_VIDEO = 6
 STEPS_PER_UPLOAD = 5
 TOTAL_STEPS = 1 + TRENDING_LIMIT * STEPS_PER_TRENDING_VIDEO + STEPS_PER_UPLOAD + 1
-
-app = FastAPI(title="Video Trend Analysis Demo")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN],
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
 
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
@@ -99,12 +80,7 @@ def _fail_job(job_id: str, message: str) -> None:
         job["error"] = message
 
 
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.post("/api/analyze")
+@router.post("/analyze")
 async def analyze(
     background_tasks: BackgroundTasks, topic: str = Form(...), video: UploadFile = File(...)
 ):
@@ -138,7 +114,7 @@ def _result_cache_key(topic: str, video_hash: str) -> str:
     return hashlib.sha256(f"{normalized_topic}|{video_hash}".encode("utf-8")).hexdigest()
 
 
-@app.get("/api/analyze/{job_id}/status")
+@router.get("/analyze/{job_id}/status")
 def analyze_status(job_id: str):
     with JOBS_LOCK:
         job = JOBS.get(job_id)
@@ -285,8 +261,3 @@ def _build_narrative(matching_traits: list[str], missing_traits: list[str]) -> s
         )
     parts.append("Consider adjusting pacing, hook, or visual style to align more closely with current trends.")
     return " ".join(parts)
-
-
-frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
-if frontend_dir.exists():
-    app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
