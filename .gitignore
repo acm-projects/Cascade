@@ -1,4 +1,5 @@
 outputs
-_pycache
+__pycache__/
+*.pyc
 app.py
 *.mp4

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cascade Settings</title>
+</head>
+<body>
+    <h1>Video Preferences</h1>
+    <form action="/settings" method="POST">
+        <label>Video type:</label><br>
+        <select name="video_type">
+            <option value="tutorial" {% if prefs.video_type == "tutorial" %}selected{% endif %}>Tutorial</option>
+            <option value="vlog" {% if prefs.video_type == "vlog" %}selected{% endif %}>Vlog</option>
+            <option value="interview" {% if prefs.video_type == "interview" %}selected{% endif %}>Interview</option>
+            <option value="podcast" {% if prefs.video_type == "podcast" %}selected{% endif %}>Podcast clip</option>
+        </select><br><br>
+
+        <label>Who is this for? (audience)</label><br>
+        <input type="text" name="audience" value="{{ prefs.audience }}" placeholder="e.g. college students, small business owners"><br><br>
+
+        <label>Tone:</label><br>
+        <select name="tone">
+            <option value="casual" {% if prefs.tone == "casual" %}selected{% endif %}>Casual</option>
+            <option value="professional" {% if prefs.tone == "professional" %}selected{% endif %}>Professional</option>
+            <option value="funny" {% if prefs.tone == "funny" %}selected{% endif %}>Funny</option>
+            <option value="educational" {% if prefs.tone == "educational" %}selected{% endif %}>Educational</option>
+        </select><br><br>
+
+        <label>Overall goal / impact:</label><br>
+        <input type="text" name="goal" value="{{ prefs.goal }}" placeholder="e.g. grow followers, drive sign-ups"><br><br>
+
+        <label>Platforms:</label><br>
+        <input type="checkbox" name="platforms" value="tiktok" {% if "tiktok" in prefs.platforms %}checked{% endif %}> TikTok
+        <input type="checkbox" name="platforms" value="instagram" {% if "instagram" in prefs.platforms %}checked{% endif %}> Instagram
+        <input type="checkbox" name="platforms" value="linkedin" {% if "linkedin" in prefs.platforms %}checked{% endif %}> LinkedIn
+        <input type="checkbox" name="platforms" value="youtube" {% if "youtube" in prefs.platforms %}checked{% endif %}> YouTube<br><br>
+
+        <button type="submit">Save Settings</button>
+    </form>
+
+    {% if prefs.audience %}
+        <hr>
+        <h3>Currently saved:</h3>
+        <p><strong>Video type:</strong> {{ prefs.video_type }}</p>
+        <p><strong>Audience:</strong> {{ prefs.audience }}</p>
+        <p><strong>Tone:</strong> {{ prefs.tone }}</p>
+        <p><strong>Goal:</strong> {{ prefs.goal }}</p>
+        <p><strong>Platforms:</strong> {{ prefs.platforms }}</p>
+    {% endif %}
+</body>
+</html>
