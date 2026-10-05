@@ -67,16 +67,17 @@
     <select id="search-mode">
       <option value="speech">Speech</option>
       <option value="visual">Visual</option>
+      <option value="both">Both</option>
     </select>
 
     <label for="search-length">Clip length (seconds)</label>
     <select id="search-length">
       <option value="15">15</option>
-      <option value="30">30</option>
+      <option value="30" selected>30</option>
       <option value="60">60</option>
     </select>
 
-    <button type="submit" class="submit">Find clip</button>
+    <button type="submit" class="submit">Find clips</button>
   </form>
   <div id="search-status"></div>
   <div id="search-error" class="error"></div>
@@ -88,18 +89,13 @@
     <label for="clips-video">Your video</label>
     <input type="file" id="clips-video" accept="video/*" required>
 
-    <label for="clips-tone">Tone</label>
-    <input type="text" id="clips-tone" value="engaging">
-
-    <label for="clips-audience">Audience</label>
-    <input type="text" id="clips-audience" value="gen-z">
+    <label for="clips-query">What should the clips be about?</label>
+    <input type="text" id="clips-query" placeholder="e.g. the pricing discussion" required>
 
     <button type="submit" class="submit">Generate 4 styled clips</button>
   </form>
-  <p class="note">Renders hormozi / minimalist / bold_viral / cinematic caption styles.
-    Note: there's currently no endpoint to download/view the finished clips, so this
-    just shows the filenames once done &mdash; they're written to disk on the server
-    (backend/clips/) rather than served over HTTP.</p>
+  <p class="note">Renders hormozi / minimalist / bold_viral / cinematic caption styles with
+    word-level captions, each clip picked around the best-matching moment for your query.</p>
   <div id="clips-status"></div>
   <div id="clips-error" class="error"></div>
   <div id="clips-result"></div>
@@ -195,12 +191,15 @@ searchForm.addEventListener('submit', async (e) => {
       throw new Error(body.detail || `Request failed with status ${response.status}`);
     }
     const data = await response.json();
-    searchStatus.textContent = 'Done';
-    searchResult.innerHTML = `
-      <p><strong>Match:</strong> ${data.match}</p>
-      <p><strong>Clip:</strong> ${data.start}s - ${data.end}s</p>
-      <video src="${data.clip_url}" controls style="max-width: 100%;"></video>
-    `;
+    searchStatus.textContent = data.note || 'Done';
+    searchResult.innerHTML = data.clips.map(clip => `
+      <div style="margin-top: 1rem; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px;">
+        <p><strong>${clip.title}</strong> (${clip.match_kind}) &mdash; ${clip.start}s - ${clip.end}s</p>
+        <p><strong>Match:</strong> ${clip.match}</p>
+        <p style="color: #555;">${clip.explanation}</p>
+        <video src="${clip.clip_url}" controls style="max-width: 100%;"></video>
+      </div>
+    `).join('');
   } catch (err) {
     searchError.textContent = err.message || 'Something went wrong.';
     searchStatus.textContent = '';
@@ -216,52 +215,29 @@ const clipsResult = document.getElementById('clips-result');
 clipsForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   clipsError.textContent = '';
-  clipsResult.textContent = '';
-  clipsStatus.textContent = 'Starting...';
+  clipsResult.innerHTML = '';
+  clipsStatus.textContent = 'Processing... this can take a few minutes.';
 
   const formData = new FormData();
   formData.append('video', document.getElementById('clips-video').files[0]);
-  formData.append('tone', document.getElementById('clips-tone').value);
-  formData.append('audience', document.getElementById('clips-audience').value);
+  formData.append('query', document.getElementById('clips-query').value);
 
   try {
-    const response = await fetch('/api/v1/process-video', { method: 'POST', body: formData });
+    const response = await fetch('/api/v1/generate-clips', { method: 'POST', body: formData });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.detail || `Request failed with status ${response.status}`);
     }
-    const { job_id } = await response.json();
-    await pollClipsJob(job_id);
+    const data = await response.json();
+    clipsStatus.textContent = 'Done';
+    clipsResult.innerHTML = data.clips
+      .map(url => `<video src="${url}" controls style="max-width: 100%; margin-top: 0.75rem; display: block;"></video>`)
+      .join('');
   } catch (err) {
     clipsError.textContent = err.message || 'Something went wrong.';
     clipsStatus.textContent = '';
   }
 });
-
-async function pollClipsJob(jobId) {
-  clipsStatus.textContent = 'Processing... this can take a few minutes.';
-  while (true) {
-    await new Promise(r => setTimeout(r, 1500));
-    const response = await fetch(`/api/v1/job/${jobId}`);
-    if (!response.ok) {
-      clipsError.textContent = `Status check failed (${response.status})`;
-      clipsStatus.textContent = '';
-      return;
-    }
-    const job = await response.json();
-
-    if (job.status === 'COMPLETED') {
-      clipsStatus.textContent = 'Done';
-      clipsResult.textContent = 'Rendered clips (on the server, backend/clips/):\n' + job.clips.join('\n');
-      return;
-    }
-    if (job.status === 'FAILED') {
-      clipsError.textContent = job.error || 'Clip generation failed.';
-      clipsStatus.textContent = '';
-      return;
-    }
-  }
-}
 </script>
 
 </body>
