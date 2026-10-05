@@ -13,6 +13,7 @@ Quick-look static pages for manually exercising a feature without the final
 frontend (not the production UI):
   /trends-ui  -> trends feature's standalone page
   /search-ui  -> video-search feature's standalone page
+  /app-ui     -> combined page with tabs for trends + video-search together
 """
 
 import os
@@ -65,4 +66,9 @@ app.mount(
     "/search-ui",
     StaticFiles(directory=str(BACKEND_DIR / "video_search" / "static"), html=True),
     name="search-ui",
+)
+app.mount(
+    "/app-ui",
+    StaticFiles(directory=str(BACKEND_DIR / "static"), html=True),
+    name="app-ui",
 )
