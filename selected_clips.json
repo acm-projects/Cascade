@@ -1,0 +1,11 @@
+{
+  "query": "find me the momements where the girl is rushing",
+  "clips": [
+    {
+      "start": 100.0,
+      "end": 110.0,
+      "title": "Girl rushing toward counter",
+      "explanation": "The girl in a striped shirt and jeans is running toward the counter while holding a cup, which is a clear rushing moment as she moves quickly through the kitchen."
+    }
+  ]
+}

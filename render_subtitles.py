@@ -42,13 +42,13 @@ def generate_four_styled_clips(video_path: str, query: str, output_dir: str):
 
     filenames = []
 
-    with VideoFileClip(video_path) as video:
-        if video.audio is None:
-            raise ValueError("The video has no audio track.")
+    for number, (match, style_name) in enumerate(
+        zip(matches, STYLES), start=1
+    ):
+        with VideoFileClip(video_path) as video:
+            if video.audio is None:
+                raise ValueError("The video has no audio track.")
 
-        for number, (match, style_name) in enumerate(
-            zip(matches, STYLES), start=1
-        ):
             style = STYLES[style_name]
 
             start = max(0.0, float(match["start"]) - 3.0)

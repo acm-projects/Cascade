@@ -33,10 +33,19 @@
       color: #1265c8;
     }
 
-    .subtitle {
-      margin-bottom: 30px;
+    .subtitle,
+    .help-text {
       color: #587096;
       line-height: 1.5;
+    }
+
+    .subtitle {
+      margin-bottom: 30px;
+    }
+
+    .help-text {
+      font-size: 14px;
+      margin-top: 8px;
     }
 
     label {
@@ -55,6 +64,14 @@
       font: inherit;
     }
 
+    input:focus,
+    select:focus,
+    button:focus-visible,
+    a:focus-visible {
+      outline: 3px solid #8cc4ff;
+      outline-offset: 3px;
+    }
+
     button {
       margin-top: 22px;
       padding: 13px 22px;
@@ -65,6 +82,10 @@
       font: inherit;
       font-weight: bold;
       cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      background: #0c50a3;
     }
 
     button:disabled {
@@ -89,6 +110,17 @@
       margin-top: 18px;
       color: #587096;
       line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    #status.error {
+      color: #b42318;
+    }
+
+    #elapsed {
+      color: #587096;
+      font-size: 14px;
     }
 
     #result {
@@ -115,84 +147,193 @@
       font-size: 14px;
       color: #587096;
     }
+
+    .download-link {
+      display: inline-block;
+      margin-top: 14px;
+      color: #1265c8;
+      font-weight: bold;
+    }
+
+    @media (max-width: 500px) {
+      body {
+        padding: 20px 12px;
+      }
+
+      main {
+        padding: 24px 18px;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 
 <body>
   <main>
     <h1>Cascade</h1>
+
     <p class="subtitle">
-      Search your video and create clips with captions
-      and an explanation of each match.
+      Find moments in your video using a prompt.
+      Cascade analyzes visuals and available speech to create
+      up to four clips with explanations.
     </p>
 
-    <label for="videoFile">1. Choose a video</label>
-    <input id="videoFile" type="file" accept="video/*">
+    <form id="searchForm">
+      <label for="videoFile">1. Choose a video</label>
 
-    <video id="videoPreview" controls hidden></video>
+      <input
+        id="videoFile"
+        type="file"
+        accept="video/*"
+        required
+      >
 
-    <label for="searchInput">2. What moment do you want to find?</label>
-    <input
-      id="searchInput"
-      type="text"
-      placeholder="Example: a girl having accidents"
-    >
+      <video
+        id="videoPreview"
+        controls
+        playsinline
+        hidden
+      ></video>
 
-    <label for="searchMode">3. Search using</label>
-    <select id="searchMode">
-      <option value="speech">Spoken words</option>
-      <option value="visual">What appears on screen</option>
-      <option value="both">Both — 2 spoken + 2 visual</option>
-    </select>
+      <label for="searchInput">
+        2. What moment do you want to find?
+      </label>
 
-    <label for="clipLength">4. Length of each clip</label>
-    <select id="clipLength">
-      <option value="15">15 seconds</option>
-      <option value="30">30 seconds</option>
-      <option value="60">60 seconds</option>
-    </select>
+      <input
+        id="searchInput"
+        type="text"
+        placeholder="Example: find moments where the girl is rushing"
+        maxlength="2000"
+        required
+      >
 
-    <button id="findButton" type="button">
-      Find and create 4 clips
-    </button>
+      <label for="clipLength">
+        3. Approximate length of each clip
+      </label>
 
-    <p id="status" role="status"></p>
+      <select id="clipLength" aria-describedby="lengthHelp">
+        <option value="15">15 seconds</option>
+        <option value="30" selected>30 seconds</option>
+        <option value="60">60 seconds</option>
+      </select>
+
+      <p id="lengthHelp" class="help-text">
+        Clip lengths may vary to include the surrounding action.
+        Fewer than four clips may be returned.
+      </p>
+
+      <button id="findButton" type="submit">
+        Find and create up to 4 clips
+      </button>
+    </form>
+
+    <p
+      id="status"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></p>
+
+    <p id="elapsed" hidden></p>
 
     <section id="result" hidden>
       <h2>Your clips</h2>
+
+      <p class="help-text">
+        Speech captions appear in the player when available.
+        Downloaded videos do not include burned-in captions.
+      </p>
+
       <div id="clipResults"></div>
     </section>
   </main>
 
   <script>
+    const searchForm = document.getElementById("searchForm");
     const videoFile = document.getElementById("videoFile");
     const videoPreview = document.getElementById("videoPreview");
     const searchInput = document.getElementById("searchInput");
-    const searchMode = document.getElementById("searchMode");
     const clipLength = document.getElementById("clipLength");
     const findButton = document.getElementById("findButton");
-    const status = document.getElementById("status");
+    const statusText = document.getElementById("status");
+    const elapsedText = document.getElementById("elapsed");
     const result = document.getElementById("result");
     const clipResults = document.getElementById("clipResults");
 
     let previewUrl = null;
+    let isProcessing = false;
+
+    const controls = [
+      videoFile,
+      searchInput,
+      clipLength,
+      findButton
+    ];
+
+    function setBusy(busy) {
+      isProcessing = busy;
+
+      controls.forEach(control => {
+        control.disabled = busy;
+      });
+
+      searchForm.setAttribute("aria-busy", String(busy));
+
+      findButton.textContent = busy
+        ? "Processing your video..."
+        : "Find and create up to 4 clips";
+    }
+
+    function formatElapsed(totalSeconds) {
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+
+      return minutes > 0
+        ? `${minutes}m ${seconds}s`
+        : `${seconds}s`;
+    }
+
+    function formatTimestamp(value) {
+      const totalSeconds = Math.max(0, Math.floor(Number(value)));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      if (hours > 0) {
+        return (
+          `${hours}:` +
+          `${String(minutes).padStart(2, "0")}:` +
+          `${String(seconds).padStart(2, "0")}`
+        );
+      }
+
+      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    }
 
     videoFile.addEventListener("change", () => {
       const file = videoFile.files[0];
+
+      videoPreview.pause();
+      videoPreview.removeAttribute("src");
+      videoPreview.load();
 
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
         previewUrl = null;
       }
 
-      videoPreview.pause();
-      videoPreview.removeAttribute("src");
-      videoPreview.load();
       videoPreview.hidden = true;
-
       result.hidden = true;
-      clipResults.innerHTML = "";
-      status.textContent = "";
+      clipResults.replaceChildren();
+
+      statusText.textContent = "";
+      statusText.classList.remove("error");
+
+      elapsedText.textContent = "";
+      elapsedText.hidden = true;
 
       if (file) {
         previewUrl = URL.createObjectURL(file);
@@ -201,121 +342,203 @@
       }
     });
 
-    findButton.addEventListener("click", async () => {
-      const file = videoFile.files[0];
-      const search = searchInput.value.trim();
-      const selectedMode = searchMode.value;
+    async function requestJSON(url, options = {}) {
+      let response;
 
-      if (!file) {
-        status.textContent = "Choose a video first.";
+      try {
+        response = await fetch(url, {
+          ...options,
+          cache: "no-store"
+        });
+      } catch {
+        throw new Error(
+          "Could not reach the server. Make sure your Python " +
+          "server is still running in Terminal."
+        );
+      }
+
+      let data;
+
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          "The server returned an unreadable response. Check Terminal."
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "The request failed. Check Terminal for details."
+        );
+      }
+
+      return data;
+    }
+
+    function displayClips(clips) {
+      clipResults.replaceChildren();
+
+      clips.forEach((clip, index) => {
+        const card = document.createElement("article");
+        card.className = "clip-card";
+
+        const title = document.createElement("h3");
+        title.textContent = clip.title || `Clip ${index + 1}`;
+
+        const description = document.createElement("p");
+        description.textContent = clip.explanation || "";
+
+        const details = document.createElement("p");
+        details.className = "clip-details";
+
+        const duration = Number(clip.end) - Number(clip.start);
+
+        details.textContent =
+          `${formatTimestamp(clip.start)}–` +
+          `${formatTimestamp(clip.end)} in the original video · ` +
+          `${duration.toFixed(1)} seconds`;
+
+        const player = document.createElement("video");
+        player.controls = true;
+        player.playsInline = true;
+        player.preload = "metadata";
+        player.src = clip.clip_url;
+
+        if (clip.captions_url) {
+          const captions = document.createElement("track");
+          captions.kind = "captions";
+          captions.label = "Speech captions";
+          captions.src = clip.captions_url;
+          captions.default = true;
+
+          player.appendChild(captions);
+        }
+
+        const download = document.createElement("a");
+        download.className = "download-link";
+        download.href = clip.clip_url;
+        download.download = `cascade_clip_${index + 1}.mp4`;
+        download.textContent = "Download clip";
+
+        card.append(
+          title,
+          description,
+          details,
+          player,
+          download
+        );
+
+        clipResults.appendChild(card);
+      });
+
+      result.hidden = clips.length === 0;
+    }
+
+    searchForm.addEventListener("submit", async event => {
+      event.preventDefault();
+
+      if (isProcessing) {
         return;
       }
 
-      if (!search) {
-        status.textContent = "Type what you want to find.";
+      const file = videoFile.files[0];
+      const search = searchInput.value.trim();
+
+      statusText.classList.remove("error");
+
+      if (!file || !search) {
+        statusText.textContent =
+          "Choose a video and enter what you want to find.";
         return;
       }
 
       const formData = new FormData();
       formData.append("video", file);
       formData.append("search", search);
-      formData.append("mode", selectedMode);
+
+      // Automatically analyze visuals and available speech.
+      formData.append("mode", "both");
+
       formData.append("clip_length", clipLength.value);
 
-      findButton.disabled = true;
+      setBusy(true);
+      videoPreview.pause();
+
       result.hidden = true;
-      clipResults.innerHTML = "";
-      status.textContent =
-        "Finding and rendering clips... This may take a few minutes.";
+      clipResults.replaceChildren();
+      statusText.textContent = "Uploading video...";
+
+      const started = Date.now();
+
+      function updateElapsed() {
+        const seconds = Math.floor((Date.now() - started) / 1000);
+        elapsedText.textContent =
+          `Elapsed: ${formatElapsed(seconds)}`;
+      }
+
+      elapsedText.hidden = false;
+      updateElapsed();
+
+      const timer = setInterval(updateElapsed, 1000);
 
       try {
-        const response = await fetch("/upload", {
+        const upload = await requestJSON("/upload", {
           method: "POST",
           body: formData
         });
 
-        const responseText = await response.text();
-
-        if (!responseText) {
+        if (!upload.job_id) {
           throw new Error(
-            "The server returned an empty response. Check the Terminal."
+            "The backend did not return a job ID. " +
+            "Make sure you are running the updated app1.py."
           );
         }
 
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          throw new Error(
-            "The server returned an error. Check the VS Code Terminal."
+        while (true) {
+          const job = await requestJSON(
+            `/jobs/${encodeURIComponent(upload.job_id)}`
           );
-        }
 
-        if (!response.ok) {
-          const detail = typeof data.detail === "string"
-            ? data.detail
-            : "Could not create the clips.";
-          throw new Error(detail);
-        }
+          statusText.textContent =
+            job.message || "Processing video...";
 
-        if (!Array.isArray(data.clips) || data.clips.length === 0) {
-          throw new Error("The server did not return any clips.");
-        }
-
-        data.clips.forEach((clip, index) => {
-          const card = document.createElement("div");
-          card.className = "clip-card";
-
-          const clipMode = clip.mode ||
-            (selectedMode === "both"
-              ? (index < 2 ? "speech" : "visual")
-              : selectedMode);
-
-          const title = document.createElement("h3");
-
-          // Use a unique title if the backend provides one.
-          // Otherwise, label the clip with the search phrase.
-          title.textContent = clip.title ||
-            `Clip ${index + 1}: ${search}`;
-
-          const description = document.createElement("p");
-
-          if (clip.description) {
-            description.textContent = clip.description;
-          } else if (clipMode === "speech") {
-            description.textContent =
-              "Selected because the spoken words were similar " +
-              `to your request. Matched speech: “${clip.match}”`;
-          } else {
-            description.textContent =
-              "Selected because a sampled image in this section " +
-              `was similar to your request: “${search}”.`;
+          if (job.state === "error") {
+            throw new Error(
+              job.message || "Video processing failed."
+            );
           }
 
-          const details = document.createElement("p");
-          details.className = "clip-details";
-          details.textContent =
-            `${clip.start}s–${clip.end}s · ` +
-            `${clipMode === "speech" ? "Spoken" : "Visual"} match · ` +
-            `${clip.style} captions`;
+          if (job.state === "done") {
+            if (!Array.isArray(job.clips)) {
+              throw new Error(
+                "The server returned an invalid clips list."
+              );
+            }
 
-          const player = document.createElement("video");
-          player.controls = true;
-          player.preload = "metadata";
-          player.src = clip.clip_url;
+            displayClips(job.clips);
 
-          card.append(title, description, details, player);
-          clipResults.appendChild(card);
-        });
+            statusText.textContent = job.clips.length > 0
+              ? `${job.clips.length} clips are ready!`
+              : "No convincing matches found. Try a different prompt.";
 
-        result.hidden = false;
-        status.textContent =
-          `${data.clips.length} clips are ready!`;
+            break;
+          }
+
+          await new Promise(resolve => {
+            setTimeout(resolve, 2000);
+          });
+        }
       } catch (error) {
-        status.textContent =
+        statusText.classList.add("error");
+        statusText.textContent =
           `Something went wrong: ${error.message}`;
       } finally {
-        findButton.disabled = false;
+        clearInterval(timer);
+        updateElapsed();
+        setBusy(false);
       }
     });
   </script>
