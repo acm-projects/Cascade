@@ -1,60 +1,64 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
+from pathlib import Path
+from uuid import uuid4
+import shutil
+import traceback
 
-# Import the NEW 4-clip generation function
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+
 from render_subtitles import generate_four_styled_clips
 
-app = FastAPI(title="Cascade AI Clip Engine")
+app = FastAPI()
 
-# In-memory database for job status
-jobs_db = {}
+BASE = Path(__file__).parent
+UPLOADS = BASE / "uploads"
+OUTPUTS = BASE / "outputs"
 
-class VideoJobRequest(BaseModel):
-    video_url: str = "sample.mp4"
-    tone: Optional[str] = "engaging"
-    audience: Optional[str] = "gen-z"
-    preferred_styles: Optional[List[str]] = ["hormozi", "minimalist", "bold_viral", "cinematic"]
 
-def process_video_background(job_id: str, request: VideoJobRequest):
-    """Background task worker that generates the 4 styled clips."""
+@app.get("/")
+def homepage():
+    return FileResponse(BASE / "sample" / "front.html")
+
+
+@app.post("/generate-clips")
+def generate_clips(
+    video: UploadFile = File(...),
+    query: str = Form(...),
+):
+    if not video.filename or not video.filename.lower().endswith(".mp4"):
+        raise HTTPException(400, "Please choose an MP4 video.")
+    if not query.strip():
+        raise HTTPException(400, "Enter a search phrase.")
+
+    job_id = uuid4().hex
+    UPLOADS.mkdir(exist_ok=True)
+    job_output = OUTPUTS / job_id
+    video_path = UPLOADS / f"{job_id}.mp4"
+
+    with video_path.open("wb") as saved:
+        shutil.copyfileobj(video.file, saved)
+
     try:
-        print(f"--- Starting background generation for {job_id} ---")
-        
-        # Call the 4-clip renderer from render_subtitles.py
-        clip_files = generate_four_styled_clips(
-            video_url=request.video_url,
-            styles=request.preferred_styles,
-            tone=request.tone,
-            audience=request.audience
+        clip_paths = generate_four_styled_clips(
+            video_path=str(video_path),
+            query=query,
+            output_dir=str(job_output),
         )
-        
-        # Update status to COMPLETED and attach file names
-        jobs_db[job_id]["status"] = "COMPLETED"
-        jobs_db[job_id]["clips"] = clip_files
-        print(f"--- Finished job {job_id} successfully! ---")
-        
-    except Exception as e:
-        jobs_db[job_id]["status"] = "FAILED"
-        jobs_db[job_id]["error"] = str(e)
-        print(f"--- Error on job {job_id}: {e} ---")
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(500, f"Could not generate clips: {exc}") from exc
 
-@app.post("/api/v1/process-video")
-async def create_processing_job(request: VideoJobRequest, background_tasks: BackgroundTasks):
-    job_id = f"job_{len(jobs_db) + 1}"
-    jobs_db[job_id] = {"status": "PROCESSING", "clips": [], "error": None}
-    
-    # Hand off execution to FastAPI background worker
-    background_tasks.add_task(process_video_background, job_id, request)
-    
     return {
-        "status": "success",
-        "job_id": job_id,
-        "message": "Video queued for 4-clip generation."
+        "clips": [
+            f"/clips/{job_id}/{Path(path).name}"
+            for path in clip_paths
+        ]
     }
 
-@app.get("/api/v1/job/{job_id}")
-async def get_job_status(job_id: str):
-    if job_id not in jobs_db:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return jobs_db[job_id]
+
+@app.get("/clips/{job_id}/{filename}")
+def watch_clip(job_id: str, filename: str):
+    clip = OUTPUTS / job_id / filename
+    if not clip.is_file():
+        raise HTTPException(404, "Clip not found")
+    return FileResponse(clip, media_type="video/mp4")
