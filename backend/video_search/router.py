@@ -248,7 +248,7 @@ async def upload_video(
             )
 
     return {
-        "clip_url": f"/clips/{filename}",
+        "clip_url": f"/api/search/clips/{filename}",
         "start": round(clip_start, 1),
         "end": round(clip_end, 1),
         "match": match_text,

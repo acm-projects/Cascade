@@ -18,5 +18,8 @@ imageio_ffmpeg
 
 # video_search feature
 faster-whisper
+# Pinned: faster-whisper 1.2.1 calls av.open(..., metadata_errors=...), which
+# av>=19 removed. Unpin only after confirming faster-whisper has caught up.
+av==18.1.0
 sentence-transformers
 pillow
