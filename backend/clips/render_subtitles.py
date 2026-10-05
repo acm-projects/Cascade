@@ -30,14 +30,12 @@ STYLE_PRESETS = {
     "cinematic": {"color": "gold", "font_size": 36, "pos_y": 0.80}
 }
 
-def generate_four_styled_clips(video_url: str, styles: list, tone: str = "engaging", audience: str = "gen-z"):
+def generate_four_styled_clips(video_path: str, styles: list, tone: str = "engaging", audience: str = "gen-z"):
     """
-    Main function called by FastAPI background worker in main.py.
+    Main function called by FastAPI background worker in router.py.
     Processes the source video and exports 4 separate clips with distinct styles.
     """
-    # NOTE: this still ignores the passed-in `video_url` and always renders the
-    # bundled sample clip, same as before the file was relocated for the merge.
-    input_video_path = str(MODULE_DIR / "sample.mp4")
+    input_video_path = video_path
 
     if not os.path.exists(input_video_path):
         raise FileNotFoundError(f"Source video '{input_video_path}' not found.")
