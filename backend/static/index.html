@@ -23,9 +23,10 @@
     width: 100%; padding: 0.5rem; margin-top: 0.25rem;
   }
   button.submit { margin-top: 1rem; padding: 0.6rem 1.2rem; cursor: pointer; }
-  #trends-status, #search-status { margin-top: 1rem; color: #555; }
-  #trends-result, #search-result { margin-top: 1rem; white-space: pre-wrap; }
+  #trends-status, #search-status, #clips-status { margin-top: 1rem; color: #555; }
+  #trends-result, #search-result, #clips-result { margin-top: 1rem; white-space: pre-wrap; }
   .error { color: #b00; margin-top: 1rem; }
+  .note { color: #777; font-size: 0.85rem; margin-top: 0.5rem; }
 </style>
 </head>
 <body>
@@ -36,6 +37,7 @@
 <div class="tabs">
   <button class="tab-btn active" data-tab="trends">Trends</button>
   <button class="tab-btn" data-tab="search">Video Search</button>
+  <button class="tab-btn" data-tab="clips">Clips</button>
 </div>
 
 <div id="trends-panel" class="tab-panel active">
@@ -79,6 +81,28 @@
   <div id="search-status"></div>
   <div id="search-error" class="error"></div>
   <div id="search-result"></div>
+</div>
+
+<div id="clips-panel" class="tab-panel">
+  <form id="clips-form">
+    <label for="clips-video">Your video</label>
+    <input type="file" id="clips-video" accept="video/*" required>
+
+    <label for="clips-tone">Tone</label>
+    <input type="text" id="clips-tone" value="engaging">
+
+    <label for="clips-audience">Audience</label>
+    <input type="text" id="clips-audience" value="gen-z">
+
+    <button type="submit" class="submit">Generate 4 styled clips</button>
+  </form>
+  <p class="note">Renders hormozi / minimalist / bold_viral / cinematic caption styles.
+    Note: there's currently no endpoint to download/view the finished clips, so this
+    just shows the filenames once done &mdash; they're written to disk on the server
+    (backend/clips/) rather than served over HTTP.</p>
+  <div id="clips-status"></div>
+  <div id="clips-error" class="error"></div>
+  <div id="clips-result"></div>
 </div>
 
 <script>
@@ -182,6 +206,62 @@ searchForm.addEventListener('submit', async (e) => {
     searchStatus.textContent = '';
   }
 });
+
+// --- Clips tab ---
+const clipsForm = document.getElementById('clips-form');
+const clipsStatus = document.getElementById('clips-status');
+const clipsError = document.getElementById('clips-error');
+const clipsResult = document.getElementById('clips-result');
+
+clipsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clipsError.textContent = '';
+  clipsResult.textContent = '';
+  clipsStatus.textContent = 'Starting...';
+
+  const formData = new FormData();
+  formData.append('video', document.getElementById('clips-video').files[0]);
+  formData.append('tone', document.getElementById('clips-tone').value);
+  formData.append('audience', document.getElementById('clips-audience').value);
+
+  try {
+    const response = await fetch('/api/v1/process-video', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed with status ${response.status}`);
+    }
+    const { job_id } = await response.json();
+    await pollClipsJob(job_id);
+  } catch (err) {
+    clipsError.textContent = err.message || 'Something went wrong.';
+    clipsStatus.textContent = '';
+  }
+});
+
+async function pollClipsJob(jobId) {
+  clipsStatus.textContent = 'Processing... this can take a few minutes.';
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+    const response = await fetch(`/api/v1/job/${jobId}`);
+    if (!response.ok) {
+      clipsError.textContent = `Status check failed (${response.status})`;
+      clipsStatus.textContent = '';
+      return;
+    }
+    const job = await response.json();
+
+    if (job.status === 'COMPLETED') {
+      clipsStatus.textContent = 'Done';
+      clipsResult.textContent = 'Rendered clips (on the server, backend/clips/):\n' + job.clips.join('\n');
+      return;
+    }
+    if (job.status === 'FAILED') {
+      clipsError.textContent = job.error || 'Clip generation failed.';
+      clipsStatus.textContent = '';
+      return;
+    }
+  }
+}
 </script>
 
 </body>
