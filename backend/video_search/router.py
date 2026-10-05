@@ -1,17 +1,17 @@
-from pathlib import Path # works for file paths, uploaded video and the outputs folder
-from tempfile import TemporaryDirectory # makes a temp folder while processing a video..python deletes after. 
-from uuid import uuid4 #gives each clip a unique filename
-import json # reads the video duration in JSON format
-import shutil # copies the uploded video to a file and checkes whether FFmpeg is installed 
-import subprocess #lets python run FFmpeg and ffprobe commands 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from uuid import uuid4
+import json
+import shutil
+import subprocess
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from faster_whisper import WhisperModel
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 
-app = FastAPI()
+router = APIRouter()
 
 PROJECT_DIR = Path(__file__).resolve().parent
 OUTPUTS = PROJECT_DIR / "outputs"
@@ -22,12 +22,12 @@ search_model = SentenceTransformer("all-MiniLM-L6-v2")
 visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
 
 
-@app.get("/")
-def show_website():
-    return FileResponse(PROJECT_DIR / "index.html")
+# Note: the standalone "/" page is now served via StaticFiles at /search-ui
+# (see backend/app.py) instead of a dedicated route here, since this router
+# is mounted under /api/search alongside the other features' APIs.
 
 
-@app.get("/clips/{filename}")
+@router.get("/clips/{filename}")
 def get_clip(filename: str):
     clip = OUTPUTS / filename
 
@@ -61,7 +61,7 @@ def srt_time(seconds):
     return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
 
 
-@app.post("/upload")
+@router.post("/upload")
 async def upload_video(
     video: UploadFile = File(...),
     search: str = Form(...),
@@ -248,7 +248,7 @@ async def upload_video(
             )
 
     return {
-        "clip_url": f"/clips/{filename}",
+        "clip_url": f"/api/search/clips/{filename}",
         "start": round(clip_start, 1),
         "end": round(clip_end, 1),
         "match": match_text,

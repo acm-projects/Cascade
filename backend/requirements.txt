@@ -1,0 +1,25 @@
+# Shared
+fastapi
+uvicorn[standard]
+python-dotenv
+python-multipart
+pydantic
+jinja2
+
+# trends feature
+google-api-python-client
+openai-whisper
+anthropic
+yt-dlp
+
+# clips feature
+moviepy
+imageio_ffmpeg
+
+# video_search feature
+faster-whisper
+# Pinned: faster-whisper 1.2.1 calls av.open(..., metadata_errors=...), which
+# av>=19 removed. Unpin only after confirming faster-whisper has caught up.
+av==18.1.0
+sentence-transformers
+pillow

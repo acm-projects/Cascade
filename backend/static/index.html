@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cascade</title>
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+  .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid #ccc; }
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1rem;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn.active { border-bottom: 2px solid #333; font-weight: bold; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  label { display: block; margin-top: 0.75rem; font-weight: 600; }
+  input[type="text"], input[type="file"], select {
+    width: 100%; padding: 0.5rem; margin-top: 0.25rem;
+  }
+  button.submit { margin-top: 1rem; padding: 0.6rem 1.2rem; cursor: pointer; }
+  #trends-status, #search-status, #clips-status { margin-top: 1rem; color: #555; }
+  #trends-result, #search-result, #clips-result { margin-top: 1rem; white-space: pre-wrap; }
+  .error { color: #b00; margin-top: 1rem; }
+  .note { color: #777; font-size: 0.85rem; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<h1>Cascade</h1>
+<p>Quick-look page for exercising the trends and video-search features together. Not the final UI.</p>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="trends">Trends</button>
+  <button class="tab-btn" data-tab="search">Video Search</button>
+  <button class="tab-btn" data-tab="clips">Clips</button>
+</div>
+
+<div id="trends-panel" class="tab-panel active">
+  <form id="trends-form">
+    <label for="trends-topic">Topic</label>
+    <input type="text" id="trends-topic" placeholder="e.g. fitness" required>
+
+    <label for="trends-video">Your video</label>
+    <input type="file" id="trends-video" accept="video/*" required>
+
+    <button type="submit" class="submit">Analyze</button>
+  </form>
+  <div id="trends-status"></div>
+  <div id="trends-error" class="error"></div>
+  <div id="trends-result"></div>
+</div>
+
+<div id="search-panel" class="tab-panel">
+  <form id="search-form">
+    <label for="search-video">Your video</label>
+    <input type="file" id="search-video" accept="video/*" required>
+
+    <label for="search-query">What are you looking for?</label>
+    <input type="text" id="search-query" placeholder="e.g. person talking about pricing" required>
+
+    <label for="search-mode">Search mode</label>
+    <select id="search-mode">
+      <option value="speech">Speech</option>
+      <option value="visual">Visual</option>
+    </select>
+
+    <label for="search-length">Clip length (seconds)</label>
+    <select id="search-length">
+      <option value="15">15</option>
+      <option value="30">30</option>
+      <option value="60">60</option>
+    </select>
+
+    <button type="submit" class="submit">Find clip</button>
+  </form>
+  <div id="search-status"></div>
+  <div id="search-error" class="error"></div>
+  <div id="search-result"></div>
+</div>
+
+<div id="clips-panel" class="tab-panel">
+  <form id="clips-form">
+    <label for="clips-video">Your video</label>
+    <input type="file" id="clips-video" accept="video/*" required>
+
+    <label for="clips-tone">Tone</label>
+    <input type="text" id="clips-tone" value="engaging">
+
+    <label for="clips-audience">Audience</label>
+    <input type="text" id="clips-audience" value="gen-z">
+
+    <button type="submit" class="submit">Generate 4 styled clips</button>
+  </form>
+  <p class="note">Renders hormozi / minimalist / bold_viral / cinematic caption styles.
+    Note: there's currently no endpoint to download/view the finished clips, so this
+    just shows the filenames once done &mdash; they're written to disk on the server
+    (backend/clips/) rather than served over HTTP.</p>
+  <div id="clips-status"></div>
+  <div id="clips-error" class="error"></div>
+  <div id="clips-result"></div>
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`${btn.dataset.tab}-panel`).classList.add('active');
+  });
+});
+
+// --- Trends tab ---
+const trendsForm = document.getElementById('trends-form');
+const trendsStatus = document.getElementById('trends-status');
+const trendsError = document.getElementById('trends-error');
+const trendsResult = document.getElementById('trends-result');
+
+trendsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  trendsError.textContent = '';
+  trendsResult.textContent = '';
+  trendsStatus.textContent = 'Starting...';
+
+  const formData = new FormData();
+  formData.append('topic', document.getElementById('trends-topic').value);
+  formData.append('video', document.getElementById('trends-video').files[0]);
+
+  try {
+    const response = await fetch('/api/trends/analyze', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed with status ${response.status}`);
+    }
+    const { job_id } = await response.json();
+    await pollTrendsJob(job_id);
+  } catch (err) {
+    trendsError.textContent = err.message || 'Something went wrong.';
+    trendsStatus.textContent = '';
+  }
+});
+
+async function pollTrendsJob(jobId) {
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+    const response = await fetch(`/api/trends/analyze/${jobId}/status`);
+    if (!response.ok) {
+      trendsError.textContent = `Status check failed (${response.status})`;
+      trendsStatus.textContent = '';
+      return;
+    }
+    const job = await response.json();
+    trendsStatus.textContent = `${job.step} (${job.step_index}/${job.total_steps})`;
+
+    if (job.status === 'done') {
+      trendsStatus.textContent = 'Done';
+      trendsResult.textContent = JSON.stringify(job.result, null, 2);
+      return;
+    }
+    if (job.status === 'error') {
+      trendsError.textContent = job.error || 'Analysis failed.';
+      trendsStatus.textContent = '';
+      return;
+    }
+  }
+}
+
+// --- Video search tab ---
+const searchForm = document.getElementById('search-form');
+const searchStatus = document.getElementById('search-status');
+const searchError = document.getElementById('search-error');
+const searchResult = document.getElementById('search-result');
+
+searchForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  searchError.textContent = '';
+  searchResult.textContent = '';
+  searchStatus.textContent = 'Processing... this can take a minute.';
+
+  const formData = new FormData();
+  formData.append('video', document.getElementById('search-video').files[0]);
+  formData.append('search', document.getElementById('search-query').value);
+  formData.append('mode', document.getElementById('search-mode').value);
+  formData.append('clip_length', document.getElementById('search-length').value);
+
+  try {
+    const response = await fetch('/api/search/upload', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed with status ${response.status}`);
+    }
+    const data = await response.json();
+    searchStatus.textContent = 'Done';
+    searchResult.innerHTML = `
+      <p><strong>Match:</strong> ${data.match}</p>
+      <p><strong>Clip:</strong> ${data.start}s - ${data.end}s</p>
+      <video src="${data.clip_url}" controls style="max-width: 100%;"></video>
+    `;
+  } catch (err) {
+    searchError.textContent = err.message || 'Something went wrong.';
+    searchStatus.textContent = '';
+  }
+});
+
+// --- Clips tab ---
+const clipsForm = document.getElementById('clips-form');
+const clipsStatus = document.getElementById('clips-status');
+const clipsError = document.getElementById('clips-error');
+const clipsResult = document.getElementById('clips-result');
+
+clipsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clipsError.textContent = '';
+  clipsResult.textContent = '';
+  clipsStatus.textContent = 'Starting...';
+
+  const formData = new FormData();
+  formData.append('video', document.getElementById('clips-video').files[0]);
+  formData.append('tone', document.getElementById('clips-tone').value);
+  formData.append('audience', document.getElementById('clips-audience').value);
+
+  try {
+    const response = await fetch('/api/v1/process-video', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed with status ${response.status}`);
+    }
+    const { job_id } = await response.json();
+    await pollClipsJob(job_id);
+  } catch (err) {
+    clipsError.textContent = err.message || 'Something went wrong.';
+    clipsStatus.textContent = '';
+  }
+});
+
+async function pollClipsJob(jobId) {
+  clipsStatus.textContent = 'Processing... this can take a few minutes.';
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+    const response = await fetch(`/api/v1/job/${jobId}`);
+    if (!response.ok) {
+      clipsError.textContent = `Status check failed (${response.status})`;
+      clipsStatus.textContent = '';
+      return;
+    }
+    const job = await response.json();
+
+    if (job.status === 'COMPLETED') {
+      clipsStatus.textContent = 'Done';
+      clipsResult.textContent = 'Rendered clips (on the server, backend/clips/):\n' + job.clips.join('\n');
+      return;
+    }
+    if (job.status === 'FAILED') {
+      clipsError.textContent = job.error || 'Clip generation failed.';
+      clipsStatus.textContent = '';
+      return;
+    }
+  }
+}
+</script>
+
+</body>
+</html>
