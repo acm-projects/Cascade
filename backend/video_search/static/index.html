@@ -29,13 +29,14 @@
     }
 
     h1 {
-      margin-bottom: 5px;
+      margin: 0 0 5px;
       color: #1265c8;
     }
 
     .subtitle {
       margin-bottom: 30px;
       color: #587096;
+      line-height: 1.5;
     }
 
     label {
@@ -44,12 +45,13 @@
       font-weight: bold;
     }
 
-    input[type="file"],
-    input[type="text"] {
+    input,
+    select {
       width: 100%;
       padding: 12px;
       border: 1px solid #b9cce6;
       border-radius: 8px;
+      background: white;
       font: inherit;
     }
 
@@ -79,28 +81,39 @@
       background: #111;
     }
 
-    video[hidden] {
-      display: none;
-    }
-
-    #result {
-      margin-top: 30px;
-      padding: 20px;
-      border-radius: 10px;
-      background: #edf5ff;
-    }
-
-    #result[hidden] {
-      display: none;
+    [hidden] {
+      display: none !important;
     }
 
     #status {
       margin-top: 18px;
       color: #587096;
+      line-height: 1.5;
     }
 
-    #matchText {
+    #result {
+      margin-top: 30px;
+    }
+
+    .clip-card {
+      margin-top: 20px;
+      padding: 20px;
+      border-radius: 10px;
+      background: #edf5ff;
+    }
+
+    .clip-card h3 {
+      margin: 0 0 10px;
+      color: #1265c8;
+    }
+
+    .clip-card p {
       line-height: 1.5;
+    }
+
+    .clip-details {
+      font-size: 14px;
+      color: #587096;
     }
   </style>
 </head>
@@ -108,7 +121,10 @@
 <body>
   <main>
     <h1>Cascade</h1>
-    <p class="subtitle">Find a moment in your video and turn it into a subtitled clip.</p>
+    <p class="subtitle">
+      Search your video and create clips with captions
+      and an explanation of each match.
+    </p>
 
     <label for="videoFile">1. Choose a video</label>
     <input id="videoFile" type="file" accept="video/*">
@@ -119,28 +135,32 @@
     <input
       id="searchInput"
       type="text"
-      placeholder="Example: a funny yo-yo trick"
+      placeholder="Example: a girl having accidents"
     >
+
     <label for="searchMode">3. Search using</label>
-<select id="searchMode">
-  <option value="speech">Spoken words</option>
-  <option value="visual">What appears on screen</option>
-</select>
-<label for="clipLength">Clip length</label>
-<select id="clipLength">
-  <option value="15">15 seconds</option>
-  <option value="30">30 seconds</option>
-  <option value="60">60 seconds</option>
-</select>
-    <button id="findButton" type="button">Find and create clip</button>
+    <select id="searchMode">
+      <option value="speech">Spoken words</option>
+      <option value="visual">What appears on screen</option>
+      <option value="both">Both — 2 spoken + 2 visual</option>
+    </select>
+
+    <label for="clipLength">4. Length of each clip</label>
+    <select id="clipLength">
+      <option value="15">15 seconds</option>
+      <option value="30">30 seconds</option>
+      <option value="60">60 seconds</option>
+    </select>
+
+    <button id="findButton" type="button">
+      Find and create 4 clips
+    </button>
 
     <p id="status" role="status"></p>
 
     <section id="result" hidden>
-      <h2>Your clip</h2>
-      <p id="timestamps"></p>
-      <p id="matchText"></p>
-      <video id="clipPreview" controls hidden></video>
+      <h2>Your clips</h2>
+      <div id="clipResults"></div>
     </section>
   </main>
 
@@ -148,12 +168,12 @@
     const videoFile = document.getElementById("videoFile");
     const videoPreview = document.getElementById("videoPreview");
     const searchInput = document.getElementById("searchInput");
+    const searchMode = document.getElementById("searchMode");
+    const clipLength = document.getElementById("clipLength");
     const findButton = document.getElementById("findButton");
     const status = document.getElementById("status");
     const result = document.getElementById("result");
-    const timestamps = document.getElementById("timestamps");
-    const matchText = document.getElementById("matchText");
-    const clipPreview = document.getElementById("clipPreview");
+    const clipResults = document.getElementById("clipResults");
 
     let previewUrl = null;
 
@@ -165,20 +185,26 @@
         previewUrl = null;
       }
 
+      videoPreview.pause();
+      videoPreview.removeAttribute("src");
+      videoPreview.load();
       videoPreview.hidden = true;
+
       result.hidden = true;
+      clipResults.innerHTML = "";
+      status.textContent = "";
 
       if (file) {
         previewUrl = URL.createObjectURL(file);
         videoPreview.src = previewUrl;
         videoPreview.hidden = false;
-        status.textContent = "";
       }
     });
 
     findButton.addEventListener("click", async () => {
       const file = videoFile.files[0];
       const search = searchInput.value.trim();
+      const selectedMode = searchMode.value;
 
       if (!file) {
         status.textContent = "Choose a video first.";
@@ -193,13 +219,14 @@
       const formData = new FormData();
       formData.append("video", file);
       formData.append("search", search);
-      formData.append("clip_length", document.getElementById("clipLength").value);
-      formData.append("mode", document.getElementById("searchMode").value);
+      formData.append("mode", selectedMode);
+      formData.append("clip_length", clipLength.value);
 
       findButton.disabled = true;
-      status.textContent = "Finding your clip... This may take a few minutes.";
       result.hidden = true;
-      clipPreview.hidden = true;
+      clipResults.innerHTML = "";
+      status.textContent =
+        "Finding and rendering clips... This may take a few minutes.";
 
       try {
         const response = await fetch("/api/search/upload", {
@@ -208,28 +235,85 @@
         });
 
         const responseText = await response.text();
+
         if (!responseText) {
-        throw new Error("The server returned an empty response. Check the Terminal for the error.");
+          throw new Error(
+            "The server returned an empty response. Check the Terminal."
+          );
         }
-        const data = JSON.parse(responseText);;
+
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          throw new Error(
+            "The server returned an error. Check the VS Code Terminal."
+          );
+        }
 
         if (!response.ok) {
-          throw new Error(data.detail || "Could not create the clip.");
+          const detail = typeof data.detail === "string"
+            ? data.detail
+            : "Could not create the clips.";
+          throw new Error(detail);
         }
 
-        timestamps.textContent = `From ${data.start}s to ${data.end}s`;
-        matchText.textContent = data.mode === "visual"
-  ? data.match
-  : `Matched speech: “${data.match}”`;
+        if (!Array.isArray(data.clips) || data.clips.length === 0) {
+          throw new Error("The server did not return any clips.");
+        }
 
-        clipPreview.src = data.clip_url;
-        clipPreview.hidden = false;
-        clipPreview.load();
+        data.clips.forEach((clip, index) => {
+          const card = document.createElement("div");
+          card.className = "clip-card";
+
+          const clipMode = clip.mode ||
+            (selectedMode === "both"
+              ? (index < 2 ? "speech" : "visual")
+              : selectedMode);
+
+          const title = document.createElement("h3");
+
+          // Use a unique title if the backend provides one.
+          // Otherwise, label the clip with the search phrase.
+          title.textContent = clip.title ||
+            `Clip ${index + 1}: ${search}`;
+
+          const description = document.createElement("p");
+
+          if (clip.description) {
+            description.textContent = clip.description;
+          } else if (clipMode === "speech") {
+            description.textContent =
+              "Selected because the spoken words were similar " +
+              `to your request. Matched speech: “${clip.match}”`;
+          } else {
+            description.textContent =
+              "Selected because a sampled image in this section " +
+              `was similar to your request: “${search}”.`;
+          }
+
+          const details = document.createElement("p");
+          details.className = "clip-details";
+          details.textContent =
+            `${clip.start}s–${clip.end}s · ` +
+            `${clipMode === "speech" ? "Spoken" : "Visual"} match · ` +
+            `${clip.style} captions`;
+
+          const player = document.createElement("video");
+          player.controls = true;
+          player.preload = "metadata";
+          player.src = clip.clip_url;
+
+          card.append(title, description, details, player);
+          clipResults.appendChild(card);
+        });
 
         result.hidden = false;
-        status.textContent = "Your clip is ready!";
+        status.textContent =
+          `${data.clips.length} clips are ready!`;
       } catch (error) {
-        status.textContent = `Something went wrong: ${error.message}`;
+        status.textContent =
+          `Something went wrong: ${error.message}`;
       } finally {
         findButton.disabled = false;
       }
