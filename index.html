@@ -3,24 +3,162 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cascade Clip Search</title>
+  <title>Cascade | Dashboard</title>
 
   <style>
     * {
       box-sizing: border-box;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
-      padding: 40px 20px;
       font-family: Arial, sans-serif;
       color: #17345c;
       background: linear-gradient(135deg, #eaf3ff, #a8ceff);
     }
 
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus,
+    select:focus {
+      outline: 3px solid #8cc4ff;
+      outline-offset: 3px;
+    }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 220px;
+      padding: 28px 18px;
+      background: white;
+      border-right: 1px solid #d4e3f5;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .brand {
+      margin: 0;
+      padding: 0 12px;
+      color: #1265c8;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .brand-description {
+      margin: 8px 12px 0;
+      color: #587096;
+      font-size: 13px;
+    }
+
+    nav {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .nav-button {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px;
+      text-align: left;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: #587096;
+      cursor: pointer;
+    }
+
+    .nav-button:hover:not(:disabled) {
+      background: #edf5ff;
+    }
+
+    .nav-button.active {
+      background: #e2efff;
+      color: #1265c8;
+    }
+
+    .nav-icon {
+      width: 24px;
+      text-align: center;
+      font-size: 20px;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      border-top: 1px solid #d4e3f5;
+      padding-top: 16px;
+    }
+
+    .layout {
+      margin-left: 220px;
+      padding: 24px 30px 40px;
+    }
+
+    .topbar {
+      max-width: 1000px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .account {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .account-details {
+      text-align: right;
+      min-width: 0;
+    }
+
+    #account-name {
+      display: block;
+      font-weight: bold;
+    }
+
+    #account-email {
+      display: block;
+      max-width: 240px;
+      margin-top: 4px;
+      font-size: 13px;
+      color: #587096;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #cascade-account {
+      position: static !important;
+      top: auto !important;
+      right: auto !important;
+      flex-shrink: 0;
+    }
+
     main {
-      max-width: 750px;
+      max-width: 1000px;
       margin: auto;
       padding: 35px;
       border-radius: 18px;
@@ -28,8 +166,8 @@
       box-shadow: 0 15px 40px rgba(27, 75, 139, 0.15);
     }
 
-    h1 {
-      margin: 0 0 5px;
+    h2 {
+      margin: 0 0 10px;
       color: #1265c8;
     }
 
@@ -40,12 +178,15 @@
     }
 
     .subtitle {
-      margin-bottom: 30px;
+      margin-bottom: 28px;
     }
 
     .help-text {
       font-size: 14px;
-      margin-top: 8px;
+    }
+
+    #account-status {
+      overflow-wrap: anywhere;
     }
 
     label {
@@ -61,30 +202,21 @@
       border: 1px solid #b9cce6;
       border-radius: 8px;
       background: white;
-      font: inherit;
+      color: #17345c;
     }
 
-    input:focus,
-    select:focus,
-    button:focus-visible,
-    a:focus-visible {
-      outline: 3px solid #8cc4ff;
-      outline-offset: 3px;
-    }
-
-    button {
-      margin-top: 22px;
+    .primary-button {
+      margin-top: 20px;
       padding: 13px 22px;
-      border: 0;
+      border: none;
       border-radius: 8px;
-      color: white;
       background: #1265c8;
-      font: inherit;
+      color: white;
       font-weight: bold;
       cursor: pointer;
     }
 
-    button:hover:not(:disabled) {
+    .primary-button:hover:not(:disabled) {
       background: #0c50a3;
     }
 
@@ -102,11 +234,7 @@
       background: #111;
     }
 
-    [hidden] {
-      display: none !important;
-    }
-
-    #status {
+    .status {
       margin-top: 18px;
       color: #587096;
       line-height: 1.5;
@@ -114,7 +242,7 @@
       overflow-wrap: anywhere;
     }
 
-    #status.error {
+    .error {
       color: #b42318;
     }
 
@@ -155,8 +283,31 @@
       font-weight: bold;
     }
 
-    @media (max-width: 500px) {
-      body {
+    @media (max-width: 750px) {
+      .sidebar {
+        position: static;
+        width: 100%;
+        padding: 18px;
+        gap: 14px;
+      }
+
+      nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+
+      .nav-button {
+        width: auto;
+        padding: 10px;
+      }
+
+      .sidebar-footer {
+        margin-top: 0;
+        padding-top: 8px;
+      }
+
+      .layout {
+        margin-left: 0;
         padding: 20px 12px;
       }
 
@@ -164,198 +315,347 @@
         padding: 24px 18px;
       }
 
-      button {
-        width: 100%;
+      .topbar {
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      #account-email {
+        max-width: 160px;
+        font-size: 11px;
+      }
+
+      #account-name {
+        font-size: 14px;
       }
     }
   </style>
 </head>
 
 <body>
-  <main>
-    <h1>Cascade</h1>
+  <aside class="sidebar">
+    <div>
+      <p class="brand">Cascade</p>
+      <p class="brand-description">Find your best moments.</p>
+    </div>
 
-    <p class="subtitle">
-      Find moments in your video using a prompt.
-      Cascade analyzes visuals and available speech to create
-      up to four clips with explanations.
-    </p>
-
-    <form id="searchForm">
-      <label for="videoFile">1. Choose a video</label>
-
-      <input
-        id="videoFile"
-        type="file"
-        accept="video/*"
-        required
+    <nav aria-label="Main navigation">
+      <button
+        id="home-button"
+        class="nav-button active"
+        type="button"
+        aria-current="page"
       >
-
-      <video
-        id="videoPreview"
-        controls
-        playsinline
-        hidden
-      ></video>
-
-      <label for="searchInput">
-        2. What moment do you want to find?
-      </label>
-
-      <input
-        id="searchInput"
-        type="text"
-        placeholder="Example: find moments where the girl is rushing"
-        maxlength="2000"
-        required
-      >
-
-      <label for="clipLength">
-        3. Approximate length of each clip
-      </label>
-
-      <select id="clipLength" aria-describedby="lengthHelp">
-        <option value="15">15 seconds</option>
-        <option value="30" selected>30 seconds</option>
-        <option value="60">60 seconds</option>
-      </select>
-
-      <p id="lengthHelp" class="help-text">
-        Clip lengths may vary to include the surrounding action.
-        Fewer than four clips may be returned.
-      </p>
-
-      <button id="findButton" type="submit">
-        Find and create up to 4 clips
+        <span class="nav-icon" aria-hidden="true">⌂</span>
+        Home
       </button>
-    </form>
 
-    <p
-      id="status"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-    ></p>
+      <button id="clips-button" class="nav-button" type="button">
+        <span class="nav-icon" aria-hidden="true">▤</span>
+        My clips
+      </button>
 
-    <p id="elapsed" hidden></p>
+      <button id="settings-button" class="nav-button" type="button">
+        <span class="nav-icon" aria-hidden="true">⚙</span>
+        Account settings
+      </button>
+    </nav>
 
-    <section id="result" hidden>
-      <h2>Your clips</h2>
+    <div class="sidebar-footer">
+      <button id="signout-button" class="nav-button" type="button">
+        <span class="nav-icon" aria-hidden="true">↪</span>
+        Sign out
+      </button>
 
-      <p class="help-text">
-        Speech captions appear in the player when available.
-        Downloaded videos do not include burned-in captions.
-      </p>
+      <p
+        id="account-status"
+        class="help-text"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </div>
+  </aside>
 
-      <div id="clipResults"></div>
-    </section>
-  </main>
+  <div class="layout">
+    <header class="topbar">
+      <h1 id="page-title">Dashboard</h1>
+
+      <div class="account">
+        <div class="account-details">
+          <span id="account-name">Your account</span>
+          <span id="account-email"></span>
+        </div>
+
+        <div id="account-button-slot"></div>
+      </div>
+    </header>
+
+    <main>
+      <section id="home-view">
+        <h2 id="welcome">Welcome to Cascade</h2>
+
+        <p class="subtitle">
+          Find moments in your video using a prompt.
+          Cascade analyzes visuals and available speech to create
+          up to four clips with explanations.
+        </p>
+
+        <form id="searchForm">
+          <label for="videoFile">1. Choose a video</label>
+
+          <input
+            id="videoFile"
+            type="file"
+            accept="video/*"
+            required
+          >
+
+          <video
+            id="videoPreview"
+            controls
+            playsinline
+            hidden
+          ></video>
+
+          <label for="searchInput">
+            2. What moment do you want to find?
+          </label>
+
+          <input
+            id="searchInput"
+            type="text"
+            maxlength="2000"
+            placeholder="Example: find moments where the girl is rushing"
+            required
+          >
+
+          <label for="clipLength">
+            3. Approximate length of each clip
+          </label>
+
+          <select id="clipLength" aria-describedby="lengthHelp">
+            <option value="15">15 seconds</option>
+            <option value="30" selected>30 seconds</option>
+            <option value="60">60 seconds</option>
+          </select>
+
+          <p id="lengthHelp" class="help-text">
+            Clip lengths may vary to include the surrounding action.
+            Fewer than four clips may be returned.
+          </p>
+
+          <button
+            id="findButton"
+            class="primary-button"
+            type="submit"
+          >
+            Find and create up to 4 clips
+          </button>
+        </form>
+
+        <p
+          id="status"
+          class="status"
+          role="status"
+          aria-live="polite"
+        ></p>
+
+        <p id="elapsed" hidden></p>
+
+        <section id="result" hidden>
+          <h2>Your clips</h2>
+
+          <p class="help-text">
+            Speech captions appear in the player when available.
+            Downloaded videos do not include burned-in captions.
+          </p>
+
+          <div id="clipResults"></div>
+        </section>
+      </section>
+
+      <section id="clips-view" hidden>
+        <h2>My clips</h2>
+
+        <p class="subtitle">
+          Your previously created clips, saved to your account.
+        </p>
+
+        <button
+          id="refresh-clips"
+          class="primary-button"
+          type="button"
+        >
+          Refresh clips
+        </button>
+
+        <p
+          id="library-status"
+          class="status"
+          role="status"
+          aria-live="polite"
+        ></p>
+
+        <div id="saved-clips"></div>
+      </section>
+    </main>
+  </div>
 
   <script>
-    const searchForm = document.getElementById("searchForm");
-    const videoFile = document.getElementById("videoFile");
-    const videoPreview = document.getElementById("videoPreview");
-    const searchInput = document.getElementById("searchInput");
-    const clipLength = document.getElementById("clipLength");
-    const findButton = document.getElementById("findButton");
-    const statusText = document.getElementById("status");
-    const elapsedText = document.getElementById("elapsed");
-    const result = document.getElementById("result");
-    const clipResults = document.getElementById("clipResults");
+    const $ = id => document.getElementById(id);
 
     let previewUrl = null;
     let isProcessing = false;
+    let libraryLoading = false;
+    let accountInitialized = false;
+    let isSigningOut = false;
 
-    const controls = [
-      videoFile,
-      searchInput,
-      clipLength,
-      findButton
-    ];
+    // Clerk is loaded by app1.py.
+    function initializeAccount() {
+      const user = window.Clerk?.user;
+      const accountButton = $("cascade-account");
 
-    function setBusy(busy) {
-      isProcessing = busy;
+      if (!user) return;
 
-      controls.forEach(control => {
-        control.disabled = busy;
-      });
+      if (
+        accountButton &&
+        accountButton.parentElement !== $("account-button-slot")
+      ) {
+        $("account-button-slot").appendChild(accountButton);
+      }
 
-      searchForm.setAttribute("aria-busy", String(busy));
+      updateAccountDetails(user);
 
-      findButton.textContent = busy
-        ? "Processing your video..."
-        : "Find and create up to 4 clips";
+      if (!accountInitialized) {
+        accountInitialized = true;
+
+        window.Clerk.addListener(({ user, session }) => {
+          // Clerk's signOut method handles its own redirect.
+          if (!session || !user) return;
+          updateAccountDetails(user);
+        });
+      }
     }
 
-    function formatElapsed(totalSeconds) {
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
+    function updateAccountDetails(user) {
+      $("account-name").textContent =
+        user.fullName || user.username || "Your account";
 
-      return minutes > 0
-        ? `${minutes}m ${seconds}s`
-        : `${seconds}s`;
+      $("account-email").textContent =
+        user.primaryEmailAddress?.emailAddress || "";
+
+      $("welcome").textContent =
+        `Welcome${user.firstName ? ", " + user.firstName : ""}!`;
     }
 
-    function formatTimestamp(value) {
-      const totalSeconds = Math.max(0, Math.floor(Number(value)));
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
+    window.addEventListener(
+      "cascade-auth-ready",
+      initializeAccount
+    );
 
-      if (hours > 0) {
-        return (
-          `${hours}:` +
-          `${String(minutes).padStart(2, "0")}:` +
-          `${String(seconds).padStart(2, "0")}`
+    initializeAccount();
+
+    function requireClerk() {
+      if (!window.Clerk?.loaded) {
+        throw new Error(
+          "Your account has not finished loading. Refresh the page."
         );
       }
 
-      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+      return window.Clerk;
     }
 
-    videoFile.addEventListener("change", () => {
-      const file = videoFile.files[0];
+    $("settings-button").addEventListener("click", () => {
+      $("account-status").textContent = "";
+      $("account-status").classList.remove("error");
 
-      videoPreview.pause();
-      videoPreview.removeAttribute("src");
-      videoPreview.load();
-
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        previewUrl = null;
-      }
-
-      videoPreview.hidden = true;
-      result.hidden = true;
-      clipResults.replaceChildren();
-
-      statusText.textContent = "";
-      statusText.classList.remove("error");
-
-      elapsedText.textContent = "";
-      elapsedText.hidden = true;
-
-      if (file) {
-        previewUrl = URL.createObjectURL(file);
-        videoPreview.src = previewUrl;
-        videoPreview.hidden = false;
+      try {
+        requireClerk().openUserProfile();
+      } catch (error) {
+        $("account-status").classList.add("error");
+        $("account-status").textContent = error.message;
       }
     });
 
-    async function requestJSON(url, options = {}) {
-      let response;
+    // Only one sign-out handler.
+    $("signout-button").addEventListener("click", async () => {
+      if (isSigningOut) return;
+
+      const button = $("signout-button");
+      const status = $("account-status");
+
+      isSigningOut = true;
+      button.disabled = true;
+      status.classList.remove("error");
+      status.textContent = "Signing out...";
 
       try {
-        response = await fetch(url, {
-          ...options,
-          cache: "no-store"
+        const clerk = requireClerk();
+
+        await clerk.signOut({
+          redirectUrl: window.location.origin + "/login"
         });
-      } catch {
-        throw new Error(
-          "Could not reach the server. Make sure your Python " +
-          "server is still running in Terminal."
-        );
+      } catch (error) {
+        console.error("Sign-out failed:", error);
+
+        status.classList.add("error");
+        status.textContent =
+          error.errors?.[0]?.longMessage ||
+          error.message ||
+          "Could not sign out. Please try again.";
+      } finally {
+        isSigningOut = false;
+        button.disabled = false;
       }
+    });
+
+    function switchView(view) {
+      const home = view === "home";
+
+      $("home-view").hidden = !home;
+      $("clips-view").hidden = home;
+
+      $("page-title").textContent =
+        home ? "Dashboard" : "My clips";
+
+      for (const [id, active] of [
+        ["home-button", home],
+        ["clips-button", !home]
+      ]) {
+        $(id).classList.toggle("active", active);
+
+        if (active) {
+          $(id).setAttribute("aria-current", "page");
+        } else {
+          $(id).removeAttribute("aria-current");
+        }
+      }
+
+      document.querySelectorAll("video").forEach(video => {
+        video.pause();
+      });
+
+      if (!home) loadSavedClips();
+    }
+
+    $("home-button").addEventListener("click", () => {
+      switchView("home");
+    });
+
+    $("clips-button").addEventListener("click", () => {
+      switchView("clips");
+    });
+
+    $("refresh-clips").addEventListener(
+      "click",
+      loadSavedClips
+    );
+
+    async function requestJSON(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        cache: "no-store"
+      });
 
       let data;
 
@@ -363,7 +663,7 @@
         data = await response.json();
       } catch {
         throw new Error(
-          "The server returned an unreadable response. Check Terminal."
+          "The server returned an unreadable response."
         );
       }
 
@@ -371,15 +671,30 @@
         throw new Error(
           typeof data.detail === "string"
             ? data.detail
-            : "The request failed. Check Terminal for details."
+            : "The request failed."
         );
       }
 
       return data;
     }
 
-    function displayClips(clips) {
-      clipResults.replaceChildren();
+    function formatTimestamp(value) {
+      const total = Math.max(0, Math.floor(Number(value)));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const seconds = String(total % 60).padStart(2, "0");
+
+      return hours
+        ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`
+        : `${minutes}:${seconds}`;
+    }
+
+    function displayClips(clips, container) {
+      container.querySelectorAll("video").forEach(video => {
+        video.pause();
+      });
+
+      container.replaceChildren();
 
       clips.forEach((clip, index) => {
         const card = document.createElement("article");
@@ -394,27 +709,25 @@
         const details = document.createElement("p");
         details.className = "clip-details";
 
-        const duration = Number(clip.end) - Number(clip.start);
-
         details.textContent =
-          `${formatTimestamp(clip.start)}–` +
-          `${formatTimestamp(clip.end)} in the original video · ` +
-          `${duration.toFixed(1)} seconds`;
+          `${formatTimestamp(clip.start)}–${formatTimestamp(clip.end)}` +
+          " in the original video · " +
+          `${(Number(clip.end) - Number(clip.start)).toFixed(1)} seconds`;
 
         const player = document.createElement("video");
         player.controls = true;
         player.playsInline = true;
-        player.preload = "metadata";
+        player.preload = "none";
         player.src = clip.clip_url;
 
         if (clip.captions_url) {
-          const captions = document.createElement("track");
-          captions.kind = "captions";
-          captions.label = "Speech captions";
-          captions.src = clip.captions_url;
-          captions.default = true;
+          const track = document.createElement("track");
+          track.kind = "captions";
+          track.label = "Speech captions";
+          track.src = clip.captions_url;
+          track.default = true;
 
-          player.appendChild(captions);
+          player.appendChild(track);
         }
 
         const download = document.createElement("a");
@@ -431,55 +744,140 @@
           download
         );
 
-        clipResults.appendChild(card);
+        container.appendChild(card);
       });
-
-      result.hidden = clips.length === 0;
     }
 
-    searchForm.addEventListener("submit", async event => {
-      event.preventDefault();
+    async function loadSavedClips() {
+      if (libraryLoading) return;
 
-      if (isProcessing) {
-        return;
+      libraryLoading = true;
+      $("refresh-clips").disabled = true;
+      $("library-status").classList.remove("error");
+      $("library-status").textContent = "Loading your clips...";
+
+      try {
+        const data = await requestJSON("/api/my-clips");
+
+        if (!Array.isArray(data.clips)) {
+          throw new Error(
+            "The server returned an invalid clips list."
+          );
+        }
+
+        displayClips(data.clips, $("saved-clips"));
+
+        $("library-status").textContent = data.clips.length
+          ? `${data.clips.length} saved clips`
+          : "No saved clips yet. Create your first clips from Home.";
+
+      } catch (error) {
+        $("library-status").classList.add("error");
+        $("library-status").textContent = error.message;
+
+      } finally {
+        libraryLoading = false;
+        $("refresh-clips").disabled = false;
+      }
+    }
+
+    $("videoFile").addEventListener("change", () => {
+      const preview = $("videoPreview");
+
+      preview.pause();
+      preview.removeAttribute("src");
+      preview.load();
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
       }
 
-      const file = videoFile.files[0];
-      const search = searchInput.value.trim();
+      previewUrl = null;
 
-      statusText.classList.remove("error");
+      const file = $("videoFile").files[0];
+      preview.hidden = !file;
+
+      if (file) {
+        previewUrl = URL.createObjectURL(file);
+        preview.src = previewUrl;
+      }
+
+      $("result").hidden = true;
+      $("clipResults").replaceChildren();
+
+      $("status").textContent = "";
+      $("status").classList.remove("error");
+      $("elapsed").hidden = true;
+    });
+
+    function setBusy(busy) {
+      isProcessing = busy;
+
+      for (const id of [
+        "videoFile",
+        "searchInput",
+        "clipLength",
+        "findButton"
+      ]) {
+        $(id).disabled = busy;
+      }
+
+      $("searchForm").setAttribute(
+        "aria-busy",
+        String(busy)
+      );
+
+      $("findButton").textContent = busy
+        ? "Processing your video..."
+        : "Find and create up to 4 clips";
+    }
+
+    $("searchForm").addEventListener("submit", async event => {
+      event.preventDefault();
+
+      if (isProcessing) return;
+
+      const file = $("videoFile").files[0];
+      const search = $("searchInput").value.trim();
 
       if (!file || !search) {
-        statusText.textContent =
+        $("status").textContent =
           "Choose a video and enter what you want to find.";
         return;
       }
 
       const formData = new FormData();
+
       formData.append("video", file);
       formData.append("search", search);
-
-      // Automatically analyze visuals and available speech.
       formData.append("mode", "both");
-
-      formData.append("clip_length", clipLength.value);
+      formData.append("clip_length", $("clipLength").value);
 
       setBusy(true);
-      videoPreview.pause();
+      $("videoPreview").pause();
 
-      result.hidden = true;
-      clipResults.replaceChildren();
-      statusText.textContent = "Uploading video...";
+      $("clipResults").querySelectorAll("video").forEach(video => {
+        video.pause();
+      });
+
+      $("result").hidden = true;
+      $("clipResults").replaceChildren();
+
+      $("status").classList.remove("error");
+      $("status").textContent = "Uploading video...";
 
       const started = Date.now();
 
-      function updateElapsed() {
-        const seconds = Math.floor((Date.now() - started) / 1000);
-        elapsedText.textContent =
-          `Elapsed: ${formatElapsed(seconds)}`;
-      }
+      const updateElapsed = () => {
+        const seconds = Math.floor(
+          (Date.now() - started) / 1000
+        );
 
-      elapsedText.hidden = false;
+        $("elapsed").textContent =
+          `Elapsed: ${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+      };
+
+      $("elapsed").hidden = false;
       updateElapsed();
 
       const timer = setInterval(updateElapsed, 1000);
@@ -492,8 +890,7 @@
 
         if (!upload.job_id) {
           throw new Error(
-            "The backend did not return a job ID. " +
-            "Make sure you are running the updated app1.py."
+            "The server did not return a job ID."
           );
         }
 
@@ -502,7 +899,7 @@
             `/jobs/${encodeURIComponent(upload.job_id)}`
           );
 
-          statusText.textContent =
+          $("status").textContent =
             job.message || "Processing video...";
 
           if (job.state === "error") {
@@ -518,10 +915,12 @@
               );
             }
 
-            displayClips(job.clips);
+            displayClips(job.clips, $("clipResults"));
 
-            statusText.textContent = job.clips.length > 0
-              ? `${job.clips.length} clips are ready!`
+            $("result").hidden = job.clips.length === 0;
+
+            $("status").textContent = job.clips.length
+              ? `${job.clips.length} clips are ready! View them in My clips too.`
               : "No convincing matches found. Try a different prompt.";
 
             break;
@@ -531,10 +930,12 @@
             setTimeout(resolve, 2000);
           });
         }
+
       } catch (error) {
-        statusText.classList.add("error");
-        statusText.textContent =
+        $("status").classList.add("error");
+        $("status").textContent =
           `Something went wrong: ${error.message}`;
+
       } finally {
         clearInterval(timer);
         updateElapsed();

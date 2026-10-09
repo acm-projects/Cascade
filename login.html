@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Cascade | Login</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100svh;
+      padding: 40px 20px;
+      display: grid;
+      place-items: center;
+
+      background:
+        radial-gradient(
+          circle at top left,
+          rgba(99, 102, 241, 0.25),
+          transparent 50%
+        ),
+        #0f172a;
+
+      color: #f1f5f9;
+      font-family: Arial, sans-serif;
+    }
+
+    main {
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+    }
+
+    .logo {
+      width: 86px;
+      height: 86px;
+      margin: 0 auto 20px;
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid rgba(234, 223, 197, 0.25);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .logo svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 38px;
+      letter-spacing: -1px;
+      color: #ffffff;
+    }
+
+    .description {
+      margin: 0 0 30px;
+      color: #cbd5e1;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    #sign-in {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      text-align: left;
+    }
+
+    .cl-rootBox,
+    .cl-cardBox {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    #status {
+      margin-top: 20px;
+      color: #cbd5e1;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 28px 16px;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .logo {
+        width: 76px;
+        height: 76px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <!-- Ukiyo-e inspired waterfall -->
+    <div class="logo" aria-hidden="true">
+      <svg
+        viewBox="0 0 100 100"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <clipPath id="waterfall-frame">
+            <rect
+              width="100"
+              height="100"
+              rx="22"
+            />
+          </clipPath>
+        </defs>
+
+        <g clip-path="url(#waterfall-frame)">
+          <!-- Indigo sky -->
+          <rect
+            width="100"
+            height="100"
+            fill="#172b46"
+          />
+
+          <!-- Moon -->
+          <circle
+            cx="76"
+            cy="22"
+            r="11"
+            fill="#eadfc5"
+          />
+
+          <!-- Layered cliffs -->
+          <path
+            d="M0 18 22 12 40 23 34 44 43 63 26 100H0Z"
+            fill="#456575"
+          />
+
+          <path
+            d="M100 36 80 30 65 43 70 66 59 100H100Z"
+            fill="#345363"
+          />
+
+          <!-- Woodblock contours -->
+          <g
+            fill="none"
+            stroke="#112b40"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M5 28 20 23 30 29"/>
+            <path d="M4 40 18 35 28 42"/>
+            <path d="M7 57 22 50 31 57"/>
+            <path d="M80 43 90 40 98 45"/>
+            <path d="M78 57 88 52 99 57"/>
+            <path d="M75 71 88 65 98 70"/>
+          </g>
+
+          <!-- Cascading water -->
+          <path
+            d="M40 0
+               C34 20 47 29 40 46
+               C35 60 36 72 27 86
+               L68 86
+               C55 71 60 57 55 43
+               C49 27 59 13 56 0Z"
+            fill="#eee5d1"
+          />
+
+          <!-- Flowing ink lines -->
+          <g
+            fill="none"
+            stroke="#789fae"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path
+              d="M44 4C39 24 51 30 45 48S44 70 37 82"
+            />
+            <path
+              d="M51 2C48 20 52 31 50 45S48 67 54 81"
+            />
+            <path
+              d="M42 57C40 65 41 71 36 77"
+            />
+          </g>
+
+          <!-- Pool -->
+          <path
+            d="M0 86Q22 76 44 87T100 84V100H0Z"
+            fill="#648c9f"
+          />
+
+          <!-- Curling foam -->
+          <g
+            fill="none"
+            stroke="#eee5d1"
+            stroke-width="3"
+            stroke-linecap="round"
+          >
+            <path d="M17 88Q24 78 32 85T47 87"/>
+            <path d="M48 87Q56 76 64 83T80 87"/>
+            <path d="M8 96Q21 90 34 95"/>
+            <path d="M57 96Q72 89 91 94"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <h1>Cascade</h1>
+
+    <p class="description">
+      Your next great clip starts here.<br>
+      Sign in to get creating.
+    </p>
+
+    <div id="sign-in"></div>
+
+    <p
+      id="status"
+      role="status"
+      aria-live="polite"
+    >
+      Loading login…
+    </p>
+
+    <noscript>
+      Please enable JavaScript to sign in.
+    </noscript>
+  </main>
+
+  <script>
+    // Use your Clerk PUBLISHABLE key, never your secret key.
+    const CLERK_PUBLISHABLE_KEY =
+      "pk_test_cHJvbW90ZWQtc2VhZ3VsbC03Njg4LmNsZXJrLmFjY291bnRzLmRldiQ";
+
+    // Go to the homepage served by your FastAPI backend.
+    const AFTER_LOGIN_URL = window.location.origin + "/";
+
+    function loadScript(url, publishableKey) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+
+        script.src = url;
+        script.async = true;
+        script.crossOrigin = "anonymous";
+
+        if (publishableKey) {
+          script.setAttribute(
+            "data-clerk-publishable-key",
+            publishableKey
+          );
+        }
+
+        script.onload = resolve;
+
+        script.onerror = () => {
+          reject(new Error("Could not load Clerk."));
+        };
+
+        document.head.appendChild(script);
+      });
+    }
+
+    async function initializeClerk() {
+      const status = document.getElementById("status");
+
+      try {
+        if (!/^pk_(test|live)_/.test(CLERK_PUBLISHABLE_KEY)) {
+          status.textContent =
+            "Please add your Clerk publishable key in login.html.";
+          return;
+        }
+
+        const encodedDomain =
+          CLERK_PUBLISHABLE_KEY.split("_")[2];
+
+        const paddedDomain = encodedDomain.padEnd(
+          Math.ceil(encodedDomain.length / 4) * 4,
+          "="
+        );
+
+        const decodedDomain = atob(paddedDomain);
+
+        if (!decodedDomain.endsWith("$")) {
+          throw new Error("Invalid Clerk publishable key.");
+        }
+
+        const clerkDomain = decodedDomain.slice(0, -1);
+
+        if (!/^[a-zA-Z0-9.-]+$/.test(clerkDomain)) {
+          throw new Error("Invalid Clerk publishable key.");
+        }
+
+        await loadScript(
+          `https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`
+        );
+
+        await loadScript(
+          `https://${clerkDomain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`,
+          CLERK_PUBLISHABLE_KEY
+        );
+
+        await window.Clerk.load({
+          ui: {
+            ClerkUI: window.__internal_ClerkUICtor
+          }
+        });
+
+        if (window.Clerk.isSignedIn) {
+          window.location.replace(AFTER_LOGIN_URL);
+          return;
+        }
+
+        window.Clerk.mountSignIn(
+          document.getElementById("sign-in"),
+          {
+            routing: "hash",
+            forceRedirectUrl: AFTER_LOGIN_URL,
+            signUpForceRedirectUrl: AFTER_LOGIN_URL,
+
+            appearance: {
+              variables: {
+                colorPrimary: "#635bff",
+                colorPrimaryForeground: "#ffffff",
+
+                colorBackground: "#ffffff",
+                colorForeground: "#172033",
+                colorMutedForeground: "#64748b",
+                colorMuted: "#f1f5f9",
+
+                colorInput: "#f8fafc",
+                colorInputForeground: "#172033",
+                colorNeutral: "#172033",
+                colorDanger: "#dc2626",
+
+                borderRadius: "14px",
+                fontFamily: "Arial, sans-serif",
+                fontSize: "15px"
+              },
+
+              elements: {
+                card: {
+                  padding: "28px",
+                  border: "1px solid #e2e8f0",
+                  boxShadow:
+                    "0 20px 60px rgba(0, 0, 0, 0.25)"
+                },
+
+                headerTitle: {
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#172033"
+                },
+
+                headerSubtitle: {
+                  color: "#64748b"
+                },
+
+                formFieldLabel: {
+                  color: "#172033"
+                },
+
+                formFieldInput: {
+                  minHeight: "46px",
+                  backgroundColor: "#f8fafc",
+                  color: "#172033",
+                  border: "1px solid #cbd5e1"
+                },
+
+                formButtonPrimary: {
+                  minHeight: "46px",
+                  fontSize: "15px",
+                  background: "#635bff",
+                  color: "#ffffff"
+                },
+
+                socialButtonsBlockButton: {
+                  minHeight: "46px",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  color: "#172033"
+                },
+
+                socialButtonsBlockButtonText: {
+                  color: "#172033"
+                },
+
+                footer: {
+                  background: "#f8fafc"
+                },
+
+                footerActionText: {
+                  color: "#64748b"
+                },
+
+                footerActionLink: {
+                  color: "#5145cd"
+                }
+              }
+            }
+          }
+        );
+
+        status.textContent = "";
+      } catch (error) {
+        console.error(error);
+
+        status.textContent =
+          "Login could not load. Check your Clerk publishable " +
+          "key and internet connection, then refresh.";
+      }
+    }
+
+    initializeClerk();
+  </script>
+</body>
+</html>

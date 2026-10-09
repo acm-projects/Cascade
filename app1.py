@@ -2,16 +2,28 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from uuid import uuid4
+from functools import lru_cache
+import base64
 import html
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
 import traceback
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+import jwt
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 from ollama import Client
 
 
@@ -21,28 +33,489 @@ PROJECT_DIR = Path(__file__).resolve().parent
 JOBS_DIR = PROJECT_DIR / "video_jobs"
 JOBS_DIR.mkdir(exist_ok=True)
 
-# Explicit Instruct variant.
 MODEL = "qwen3-vl:4b-instruct"
-
-# Model used for the text-only steps (interpreting the request and
-# scoring). Defaults to the same model. A larger text model such as
-# "qwen3:8b" judges humor better if you have it installed.
 SCORING_MODEL = MODEL
-
 FRAME_INTERVAL = 2.0
 GROUP_SIZE = 5
 
-# One video-processing task at a time.
 worker = ThreadPoolExecutor(max_workers=1)
 jobs = {}
 jobs_lock = Lock()
-
 whisper_model = None
 
 ollama_client = Client(
     host="http://127.0.0.1:11434",
     timeout=600,
 )
+
+
+# ---------------------------------------------------------
+# Clerk configuration and token verification
+# ---------------------------------------------------------
+
+def clerk_configuration():
+    key = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip()
+
+    if not key:
+        login_path = PROJECT_DIR / "login.html"
+
+        if login_path.is_file():
+            match = re.search(
+                r"""const\s+CLERK_PUBLISHABLE_KEY\s*=\s*["'](pk_(?:test|live)_[^"']+)["']""",
+                login_path.read_text(encoding="utf-8"),
+            )
+
+            if match:
+                key = match.group(1)
+
+    try:
+        if not key.startswith(("pk_test_", "pk_live_")):
+            raise ValueError("Invalid publishable key.")
+
+        encoded = key.split("_", 2)[2]
+        encoded += "=" * (-len(encoded) % 4)
+        decoded = base64.b64decode(encoded).decode()
+
+        if not decoded.endswith("$"):
+            raise ValueError("Invalid Clerk domain.")
+
+        domain = decoded[:-1]
+
+        if not re.fullmatch(r"[a-zA-Z0-9.-]+", domain):
+            raise ValueError("Invalid Clerk domain.")
+
+    except (ValueError, IndexError, UnicodeError):
+        raise HTTPException(
+            503,
+            "Add your Clerk publishable key to login.html first.",
+        )
+
+    return key, domain
+
+
+def authorized_parties():
+    return {
+        value.strip()
+        for value in os.environ.get(
+            "CLERK_AUTHORIZED_PARTIES",
+            "http://127.0.0.1:8000,http://localhost:8000",
+        ).split(",")
+        if value.strip()
+    }
+
+
+@lru_cache(maxsize=4)
+def clerk_jwks(domain):
+    return jwt.PyJWKClient(
+        f"https://{domain}/.well-known/jwks.json",
+        timeout=10,
+    )
+
+
+def verify_clerk_token(token):
+    _, domain = clerk_configuration()
+
+    try:
+        signing_key = (
+            clerk_jwks(domain)
+            .get_signing_key_from_jwt(token)
+            .key
+        )
+
+        claims = jwt.decode(
+            token,
+            signing_key,
+            algorithms=["RS256"],
+            issuer=f"https://{domain}",
+            options={
+                "require": ["exp", "iat", "nbf", "sub", "sid"],
+                "verify_aud": False,
+            },
+        )
+
+        if (
+            claims.get("azp") not in authorized_parties()
+            or not claims.get("sub")
+            or not claims.get("sid")
+        ):
+            raise jwt.InvalidTokenError(
+                "Invalid session or authorized party."
+            )
+
+        return claims["sub"]
+
+    except jwt.PyJWKClientConnectionError as error:
+        print(
+            "Clerk signing-key connection failed:",
+            str(error),
+            flush=True,
+        )
+        traceback.print_exc()
+
+        raise HTTPException(
+            503,
+            "Could not reach Clerk to verify your session. Try again.",
+        ) from error
+
+    except jwt.PyJWTError:
+        raise HTTPException(401, "Please sign in again.")
+
+
+@app.middleware("http")
+async def authenticate_backend(request: Request, call_next):
+    protected = (
+        request.url.path in ("/upload", "/api/my-clips")
+        or request.url.path.startswith(("/jobs/", "/clips/"))
+    )
+
+    if protected:
+        origin = request.headers.get("origin")
+
+        if origin and origin not in authorized_parties():
+            return JSONResponse(
+                {"detail": "Origin not allowed."},
+                status_code=403,
+            )
+
+        authorization = request.headers.get("authorization", "")
+
+        if authorization.startswith("Bearer "):
+            token = authorization[7:]
+        else:
+            token = request.cookies.get("__session")
+
+        if not token:
+            return JSONResponse(
+                {"detail": "Please sign in first."},
+                status_code=401,
+            )
+
+        try:
+            request.state.user_id = await run_in_threadpool(
+                verify_clerk_token,
+                token,
+            )
+        except HTTPException as error:
+            return JSONResponse(
+                {"detail": error.detail},
+                status_code=error.status_code,
+            )
+
+    response = await call_next(request)
+
+    if protected:
+        response.headers["Cache-Control"] = "no-store"
+
+    return response
+
+
+# ---------------------------------------------------------
+# Login page
+# ---------------------------------------------------------
+
+@app.get("/login")
+def login_page():
+    path = PROJECT_DIR / "login.html"
+
+    if not path.is_file():
+        raise HTTPException(
+            404,
+            "Put login.html beside app1.py.",
+        )
+
+    page = path.read_text(encoding="utf-8")
+
+    page = re.sub(
+        r"const\s+AFTER_LOGIN_URL\s*=\s*[^;]+;",
+        'const AFTER_LOGIN_URL = window.location.origin + "/";',
+        page,
+    )
+
+    return HTMLResponse(
+        page,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+# ---------------------------------------------------------
+# Homepage authentication and account button
+# ---------------------------------------------------------
+
+def homepage_auth_script():
+    key, domain = clerk_configuration()
+
+    script = r"""
+<style id="cascade-auth-pending">
+  body {
+    visibility: hidden;
+  }
+</style>
+
+<script>
+(() => {
+  const originalFetch = window.fetch.bind(window);
+  let redirectingToLogin = false;
+
+  function redirectToLogin() {
+    redirectingToLogin = true;
+    window.location.replace("/login");
+  }
+
+  const authReady = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+
+    script.src = __SDK_URL__;
+    script.crossOrigin = "anonymous";
+    script.setAttribute(
+      "data-clerk-publishable-key",
+      __PUBLIC_KEY__
+    );
+
+    script.onload = async () => {
+      try {
+        await new Promise((resolveUI, rejectUI) => {
+          const uiScript = document.createElement("script");
+
+          uiScript.src =
+            new URL(script.src).origin +
+            "/npm/@clerk/ui@1/dist/ui.browser.js";
+
+          uiScript.crossOrigin = "anonymous";
+          uiScript.onload = resolveUI;
+          uiScript.onerror = () => {
+            rejectUI(
+              new Error("Could not load Clerk account interface.")
+            );
+          };
+
+          document.head.appendChild(uiScript);
+        });
+
+        await window.Clerk.load({
+          ui: {
+            ClerkUI: window.__internal_ClerkUICtor
+          },
+          afterSignOutUrl: "/login"
+        });
+
+        if (!window.Clerk.session) {
+          redirectToLogin();
+          reject(new Error("Sign in required."));
+          return;
+        }
+
+        const token = await window.Clerk.session.getToken();
+
+        if (!token) {
+          redirectToLogin();
+          reject(new Error("Sign in required."));
+          return;
+        }
+
+        // Wait until index.html has finished creating its elements.
+        if (document.readyState === "loading") {
+          await new Promise(resolveDOM => {
+            document.addEventListener(
+              "DOMContentLoaded",
+              resolveDOM,
+              { once: true }
+            );
+          });
+        }
+
+        const accountContainer = document.createElement("div");
+        accountContainer.id = "cascade-account";
+
+        const accountSlot =
+          document.getElementById("account-button-slot");
+
+        if (accountSlot) {
+          accountSlot.appendChild(accountContainer);
+        } else {
+          accountContainer.style.cssText =
+            "position:fixed;top:16px;right:20px;" +
+            "z-index:1000;padding:8px;background:white;" +
+            "border-radius:999px;";
+          document.body.appendChild(accountContainer);
+        }
+
+        window.Clerk.mountUserButton(accountContainer);
+
+        // Let index.html fill in the name, email, and settings buttons.
+        window.dispatchEvent(new Event("cascade-auth-ready"));
+
+        document
+          .getElementById("cascade-auth-pending")
+          ?.remove();
+
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    script.onerror = () => {
+      reject(new Error("Could not load Clerk."));
+    };
+
+    document.head.appendChild(script);
+  });
+
+  authReady.catch(error => {
+    console.error(error);
+
+    if (redirectingToLogin) return;
+
+    const showError = () => {
+      document
+        .getElementById("cascade-auth-pending")
+        ?.remove();
+
+      document.body.replaceChildren();
+
+      const message = document.createElement("p");
+      message.textContent =
+        "Login could not load. Check your connection and refresh.";
+
+      const loginLink = document.createElement("a");
+      loginLink.href = "/login";
+      loginLink.textContent = "Go to login";
+
+      document.body.append(message, loginLink);
+    };
+
+    if (document.body) {
+      showError();
+    } else {
+      document.addEventListener(
+        "DOMContentLoaded",
+        showError,
+        { once: true }
+      );
+    }
+  });
+
+  // Attach Clerk tokens to protected API requests.
+  window.fetch = async (input, init) => {
+    const url = new URL(
+      input instanceof Request ? input.url : input,
+      location.href
+    );
+
+    const protectedRequest =
+      url.origin === location.origin &&
+      (
+        url.pathname === "/upload" ||
+        url.pathname === "/api/my-clips" ||
+        url.pathname.startsWith("/jobs/") ||
+        url.pathname.startsWith("/clips/")
+      );
+
+    if (!protectedRequest) {
+      return originalFetch(input, init);
+    }
+
+    await authReady;
+
+    const token = await window.Clerk.session?.getToken();
+
+    if (!token) {
+      redirectToLogin();
+      throw new Error("Sign in required.");
+    }
+
+    const headers = new Headers(
+      init?.headers ||
+      (input instanceof Request ? input.headers : undefined)
+    );
+
+    headers.set("Authorization", "Bearer " + token);
+
+    const response = await originalFetch(
+      input,
+      { ...init, headers }
+    );
+
+    if (response.status === 401) {
+      redirectToLogin();
+    }
+
+    return response;
+  };
+})();
+</script>
+"""
+
+    sdk_url = (
+        f"https://{domain}/npm/"
+        "@clerk/clerk-js@6/dist/clerk.browser.js"
+    )
+
+    return (
+        script
+        .replace("__SDK_URL__", json.dumps(sdk_url))
+        .replace("__PUBLIC_KEY__", json.dumps(key))
+    )
+
+
+@app.get("/")
+def show_website():
+    path = PROJECT_DIR / "index.html"
+
+    if not path.is_file():
+        raise HTTPException(
+            404,
+            "Put index.html beside app1.py.",
+        )
+
+    page = path.read_text(encoding="utf-8")
+
+    match = re.search(
+        r"<head\b[^>]*>",
+        page,
+        flags=re.IGNORECASE,
+    )
+
+    if not match:
+        raise HTTPException(
+            500,
+            "index.html needs a <head> element.",
+        )
+
+    page = (
+        page[:match.end()]
+        + homepage_auth_script()
+        + page[match.end():]
+    )
+
+    return HTMLResponse(
+        page,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+# ---------------------------------------------------------
+# Job ownership
+# ---------------------------------------------------------
+
+def require_job_owner(job_id, user_id):
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(404, "Job not found.")
+
+    owner_path = JOBS_DIR / job_id / "owner.json"
+
+    if not owner_path.is_file():
+        raise HTTPException(
+            404,
+            "Job not found. Upload the video again.",
+        )
+
+    owner = json.loads(
+        owner_path.read_text(encoding="utf-8")
+    )
+
+    if owner.get("user_id") != user_id:
+        raise HTTPException(404, "Job not found.")
 
 
 # ---------------------------------------------------------
@@ -74,13 +547,19 @@ def run_command(command):
 
     if result.returncode != 0:
         raise RuntimeError(
-            result.stderr[-1500:] or "Video processing failed."
+            result.stderr[-1500:]
+            or "Video processing failed."
         )
 
     return result.stdout
 
 
-def ask_qwen(prompt, images=None, json_response=False, model=None):
+def ask_qwen(
+    prompt,
+    images=None,
+    json_response=False,
+    model=None,
+):
     model_name = model or MODEL
     message = {
         "role": "user",
@@ -108,8 +587,13 @@ def ask_qwen(prompt, images=None, json_response=False, model=None):
     )
 
     answer = (response.message.content or "").strip()
+
     if json_response:
-        print("RAW SELECTION RESPONSE:", repr(answer), flush=True)
+        print(
+            "RAW SELECTION RESPONSE:",
+            repr(answer),
+            flush=True,
+        )
 
     print(
         f"Model: {model_name} | "
@@ -120,8 +604,8 @@ def ask_qwen(prompt, images=None, json_response=False, model=None):
 
     if response.done_reason == "length":
         raise RuntimeError(
-            "Qwen reached its output limit before completing the answer. "
-            "Completed video analysis is still saved."
+            "Qwen reached its output limit before completing "
+            "the answer. Completed video analysis is still saved."
         )
 
     if not answer:
@@ -143,7 +627,7 @@ def ask_qwen(prompt, images=None, json_response=False, model=None):
 
 
 # ---------------------------------------------------------
-# Inspect the uploaded video
+# Inspect uploaded video
 # ---------------------------------------------------------
 
 def inspect_video(video_path):
@@ -180,7 +664,7 @@ def inspect_video(video_path):
 
 
 # ---------------------------------------------------------
-# Speech -> transcript
+# Speech transcription
 # ---------------------------------------------------------
 
 def transcribe_video(video_path, has_audio, progress):
@@ -227,18 +711,16 @@ def transcribe_video(video_path, has_audio, progress):
         })
 
         progress(
-            f"Transcribing speech: reached "
+            "Transcribing speech: reached "
             f"{segment.end:.0f} seconds..."
         )
 
-    # Save only after transcription completes.
     save_json(transcript_path, transcript)
-
     return transcript
 
 
 # ---------------------------------------------------------
-# Video frames -> visual descriptions
+# Visual analysis
 # ---------------------------------------------------------
 
 def describe_video(video_path, folder, duration, progress):
@@ -274,7 +756,6 @@ def describe_video(video_path, folder, duration, progress):
 
     frames = sorted(frames_dir.glob("frame_*.jpg"))
 
-    # Handle videos too short for the normal sampling filter.
     if not frames:
         run_command([
             "ffmpeg",
@@ -309,12 +790,12 @@ def describe_video(video_path, folder, duration, progress):
             start + GROUP_SIZE * FRAME_INTERVAL,
         )
 
-        # Include the small remaining tail in the final approximate range.
         if group_index == total_groups - 1:
             end = duration
 
         progress(
-            f"Analyzing visuals {group_index + 1}/{total_groups}: "
+            f"Analyzing visuals "
+            f"{group_index + 1}/{total_groups}: "
             f"{start:.0f}–{end:.0f} seconds..."
         )
 
@@ -335,23 +816,16 @@ def describe_video(video_path, folder, duration, progress):
             "visual_description": description,
         })
 
-        # Preserve each completed section if a later request fails.
         save_json(descriptions_path, descriptions)
 
     return descriptions
 
 
 # ---------------------------------------------------------
-# Descriptions + transcript + prompt -> selected moments
-#
-# 1. Turn a vague request ("funniest parts") into concrete signs.
-# 2. The model only SCORES each section 0-10, relative to the video.
-# 3. Python picks, merges and sizes the clips.
+# Understand the search request
 # ---------------------------------------------------------
 
 def interpret_request(search):
-    """Translate a vague or subjective request into observable signs."""
-
     prompt = f"""
 Someone wants to find moments in a video using this request:
 {json.dumps(search)}
@@ -360,6 +834,7 @@ The video is searched using written descriptions of what happens
 (actions, events, expressions, dialogue), not the raw footage.
 
 Explain what to look for in those descriptions, in 2-4 sentences.
+
 - If the request is subjective (funny, exciting, emotional, scary,
   heartwarming, impressive), translate it into concrete observable signs.
   Example for "funny": a mishap or accident, something unexpected,
@@ -390,9 +865,11 @@ Return ONLY JSON:
     return search, False
 
 
-def score_observations(observations, search, criteria, progress):
-    """Ask Qwen only to rate each observation 0-10. Code does the rest."""
+# ---------------------------------------------------------
+# Score observations
+# ---------------------------------------------------------
 
+def score_observations(observations, search, criteria, progress):
     instructions = f"""
 You are rating sections of a video against a search request.
 
@@ -405,6 +882,7 @@ Score relative to the whole video:
 5-7 = decent match
 2-4 = weak or partial match
 0-1 = unrelated
+
 Use the full range. Do not give every section the same score.
 If a section clearly contains what was requested, score it at least 7.
 
@@ -424,22 +902,30 @@ Return ONLY JSON, with one entry for every observation id:
             "start": observation["start"],
             "end": observation["end"],
             "type": (
-                "visual" if "visual_description" in observation
+                "visual"
+                if "visual_description" in observation
                 else "speech"
             ),
-            "text": observation.get("visual_description")
-                    or observation.get("text", ""),
+            "text": (
+                observation.get("visual_description")
+                or observation.get("text", "")
+            ),
         })
 
-    # Small batches keep a 4B model accurate.
-    batches, batch, size = [], [], 0
+    batches = []
+    batch = []
+    size = 0
 
     for item in items:
         item_size = len(json.dumps(item, ensure_ascii=False))
 
-        if batch and (len(batch) >= 4 or size + item_size > 6000):
+        if batch and (
+            len(batch) >= 4
+            or size + item_size > 6000
+        ):
             batches.append(batch)
-            batch, size = [], 0
+            batch = []
+            size = 0
 
         batch.append(item)
         size += item_size
@@ -452,7 +938,6 @@ Return ONLY JSON, with one entry for every observation id:
     for number, batch in enumerate(batches, start=1):
         progress(f"Scoring moments {number}/{len(batches)}...")
 
-        # Give the model the section just before this batch as setup.
         first_id = batch[0]["id"]
         context = ""
 
@@ -472,12 +957,13 @@ Return ONLY JSON, with one entry for every observation id:
                 json_response=True,
                 model=SCORING_MODEL,
             )
+
         except RuntimeError:
-            # One bad batch should not lose the whole search.
             traceback.print_exc()
             continue
 
         by_id = {item["id"]: item for item in batch}
+
         entries = (
             response.get("scores", [])
             if isinstance(response, dict)
@@ -493,7 +979,11 @@ Return ONLY JSON, with one entry for every observation id:
 
             try:
                 item = by_id[int(entry["id"])]
-                score = max(0.0, min(10.0, float(entry["score"])))
+                score = max(
+                    0.0,
+                    min(10.0, float(entry["score"])),
+                )
+
             except (KeyError, TypeError, ValueError):
                 continue
 
@@ -501,7 +991,9 @@ Return ONLY JSON, with one entry for every observation id:
                 "start": float(item["start"]),
                 "end": float(item["end"]),
                 "score": score,
-                "title": str(entry.get("title") or "Selected moment"),
+                "title": str(
+                    entry.get("title") or "Selected moment"
+                ),
                 "reason": str(entry.get("reason") or ""),
             })
 
@@ -510,12 +1002,17 @@ Return ONLY JSON, with one entry for every observation id:
     for item in scored:
         print(
             f"SCORE {item['score']:>4} "
-            f"{item['start']:.0f}-{item['end']:.0f}s  {item['reason']}",
+            f"{item['start']:.0f}-{item['end']:.0f}s  "
+            f"{item['reason']}",
             flush=True,
         )
 
     return scored
 
+
+# ---------------------------------------------------------
+# Select up to four clips
+# ---------------------------------------------------------
 
 def select_clips(observations, search, duration, target, progress):
     if not observations:
@@ -544,17 +1041,17 @@ def select_clips(observations, search, duration, target, progress):
     if best < 4:
         return []
 
-    # Vague requests are ranked relative to the best moments in the
-    # video. Concrete requests need a clear match (score 6+), falling
-    # back to the best weak match.
-    if subjective:
-        cutoff = max(4, best - 2)
-    else:
-        cutoff = min(6, best)
+    cutoff = (
+        max(4, best - 2)
+        if subjective
+        else min(6, best)
+    )
 
-    hits = [item for item in scored if item["score"] >= cutoff]
+    hits = [
+        item for item in scored
+        if item["score"] >= cutoff
+    ]
 
-    # Merge hits that touch or are within 3 seconds of each other.
     runs = []
 
     for item in hits:
@@ -566,24 +1063,27 @@ def select_clips(observations, search, duration, target, progress):
                 run["score"] = item["score"]
                 run["title"] = item["title"]
                 run["reason"] = item["reason"]
-                run["center"] = (item["start"] + item["end"]) / 2
+                run["center"] = (
+                    item["start"] + item["end"]
+                ) / 2
+
         else:
             runs.append({
                 **item,
                 "center": (item["start"] + item["end"]) / 2,
             })
 
-    # Expand or trim each run to the requested clip length.
-    # Extra time goes mostly BEFORE the moment to include the setup.
     clips = []
 
     for run in runs:
-        start, end = run["start"], run["end"]
+        start = run["start"]
+        end = run["end"]
         length = end - start
 
         if length > target * 2:
             start = run["center"] - target
             end = run["center"] + target
+
         elif length < target:
             extra = target - length
             start -= extra * 0.6
@@ -611,8 +1111,11 @@ def select_clips(observations, search, duration, target, progress):
             "score": run["score"],
         })
 
-    # Best first, no overlaps, max four.
-    clips.sort(key=lambda clip: clip["score"], reverse=True)
+    clips.sort(
+        key=lambda clip: clip["score"],
+        reverse=True,
+    )
+
     selected = []
 
     for clip in clips:
@@ -637,7 +1140,7 @@ def select_clips(observations, search, duration, target, progress):
 
 
 # ---------------------------------------------------------
-# Browser speech captions
+# Speech captions
 # ---------------------------------------------------------
 
 def caption_time(seconds):
@@ -680,7 +1183,7 @@ def write_captions(path, transcript, start, end):
 
 
 # ---------------------------------------------------------
-# Complete background task
+# Background video processing
 # ---------------------------------------------------------
 
 def process_upload(job_id, video_path, search, mode, target):
@@ -804,16 +1307,12 @@ def process_upload(job_id, video_path, search, mode, target):
 
 
 # ---------------------------------------------------------
-# Website routes
+# Upload video
 # ---------------------------------------------------------
-
-@app.get("/")
-def show_website():
-    return FileResponse(PROJECT_DIR / "index.html")
-
 
 @app.post("/upload", status_code=202)
 def upload_video(
+    request: Request,
     video: UploadFile = File(...),
     search: str = Form(...),
     mode: str = Form("both"),
@@ -858,6 +1357,11 @@ def upload_video(
                 "The uploaded file is empty.",
             )
 
+        save_json(
+            folder / "owner.json",
+            {"user_id": request.state.user_id},
+        )
+
     except Exception:
         shutil.rmtree(folder)
         raise
@@ -884,27 +1388,53 @@ def upload_video(
     return {"job_id": job_id}
 
 
+# ---------------------------------------------------------
+# Job status
+# ---------------------------------------------------------
+
 @app.get("/jobs/{job_id}")
-def get_job(job_id: str):
+def get_job(job_id: str, request: Request):
+    require_job_owner(job_id, request.state.user_id)
+
     with jobs_lock:
-        if job_id not in jobs:
-            raise HTTPException(
-                404,
-                "Job unavailable. The server may have restarted.",
-            )
+        if job_id in jobs:
+            return dict(jobs[job_id])
 
-        return dict(jobs[job_id])
+    # Completed results remain available after a server restart.
+    results_path = JOBS_DIR / job_id / "results.json"
 
+    if results_path.is_file():
+        results = json.loads(
+            results_path.read_text(encoding="utf-8")
+        )
+        clips = results.get("clips", [])
+
+        return {
+            "state": "done",
+            "message": f"{len(clips)} clips are ready.",
+            "clips": clips,
+        }
+
+    raise HTTPException(
+        404,
+        "Job unavailable. The server may have restarted "
+        "before processing finished. Upload the video again.",
+    )
+
+
+# ---------------------------------------------------------
+# Serve clips and captions
+# ---------------------------------------------------------
 
 @app.get("/clips/{job_id}/{filename}")
-def get_clip(job_id: str, filename: str):
-    if (
-        not re.fullmatch(r"[0-9a-f]{32}", job_id)
-        or not re.fullmatch(
-            r"clip_[1-4]\.(mp4|vtt)",
-            filename,
-        )
-    ):
+def get_clip(
+    job_id: str,
+    filename: str,
+    request: Request,
+):
+    require_job_owner(job_id, request.state.user_id)
+
+    if not re.fullmatch(r"clip_[1-4]\.(mp4|vtt)", filename):
         raise HTTPException(404, "Clip not found.")
 
     path = JOBS_DIR / job_id / filename
@@ -919,3 +1449,84 @@ def get_clip(job_id: str, filename: str):
     )
 
     return FileResponse(path, media_type=media_type)
+
+
+# ---------------------------------------------------------
+# My clips: return only the signed-in user's saved clips
+# ---------------------------------------------------------
+
+@app.get("/api/my-clips")
+def get_my_clips(request: Request):
+    saved_clips = []
+
+    folders = [
+        folder
+        for folder in JOBS_DIR.iterdir()
+        if folder.is_dir()
+        and re.fullmatch(r"[0-9a-f]{32}", folder.name)
+    ]
+
+    folders.sort(
+        key=lambda folder: folder.stat().st_mtime,
+        reverse=True,
+    )
+
+    for folder in folders:
+        owner_path = folder / "owner.json"
+        results_path = folder / "results.json"
+
+        if not owner_path.is_file():
+            continue
+
+        try:
+            owner = json.loads(
+                owner_path.read_text(encoding="utf-8")
+            )
+
+            if owner.get("user_id") != request.state.user_id:
+                continue
+
+            if not results_path.is_file():
+                continue
+
+            results = json.loads(
+                results_path.read_text(encoding="utf-8")
+            )
+
+            clips = results.get("clips", [])
+
+            if not isinstance(clips, list):
+                continue
+
+            for clip in clips:
+                if not isinstance(clip, dict):
+                    continue
+
+                clip_url = clip.get("clip_url")
+
+                if not isinstance(clip_url, str):
+                    continue
+
+                match = re.fullmatch(
+                    rf"/clips/{folder.name}/(clip_[1-4]\.mp4)",
+                    clip_url,
+                )
+
+                if not match:
+                    continue
+
+                if not (folder / match.group(1)).is_file():
+                    continue
+
+                saved_clips.append({
+                    **clip,
+                    "job_id": folder.name,
+                })
+
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+
+    return JSONResponse(
+        {"clips": saved_clips},
+        headers={"Cache-Control": "no-store"},
+    )
