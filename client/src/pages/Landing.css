@@ -1,0 +1,21 @@
+.landing {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+.landing .blimp {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  width: 55%;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(-50%, 0); }
+  50%      { transform: translate(-50%, -30px); }
+}
