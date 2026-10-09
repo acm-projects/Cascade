@@ -1,10 +1,11 @@
 .landing {
   position: relative;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   background-size: cover;
   background-position: center;
   overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
 }
 
 .landing .blimp {
