@@ -1,22 +1,27 @@
 .landing {
   position: relative;
   width: 100%;
-  height: 100vh;
-  background-size: cover;
-  background-position: center;
+  height: 80vh;
+  background: #b2f7fd;
   overflow: hidden;
   mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  display: flex;
+  align-items: center;       /* center the word vertically */
+  justify-content: center;   /* center the word horizontally */
+}
+.landing-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20vh;        /* ← pushes the word up */
 }
 
-.landing .blimp {
-  position: absolute;
-  top: 52%;
-  left: 50%;
-  width: 55%;
-  animation: float 3s ease-in-out infinite;
+.landing-letter {
+  height: min(20vh, 11vw);
+  width: auto;
+  margin: 0 -0.6vw;           /* ← negative margin pulls letters closer */
+  animation: bounce 1s steps(1) infinite;
 }
-
-@keyframes float {
-  0%, 100% { transform: translate(-50%, 0); }
-  50%      { transform: translate(-50%, -30px); }
+@keyframes bounce {
+  0%, 100% { transform: translateY(-15px); }
+  50%      { transform: translateY(15px); }
 }
