@@ -1,4 +1,5 @@
 import "./Landing.css";
+import { Link } from "react-router-dom";
 import letterC from "../assets/letter_c1.png";
 import letterA from "../assets/letter_a1.png";
 import letterS from "../assets/letter_s.png";
@@ -22,6 +23,10 @@ function Landing() {
           />
         ))}
       </div>
+
+      <Link to="/projects" className="page-button landing-start">
+        Get Started
+      </Link>
     </div>
   );
 }

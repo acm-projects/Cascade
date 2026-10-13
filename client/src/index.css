@@ -4,6 +4,18 @@
   box-sizing: border-box;
 }
 
-.sky {
-  background: #b2f7fd;
+.page-button {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: white;
+  color: #1a3d2b;
+  font-size: 1.1rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.page-button:hover {
+  background: #e0e0e0;
 }

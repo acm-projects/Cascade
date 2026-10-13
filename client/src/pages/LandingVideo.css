@@ -7,6 +7,13 @@
   mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
 }
 
+.landing-start {
+  position: absolute;
+  bottom: 15vh;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 /* The video file is sideways (portrait), so we swap its width/height
    and rotate it 90° to make it landscape */
 .landing-video-player {

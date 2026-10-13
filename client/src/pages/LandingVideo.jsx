@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { Link } from "react-router-dom";
 import "./LandingVideo.css";
 
 const START = 1; // seconds: where the loop begins
@@ -31,6 +32,9 @@ function LandingVideo() {
         onLoadedMetadata={handleLoaded}
         onTimeUpdate={handleTimeUpdate}
       />
+      <Link to="/projects" className="page-button landing-start">
+        Get Started
+      </Link>
     </div>
   );
 }
