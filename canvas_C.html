@@ -268,8 +268,14 @@
               margin-top: 16px;
             "
           >
-            Generate Clip 1
+            Generate clips
           </button>
+          <details class="research-section">
+            <summary>Research current trends</summary>
+            <p class="muted">Analyze the selected upload or this generation’s original video. Research does not require a matching clip.</p>
+            <form id="research-form"><label for="research-topic">Topic</label><input id="research-topic" maxlength="200" required><button type="submit">Analyze trends</button></form>
+            <div id="research-result" aria-live="polite"></div>
+          </details>
         </section>
 
         <div class="connector" aria-hidden="true"></div>

@@ -9,8 +9,11 @@ import shutil
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
+from typing import Literal
 
-from fastapi import HTTPException, Request
+from backend.settings.preferences import load_preferences, save_preferences
+
+from fastapi import HTTPException, Request, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
 host = None
@@ -19,6 +22,14 @@ lock = RLock()
 
 class ProjectInput(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+
+
+class SettingsInput(BaseModel):
+    video_type: Literal["", "tutorial", "vlog", "interview", "podcast"] = ""
+    audience: str = Field(default="", max_length=200)
+    tone: Literal["", "casual", "professional", "funny", "educational"] = ""
+    goal: str = Field(default="", max_length=500)
+    platforms: list[Literal["tiktok", "instagram", "linkedin", "youtube"]] = Field(default_factory=list, max_length=4)
 
 
 class ClipInput(BaseModel):
@@ -54,7 +65,8 @@ def project_jobs(project_id, user_id):
         if owner.get('user_id') == user_id and owner.get('project_id') == project_id:
             result.append({'job_id': path.parent.name, 'prompt': owner.get('prompt', ''),
                            'source_name': owner.get('source_name', ''),
-                           'kind': owner.get('kind', 'generation'), 'created_at': path.stat().st_mtime})
+                           'kind': owner.get('kind', 'generation'), 'has_source': (path.parent / 'source.video').is_file(),
+                           'created_at': path.stat().st_mtime})
     return sorted(result, key=lambda item: item['created_at'], reverse=True)
 
 
@@ -78,11 +90,23 @@ def selected_clip(project_id, body, user_id):
     return owner, clips[body.clip_index]
 
 
-def new_feature_job(owner, kind):
+def original_source(project_id, job_id, user_id):
+    visited = set()
+    while job_id and job_id not in visited and len(visited) < 20:
+        visited.add(job_id)
+        owner = owner_for_job(project_id, job_id, user_id)
+        source = host.JOBS_DIR / job_id / 'source.video'
+        if source.is_file():
+            return source
+        job_id = owner.get('parent_job')
+    raise HTTPException(409, 'Original source is unavailable. Choose an original upload from history.')
+
+
+def new_feature_job(owner, kind, parent_job=None):
     job_id = uuid4().hex
     folder = host.JOBS_DIR / job_id
     folder.mkdir()
-    host.save_json(folder / 'owner.json', {**owner, 'kind': kind})
+    host.save_json(folder / 'owner.json', {**owner, 'kind': kind, 'parent_job': parent_job})
     with host.jobs_lock:
         host.jobs[job_id] = {'state': 'queued', 'message': 'Waiting to process...', 'clips': []}
     return job_id, folder
@@ -159,6 +183,9 @@ def render_styles(job_id, source, source_clip):
 
 
 def research(job_id, source, topic):
+    work = None
+    internal_id = None
+    job_registry = None
     try:
         from backend.trends.router import _run_analysis, _new_job, JOBS, RESULTS_CACHE_DIR, _result_cache_key
         # Existing remote pipeline owns its progress/cache; adapt to persistent authenticated jobs.
@@ -166,28 +193,63 @@ def research(job_id, source, topic):
         work = folder / 'research'
         work.mkdir()
         internal_id = _new_job()
+        job_registry = JOBS
         host.update_job(job_id, state='processing', message='Analyzing your video and current YouTube trends...')
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        hasher = hashlib.sha256()
+        with source.open('rb') as video:
+            while chunk := video.read(1024 * 1024):
+                hasher.update(chunk)
+        digest = hasher.hexdigest()
         cache = RESULTS_CACHE_DIR / (_result_cache_key(topic, digest) + '.json')
         if cache.is_file():
             result = json.loads(cache.read_text())
         else:
-            _run_analysis(internal_id, topic, source, work, cache)
+            _run_analysis(internal_id, topic, source, work, cache,
+                          progress=lambda message: host.update_job(job_id, message=message))
             outcome = JOBS[internal_id]
             if outcome['status'] != 'done':
                 raise RuntimeError('Research failed')
             result = outcome['result']
-        JOBS.pop(internal_id, None)
         finish_feature(job_id, {'clips': [], 'research': result})
     except ImportError:
         fail_feature(job_id, 'A processing dependency is missing. Install requirements.txt and restart the service.')
     except Exception:
         fail_feature(job_id)
 
+    finally:
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)
+        if job_registry is not None and internal_id is not None:
+            job_registry.pop(internal_id, None)
 
 def register(app, backend):
     global host
     host = backend
+
+    @app.get('/api/health')
+    def health():
+        return {'status': 'ok'}
+
+    @app.get('/settings', include_in_schema=False)
+    def settings_page():
+        return host.serve_new_page('settings_C.html')
+
+    @app.get('/api/settings')
+    def get_settings(request: Request):
+        path = project_dir(request.state.user_id) / 'settings' / 'preferences.json'
+        with lock:
+            if path.is_file():
+                return load_preferences(path)
+            # Retain original global preferences as defaults; never overwrite them.
+            legacy = Path(host.PROJECT_DIR) / 'preferences.json'
+            return load_preferences(legacy if legacy.is_file() else None)
+
+    @app.post('/api/settings')
+    def set_settings(body: SettingsInput, request: Request):
+        path = project_dir(request.state.user_id) / 'settings' / 'preferences.json'
+        with lock:
+            save_preferences(body.model_dump(), path)
+        return {'saved': True, 'preferences': body.model_dump()}
 
     @app.get('/api/projects')
     def list_projects(request: Request):
@@ -241,20 +303,48 @@ def register(app, backend):
         source = host.JOBS_DIR / body.job_id / f'clip_{body.clip_index + 1}.mp4'
         if not source.is_file():
             raise HTTPException(409, 'Local clip is unavailable for rendering. Original download remains available.')
-        job_id, folder = new_feature_job(owner, 'caption-styles')
+        job_id, folder = new_feature_job(owner, 'caption-styles', body.job_id)
         host.worker.submit(render_styles, job_id, source, clip)
         return {'job_id': job_id}
 
     @app.post('/api/projects/{project_id}/research', status_code=202)
     def start_research(project_id: str, body: ResearchInput, request: Request):
         owner = owner_for_job(project_id, body.job_id, request.state.user_id)
-        source = host.JOBS_DIR / body.job_id / 'source.video'
-        if not source.is_file():
-            raise HTTPException(409, 'Open an original upload to run research.')
+        source = original_source(project_id, body.job_id, request.state.user_id)
         if not body.topic.strip():
             raise HTTPException(400, 'Enter a topic.')
-        job_id, folder = new_feature_job(owner, 'research')
+        job_id, folder = new_feature_job(owner, 'research', body.job_id)
         host.worker.submit(research, job_id, source, body.topic.strip())
+        return {'job_id': job_id}
+
+    @app.post('/api/projects/{project_id}/research-upload', status_code=202)
+    def research_upload(project_id: str, request: Request, video: UploadFile = File(...), topic: str = Form(...)):
+        require_project(project_id, request.state.user_id)
+        topic = topic.strip()
+        if not topic or len(topic) > 200:
+            raise HTTPException(400, 'Enter a research topic of 1–200 characters.')
+        suffix = Path(video.filename or '').suffix.lower()
+        if suffix not in {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'}:
+            raise HTTPException(400, 'Choose a supported video file.')
+        if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+            raise HTTPException(503, 'FFmpeg and ffprobe must be installed.')
+        storage = host.resolve_storage_folder(request.state.user_id)
+        owner = {'user_id': request.state.user_id, 'project_id': project_id,
+                 'user_folder': storage['folder'], 'folder_source': storage['source'],
+                 'source_name': Path(video.filename).name, 'prompt': topic}
+        job_id, folder = new_feature_job(owner, 'research')
+        source = folder / 'source.video'
+        try:
+            with source.open('wb') as destination:
+                shutil.copyfileobj(video.file, destination)
+            if source.stat().st_size == 0:
+                raise HTTPException(400, 'The uploaded file is empty.')
+        except Exception:
+            fail_feature(job_id, 'The video upload failed. Select a nonempty video and retry.')
+            raise
+        finally:
+            video.file.close()
+        host.worker.submit(research, job_id, source, topic)
         return {'job_id': job_id}
 
     @app.get('/api/features/{job_id}')

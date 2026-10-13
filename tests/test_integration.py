@@ -122,6 +122,128 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(self.client.post(prefix + '/research', headers=self.other, json=body).status_code, 404)
         self.assertEqual(self.client.post('/upload', headers=self.other, data={'project_id': self.project['id'], 'search': 'waterfalls'}, files={'video': ('a.mp4', b'video')}).status_code, 404)
 
+    def test_settings_save_reload_isolation_and_legacy_preservation(self):
+        legacy = Path(self.temp.name) / 'preferences.json'
+        legacy.write_text(json.dumps({'tone': 'professional', 'audience': 'legacy audience'}))
+        original = legacy.read_bytes()
+        body = {'video_type': 'interview', 'audience': 'creators', 'tone': 'funny',
+                'goal': 'grow followers', 'platforms': ['youtube', 'tiktok']}
+        with patch.object(app1, 'PROJECT_DIR', Path(self.temp.name)):
+            self.assertEqual(self.client.get('/api/settings').status_code, 401)
+            self.assertEqual(self.client.post('/api/settings', json=body).status_code, 401)
+            self.assertEqual(self.client.get('/api/settings', headers=self.headers).json()['tone'], 'professional')
+            self.assertEqual(self.client.post('/api/settings', headers=self.headers, json=body).status_code, 200)
+            self.assertEqual(self.client.get('/api/settings', headers=self.headers).json(), body)
+            self.assertEqual(self.client.get('/api/settings', headers=self.other).json()['tone'], 'professional')
+            self.assertEqual(self.client.post('/api/settings', headers=self.other, json={**body, 'tone': 'casual'}).status_code, 200)
+            self.assertEqual(self.client.get('/api/settings', headers=self.headers).json(), body)
+            self.assertEqual(legacy.read_bytes(), original)
+            self.assertEqual(self.client.post('/api/settings', headers=self.headers, json={**body, 'platforms': ['unknown']}).status_code, 422)
+            self.assertEqual(len(self.client.get('/api/projects', headers=self.headers).json()['projects']), 1)
+
+    def test_research_upload_without_clip_generation(self):
+        url = '/api/projects/' + self.project['id'] + '/research-upload'
+        data = {'topic': 'waterfalls'}
+        with patch.object(app1, 'resolve_storage_folder', return_value={'folder': 'users', 'source': 'test'}), patch.object(app1.worker, 'submit') as submit:
+            response = self.client.post(url, headers=self.headers, data=data, files={'video': ('research.mp4', b'research-source', 'video/mp4')})
+            self.assertEqual(response.status_code, 202)
+            job_id = response.json()['job_id']
+            self.assertIs(submit.call_args.args[0], integration.research)
+            self.assertEqual(submit.call_args.args[2].read_bytes(), b'research-source')
+            submit.reset_mock()
+            self.assertEqual(self.client.post(url, headers=self.other, data=data, files={'video': ('research.mp4', b'video')}).status_code, 404)
+            self.assertEqual(self.client.post(url, headers=self.headers, data=data, files={'video': ('research.txt', b'video')}).status_code, 400)
+            self.assertEqual(self.client.post(url, headers=self.headers, data=data, files={'video': ('research.mp4', b'')}).status_code, 400)
+            submit.assert_not_called()
+        owner = json.loads((app1.JOBS_DIR / job_id / 'owner.json').read_text())
+        self.assertEqual(owner['user_id'], 'user-a')
+        self.assertEqual(owner['project_id'], self.project['id'])
+        self.assertEqual(owner['kind'], 'research')
+        project = self.client.get('/api/projects/' + self.project['id'], headers=self.headers).json()
+        self.assertTrue(any(item['job_id'] == job_id and item['has_source'] for item in project['jobs']))
+
+    def test_research_from_caption_job_follows_owned_source(self):
+        original = self.upload()
+        owner = json.loads((app1.JOBS_DIR / original / 'owner.json').read_text())
+        caption_job, folder = integration.new_feature_job(owner, 'caption-styles', original)
+        url = '/api/projects/' + self.project['id'] + '/research'
+        with patch.object(app1.worker, 'submit') as submit:
+            response = self.client.post(url, headers=self.headers, json={'job_id': caption_job, 'topic': 'waterfalls'})
+            self.assertEqual(response.status_code, 202)
+            self.assertEqual(submit.call_args.args[2], app1.JOBS_DIR / original / 'source.video')
+            self.assertEqual(self.client.post(url, headers=self.other, json={'job_id': caption_job, 'topic': 'waterfalls'}).status_code, 404)
+        owner['parent_job'] = caption_job
+        app1.save_json(folder / 'owner.json', owner)
+        self.assertEqual(self.client.post(url, headers=self.headers, json={'job_id': caption_job, 'topic': 'waterfalls'}).status_code, 409)
+
+    def test_caption_worker_publishes_four_results_with_storage_metadata_private(self):
+        import sys
+        import types
+        original = self.upload()
+        owner = json.loads((app1.JOBS_DIR / original / 'owner.json').read_text())
+        job_id, folder = integration.new_feature_job(owner, 'caption-styles', original)
+        source = app1.JOBS_DIR / original / 'clip_1.mp4'
+        source.write_bytes(b'fixture')
+        fake_renderer = types.ModuleType('backend.clips.render_subtitles')
+        def render(video_path, styles, output_dir, whole_clip):
+            self.assertTrue(whole_clip)
+            self.assertEqual(Path(video_path), source)
+            names = []
+            for style in styles:
+                name = style + '.mp4'; names.append(name)
+                (output_dir / name).write_bytes(b'rendered-' + style.encode())
+                (output_dir / name).with_suffix('.vtt').write_text('WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nCaption\n')
+            return names
+        fake_renderer.generate_four_styled_clips = render
+        with patch.dict(sys.modules, {'backend.clips.render_subtitles': fake_renderer}), patch.object(app1, 'upload_clip_files', return_value={'s3_bucket': 'test-bucket', 'clip_s3_key': 'private-key', 'captions_s3_key': 'private-caption-key'}) as storage:
+            integration.render_styles(job_id, source, {'start': 10, 'end': 12})
+        self.assertEqual(storage.call_count, 4)
+        app1.jobs.clear()
+        response = self.client.get('/api/features/' + job_id, headers=self.headers).json()
+        self.assertEqual(response['state'], 'done')
+        self.assertEqual(len(response['clips']), 4)
+        for number, clip in enumerate(response['clips'], 1):
+            self.assertEqual(clip['clip_url'], f'/clips/{job_id}/clip_{number}.mp4')
+            self.assertNotIn('s3_bucket', clip)
+            self.assertNotIn('clip_s3_key', clip)
+            self.assertNotIn('captions_s3_key', clip)
+            self.assertIn('Caption', (folder / f'clip_{number}.vtt').read_text())
+
+    def test_research_pipeline_progress_persistence_and_cache_with_mocked_providers(self):
+        import importlib
+        import sys
+        import types
+        tags = {'visual_style': ['close-ups'], 'audio_style': ['voiceover'], 'topics': ['waterfalls'],
+                'pacing': 'medium', 'tone': 'informative', 'hook_style': 'question'}
+        fake_pipeline = types.ModuleType('backend.trends.pipeline')
+        def analyze(*args, progress=None):
+            if progress: progress('Tagging fixture')
+            return {'tags': tags, 'transcript': 'fixture'}
+        fake_pipeline.analyze_youtube_video = analyze
+        fake_pipeline.analyze_video_file = analyze
+        fake_youtube = types.ModuleType('backend.trends.youtube_trends')
+        fake_youtube.get_trending_videos = lambda *args, **kwargs: [{'video_id': 'fixture', 'title': 'Fixture title', 'channel': 'Fixture channel', 'url': 'https://www.youtube.com/watch?v=fixture'}]
+        with patch.dict(sys.modules, {'backend.trends.pipeline': fake_pipeline, 'backend.trends.youtube_trends': fake_youtube}):
+            router = importlib.import_module('backend.trends.router')
+        original = self.upload()
+        owner = json.loads((app1.JOBS_DIR / original / 'owner.json').read_text())
+        job_id, folder = integration.new_feature_job(owner, 'research', original)
+        cache = Path(self.temp.name) / 'research-cache'; cache.mkdir()
+        with patch.dict(sys.modules, {'backend.trends.router': router}), patch.object(router, 'pipeline', fake_pipeline), patch.object(router, 'youtube_trends', fake_youtube), patch.object(router, 'RESULTS_CACHE_DIR', cache), patch.object(app1, 'update_job', wraps=app1.update_job) as updates:
+            integration.research(job_id, app1.JOBS_DIR / original / 'source.video', 'waterfalls')
+            self.assertTrue(any('Tagging fixture' in call.kwargs.get('message', '') for call in updates.call_args_list))
+            self.assertFalse((folder / 'research').exists())
+            app1.jobs.clear()
+            result = self.client.get('/api/features/' + job_id, headers=self.headers).json()
+            self.assertEqual(result['state'], 'done')
+            self.assertEqual(result['research']['trending_summary'][0]['title'], 'Fixture title')
+            self.assertTrue(result['research']['comparison']['matching_traits'])
+            cached_job, cached_folder = integration.new_feature_job(owner, 'research', original)
+            with patch.object(router, '_run_analysis', side_effect=AssertionError('Cache should avoid providers')):
+                integration.research(cached_job, app1.JOBS_DIR / original / 'source.video', 'waterfalls')
+            self.assertEqual(app1.jobs[cached_job]['state'], 'done')
+        self.assertEqual(self.client.get('/api/features/' + job_id, headers=self.other).status_code, 404)
+
 
 if __name__ == '__main__':
     unittest.main()

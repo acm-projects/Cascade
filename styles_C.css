@@ -1194,3 +1194,8 @@ a {
 .project-tile { white-space:normal; overflow-wrap:anywhere; }
 .clip-placeholder video, #saved-clips video { width:100%; max-height:300px; }
 #saved-clips { display:grid; gap:16px; }
+
+.research-section { margin-top:16px; }
+#research-result { overflow-wrap:anywhere; max-height:420px; overflow:auto; }
+#research-result h4 { margin:16px 0 8px; }
+#settings-form label, #settings-form legend { margin-top:12px; }

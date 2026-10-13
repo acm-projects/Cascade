@@ -23,6 +23,7 @@
 
   let project = null;
   let selectedIndex = 0;
+  let canvasJobId = null;
   const query = new URLSearchParams(location.search);
   let userId = null;
   let sourceURL = null;
@@ -220,6 +221,11 @@
     profile.type = "button"; profile.textContent = "Profile";
     profile.onclick = () => window.Clerk.openUserProfile();
     $("account")?.appendChild(profile);
+    if (page !== "settings") {
+      const settings = document.createElement("a"); settings.className = "button";
+      settings.href = "settings_C.html"; settings.textContent = "Settings";
+      $("account")?.appendChild(settings);
+    }
 
     const name =
       user.fullName ||
@@ -350,6 +356,7 @@
   }
 
   async function showCanvasClip(jobId, job) {
+    canvasJobId = jobId;
     const group = document.querySelector(".clip-group");
     group.replaceChildren();
     selectedIndex = 0;
@@ -560,6 +567,7 @@
         }
 
         saveJob(upload.job_id);
+        canvasJobId = upload.job_id;
         const option = document.createElement("option"); option.value = upload.job_id; option.textContent = prompt + " · " + file.name;
         $("job-history").prepend(option); $("job-history").value = upload.job_id;
 
@@ -592,13 +600,16 @@
     });
     history.onchange = async () => {
       if (!history.value || processing) return;
+      canvasJobId = history.value;
       processing = true; $("generate-clip").disabled = true; resetClipCard();
       try { saveJob(history.value); await pollJob(history.value); }
       catch (error) { setStatus(error.message); }
       finally { processing = false; $("generate-clip").disabled = false; }
     };
     const jobId = query.get("job") || getSavedJob() || project.jobs.find(job => job.kind !== "research")?.job_id;
-    const original = project.jobs.find(job => job.kind === "generation");
+    const original = project.jobs.find(job => job.has_source);
+    canvasJobId = jobId || original?.job_id;
+    await initializeResearch(() => canvasJobId, () => $("source-video").files[0] || (!canvasJobId ? restoredSource : null));
     if (original) {
       try {
         const response = await apiFetch("/api/projects/" + project.id + "/source/" + original.job_id);
@@ -743,21 +754,81 @@
         location.href = projectURL("canvas_C.html", response.job_id);
       } catch (error) { setStatus(error.message); button.disabled = false; }
     };
-    $("research-form").onsubmit = async event => {
+    await initializeResearch(() => jobId);
+    setStatus("Selected clip loaded. Save, download, caption styles, and research are connected. Other editing controls remain unfinished.");
+  }
+
+  function renderResearch(result) {
+    const container = $("research-result"); container.replaceChildren();
+    const comparison = result.comparison || {};
+    const summary = document.createElement("p"); summary.textContent = comparison.narrative || "Research results";
+    container.appendChild(summary);
+    for (const [title, items] of [["Matching traits", comparison.matching_traits], ["Traits to consider", comparison.missing_traits]]) {
+      const heading = document.createElement("h4"); heading.textContent = title; container.appendChild(heading);
+      const list = document.createElement("ul");
+      for (const item of items || []) { const row = document.createElement("li"); row.textContent = item; list.appendChild(row); }
+      if (!list.children.length) { const row = document.createElement("li"); row.textContent = "None found"; list.appendChild(row); }
+      container.appendChild(list);
+    }
+    const heading = document.createElement("h4"); heading.textContent = "Videos analyzed"; container.appendChild(heading);
+    for (const video of result.trending_summary || []) {
+      const row = document.createElement("p"); row.textContent = video.title + " · " + video.channel;
+      try {
+        const url = new URL(video.url);
+        if (url.protocol === "https:" && ["www.youtube.com", "youtube.com"].includes(url.hostname)) {
+          const link = document.createElement("a"); link.textContent = "Watch video"; link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+          row.append(document.createTextNode(" · "), link);
+        }
+      } catch { /* Keep plain text for invalid external URLs. */ }
+      container.appendChild(row);
+    }
+  }
+
+  async function initializeResearch(getJob, getFile = () => null) {
+    const form = $("research-form"); if (!form) return;
+    form.onsubmit = async event => {
       event.preventDefault(); const button = event.submitter; button.disabled = true;
       try {
-        const response = await apiJSON("/api/projects/" + project.id + "/research", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({job_id: jobId, topic: $("research-topic").value.trim()})});
-        const result = await waitFeature(response.job_id);
-        $("research-result").textContent = JSON.stringify(result.research, null, 2);
+        const file = getFile(); const jobId = getJob(); const topic = $("research-topic").value.trim();
+        if (!file && !jobId) throw new Error("Choose a video or open a saved generation first.");
+        setStatus(file ? "Uploading video for research…" : "Starting research…");
+        let response;
+        if (file) {
+          const body = new FormData(); body.append("video", file); body.append("topic", topic);
+          response = await apiJSON("/api/projects/" + project.id + "/research-upload", {method: "POST", body});
+        } else {
+          response = await apiJSON("/api/projects/" + project.id + "/research", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({job_id: jobId, topic})});
+        }
+        const result = await waitFeature(response.job_id); renderResearch(result.research);
         setStatus("Research complete.");
       } catch (error) { setStatus(error.message); } finally { button.disabled = false; }
     };
     const researchJob = project.jobs.find(item => item.kind === "research");
     if (researchJob) {
       const result = await apiJSON("/api/features/" + researchJob.job_id);
-      if (result.research) $("research-result").textContent = JSON.stringify(result.research, null, 2);
+      if (result.research) renderResearch(result.research);
+      else if (["queued", "processing"].includes(result.state)) {
+        waitFeature(researchJob.job_id).then(job => renderResearch(job.research)).catch(error => setStatus(error.message));
+      } else if (result.state === "error") setStatus(result.message);
     }
-    setStatus("Selected clip loaded. Save, download, caption styles, and research are connected. Other editing controls remain unfinished.");
+  }
+
+  async function initializeSettings() {
+    const preferences = await apiJSON("/api/settings");
+    for (const field of ["video_type", "audience", "tone", "goal"]) {
+      $("settings-" + field.replace("_", "-")).value = preferences[field] || "";
+    }
+    document.querySelectorAll('[name="platforms"]').forEach(input => { input.checked = (preferences.platforms || []).includes(input.value); });
+    $("settings-form").onsubmit = async event => {
+      event.preventDefault(); const button = event.submitter; button.disabled = true;
+      try {
+        const data = {};
+        for (const field of ["video_type", "audience", "tone", "goal"]) data[field] = $("settings-" + field.replace("_", "-")).value.trim();
+        data.platforms = [...document.querySelectorAll('[name="platforms"]:checked')].map(input => input.value);
+        await apiJSON("/api/settings", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data)});
+        setStatus("Your preferences were saved.");
+      } catch (error) { setStatus(error.message); } finally { button.disabled = false; }
+    };
   }
 
   async function initializeExports() {
@@ -934,7 +1005,9 @@
         await initializeProjects();
       }
 
-      if (page !== "projects") await loadProject();
+      if (page === "settings") await initializeSettings();
+
+      if (!["projects", "settings"].includes(page)) await loadProject();
 
       if (page === "exports") await initializeExports();
 

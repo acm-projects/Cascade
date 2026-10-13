@@ -73,6 +73,7 @@ PROTECTED_EXACT_PATHS = (
     "/upload",
     "/api/my-clips",
     "/api/session",
+    "/api/settings",
 )
 
 FRONTEND_FILES = {
@@ -82,6 +83,7 @@ FRONTEND_FILES = {
     "canvas_C.html",
     "editor_C.html",
     "exports_C.html",
+    "settings_C.html",
     "styles_C.css",
     "flow_C.js",
 }
