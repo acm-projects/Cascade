@@ -1,6 +1,25 @@
 .export {
-    min-height: 100vh;
-    padding: 40px;
-    background: #2c3e50; /* Placeholder for the background color */
-    color: white;
+  position: relative;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;          /* trims the parts of the image that stick out */
+}
+
+/* Image-shaped box, now big enough to COVER the screen */
+.export-stage {
+  position: relative;
+  flex-shrink: 0;            /* don't let flexbox squeeze it back down */
+  width: max(100vw, 140.6vh);   /* ← was min(...) */
+  aspect-ratio: 1440 / 1024;
+  background-size: 100% 100%;
+}
+
+.export-back {
+  position: absolute;
+  left: 50%;
+  bottom: 3vh;
+  transform: translateX(-50%);
+  margin-top: 0;
 }

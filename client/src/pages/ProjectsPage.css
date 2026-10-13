@@ -1,6 +1,87 @@
 .projects {
-    min-height: 100vh;
-    padding: 40px;
-    background: #4a7c59; /* Placeholder for the background color */
-    color: white;
+  min-height: 100vh;
+  padding: 40px;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;   /* background stays put while the planks scroll */
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Planks stacked top to bottom; no gap, so each plank's vines touch the next plank */
+.plank-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 32px;
+}
+
+/* One plank: a box the exact shape of the image */
+.plank {
+  position: relative;
+  display: block;
+  width: min(70vw, 700px);
+  aspect-ratio: 904 / 433;
+  background-size: 100% 100%;
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+
+.plank:hover {
+  transform: scale(1.03);
+}
+
+/* The area on the wood where the thumbnail and name sit */
+.plank-content {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 12%;
+  height: 42%;
+  display: flex;
+  align-items: center;
+  gap: 5%;
+}
+
+.plank-thumb {
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: rgba(60, 40, 20, 0.3);
+  color: #5a4020;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.plank-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.plank-name {
+  color: #4a3018;
+  font-size: clamp(1.1rem, 2.4vw, 1.8rem);
+}
+
+/* Every plank except the first: pull it up so the vines above tuck behind it */
+.plank + .plank {
+  margin-top: -4%;
+}
+
+/* Full-screen vine overlay: vines sit in the top-right and bottom-left corners */
+.vines {
+  position: fixed;
+  inset: 0;                 /* stretch to all 4 edges of the screen */
+  width: 100%;
+  height: 100%;
+  object-fit: cover;        /* fill the screen without squishing the vines */
+  pointer-events: none;     /* clicks pass through to the planks */
+  z-index: 1;
 }
