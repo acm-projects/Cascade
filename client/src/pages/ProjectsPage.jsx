@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import "./ProjectsPage.css";
 import projectsBg from "../assets/projects-page-bg.png";
 import plank from "../assets/plank.png";
-import vines from "../assets/Vines.png";
+import vines from "../assets/vines.png";
 
 // Fake projects for now; real ones (with real thumbnails) will come from the backend
 const projects = [
@@ -17,7 +17,7 @@ function ProjectsPage() {
       <img src={vines} alt="" className="vines" />
       <h1>PROJECTS</h1>
 
-      <Link to="/projects/new" className="page-button">New Project</Link>
+      <Link to="/projects/new" className="wood-button">New Project</Link>
 
       <div className="plank-list">
         {projects.map((project) => (

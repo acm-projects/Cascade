@@ -8,7 +8,7 @@ function DrawingPage() {
       <h1>NEW PROJECT</h1>
       <p>Drop a clip, write a prompt, pick from 4 generated clips (coming soon).</p>
 
-      <Link to="/editor" className="page-button">Continue to Editor</Link>
+      <Link to="/editor" className="wood-button">Continue to Editor</Link>
     </div>
   );
 }

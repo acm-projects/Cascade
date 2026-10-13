@@ -24,7 +24,7 @@ function Landing() {
         ))}
       </div>
 
-      <Link to="/projects" className="page-button landing-start">
+      <Link to="/projects" className="wood-button landing-start">
         Get Started
       </Link>
     </div>

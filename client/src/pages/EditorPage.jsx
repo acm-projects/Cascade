@@ -6,7 +6,7 @@ function EditorPage() {
         <div className="editor">
             <h1>EDITOR</h1>
             <p>Timeline, effects, captions will go here.</p>
-            <Link to="/export" className="page-button">
+            <Link to="/export" className="wood-button">
                 Export
             </Link>
         </div>

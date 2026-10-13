@@ -32,7 +32,7 @@ function LandingVideo() {
         onLoadedMetadata={handleLoaded}
         onTimeUpdate={handleTimeUpdate}
       />
-      <Link to="/projects" className="page-button landing-start">
+      <Link to="/projects" className="wood-button landing-start">
         Get Started
       </Link>
     </div>

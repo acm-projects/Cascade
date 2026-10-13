@@ -19,3 +19,25 @@
 .page-button:hover {
   background: #e0e0e0;
 }
+
+/* Wooden button used across the app: the image is the background, the text sits on top */
+.wood-button {
+  display: flex;
+  align-items: center;       /* text centered top-to-bottom */
+  justify-content: center;   /* text centered left-to-right */
+  width: min(40vw, 332px);
+  aspect-ratio: 664 / 158;   /* same shape as the image */
+  margin-top: 24px;
+  background-image: url("./assets/newprojectbutton.png");
+  background-size: 100% 100%;
+  color: #f3e2c0;            /* light wood color, readable on the dark brown */
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  text-decoration: none;
+  cursor: pointer;
+  transition: scale 0.15s, filter 0.15s;
+}
+
+.wood-button:hover {
+  scale: 1.05;               /* separate from transform, so it won't undo any positioning */
+  filter: brightness(1.15);  /* the wood lights up a little on hover */
+}
