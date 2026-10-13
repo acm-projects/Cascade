@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Canvas</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .canvas-page {
+      padding: 28px;
+    }
+
+    .page-heading {
+      margin-bottom: 28px;
+    }
+
+    .page-heading h1 {
+      margin-bottom: 8px;
+      font-size: 30px;
+    }
+
+    .simple-canvas {
+      overflow-x: auto;
+      padding: 40px 20px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background-color: var(--bg);
+      background-image: radial-gradient(
+        #45625155 1px,
+        transparent 1px
+      );
+      background-size: 22px 22px;
+    }
+
+    .canvas-flow {
+      display: flex;
+      min-width: 860px;
+      align-items: center;
+    }
+
+    .canvas-card {
+      width: 240px;
+      flex-shrink: 0;
+    }
+
+    .connector {
+      height: 2px;
+      min-width: 50px;
+      flex: 1;
+      background: var(--teal);
+    }
+
+    .clip-group {
+      display: grid;
+      gap: 16px;
+      width: 270px;
+      flex-shrink: 0;
+      padding-left: 20px;
+      border-left: 2px solid var(--teal);
+    }
+
+    .clip-placeholder {
+      position: relative;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+
+    .clip-placeholder::before {
+      position: absolute;
+      top: 50%;
+      left: -22px;
+      width: 20px;
+      height: 2px;
+      background: var(--teal);
+      content: "";
+    }
+
+    .clip-placeholder h3 {
+      margin-bottom: 6px;
+    }
+
+    .clip-placeholder p {
+      margin-bottom: 0;
+      font-size: 12px;
+    }
+
+    .source-preview {
+      display: grid;
+      height: 120px;
+      place-items: center;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      background: var(--panel2);
+      color: var(--muted);
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      border-radius: 8px;
+      background: #06110d;
+    }
+
+    #source-player {
+      max-height: 160px;
+      margin-bottom: 16px;
+    }
+
+    #clip-video {
+      margin: 12px 0;
+    }
+
+    #clip-title:empty,
+    #clip-timing:empty,
+    #clip-explanation:empty {
+      display: none;
+    }
+
+    #file-name,
+    #clip-title,
+    #clip-explanation,
+    #status {
+      overflow-wrap: anywhere;
+    }
+
+    .canvas-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    .disabled-link {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    #status {
+      padding: 16px 28px;
+      color: var(--muted);
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      .canvas-page {
+        padding: 18px;
+      }
+
+      #status {
+        padding: 16px 18px;
+      }
+    }
+  </style>
+</head>
+
+<body data-page="canvas">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+
+    <div class="row">
+      <a class="button" href="projects_C.html">
+        ← Projects
+      </a>
+
+      <div id="account" class="row" hidden>
+        <span id="account-name" class="muted"></span>
+
+        <button id="sign-out" type="button">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Shown only after FastAPI verifies the Clerk session. -->
+  <main id="protected-page" class="canvas-page" hidden>
+    <div class="page-heading">
+      <h1 id="project-title">Your project</h1>
+
+      <p class="muted">
+        Choose a video and describe the clip you want.
+      </p>
+    </div>
+
+    <section
+      class="simple-canvas"
+      aria-label="Source video, prompt, and clips"
+    >
+      <div class="canvas-flow">
+
+        <!-- Source video -->
+        <section class="card canvas-card">
+          <h3>Source video</h3>
+
+          <div id="source-empty" class="source-preview">
+            Video preview
+          </div>
+
+          <video
+            id="source-player"
+            controls
+            playsinline
+            hidden
+          ></video>
+
+          <label for="source-video">
+            Choose a video
+          </label>
+
+          <input
+            id="source-video"
+            type="file"
+            accept="video/*"
+          >
+
+          <p
+            id="file-name"
+            class="muted"
+            style="margin-top: 12px;"
+          >
+            No video selected
+          </p>
+        </section>
+
+        <div class="connector" aria-hidden="true"></div>
+
+        <!-- Search prompt -->
+        <section class="card canvas-card">
+          <h3>Find clip</h3>
+
+          <label for="clip-prompt">
+            What are you looking for?
+          </label>
+
+          <textarea
+            id="clip-prompt"
+            maxlength="2000"
+            placeholder="Find funny moments…"
+          ></textarea>
+
+          <button
+            id="generate-clip"
+            class="primary"
+            type="button"
+            style="
+              width: 100%;
+              margin-top: 16px;
+            "
+          >
+            Generate Clip 1
+          </button>
+        </section>
+
+        <div class="connector" aria-hidden="true"></div>
+
+        <!-- Keep all four cards; only Clip 1 receives a result. -->
+        <section class="clip-group" aria-label="Clips">
+
+          <article class="clip-placeholder">
+            <h3>Clip 1</h3>
+
+            <p id="clip-empty" class="muted">
+              Preview placeholder
+            </p>
+
+            <video
+              id="clip-video"
+              controls
+              playsinline
+              hidden
+            ></video>
+
+            <h3 id="clip-title"></h3>
+
+            <p id="clip-timing" class="muted"></p>
+
+            <p id="clip-explanation" class="muted"></p>
+          </article>
+
+          <article class="clip-placeholder">
+            <h3>Clip 2</h3>
+
+            <p class="muted">
+              Preview placeholder
+            </p>
+          </article>
+
+          <article class="clip-placeholder">
+            <h3>Clip 3</h3>
+
+            <p class="muted">
+              Preview placeholder
+            </p>
+          </article>
+
+          <article class="clip-placeholder">
+            <h3>Clip 4</h3>
+
+            <p class="muted">
+              Preview placeholder
+            </p>
+          </article>
+        </section>
+      </div>
+    </section>
+
+    <div class="canvas-footer">
+      <a class="button" href="projects_C.html">
+        ← Back
+      </a>
+
+      <a
+        id="open-editor"
+        class="button primary disabled-link"
+        href="editor_C.html"
+        aria-disabled="true"
+      >
+        Open editor →
+      </a>
+    </div>
+  </main>
+
+  <p
+    id="status"
+    role="status"
+    aria-live="polite"
+  >
+    Checking sign-in…
+  </p>
+
+  <noscript>
+    <p>Please enable JavaScript to open the canvas.</p>
+  </noscript>
+
+  <script src="flow_C.js"></script>
+</body>
+</html>
