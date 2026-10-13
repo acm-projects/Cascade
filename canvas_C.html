@@ -193,6 +193,8 @@
   <main id="protected-page" class="canvas-page" hidden>
     <div class="page-heading">
       <h1 id="project-title">Your project</h1>
+      <label for="job-history">Previous generations</label>
+      <select id="job-history"><option value="">Choose a generation</option></select>
 
       <p class="muted">
         Choose a video and describe the clip you want.
@@ -255,6 +257,8 @@
             placeholder="Find funny moments…"
           ></textarea>
 
+          <label for="search-engine">Search method</label>
+          <select id="search-engine"><option value="qwen">AI prompt search (existing pipeline)</option><option value="speech">Speech search</option><option value="visual">Visual search</option></select>
           <button
             id="generate-clip"
             class="primary"

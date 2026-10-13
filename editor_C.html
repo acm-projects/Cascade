@@ -261,6 +261,7 @@
       <h1 id="project-title">Your project</h1>
 
       <div class="row">
+        <button id="save-clip" type="button">Save clip</button>
         <a class="button" href="canvas_C.html">
           ← Canvas
         </a>
@@ -440,6 +441,8 @@
           hidden
         >
           <h3>Captions</h3>
+          <button id="caption-styles" type="button">Render four caption styles</button>
+          <p class="muted">Renders this selected clip in Hormozi, minimalist, bold viral, and cinematic styles.</p>
 
           <fieldset class="placeholder-controls" disabled>
             <label for="caption-text">
@@ -548,6 +551,11 @@
               placeholder="Describe the B-roll you want…"
             ></textarea>
           </fieldset>
+        </section>
+        <section class="card">
+          <h3>Research current trends</h3>
+          <form id="research-form"><label for="research-topic">Topic</label><input id="research-topic" maxlength="200" required><button type="submit">Analyze trends</button></form>
+          <pre id="research-result" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
         </section>
       </aside>
     </div>

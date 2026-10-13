@@ -1189,3 +1189,8 @@ a {
     padding: 10px;
   }
 }
+/* Persistent project tiles use the existing design tokens. */
+.project-tiles { display:grid; gap:12px; margin:20px 0; }
+.project-tile { white-space:normal; overflow-wrap:anywhere; }
+.clip-placeholder video, #saved-clips video { width:100%; max-height:300px; }
+#saved-clips { display:grid; gap:16px; }

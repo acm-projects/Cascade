@@ -16,3 +16,8 @@ test_frame.jpg
 test_video.mp4
 output_clip_*.mp4
 output_preview.mp4
+.venv/
+backend/**/.cache/
+backend/video_search/outputs/
+backend/clips/output_clip_*.mp4
+backend/settings/preferences.json

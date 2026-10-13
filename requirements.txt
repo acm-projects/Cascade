@@ -1,0 +1,5 @@
+-r backend/requirements.txt
+PyJWT[crypto]
+boto3
+ollama
+httpx

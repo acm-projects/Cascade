@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Trend Analysis Demo</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8ec;
+    --muted: #9aa1ad;
+    --accent: #5b8cff;
+    --good: #4caf7d;
+    --bad: #e0656b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 2rem 1rem;
+  }
+  .container { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--muted); margin-bottom: 2rem; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  label { display: block; font-weight: 600; margin-bottom: 0.4rem; }
+  input[type="text"], input[type="file"] {
+    width: 100%;
+    padding: 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #0d0f13;
+    color: var(--text);
+    margin-bottom: 1.25rem;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.7rem 1.4rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  #error { color: var(--bad); margin-top: 1rem; display: none; }
+  .spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #progress-container { display: none; margin-top: 1.25rem; }
+  .progress-header {
+    display: flex;
+    align-items: center;
+    color: var(--text);
+    font-size: 0.95rem;
+    margin-bottom: 0.6rem;
+  }
+  #progress-step {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .progress-bar-track {
+    width: 100%;
+    height: 8px;
+    background: #0d0f13;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+  #progress-details {
+    margin-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  #progress-details summary {
+    cursor: pointer;
+    user-select: none;
+  }
+  #progress-history {
+    margin-top: 0.5rem;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  #progress-history li { margin-bottom: 0.2rem; }
+  #results { display: none; }
+  .narrative {
+    font-size: 1.15rem;
+    background: #12331f;
+    border: 1px solid var(--good);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+  }
+  .trait-columns { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .trait-col { flex: 1; min-width: 220px; }
+  .trait-col h3 { margin-bottom: 0.5rem; font-size: 1.05rem; }
+  .trait-col.match h3 { color: var(--good); }
+  .trait-col.missing h3 { color: var(--bad); }
+  ul { padding-left: 1.2rem; margin: 0; }
+  li { margin-bottom: 0.3rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Video Trend Analysis</h1>
+  <p class="subtitle">Upload a video and a topic to see how it compares to what's trending.</p>
+
+  <div class="panel">
+    <form id="analyze-form">
+      <label for="topic">Topic</label>
+      <input type="text" id="topic" name="topic" placeholder="e.g. fitness" required>
+
+      <label for="video">Your video</label>
+      <input type="file" id="video" name="video" accept="video/*" required>
+
+      <button type="submit" id="submit-btn">Analyze</button>
+    </form>
+
+    <div id="progress-container">
+      <div class="progress-header">
+        <span class="spinner"></span>
+        <span id="progress-step">Starting...</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progress-bar-fill"></div>
+      </div>
+      <details id="progress-details">
+        <summary>Step history</summary>
+        <ul id="progress-history"></ul>
+      </details>
+    </div>
+
+    <div id="error"></div>
+  </div>
+
+  <div class="panel" id="results">
+    <div class="narrative" id="narrative"></div>
+
+    <div class="trait-columns">
+      <div class="trait-col match">
+        <h3>Matching traits</h3>
+        <ul id="matching-list"></ul>
+      </div>
+      <div class="trait-col missing">
+        <h3>Missing traits</h3>
+        <ul id="missing-list"></ul>
+      </div>
+    </div>
+
+    <h3>Trending videos analyzed</h3>
+    <table>
+      <thead><tr><th>Title</th><th>Channel</th></tr></thead>
+      <tbody id="trending-table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const form = document.getElementById('analyze-form');
+const submitBtn = document.getElementById('submit-btn');
+const progressContainer = document.getElementById('progress-container');
+const progressStep = document.getElementById('progress-step');
+const progressBarFill = document.getElementById('progress-bar-fill');
+const progressHistory = document.getElementById('progress-history');
+const errorEl = document.getElementById('error');
+const resultsEl = document.getElementById('results');
+
+const POLL_INTERVAL_MS = 1500;
+const MAX_CONSECUTIVE_POLL_FAILURES = 5;
+
+let lastRenderedStep = null;
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  errorEl.style.display = 'none';
+  resultsEl.style.display = 'none';
+  submitBtn.disabled = true;
+  resetProgress();
+  progressContainer.style.display = 'block';
+
+  const formData = new FormData();
+  formData.append('topic', document.getElementById('topic').value);
+  formData.append('video', document.getElementById('video').files[0]);
+
+  try {
+    const response = await fetch('/api/trends/analyze', { method: 'POST', body: formData });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed with status ${response.status}`);
+    }
+
+    const { job_id } = await response.json();
+    await pollJob(job_id);
+  } catch (err) {
+    showError(err.message || 'Something went wrong.');
+    progressContainer.style.display = 'none';
+    submitBtn.disabled = false;
+  }
+});
+
+function resetProgress() {
+  lastRenderedStep = null;
+  progressStep.textContent = 'Starting...';
+  progressBarFill.style.transform = 'scaleX(0)';
+  progressHistory.innerHTML = '';
+}
+
+function updateProgress(job) {
+  progressStep.textContent = job.step;
+  const pct = job.total_steps > 0 ? Math.min(100, (job.step_index / job.total_steps) * 100) : 0;
+  progressBarFill.style.transform = `scaleX(${pct / 100})`;
+
+  if (job.step !== lastRenderedStep) {
+    lastRenderedStep = job.step;
+    const li = document.createElement('li');
+    li.textContent = job.step;
+    progressHistory.appendChild(li);
+    progressHistory.scrollTop = progressHistory.scrollHeight;
+  }
+}
+
+async function pollJob(jobId) {
+  let consecutiveFailures = 0;
+
+  while (true) {
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+
+    let job;
+    try {
+      const response = await fetch(`/api/trends/analyze/${jobId}/status`);
+      if (!response.ok) throw new Error(`Status check failed (${response.status})`);
+      job = await response.json();
+      consecutiveFailures = 0;
+    } catch (err) {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        showError('Lost connection to the server while checking progress. Please try again.');
+        progressContainer.style.display = 'none';
+        submitBtn.disabled = false;
+        return;
+      }
+      continue;
+    }
+
+    updateProgress(job);
+
+    if (job.status === 'done') {
+      renderResults(job.result);
+      progressContainer.style.display = 'none';
+      submitBtn.disabled = false;
+      return;
+    }
+
+    if (job.status === 'error') {
+      showError(job.error || 'Analysis failed.');
+      progressContainer.style.display = 'none';
+      submitBtn.disabled = false;
+      return;
+    }
+  }
+}
+
+function showError(message) {
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+}
+
+function renderResults(data) {
+  document.getElementById('narrative').textContent = data.comparison.narrative;
+
+  const matchingList = document.getElementById('matching-list');
+  matchingList.innerHTML = '';
+  if (data.comparison.matching_traits.length === 0) {
+    matchingList.innerHTML = '<li>None found</li>';
+  } else {
+    data.comparison.matching_traits.forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      matchingList.appendChild(li);
+    });
+  }
+
+  const missingList = document.getElementById('missing-list');
+  missingList.innerHTML = '';
+  if (data.comparison.missing_traits.length === 0) {
+    missingList.innerHTML = '<li>None found</li>';
+  } else {
+    data.comparison.missing_traits.forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      missingList.appendChild(li);
+    });
+  }
+
+  const tbody = document.getElementById('trending-table-body');
+  tbody.innerHTML = '';
+  data.trending_summary.forEach(v => {
+    const tr = document.createElement('tr');
+    const titleTd = document.createElement('td');
+    const link = document.createElement('a');
+    link.href = v.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = v.title;
+    titleTd.appendChild(link);
+    const channelTd = document.createElement('td');
+    channelTd.textContent = v.channel;
+    tr.appendChild(titleTd);
+    tr.appendChild(channelTd);
+    tbody.appendChild(tr);
+  });
+
+  resultsEl.style.display = 'block';
+}
+</script>
+</body>
+</html>

@@ -578,7 +578,7 @@ async def authenticate_backend(
         request.url.path
         in PROTECTED_EXACT_PATHS
         or request.url.path.startswith(
-            ("/jobs/", "/clips/")
+            ("/jobs/", "/clips/", "/api/projects", "/api/features/")
         )
     )
 
@@ -1537,8 +1537,8 @@ def select_clips(
 
         selected.append(clip)
 
-        # Stop before creating a second clip.
-        if len(selected) == 1:
+        # Return up to four real, non-overlapping matches for the existing canvas.
+        if len(selected) == 4:
             break
 
     for clip in selected:
@@ -1806,6 +1806,7 @@ def process_upload(
     except Exception:
         traceback.print_exc()
 
+        save_json(folder / "failure.json", {"message": "Processing failed. Check FFmpeg, Ollama, model availability, and S3 configuration, then retry."})
         update_job(
             job_id,
             state="error",
@@ -1827,7 +1828,12 @@ def upload_video(
     search: str = Form(...),
     mode: str = Form("both"),
     clip_length: int = Form(30),
+    project_id: str = Form(...),
+    engine: str = Form("qwen"),
 ):
+    integration.require_project(project_id, request.state.user_id)
+    if engine not in ("qwen", "speech", "visual"):
+        raise HTTPException(400, "Invalid search engine.")
     search = search.strip()
 
     if not search or len(search) > 2000:
@@ -1889,6 +1895,9 @@ def upload_video(
             folder / "owner.json",
             {
                 "user_id": request.state.user_id,
+                "project_id": project_id,
+                "prompt": search,
+                "source_name": Path(video.filename or "video").name,
 
                 "user_folder": (
                     storage_information["folder"]
@@ -1915,11 +1924,11 @@ def upload_video(
         }
 
     worker.submit(
-        process_upload,
+        process_upload if engine == "qwen" else integration.process_search,
         job_id,
         video_path,
         search,
-        mode,
+        mode if engine == "qwen" else engine,
         clip_length,
     )
 
@@ -2256,3 +2265,8 @@ def get_my_clips(request: Request):
             "Cache-Control": "no-store",
         },
     )
+
+# Integrate remote backend features under the existing authenticated app.
+import sys
+import integration
+integration.register(app, sys.modules[__name__])
