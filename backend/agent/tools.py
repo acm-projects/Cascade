@@ -1,4 +1,5 @@
-"""Agent tools: get_overview, search_video, inspect_clip, read_transcript, suggest_clip.
+"""Agent tools: get_overview, search_video, inspect_clip, read_transcript, add_candidate,
+rank_candidates.
 
 Each tool returns (content_blocks, is_error) where content_blocks is what goes
 into the Anthropic tool_result. Errors are returned to the model (not raised) so
@@ -20,6 +21,12 @@ MIN_CLIP_SECONDS = 5.0
 MAX_CLIP_SECONDS = 60.0
 MAX_INSPECT_FRAMES = 6
 MAX_OVERLAP_RATIO = 0.5
+
+# The final result is the best TARGET_CLIPS moments of the WHOLE video, spread out: a pick must
+# be at least duration / (2 * TARGET_CLIPS) seconds (midpoint to midpoint) from every better
+# pick. The gap is relaxed in steps only if the candidates can't otherwise fill the set.
+TARGET_CLIPS = 4
+SPACING_RELAX_STEPS = (1.0, 0.5, 0.25, 0.0)
 MAX_READ_SECONDS = 600.0      # read_transcript window cap, so the agent can't pull hours back in
 MAX_READ_CHARS = 20000        # ~5k tokens; a normal 10-minute podcast window fits whole
 MAX_NOTABLE_CHARS = 200
@@ -93,10 +100,14 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "suggest_clip",
+        "name": "add_candidate",
         "description": (
-            f"Record a final clip suggestion ({MIN_CLIP_SECONDS:g}-{MAX_CLIP_SECONDS:g} seconds long). "
-            "Call once per distinct clip. Include a short reason and a 0-1 confidence score."
+            f"Add a candidate clip ({MIN_CLIP_SECONDS:g}-{MAX_CLIP_SECONDS:g} seconds long) to the "
+            "pool you will rank at the end. Add MANY candidates, from DIFFERENT parts of the video - "
+            "not just the first few you find. Start and end at natural sentence boundaries with a "
+            "little setup before the payoff. score is your 0-1 estimate of how well it fits the "
+            "category. The result shows how your candidates are spread across the video so you can "
+            "see which regions still lack any."
         ),
         "input_schema": {
             "type": "object",
@@ -109,9 +120,38 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["start_time", "end_time", "reason", "score"],
         },
     },
+    {
+        "name": "rank_candidates",
+        "description": (
+            "Finish: rank the candidates you added from best to worst for the category. Compare them "
+            "head-to-head - which is funnier or stronger than which, and why. The final "
+            f"{TARGET_CLIPS} clips are taken from the top of your ranking, skipping any clip too close "
+            "in time to a better-ranked pick so the final set is spread across the video. Call this "
+            "once, after you have compared your candidates."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ranking": {
+                    "type": "array",
+                    "description": "Candidate ids, best first.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer", "description": "candidate id from add_candidate"},
+                            "note": {"type": "string", "description": "why it ranks here vs its neighbours"},
+                        },
+                        "required": ["id"],
+                    },
+                },
+            },
+            "required": ["ranking"],
+        },
+    },
 ]
 
-SUGGEST_ONLY_SCHEMAS = [s for s in TOOL_SCHEMAS if s["name"] == "suggest_clip"]
+# Last turn: only the ranking tool, so the agent must commit instead of running out of turns.
+FINAL_SCHEMAS = [s for s in TOOL_SCHEMAS if s["name"] == "rank_candidates"]
 
 
 def grab_frame_jpeg(video_path: Path, timestamp: float, width: int = 512) -> bytes:
@@ -141,7 +181,10 @@ class ToolBox:
         self.index = index
         self.video_path = video_path
         self.frame_grabber = frame_grabber
-        self.suggestions: list[dict[str, Any]] = []
+        self.candidates: list[dict[str, Any]] = []
+        self.ranking: list[dict[str, Any]] | None = None
+        self.finalized = False
+        self.spacing_relaxed = False
         self.overview_given = False
 
     def call(self, name: str, args: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
@@ -154,8 +197,10 @@ class ToolBox:
                 return self._inspect_clip(**args)
             if name == "read_transcript":
                 return self._read_transcript(**args)
-            if name == "suggest_clip":
-                return self._suggest_clip(**args)
+            if name == "add_candidate":
+                return self._add_candidate(**args)
+            if name == "rank_candidates":
+                return self._rank_candidates(**args)
             return _text(f"Unknown tool '{name}'"), True
         except TypeError as exc:
             return _text(f"Bad arguments for {name}: {exc}"), True
@@ -293,7 +338,7 @@ class ToolBox:
         blocks.append({"type": "text", "text": f"Transcript {start:.1f}s-{end:.1f}s: {spoken}"})
         return blocks, False
 
-    def _suggest_clip(self, start_time: float, end_time: float, reason: str, score: float):
+    def _add_candidate(self, start_time: float, end_time: float, reason: str, score: float):
         start, end = float(start_time), float(end_time)
         length = end - start
         if start < 0 or end > self.index.duration + 0.01:
@@ -302,22 +347,107 @@ class ToolBox:
             return _text(
                 f"Clip length must be {MIN_CLIP_SECONDS:g}-{MAX_CLIP_SECONDS:g}s (got {length:.1f}s)."
             ), True
-        for existing in self.suggestions:
+        for existing in self.candidates:
             overlap = min(end, existing["end"]) - max(start, existing["start"])
             if overlap > MAX_OVERLAP_RATIO * min(length, existing["end"] - existing["start"]):
                 return _text(
-                    f"Overlaps an existing suggestion ({existing['start']}s-{existing['end']}s). "
+                    f"Overlaps candidate #{existing['id']} ({existing['start']}s-{existing['end']}s). "
                     "Pick a distinct moment."
                 ), True
-        self.suggestions.append(
-            {
-                "start": round(start, 1),
-                "end": round(end, 1),
-                "reason": str(reason),
-                "score": round(max(0.0, min(1.0, float(score))), 2),
-            }
+        candidate = {
+            "id": len(self.candidates),
+            "start": round(start, 1),
+            "end": round(end, 1),
+            "reason": str(reason),
+            "score": round(max(0.0, min(1.0, float(score))), 2),
+        }
+        self.candidates.append(candidate)
+        return _text(
+            f"Added candidate #{candidate['id']} ({candidate['start']}s-{candidate['end']}s). "
+            f"{len(self.candidates)} candidates so far. {self._coverage_text()}"
+        ), False
+
+    def _coverage_text(self) -> str:
+        """Candidates per equal slice of the video, so gaps are visible to the agent."""
+        regions = TARGET_CLIPS
+        counts = [0] * regions
+        for c in self.candidates:
+            mid = (c["start"] + c["end"]) / 2
+            counts[min(regions - 1, int(mid / self.index.duration * regions))] += 1
+        size = self.index.duration / regions
+        parts = [
+            f"{fmt_time(i * size)}-{fmt_time((i + 1) * size)}: {n}" for i, n in enumerate(counts)
+        ]
+        empty = [i for i, n in enumerate(counts) if n == 0]
+        hint = " Some regions have no candidates yet - look there." if empty and len(self.candidates) >= 2 else ""
+        return "Candidates by region of the video - " + "; ".join(parts) + "." + hint
+
+    def _rank_candidates(self, ranking: list):
+        if not isinstance(ranking, list):
+            return _text("ranking must be a list of {id, note} objects, best first."), True
+        self.ranking = [e for e in ranking if isinstance(e, dict)]
+        self.finalized = True
+        if not self.candidates:
+            return _text("No candidates were added, so there is nothing to rank."), False
+        chosen = self.final_selection()
+        lines = [
+            f"#{c['rank']}: candidate {c['candidate_id']} ({c['start']}s-{c['end']}s)" for c in chosen
+        ]
+        note = " Spacing was relaxed to fill the set." if self.spacing_relaxed else ""
+        return _text("Final selection: " + "; ".join(lines) + "." + note), False
+
+    def final_selection(self) -> list[dict[str, Any]]:
+        """The best TARGET_CLIPS candidates, in ranked order, spread across the video.
+
+        Order = the agent's ranking, then any unranked candidates by their own score. A pick is
+        skipped if its midpoint is closer than the minimum gap to a better-ranked pick; the gap
+        is relaxed in steps only if that leaves fewer than TARGET_CLIPS.
+        """
+        by_id = {c["id"]: c for c in self.candidates}
+        order: list[int] = []
+        notes: dict[int, str] = {}
+        for entry in self.ranking or []:
+            cid = entry.get("id")
+            if isinstance(cid, int) and cid in by_id and cid not in notes:
+                order.append(cid)
+                notes[cid] = str(entry.get("note", "")).strip()
+        order += sorted(
+            (cid for cid in by_id if cid not in notes), key=lambda cid: -by_id[cid]["score"]
         )
-        return _text(f"Recorded suggestion {len(self.suggestions)}."), False
+
+        def mid(cid: int) -> float:
+            return (by_id[cid]["start"] + by_id[cid]["end"]) / 2
+
+        base_gap = self.index.duration / (2 * TARGET_CLIPS)
+        chosen: list[int] = []
+        strict_count = 0
+        for step, factor in enumerate(SPACING_RELAX_STEPS):
+            gap = base_gap * factor
+            chosen = []
+            for cid in order:
+                if all(abs(mid(cid) - mid(other)) >= gap for other in chosen):
+                    chosen.append(cid)
+                if len(chosen) == TARGET_CLIPS:
+                    break
+            if step == 0:
+                strict_count = len(chosen)
+            if len(chosen) == TARGET_CLIPS:
+                break
+        # "Relaxed" only if loosening the gap actually let more picks in.
+        self.spacing_relaxed = len(chosen) > strict_count
+
+        return [
+            {
+                "rank": n + 1,
+                "candidate_id": cid,
+                "start": by_id[cid]["start"],
+                "end": by_id[cid]["end"],
+                "reason": by_id[cid]["reason"],
+                "score": by_id[cid]["score"],
+                "comparison": notes.get(cid, ""),
+            }
+            for n, cid in enumerate(chosen)
+        ]
 
 
 def _text(message: str) -> list[dict[str, Any]]:

@@ -1,5 +1,7 @@
-"""The agent loop: Claude first calls get_overview (forced), then uses search_video /
-inspect_clip / suggest_clip until it has committed to enough clips or runs out of turns."""
+"""The agent loop: Claude first calls get_overview (forced), then gathers a pool of candidate
+moments from across the whole video (search_video / read_transcript / inspect_clip /
+add_candidate), compares them, and ranks them (rank_candidates). Code then picks the best
+TARGET_CLIPS from that ranking, spread out through the video."""
 
 from __future__ import annotations
 
@@ -7,29 +9,34 @@ import os
 from typing import Any, Callable
 
 from .anthropic_client import call_cost, make_client
-from .tools import OVERVIEW_ONLY_SCHEMAS, SUGGEST_ONLY_SCHEMAS, TOOL_SCHEMAS, ToolBox
+from .tools import FINAL_SCHEMAS, OVERVIEW_ONLY_SCHEMAS, TARGET_CLIPS, TOOL_SCHEMAS, ToolBox
 
 # Working turns after the forced overview turn.
 MAX_ITERATIONS = 5
-TARGET_SUGGESTIONS = 3
+TARGET_SUGGESTIONS = TARGET_CLIPS  # final clips returned (set in tools.py)
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "claude-haiku-5-5")
 
-SYSTEM_PROMPT = f"""You find the best short-form clips in a video for a given category (e.g. "funny", "interesting").
+SYSTEM_PROMPT = f"""You find the {TARGET_SUGGESTIONS} best clips of a whole video for a given category (e.g. "funny", "interesting"). They must be the best of the ENTIRE video and spread out through it - not four moments from the same stretch.
 
 Your first action is always get_overview (it is called for you on the first turn). For a short video it gives you the full transcript; for a long one (a podcast, an interview) it gives you an outline: per-chunk summaries with notable lines and exact timestamps. Either way you also get a few sample frames. Read it carefully - it tells you what this video is about, who is speaking and where candidate moments might be. Base your searches on THIS video, not on generic ideas.
 
-After the overview you have {MAX_ITERATIONS} turns and must end with up to {TARGET_SUGGESTIONS} distinct suggested clips.
+How to work (you have {MAX_ITERATIONS} turns after the overview):
+1. FIND candidates across the whole video - aim for roughly {2 * TARGET_SUGGESTIONS}-{3 * TARGET_SUGGESTIONS}, from every part of it, not just the first stretch you look at. Verify promising ones before adding them.
+2. COMPARE them head-to-head: which is actually funnier / stronger, and why. Do not just rank by the order you found them.
+3. RANK with rank_candidates (best first, with a short note on why each beats the one below it). Code then takes the top {TARGET_SUGGESTIONS} from your ranking, skipping any pick that is too close in time to a better-ranked one - so make sure your pool contains strong candidates from different parts of the video, and don't rely on a single region.
+
 Tools:
 - search_video: embedding search over the video. Visual search (CLIP) understands concrete things on screen, NOT abstract words like "funny" - so write concrete queries about what you saw in the overview (e.g. "chef dropping a pan", "audience laughing"). Speech mode searches the transcript by meaning - good for punchlines, jokes, surprising statements and topics. For talk-heavy videos lean on speech mode.
 - read_transcript: read the exact words (with speaker labels) for a time range, up to 10 minutes at a time. Use it on the stretches the outline or a search hit points to - the outline summarizes, this shows what was actually said.
-- inspect_clip: look at frames and the transcript of a time range. Verify candidates before suggesting them.
-- suggest_clip: commit a clip (5-60s) that starts and ends at natural sentence boundaries, with a little setup before the payoff. Give a specific reason.
+- inspect_clip: look at frames and the transcript of a time range. Verify candidates before adding them.
+- add_candidate: add a clip (5-60s) to your pool. Start and end at natural sentence boundaries, with a little setup before the payoff. Give a specific reason and an honest 0-1 score. Its result shows how your candidates are spread across the video - fill any empty regions.
+- rank_candidates: finish by ranking your candidates, best first.
 
-Be efficient: call several tools in the same turn (e.g. multiple searches at once, or inspecting several candidates at once). Do not spend turns narrating. If your searches are returning weak or irrelevant results, say so honestly in your suggestions' scores instead of inventing a justification."""
+Be efficient: call several tools in the same turn (e.g. multiple searches at once, inspecting or adding several candidates at once). Do not spend turns narrating. If your searches are returning weak or irrelevant results, say so honestly in the scores instead of inventing a justification."""
 
 LAST_TURN_NOTE = (
-    "\n\nThis is your FINAL turn: only suggest_clip is available. Commit your best remaining "
-    "candidates now using what you have learned."
+    "\n\nThis is your FINAL turn: only rank_candidates is available. Compare the candidates you have "
+    "and rank them now. If you added fewer than needed, rank what exists - do not invent more."
 )
 
 
@@ -61,8 +68,8 @@ def run_agent(
         {
             "role": "user",
             "content": (
-                f"Find the top {TARGET_SUGGESTIONS} '{category}' clips in this video "
-                f"(duration {toolbox.index.duration:.1f}s)."
+                f"Find the {TARGET_SUGGESTIONS} best '{category}' moments of this whole video, spread out "
+                f"through it (duration {toolbox.index.duration:.1f}s)."
             ),
         }
     ]
@@ -144,16 +151,22 @@ def run_agent(
         last_turn = i == MAX_ITERATIONS - 1
         keep_going = take_turn(
             f"Agent turn {iterations}/{MAX_ITERATIONS}",
-            SUGGEST_ONLY_SCHEMAS if last_turn else TOOL_SCHEMAS,
+            FINAL_SCHEMAS if last_turn else TOOL_SCHEMAS,
             SYSTEM_PROMPT + (LAST_TURN_NOTE if last_turn else ""),
             {"type": "any"} if last_turn else None,
         )
-        if not keep_going or len(toolbox.suggestions) >= TARGET_SUGGESTIONS:
+        # The agent ends the search itself by ranking; otherwise it runs to the turn limit.
+        if not keep_going or toolbox.finalized:
             break
 
-    suggestions = sorted(toolbox.suggestions, key=lambda s: s["score"], reverse=True)
+    # If the agent never ranked (ran out of turns / stopped talking), the selection falls back to
+    # its own candidate scores - still spread out through the video.
+    suggestions = toolbox.final_selection()
     return {
         "suggestions": suggestions,
+        "candidates_considered": len(toolbox.candidates),
+        "ranked_by_agent": toolbox.finalized,
+        "spacing_relaxed": toolbox.spacing_relaxed,
         "summary": final_text,
         "iterations": iterations,
         "usage": _usage_summary(usage),

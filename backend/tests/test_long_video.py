@@ -270,7 +270,8 @@ def test_read_transcript_empty_range_is_not_an_error():
 
 def test_read_transcript_is_offered_in_loop_but_not_on_final_turn_or_overview():
     assert "read_transcript" in [t["name"] for t in tools.TOOL_SCHEMAS]
-    assert [t["name"] for t in tools.SUGGEST_ONLY_SCHEMAS] == ["suggest_clip"]
+    assert [t["name"] for t in tools.FINAL_SCHEMAS] == ["rank_candidates"]
+    assert "add_candidate" in [t["name"] for t in tools.TOOL_SCHEMAS]
     assert [t["name"] for t in tools.OVERVIEW_ONLY_SCHEMAS] == ["get_overview"]
 
 

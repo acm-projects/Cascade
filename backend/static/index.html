@@ -376,26 +376,44 @@ function renderAgentResult(result) {
     agentResult.appendChild(p);
     return;
   }
-  result.suggestions.forEach((s, i) => {
+  const considered = document.createElement('p');
+  considered.className = 'note';
+  considered.textContent =
+    `Best ${result.suggestions.length} of ${result.candidates_considered} candidates, ranked best first ` +
+    `and spread across the video` +
+    (result.ranked_by_agent ? '' : ' (the agent did not finish ranking, so confidence scores were used)') +
+    (result.spacing_relaxed ? ' (spacing was relaxed: there were not enough well-spaced candidates)' : '') +
+    '.';
+  agentResult.appendChild(considered);
+
+  result.suggestions.forEach((s) => {
     const wrap = document.createElement('div');
     wrap.style.marginBottom = '1.5rem';
 
     const title = document.createElement('p');
     const strong = document.createElement('strong');
     strong.textContent =
-      `#${i + 1}: ${formatTime(s.start)} - ${formatTime(s.end)} ` +
+      `#${s.rank}: ${formatTime(s.start)} - ${formatTime(s.end)} ` +
       `(${Math.round(s.end - s.start)}s long, confidence ${s.score})`;
     title.appendChild(strong);
 
     const reason = document.createElement('p');
     reason.textContent = s.reason;
 
+    const parts = [title, reason];
+    if (s.comparison) {
+      const why = document.createElement('p');
+      why.className = 'note';
+      why.textContent = `Why it ranks here: ${s.comparison}`;
+      parts.push(why);
+    }
+
     const video = document.createElement('video');
     video.controls = true;
     video.style.maxWidth = '100%';
     video.src = `${agentObjectUrl}#t=${s.start},${s.end}`;
 
-    wrap.append(title, reason, video);
+    wrap.append(...parts, video);
     agentResult.appendChild(wrap);
   });
 }
