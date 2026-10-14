@@ -202,6 +202,62 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/features/' + job_id, headers=self.other).status_code, 404)
 
 
+    def test_generation_without_cloud_restores_editor_and_history(self):
+        job_id = self.upload()
+        folder = app1.JOBS_DIR / job_id
+        selection = {'start': 0, 'end': 2, 'title': 'Local clip'}
+        transcript = [{'start': 0, 'end': 2, 'text': 'Local caption'}]
+        def render(command):
+            Path(command[-1]).write_bytes(b'local-video')
+        with patch.dict(os.environ, {'CASCADE_STORAGE': 'auto', 'S3_BUCKET_NAME': '', 'DATABASE_URL': '', 'NEON_DATABASE_URL': ''}), \
+                patch.object(app1, 's3_client', side_effect=AssertionError('Local generation must not use S3')), \
+                patch.object(app1, 'inspect_video', return_value=(2, True)), \
+                patch.object(app1, 'select_with_agent', return_value=([selection], transcript, {})), \
+                patch.object(app1, 'run_command', side_effect=render):
+            app1.process_upload(job_id, folder / 'source.video', 'caption', 'speech', 2)
+            app1.jobs.clear()
+            job = self.client.get('/api/features/' + job_id, headers=self.headers).json()
+            self.assertEqual(job['state'], 'done')
+            clip = job['clips'][0]
+            self.assertNotIn('clip_s3_key', clip)
+            self.assertEqual(self.client.get(clip['clip_url'], headers=self.headers).content, b'local-video')
+            self.assertIn('Local caption', self.client.get(clip['captions_url'], headers=self.headers).text)
+            self.assertEqual(self.client.get(clip['captions_url'], headers=self.other).status_code, 404)
+            project_url = '/api/projects/' + self.project['id']
+            self.assertEqual(self.client.get(project_url, headers=self.headers).json()['jobs'][0]['job_id'], job_id)
+            self.assertEqual(self.client.post(project_url + '/saved-clips', headers=self.headers,
+                                            json={'job_id': job_id, 'clip_index': 0}).status_code, 200)
+            self.assertEqual(len(self.client.get('/api/my-clips', headers=self.headers).json()['clips']), 1)
+            with patch.object(app1.worker, 'submit') as submit:
+                response = self.client.post(project_url + '/caption-styles', headers=self.headers,
+                                            json={'job_id': job_id, 'clip_index': 0})
+                self.assertEqual(response.status_code, 202)
+                self.assertEqual(submit.call_args.args[2], folder / 'clip_1.mp4')
+
+    def test_local_playback_with_existing_cloud_metadata(self):
+        job_id = self.upload()
+        folder = app1.JOBS_DIR / job_id
+        clip = {'clip_url': f'/clips/{job_id}/clip_1.mp4', 'captions_url': f'/clips/{job_id}/clip_1.vtt',
+                's3_bucket': 'old-bucket', 'clip_s3_key': 'old-video', 'captions_s3_key': 'old-captions'}
+        app1.save_json(folder / 'results.json', {'clips': [clip]})
+        (folder / 'clip_1.mp4').write_bytes(b'local-copy')
+        (folder / 'clip_1.vtt').write_text('WEBVTT\n\n')
+        with patch.object(app1, 's3_client', side_effect=AssertionError('Use existing local copies')):
+            response = self.client.get(clip['clip_url'], headers=self.headers)
+            self.assertEqual(response.content, b'local-copy')
+            self.assertEqual(response.headers['cache-control'], 'no-store')
+            self.assertEqual(self.client.get(clip['clip_url'], headers=self.other).status_code, 404)
+            self.assertEqual(self.client.get(clip['captions_url'], headers=self.headers).text, 'WEBVTT\n\n')
+
+    def test_configured_cloud_upload_is_preserved(self):
+        job_id = self.upload()
+        folder = app1.JOBS_DIR / job_id
+        with patch.dict(os.environ, {'CASCADE_STORAGE': 's3', 'S3_BUCKET_NAME': 'test-bucket'}), patch.object(app1, 's3_client') as client:
+            storage = app1.upload_clip_files(folder, job_id, 'clip_1.mp4', 'clip_1.vtt')
+            self.assertEqual(storage['s3_bucket'], 'test-bucket')
+            self.assertEqual(client.return_value.upload_file.call_count, 2)
+            self.assertTrue(storage['clip_s3_key'].endswith('/clip_1.mp4'))
+
     def test_feature_adapters_validate_ownership_before_workers(self):
         job_id = self.upload()
         prefix = '/api/projects/' + self.project['id']
