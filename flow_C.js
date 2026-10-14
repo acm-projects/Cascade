@@ -377,11 +377,57 @@
     link.classList.remove("disabled-link"); link.removeAttribute("aria-disabled"); link.onclick = null;
   }
 
+  function showProcessingTimings(job) {
+    let panel = $("processing-timings");
+    if (!panel) {
+      const status = $("status");
+      if (!status) return;
+      panel = document.createElement("details");
+      panel.id = "processing-timings";
+      panel.open = true;
+      const summary = document.createElement("summary");
+      summary.textContent = "Processing timings";
+      const list = document.createElement("ul"); list.id = "processing-timing-list";
+      const note = document.createElement("p"); note.className = "muted";
+      note.textContent = "Server processing only; excludes browser upload and playback downloads. Model loading can be slower on the first run.";
+      panel.append(summary, list, note); status.after(panel);
+    }
+    panel.hidden = !job.timings && !job.timing_stage;
+    const list = $("processing-timing-list"); list.replaceChildren();
+    for (const [label, seconds] of Object.entries(job.timings || {})) {
+      const row = document.createElement("li");
+      row.textContent = label + ": " + Number(seconds).toFixed(2) + "s";
+      list.append(row);
+    }
+    if (job.timing_stage) {
+      const row = document.createElement("li");
+      const active = !["done", "error"].includes(job.state);
+      const end = active ? Date.now() / 1000 : job.updated_at;
+      const seconds = Math.max(0, (end || Date.now() / 1000) - job.timing_stage_started_at);
+      row.textContent = job.timing_stage + ": " + seconds.toFixed(1) + "s (" + (active ? "running" : "interrupted") + ")";
+      list.append(row);
+    }
+  }
+
   async function pollJob(jobId) {
-    while (!signedOut) {
+    const stop = $("stop-generation");
+    if (stop) {
+      stop.hidden = false;
+      stop.disabled = false;
+      stop.onclick = async () => {
+        stop.disabled = true;
+        try {
+          const result = await apiJSON("/api/features/" + encodeURIComponent(jobId) + "/cancel", { method: "POST" });
+          setStatus(result.message);
+        } catch (error) { setStatus(error.message); stop.disabled = false; }
+      };
+    }
+    try {
+      while (!signedOut) {
       const job = await apiJSON(
         "/api/features/" + encodeURIComponent(jobId)
       );
+      showProcessingTimings(job);
 
       if (job.state === "error") {
         throw new Error(
@@ -394,7 +440,7 @@
         if (signedOut) return;
 
         if (job.clips?.length) {
-          setStatus(job.clips.length + " clip(s) ready.");
+          setStatus(job.clips.length + " clip(s) ready." + (job.selection_note ? " " + job.selection_note : ""));
 
           await showCanvasClip(
             jobId,
@@ -402,19 +448,23 @@
           );
         } else {
           setStatus(
-            "No matching clip was found. Try a different prompt."
+            job.selection_note || "No matching clip was found. Try a different prompt."
           );
         }
 
         return;
       }
 
-      setStatus(
-        job.message ||
-        "Processing video…"
-      );
+      const now = Date.now() / 1000;
+      const elapsed = job.started_at ? Math.max(0, Math.floor(now - job.started_at)) : 0;
+      const stageElapsed = job.stage_started_at ? Math.max(0, Math.floor(now - job.stage_started_at)) : 0;
+      const timing = job.started_at ? " · " + elapsed + "s elapsed · " + stageElapsed + "s in this step" : "";
+      setStatus((job.message || "Processing video…") + timing);
 
       await wait(1500);
+      }
+    } finally {
+      if (stop) stop.hidden = true;
     }
   }
 

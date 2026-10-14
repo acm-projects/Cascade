@@ -39,7 +39,147 @@ There is no cross-device source upload storage, automatic interrupted-job retry,
 
 ## Install and run
 
-Use Python 3.12, FFmpeg/ffprobe, and Ollama. From the repository root on macOS:
+### Windows local processing and troubleshooting
+
+**AI scene analysis now uses OpenAI by default.** Ollama is not required for it.
+Keep your existing `.env` and add the following locally (do not commit the key):
+
+```dotenv
+OPENAI_API_KEY=your_key_here
+# Optional; these are the defaults:
+OPENAI_SCENE_MODEL=gpt-5.4-mini
+OPENAI_SCENE_REASONING=low
+OPENAI_SCENE_TIMEOUT=120
+OPENAI_SCENE_MAX_FRAMES=48
+```
+
+Choose **AI scene analysis — OpenAI · up to 4 clips** and enter a request such as
+“Find four funny moments; include each setup and punchline.” The app transcribes
+speech locally (or reuses the saved transcript), extracts up to 48 compressed
+timestamped images, and sends the images plus transcript to OpenAI's Responses
+API with a strict candidate schema and `store=false`. It does not upload the
+full source video to OpenAI. Normal processing uses one scene-selection call;
+a transient rate/service error may retry once. API usage is billed to your key.
+
+The selector requests up to 12 candidate windows and validates finite timestamps,
+source bounds, duration, match score, duplicates, and overlap. It chooses up to
+four distinct supported moments without merging adjacent candidates. It does not
+repeat one joke or pad unrelated footage to force four clips. Fewer results come
+with a readable explanation. Humor quality still needs testing on your footage.
+Boundary validation ensures usable windows, not that a moment is objectively funny.
+
+FFmpeg cuts the clips locally and matching VTT captions are generated from the
+transcript. Existing Clerk ownership and local/S3 media delivery remain in use.
+Model results, usage, and timings persist with the job; identical requests reuse
+the paid selection within the same account/project. Changing the prompt, model,
+frames, transcript, or requested duration invalidates that selection cache. Cache
+metadata lives in `openai_selection.json`; keys are never saved there or sent to
+the browser. No OpenAI SDK installation is needed; the existing HTTPX dependency
+implements the documented API protocol.
+
+The timing panel includes local transcription, preview extraction, OpenAI scene
+selection (including network wait), validation, rendering, and storage. Missing
+keys, rejected keys, quota/rate limits, refusals, incomplete responses, and timeouts
+produce readable errors. The Stop button takes effect at the next checkpoint;
+an in-flight request may still complete and incur usage.
+
+All automated tests mock OpenAI. The migration has **not** been tested with a live
+OpenAI request: the user asked to perform the first live upload themselves. The
+earlier timings below are local-model measurements, not OpenAI speed claims.
+
+From PowerShell in the repository root, use the Python 3.12 environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app1:app --host 127.0.0.1 --port 8000
+```
+
+The API serves the website too. Restart it after changing environment variables or source files.
+
+Storage defaults to `CASCADE_STORAGE=auto`: generated media stays on this computer if
+`S3_BUCKET_NAME` is absent, and uploads to S3 when a bucket is configured. Set
+`CASCADE_STORAGE=local` explicitly to avoid S3 uploads on a slow connection. Local
+clips retain the same Clerk authentication and ownership checks. Keep `video_jobs`
+on disk; local storage is not a cross-device backup. `CASCADE_STORAGE=s3` requires
+`S3_BUCKET_NAME`, AWS credentials (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`,
+or an AWS credential profile), and the correct `AWS_DEFAULT_REGION`. A configured
+but failing S3 upload reports an error; it does not silently change storage modes.
+
+Clerk expects `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. For compatibility,
+`CLERK_KEY` is accepted according to its `pk_`/`sk_` prefix, and `AWS_ACCESS_KEY`
+is accepted as an alias for `AWS_ACCESS_KEY_ID`. An AWS access key ID alone is
+insufficient: it still needs its paired secret access key. Existing `.env` values
+are never rewritten by the app.
+
+The canvas shows both overall processing time and time in the current step.
+The **Processing timings** panel also shows completed stage durations, including
+model loading, frame extraction, prompt/image embeddings, Whisper transcription,
+rendering, and clip storage. These measurements use a monotonic clock and include
+Whisper's lazy segment iteration. A currently running stage has a live elapsed
+counter. Completed breakdowns are saved in `results.json` and restored with job
+history; timing fields are also included in status responses. They exclude the
+browser's initial upload and subsequent playback downloads. AI scene analysis
+reports its own broader stages rather than image embeddings, which it does not use.
+`video_jobs/<job-id>/progress.json` saves the last progress update. A status response
+with HTTP 200 only confirms that polling succeeded; inspect `state` and `message`
+for processing status. API terminal logs include each stage and Ollama's reported
+model/load durations. **Stop processing** requests cancellation at the next progress
+checkpoint; an active model request or FFmpeg process must return or time out first.
+
+The optional **Local Ollama analysis** still performs vision inference and transcription; it is not
+instant. Defaults now use 4,096 context tokens and at most 20 AI-analysis frames,
+each fitting within 384×384 pixels,
+and scoring batches of up to eight observations. Long videos are sampled more
+sparsely, so very brief events may be missed. Repeated AI requests on an identical
+upload reuse transcripts and visual descriptions within the same account/project.
+Speech search avoids the vision language model. Visual search samples across the
+whole video and transcribes only the selected clip for captions; silent videos
+do not load Whisper just for captions. First use may download model files.
+
+AI analysis combines each group into one numbered contact sheet (up to 672×488),
+read chronologically. This reduces per-image token overhead. Scene descriptions
+are capped at 128 output tokens. If a request still exceeds context, the group is
+split into smaller chronological requests, preserving sampled frames and their
+time window. The app does not automatically increase context memory. Local CPU
+vision inference can still be slow, particularly under RAM pressure. Increase
+`CASCADE_AI_MAX_FRAMES` (default 20, maximum 100) for denser sampling at the cost
+of additional model calls. Cached visual descriptions are versioned by sampling
+settings so partial results from older layouts are not combined with new layouts.
+
+Limits can be overridden in `.env`: `CASCADE_MODEL_TIMEOUT=120` (seconds per
+Ollama request), `CASCADE_FFMPEG_TIMEOUT=300` (seconds per FFmpeg command),
+`CASCADE_JOB_TIMEOUT=900` (AI job budget checked between processing steps),
+`CASCADE_MODEL_CONTEXT=4096`, and `CASCADE_MODEL=qwen3-vl:4b-instruct`.
+These are failure limits, not speed guarantees. The job budget and cancellation
+are cooperative, rather than forcibly killing an in-flight native model operation.
+
+Validation:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+# Opt-in: starts real local Ollama inference on a four-second synthetic silent video.
+# No S3 or paid API calls; all synthetic media is temporary.
+.\.venv\Scripts\python.exe tests/live_ai_smoke.py
+# Opt-in: real visual search and captions on your own file, cached models only.
+.\.venv\Scripts\python.exe tests/live_search_smoke.py path\to\video.mp4
+```
+
+An earlier local-model smoke test completed in 102.5 seconds on this machine: 79.3 seconds in
+vision inference (including 10 seconds loading), 8 seconds interpreting the query,
+and 14.5 seconds scoring. It produced a playable local clip. This validates one
+small synthetic AI path, not arbitrary-video quality, live speech inference,
+Clerk browser sign-in, or AWS access. Hardware/memory pressure and first-use model
+downloads can materially change these timings.
+
+A separate offline test on the existing 133.5-second uploaded video completed
+real visual search, Whisper captions, and a 30-second MP4 render in 21.1 seconds,
+including roughly 13 seconds importing dependencies. Models were already cached;
+no S3 or provider calls were made. Local visual search remains available alongside
+the new default OpenAI scene analysis. These are different
+search algorithms and inputs, so these timings are not a before/after speedup claim.
+
+Use Python 3.12 and FFmpeg/ffprobe. Ollama is only required for the optional local
+Ollama analysis mode. From the repository root on macOS:
 
 ```bash
 brew install python@3.12 ffmpeg ollama

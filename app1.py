@@ -6,6 +6,7 @@ from functools import lru_cache
 
 import base64
 import html
+import hashlib
 import json
 import math
 import os
@@ -14,6 +15,7 @@ import shutil
 import subprocess
 import time
 import traceback
+import httpx
 
 from urllib.request import Request as URLRequest, urlopen
 from urllib.error import HTTPError, URLError
@@ -42,7 +44,9 @@ from fastapi.responses import (
 )
 
 from starlette.concurrency import run_in_threadpool
-from ollama import Client
+from ollama import Client, ResponseError
+from pipeline_timing import StageTimer
+from openai_scene import SceneAnalysisError
 
 
 # --------------------------------------------------
@@ -54,15 +58,23 @@ app = FastAPI()
 PROJECT_DIR = Path(__file__).resolve().parent
 
 load_dotenv(PROJECT_DIR / ".env", override=True)
+# Accept existing local names without rewriting the user's secrets file.
+if not os.getenv('CLERK_SECRET_KEY') and os.getenv('CLERK_KEY', '').startswith('sk_'):
+    os.environ['CLERK_SECRET_KEY'] = os.environ['CLERK_KEY']
+if not os.getenv('CLERK_PUBLISHABLE_KEY') and os.getenv('CLERK_KEY', '').startswith('pk_'):
+    os.environ['CLERK_PUBLISHABLE_KEY'] = os.environ['CLERK_KEY']
+if not os.getenv('AWS_ACCESS_KEY_ID') and os.getenv('AWS_ACCESS_KEY'):
+    os.environ['AWS_ACCESS_KEY_ID'] = os.environ['AWS_ACCESS_KEY']
 
 JOBS_DIR = PROJECT_DIR / "video_jobs"
 JOBS_DIR.mkdir(exist_ok=True)
 
-MODEL = "qwen3-vl:4b-instruct"
+MODEL = os.getenv("CASCADE_MODEL", "qwen3-vl:4b-instruct")
 SCORING_MODEL = MODEL
 
 FRAME_INTERVAL = 2.0
 GROUP_SIZE = 5
+MODEL_TIMEOUT = float(os.getenv("CASCADE_MODEL_TIMEOUT", "120"))
 
 PROFILE_CACHE_SECONDS = 300
 FAILURE_CACHE_SECONDS = 30
@@ -116,13 +128,33 @@ whisper_model = None
 
 ollama_client = Client(
     host="http://127.0.0.1:11434",
-    timeout=600,
+    timeout=MODEL_TIMEOUT,
 )
 
 
 # --------------------------------------------------
 # S3 storage
 # --------------------------------------------------
+
+def uses_local_storage():
+    mode = os.getenv('CASCADE_STORAGE', 'auto').lower()
+    if mode not in ('auto', 'local', 's3'):
+        raise HTTPException(503, 'CASCADE_STORAGE must be auto, local, or s3.')
+    return mode == 'local' or (mode == 'auto' and not os.getenv('S3_BUCKET_NAME', '').strip())
+
+
+def validate_clip_storage():
+    if uses_local_storage():
+        return
+    if not os.getenv('S3_BUCKET_NAME', '').strip():
+        raise HTTPException(503, 'S3_BUCKET_NAME is missing. Configure S3 or set CASCADE_STORAGE=local.')
+    try:
+        credentials = boto3.Session().get_credentials()
+        if credentials is None:
+            raise HTTPException(503, 'AWS credentials are missing. Configure AWS or set CASCADE_STORAGE=local.')
+        credentials.get_frozen_credentials()
+    except BotoCoreError as error:
+        raise HTTPException(503, 'AWS credentials are incomplete or unavailable. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set CASCADE_STORAGE=local.') from error
 
 @lru_cache(maxsize=1)
 def s3_client():
@@ -355,6 +387,9 @@ def upload_clip_files(
     filename,
     captions_filename,
 ):
+    # Local media already uses the same ownership-checked /clips route.
+    if uses_local_storage():
+        return {"storage": "local"}
     owner = json.loads(
         (folder / "owner.json").read_text(
             encoding="utf-8"
@@ -779,7 +814,20 @@ def save_json(path, data):
 
 def update_job(job_id, **changes):
     with jobs_lock:
-        jobs[job_id].update(changes)
+        job = jobs[job_id]
+        if job.get('cancel_requested') and changes.get('state') not in ('error', 'done'):
+            raise JobCancelled()
+        now = time.time()
+        job.setdefault("started_at", now)
+        if "message" in changes and changes["message"] != job.get("message"):
+            job["stage_started_at"] = now
+            print(f"[{job_id}] {changes['message']}", flush=True)
+        job.update(changes)
+        job["updated_at"] = now
+        snapshot = dict(job)
+    folder = JOBS_DIR / job_id
+    if folder.is_dir():
+        save_json(folder / "progress.json", snapshot)
 
 
 def run_command(command):
@@ -787,6 +835,7 @@ def run_command(command):
         command,
         capture_output=True,
         text=True,
+        timeout=float(os.getenv("CASCADE_FFMPEG_TIMEOUT", "300")),
     )
 
     if result.returncode != 0:
@@ -796,6 +845,28 @@ def run_command(command):
         )
 
     return result.stdout
+
+
+class JobCancelled(Exception):
+    pass
+
+
+def processing_error(error, stage):
+    """Safe public errors: never expose provider credentials or signed URLs."""
+    if isinstance(error, JobCancelled):
+        return 'Processing cancelled. You can start another search.'
+    if isinstance(error, SceneAnalysisError):
+        return str(error)
+    if isinstance(error, (httpx.TimeoutException, subprocess.TimeoutExpired, TimeoutError)):
+        return f'Timed out while {stage}. Local processing exceeded its time limit. Try a shorter video or speech search; check the API terminal.'
+    if isinstance(error, (ConnectionError, httpx.ConnectError)):
+        return 'Cannot reach Ollama. Start Ollama and confirm the configured model is installed.'
+    if isinstance(error, ClientError) or isinstance(error, BotoCoreError):
+        return f'Storage failed while {stage}. Check AWS credentials, bucket permissions, and connectivity, or use CASCADE_STORAGE=local.'
+    if isinstance(error, HTTPException) and isinstance(error.detail, str):
+        # Only locally raised processing validation errors reach this adapter.
+        return error.detail
+    return f'Processing failed while {stage}. Check the API terminal for the error details.'
 
 
 # --------------------------------------------------
@@ -830,9 +901,10 @@ def ask_qwen(
         model=model_name,
         messages=[message],
         stream=False,
+        keep_alive="30s",
         options={
-            "num_ctx": 16384,
-            "num_predict": 2048,
+            "num_ctx": int(os.getenv("CASCADE_MODEL_CONTEXT", "4096")),
+            "num_predict": 1024 if json_response else (128 if images else 384),
             "temperature": 0.2,
         },
         **kwargs,
@@ -858,6 +930,8 @@ def ask_qwen(
         ),
         flush=True,
     )
+    print(f'Model time: {float(response.total_duration or 0) / 1e9:.1f}s '
+          f'(loading: {float(response.load_duration or 0) / 1e9:.1f}s)', flush=True)
 
     if response.done_reason == "length":
         raise RuntimeError(
@@ -1008,6 +1082,52 @@ def transcribe_video(
     return transcript
 
 
+def scene_preview(images):
+    """One bounded chronological contact sheet avoids per-image vision token overhead."""
+    from PIL import Image, ImageDraw, ImageOps
+    columns = min(3, len(images))
+    rows = math.ceil(len(images) / columns)
+    tile = 224
+    sheet = Image.new('RGB', (columns * tile, rows * (tile + 20)), 'black')
+    draw = ImageDraw.Draw(sheet)
+    for index, path in enumerate(images):
+        with Image.open(path) as original:
+            image = ImageOps.contain(original.convert('RGB'), (tile, tile))
+        x = (index % columns) * tile
+        y = (index // columns) * (tile + 20)
+        sheet.paste(image, (x + (tile - image.width) // 2, y + 20 + (tile - image.height) // 2))
+        image.close()
+        draw.text((x + 6, y + 3), f'Frame {index + 1}', fill='white')
+    target = Path(images[0]).parent / f'scene_{Path(images[0]).stem}_{Path(images[-1]).stem}.jpg'
+    sheet.save(target, quality=85)
+    sheet.close()
+    return target
+
+
+def describe_frame_group(prompt, images, progress):
+    """Fit vision inputs to the configured context without dropping frames."""
+    try:
+        preview = scene_preview(images) if len(images) > 1 else images[0]
+        sheet_prompt = ('The image is a numbered contact sheet of consecutive video frames. '
+                        'Read left to right, then top to bottom; black borders and frame labels are not video content. '
+                        if len(images) > 1 else '')
+        return ask_qwen(sheet_prompt + prompt, images=[preview])
+    except ResponseError as error:
+        detail = str(error).lower()
+        if error.status_code != 400 or 'context' not in detail or 'exceeds' not in detail:
+            raise
+        if len(images) <= 1:
+            raise HTTPException(503, 'A single video frame exceeds the model context. '
+                                'Increase CASCADE_MODEL_CONTEXT or use Visual search.') from error
+        midpoint = len(images) // 2
+        progress(f'Model context limit reached; splitting {len(images)} frames into '
+                 f'{midpoint} and {len(images) - midpoint}...')
+        first = describe_frame_group(prompt, images[:midpoint], progress)
+        progress('Continuing visual analysis with the next smaller frame group...')
+        second = describe_frame_group(prompt, images[midpoint:], progress)
+        return first + '\n' + second
+
+
 def describe_video(
     video_path,
     folder,
@@ -1019,8 +1139,12 @@ def describe_video(
     )
 
     descriptions = []
+    maximum_frames = max(1, min(100, int(os.getenv('CASCADE_AI_MAX_FRAMES', '20'))))
+    interval = max(FRAME_INTERVAL, duration / maximum_frames)
+    cache_settings = {'version': 2, 'interval': interval, 'maximum_frames': maximum_frames}
+    settings_path = folder / 'visual_analysis_settings.json'
 
-    if descriptions_path.is_file():
+    if descriptions_path.is_file() and settings_path.is_file() and json.loads(settings_path.read_text()) == cache_settings:
         descriptions = json.loads(
             descriptions_path.read_text(
                 encoding="utf-8"
@@ -1038,12 +1162,15 @@ def describe_video(
             )
 
             return descriptions
+    save_json(descriptions_path, descriptions)
+    save_json(settings_path, cache_settings)
 
     frames_dir = folder / "frames"
     frames_dir.mkdir(exist_ok=True)
 
     progress("Extracting video frames...")
 
+    # Coarse scene coverage bounds the number of expensive local vision calls.
     run_command([
         "ffmpeg",
         "-hide_banner",
@@ -1053,7 +1180,8 @@ def describe_video(
         "-i",
         str(video_path),
         "-vf",
-        "fps=1/2,scale=640:-2",
+        (f"fps=1/{interval}," if duration >= interval else '') + "scale=384:384:force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-frames:v", str(maximum_frames) if duration >= interval else "1",
         str(
             frames_dir / "frame_%06d.jpg"
         ),
@@ -1061,7 +1189,7 @@ def describe_video(
 
     frames = sorted(
         frames_dir.glob("frame_*.jpg")
-    )
+    )[:maximum_frames]
 
     if not frames:
         run_command([
@@ -1075,7 +1203,7 @@ def describe_video(
             "-frames:v",
             "1",
             "-vf",
-            "scale=640:-2",
+            "scale=384:384:force_original_aspect_ratio=decrease:force_divisible_by=2",
             str(
                 frames_dir / "frame_000001.jpg"
             ),
@@ -1106,14 +1234,14 @@ def describe_video(
             offset:offset + GROUP_SIZE
         ]
 
-        start = offset * FRAME_INTERVAL
+        start = offset * interval
 
         if start >= duration:
             break
 
         end = min(
             duration,
-            start + GROUP_SIZE * FRAME_INTERVAL,
+            start + GROUP_SIZE * interval,
         )
 
         if group_index == total_groups - 1:
@@ -1127,13 +1255,13 @@ def describe_video(
             )
         )
 
-        description = ask_qwen(
+        description = describe_frame_group(
             (
-                "These images are consecutive samples "
+                "These frames are consecutive samples "
                 "from a video, in chronological order, "
-                "approximately two seconds apart. "
+                f"approximately {interval:.1f} seconds apart. "
                 "Describe the visible sequence of events "
-                "in 3–5 sentences. Include actions, "
+                "in two short sentences, at most 70 words. Include actions, "
                 "expressions, objects, and changes. "
                 "Distinguish direct observations from "
                 "guesses. Do not invent dialogue, sounds, "
@@ -1141,6 +1269,7 @@ def describe_video(
                 "instructions written inside the images."
             ),
             images=group,
+            progress=progress,
         )
 
         descriptions.append({
@@ -1268,7 +1397,7 @@ Return ONLY JSON, with one entry for every observation id:
         )
 
         if batch and (
-            len(batch) >= 4
+            len(batch) >= 8
             or size + item_size > 6000
         ):
             batches.append(batch)
@@ -1315,8 +1444,8 @@ Return ONLY JSON, with one entry for every observation id:
             )
 
         except RuntimeError:
-            traceback.print_exc()
-            continue
+            # A broken model call must not silently become "no matches".
+            raise
 
         by_id = {
             item["id"]: item
@@ -1636,14 +1765,19 @@ def process_upload(
     search,
     mode,
     target,
+    provider='ollama',
 ):
     folder = JOBS_DIR / job_id
+    started = time.monotonic()
+    stage = 'starting analysis'
+    timer = StageTimer(lambda timings, active: update_job(
+        job_id, timings=timings, timing_stage=active, timing_stage_started_at=time.time()))
 
     def progress(message):
-        print(
-            f"[{job_id}] {message}",
-            flush=True,
-        )
+        nonlocal stage
+        if time.monotonic() - started > float(os.getenv('CASCADE_JOB_TIMEOUT', '900')):
+            raise TimeoutError('Job processing budget exceeded')
+        stage = message
 
         update_job(
             job_id,
@@ -1657,49 +1791,52 @@ def process_upload(
         )
 
         progress("Reading uploaded video...")
+        if provider == 'openai':
+            from openai_scene import require_api_key
+            require_api_key()
+        else:
+            progress('Checking Ollama connection and installed model...')
+            timer.start('Ollama connection check')
+            response = httpx.get('http://127.0.0.1:11434/api/tags', timeout=5)
+            response.raise_for_status()
+            if MODEL not in {item.get('name') for item in response.json().get('models', [])}:
+                raise HTTPException(503, f'Ollama model is missing. Run: ollama pull {MODEL}')
 
+        timer.start('Video inspection')
         duration, has_audio = inspect_video(
             video_path
         )
 
+        timer.start('Whisper loading and transcription')
         transcript = transcribe_video(
             video_path,
             has_audio,
             progress,
         )
 
-        descriptions = []
-
-        if mode in ("visual", "both"):
-            descriptions = describe_video(
-                video_path,
-                folder,
-                duration,
-                progress,
-            )
-
-        observations = list(descriptions)
-
-        if mode in ("speech", "both"):
-            observations.extend(transcript)
-
-        observations.sort(
-            key=lambda item: item["start"]
-        )
-
-        selected = select_clips(
-            observations,
-            search,
-            duration,
-            target,
-            progress,
-        )
+        metadata = {}
+        if provider == 'openai':
+            from openai_scene import select_scenes
+            selected, metadata = select_scenes(video_path, folder, duration, transcript, search, target,
+                                               progress, timer.start, run_command, save_json)
+        else:
+            descriptions = []
+            if mode in ("visual", "both"):
+                timer.start('AI visual analysis')
+                descriptions = describe_video(video_path, folder, duration, progress)
+            observations = list(descriptions)
+            if mode in ("speech", "both"):
+                observations.extend(transcript)
+            observations.sort(key=lambda item: item["start"])
+            timer.start('AI request interpretation and scoring')
+            selected = select_clips(observations, search, duration, target, progress)
 
         save_json(
             folder / "selected_clips.json",
             {
                 "query": search,
-                "model": MODEL,
+                "model": metadata.get('model', MODEL),
+                "provider": provider,
                 "clips": selected,
             },
         )
@@ -1713,6 +1850,7 @@ def process_upload(
             progress(
                 f"Cutting clip {number}/{len(selected)}..."
             )
+            timer.start('Video rendering')
 
             filename = f"clip_{number}.mp4"
 
@@ -1743,6 +1881,8 @@ def process_upload(
                 "scale=trunc(iw/2)*2:trunc(ih/2)*2",
                 "-c:v",
                 "libx264",
+                "-preset",
+                "veryfast",
                 "-pix_fmt",
                 "yuv420p",
                 "-c:a",
@@ -1752,6 +1892,7 @@ def process_upload(
                 str(folder / filename),
             ])
 
+            timer.start('Caption preparation')
             write_captions(
                 folder / captions_filename,
                 transcript,
@@ -1762,6 +1903,7 @@ def process_upload(
             progress(
                 f"Saving clip {number}/{len(selected)}..."
             )
+            timer.start('Clip storage')
 
             storage = upload_clip_files(
                 folder,
@@ -1784,9 +1926,10 @@ def process_upload(
                 ),
             })
 
+        timings = timer.finish()
         save_json(
             folder / "results.json",
-            {"clips": clips},
+            {"clips": clips, 'timings': timings, **metadata},
         )
 
         update_job(
@@ -1794,7 +1937,7 @@ def process_upload(
             state="done",
 
             message=(
-                "Clip 1 is ready."
+                f"{len(clips)} clip(s) ready."
                 if clips
                 else "No matching clip was found."
             ),
@@ -1803,23 +1946,20 @@ def process_upload(
                 public_clip(clip)
                 for clip in clips
             ],
+            **metadata,
         )
 
-    except Exception:
+    except Exception as error:
         traceback.print_exc()
-
-        save_json(folder / "failure.json", {"message": "Processing failed. Check FFmpeg, Ollama, model availability, and S3 configuration, then retry."})
-        update_job(
-            job_id,
-            state="error",
-            message=(
-                "Processing failed. "
-                "Please try again."
-            ),
-        )
+        message = processing_error(error, stage)
+        integration.fail_feature(job_id, message)
 
 
 # --------------------------------------------------
+def process_openai_upload(job_id, video_path, search, mode, target):
+    return process_upload(job_id, video_path, search, mode, target, provider='openai')
+
+
 # Upload
 # --------------------------------------------------
 
@@ -1831,11 +1971,18 @@ def upload_video(
     mode: str = Form("both"),
     clip_length: int = Form(30),
     project_id: str = Form(...),
-    engine: str = Form("qwen"),
+    engine: str = Form("openai"),
 ):
     integration.require_project(project_id, request.state.user_id)
-    if engine not in ("qwen", "speech", "visual"):
+    validate_clip_storage()
+    if engine not in ("openai", "qwen", "speech", "visual"):
         raise HTTPException(400, "Invalid search engine.")
+    if engine == 'openai':
+        from openai_scene import require_api_key
+        try:
+            require_api_key()
+        except SceneAnalysisError as error:
+            raise HTTPException(503, str(error)) from error
     search = search.strip()
 
     if not search or len(search) > 2000:
@@ -1869,9 +2016,8 @@ def upload_video(
             "FFmpeg and ffprobe must be installed.",
         )
 
-    storage_information = resolve_storage_folder(
-        request.state.user_id
-    )
+    storage_information = ({'folder': DEFAULT_FOLDER, 'source': 'local'} if uses_local_storage()
+                           else resolve_storage_folder(request.state.user_id))
 
     job_id = uuid4().hex
 
@@ -1881,11 +2027,11 @@ def upload_video(
     video_path = folder / "source.video"
 
     try:
+        fingerprint = hashlib.sha256()
         with video_path.open("wb") as destination:
-            shutil.copyfileobj(
-                video.file,
-                destination,
-            )
+            while chunk := video.file.read(1024 * 1024):
+                fingerprint.update(chunk)
+                destination.write(chunk)
 
         if video_path.stat().st_size == 0:
             raise HTTPException(
@@ -1900,6 +2046,7 @@ def upload_video(
                 "project_id": project_id,
                 "prompt": search,
                 "source_name": Path(video.filename or "video").name,
+                "video_sha256": fingerprint.hexdigest(),
 
                 "user_folder": (
                     storage_information["folder"]
@@ -1910,6 +2057,20 @@ def upload_video(
                 ),
             },
         )
+        # Reuse only analysis from the same verified account and project.
+        for previous in JOBS_DIR.glob('*/owner.json'):
+            if previous.parent == folder:
+                continue
+            try:
+                owner = json.loads(previous.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                continue
+            if (owner.get('user_id') == request.state.user_id and owner.get('project_id') == project_id
+                    and owner.get('video_sha256') == fingerprint.hexdigest()):
+                for name in ('transcript.json', 'video_descriptions.json', 'visual_analysis_settings.json', 'openai_selection.json'):
+                    cached = previous.parent / name
+                    if cached.is_file() and not (folder / name).exists():
+                        shutil.copyfile(cached, folder / name)
 
     except Exception:
         shutil.rmtree(folder)
@@ -1926,11 +2087,11 @@ def upload_video(
         }
 
     worker.submit(
-        process_upload if engine == "qwen" else integration.process_search,
+        process_openai_upload if engine == 'openai' else process_upload if engine == "qwen" else integration.process_search,
         job_id,
         video_path,
         search,
-        mode if engine == "qwen" else engine,
+        mode if engine in ("qwen", "openai") else engine,
         clip_length,
     )
 

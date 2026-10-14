@@ -2,6 +2,7 @@
 External identity, S3, and AI workers are mocked; persistence/HTTP/ownership are real.
 """
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,8 @@ import integration
 
 class IntegrationTests(unittest.TestCase):
     def setUp(self):
+        self.storage = patch.dict(os.environ, {'CASCADE_STORAGE': 'local', 'OPENAI_API_KEY': 'test-key'})
+        self.storage.start()
         self.temp = tempfile.TemporaryDirectory()
         self.directory = patch.object(app1, 'JOBS_DIR', Path(self.temp.name))
         self.directory.start()
@@ -25,6 +28,7 @@ class IntegrationTests(unittest.TestCase):
         self.project = self.client.post('/api/projects', json={'name': 'My project'}, headers=self.headers).json()
 
     def tearDown(self):
+        self.storage.stop()
         self.auth.stop()
         self.directory.stop()
         self.temp.cleanup()
@@ -53,6 +57,17 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(result.status_code, 202)
         self.assertIs(submit.call_args.args[0], integration.process_search)
         return result.json()['job_id']
+
+    def test_openai_upload_checks_key_and_dispatches_without_ollama(self):
+        data = {'project_id': self.project['id'], 'search': 'four funny moments', 'engine': 'openai'}
+        with patch.object(app1.worker, 'submit') as submit:
+            with patch.dict(os.environ, {'OPENAI_API_KEY': ''}):
+                response = self.client.post('/upload', headers=self.headers, data=data, files={'video': ('a.mp4', b'video')})
+            self.assertEqual(response.status_code, 503)
+            submit.assert_not_called()
+            response = self.client.post('/upload', headers=self.headers, data=data, files={'video': ('a.mp4', b'video')})
+            self.assertEqual(response.status_code, 202)
+            self.assertIs(submit.call_args.args[0], app1.process_openai_upload)
 
     def test_upload_project_association_history_and_source(self):
         job_id = self.upload()
@@ -102,6 +117,52 @@ class IntegrationTests(unittest.TestCase):
         integration.fail_feature(job_id)
         app1.jobs.clear()
         self.assertEqual(self.client.get('/api/features/' + job_id, headers=self.headers).json()['state'], 'error')
+
+    def test_cancel_is_owned_and_worker_stops_on_next_progress(self):
+        job_id = self.upload()
+        url = '/api/features/' + job_id + '/cancel'
+        self.assertEqual(self.client.post(url, headers=self.other).status_code, 404)
+        self.assertEqual(self.client.post(url, headers=self.headers).status_code, 200)
+        with self.assertRaises(app1.JobCancelled):
+            app1.update_job(job_id, message='Next stage')
+        integration.fail_feature(job_id, app1.processing_error(app1.JobCancelled(), 'search'))
+        self.assertEqual(self.client.post(url, headers=self.headers).status_code, 409)
+
+    def test_analysis_cache_is_reused_only_within_owned_project(self):
+        original = self.upload()
+        (app1.JOBS_DIR / original / 'transcript.json').write_text('[{"text":"cached"}]')
+        retry = self.upload()
+        self.assertEqual((app1.JOBS_DIR / retry / 'transcript.json').read_text(), '[{"text":"cached"}]')
+        other = self.client.post('/api/projects', headers=self.headers, json={'name': 'Other'}).json()
+        with patch.object(app1, 'resolve_storage_folder', return_value={'folder': 'users', 'source': 'test'}), patch.object(app1.worker, 'submit'):
+            result = self.client.post('/upload', headers=self.headers, data={'project_id': other['id'], 'search': 'blue'},
+                                      files={'video': ('source.mp4', b'example-source', 'video/mp4')})
+        self.assertFalse((app1.JOBS_DIR / result.json()['job_id'] / 'transcript.json').exists())
+
+    def test_search_stage_timings_are_saved_with_results(self):
+        import sys
+        import types
+        job_id = self.upload()
+        folder = app1.JOBS_DIR / job_id
+        fake = types.ModuleType('backend.video_search.router')
+        fake.OUTPUTS = Path(self.temp.name)
+        output = fake.OUTPUTS / 'generated.mp4'
+        output.write_bytes(b'fixture')
+        def search(*args, progress, timing):
+            timing({}, 'Image embeddings')
+            values = {'Image embeddings': 2.5, 'Whisper transcription': 1.0}
+            timing(values, None)
+            return {'clip_url': '/search/generated.mp4', 'captions_vtt': 'WEBVTT\n',
+                    'start': 0, 'end': 15, 'match': 'fixture', 'timings': values}
+        fake.search_video = search
+        with patch.dict(sys.modules, {'backend.video_search.router': fake}), \
+             patch.object(app1, 'upload_clip_files', return_value={'storage': 'local'}):
+            integration.process_search(job_id, folder / 'source.video', 'blue', 'visual', 15)
+        app1.jobs.clear()
+        result = self.client.get('/api/features/' + job_id, headers=self.headers).json()
+        self.assertEqual(result['state'], 'done')
+        self.assertEqual(result['timings']['Image embeddings'], 2.5)
+        self.assertIn('Clip storage', result['timings'])
 
     def test_prompt_selection_returns_real_nonoverlapping_candidates(self):
         observations = [{'start': i*40, 'end': i*40+10, 'score': 8, 'title': str(i), 'reason': 'match'} for i in range(5)]

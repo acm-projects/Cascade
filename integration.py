@@ -1,15 +1,17 @@
 """Persistent, owner-checked adapters for the existing website and origin/main features.
 No database configuration is replaced; records live beside existing video_jobs.
 """
-import asyncio
 import hashlib
 import json
+import logging
+import time
 import re
 import shutil
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 from typing import Literal
+from pipeline_timing import StageTimer
 
 from backend.settings.preferences import load_preferences, save_preferences
 
@@ -121,8 +123,11 @@ def finish_feature(job_id, result):
 def fail_feature(job_id, message=None):
     # Never return provider exceptions, credentials, or signed storage URLs.
     message = message or 'Processing failed. Check the required models, services, and credentials, then retry.'
-    host.save_json(host.JOBS_DIR / job_id / 'failure.json', {'message': message})
     host.update_job(job_id, state='error', message=message)
+    with host.jobs_lock:
+        job = host.jobs[job_id]
+        details = {key: job[key] for key in ('timings', 'timing_stage', 'timing_stage_started_at', 'updated_at') if key in job}
+    host.save_json(host.JOBS_DIR / job_id / 'failure.json', {'message': message, **details})
 
 
 def publish_clip(folder, job_id, number, path, start, end, title, explanation='', captions=None):
@@ -142,25 +147,42 @@ def publish_clip(folder, job_id, number, path, start, end, title, explanation=''
 def process_search(job_id, video_path, search, mode, target):
     """Reuse origin/main speech/visual search under the existing job and S3 contract."""
     from starlette.datastructures import UploadFile
+    stage = 'loading search dependencies'
+    def timing(timings, active):
+        host.update_job(job_id, timings=timings, timing_stage=active, timing_stage_started_at=time.time())
+    timer = StageTimer(timing)
+    def progress(message):
+        nonlocal stage
+        stage = message
+        host.update_job(job_id, message=message)
     try:
-        from backend.video_search.router import upload_video, OUTPUTS
+        timer.start('Dependency imports')
+        from backend.video_search.router import search_video, OUTPUTS
+        initial = timer.finish()
+        def search_timing(timings, active):
+            timing({**initial, **timings}, active)
         host.update_job(job_id, state='processing', message='Searching video and rendering captions...')
         with video_path.open('rb') as file:
             upload = UploadFile(file, filename='source.mp4')
-            result = asyncio.run(upload_video(video=upload, search=search, mode=mode, clip_length=target))
+            result = search_video(upload, search, mode, target, progress=progress, timing=search_timing)
         output = OUTPUTS / Path(result['clip_url']).name
         captions = video_path.parent / "search.vtt"
         captions.write_text(result["captions_vtt"], encoding="utf-8")
         try:
+            progress('Saving the generated clip...')
+            timer.timings = {**initial, **result['timings']}
+            timer.start('Clip storage')
             clip = publish_clip(video_path.parent, job_id, 1, output, result['start'], result['end'],
                                 search, result['match'] + ' · Captions are burned into the video.', captions=captions)
-            finish_feature(job_id, {'clips': [clip]})
+            timings = timer.finish()
+            finish_feature(job_id, {'clips': [clip], 'timings': timings})
         finally:
             output.unlink(missing_ok=True)
     except ImportError:
         fail_feature(job_id, 'A processing dependency is missing. Install requirements.txt and restart the service.')
-    except Exception:
-        fail_feature(job_id)
+    except Exception as error:
+        logging.getLogger(__name__).exception('Search job %s failed during %s', job_id, stage)
+        fail_feature(job_id, host.processing_error(error, stage))
 
 
 def render_styles(job_id, source, source_clip):
@@ -360,3 +382,14 @@ def register(app, backend):
             result = json.loads((folder / 'results.json').read_text())
             return {'state': 'done', **result, 'clips': [host.public_clip(c) for c in result.get('clips', [])]}
         return {'state': 'error', 'message': 'Processing was interrupted by a server restart. Retry the operation.'}
+
+    @app.post('/api/features/{job_id}/cancel')
+    def cancel_feature(job_id: str, request: Request):
+        host.require_job_owner(job_id, request.state.user_id)
+        with host.jobs_lock:
+            job = host.jobs.get(job_id)
+            if not job or job.get('state') in ('done', 'error'):
+                raise HTTPException(409, 'This job is no longer processing.')
+            job['cancel_requested'] = True
+            job['message'] = 'Stopping after the current processing step...'
+        return {'message': 'Stop requested. The active model call or render may take up to its timeout to return.'}

@@ -258,7 +258,7 @@
           ></textarea>
 
           <label for="search-engine">Search method</label>
-          <select id="search-engine"><option value="qwen">AI prompt search (existing pipeline)</option><option value="speech">Speech search</option><option value="visual">Visual search</option></select>
+          <select id="search-engine"><option value="openai">AI scene analysis — OpenAI · up to 4 clips</option><option value="visual">Local visual search — objects and actions</option><option value="speech">Local speech search — spoken phrases</option><option value="qwen">Local Ollama analysis — slower</option></select>
           <button
             id="generate-clip"
             class="primary"
@@ -270,6 +270,8 @@
           >
             Generate clips
           </button>
+          <button id="stop-generation" type="button" hidden>Stop processing</button>
+          <p class="muted">AI scene analysis sends sampled images and transcript text to OpenAI to find up to four distinct moments. API usage is billed to your configured key. Video cutting stays local; Ollama is optional.</p>
           <details class="research-section">
             <summary>Research current trends</summary>
             <p class="muted">Analyze the selected upload or this generation’s original video. Research does not require a matching clip.</p>
