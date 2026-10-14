@@ -18,6 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 
 from .agent import run_agent
 from .index import build_index
+from .summaries import ensure_summaries
 from .tools import ToolBox
 
 logger = logging.getLogger("cascade_agent")
@@ -120,6 +121,14 @@ def _run_job(job_id: str, video_path: Path, work_dir: Path, category: str) -> No
         except Exception as exc:
             logger.exception("Failed to index video")
             _fail_job(job_id, f"Could not index your video: {exc}")
+            return
+
+        try:
+            # Long transcripts (podcasts) get a per-chunk summary outline; no-op for short ones.
+            ensure_summaries(index, progress=progress)
+        except Exception as exc:
+            logger.exception("Failed to summarize transcript")
+            _fail_job(job_id, f"Could not summarize your video's transcript: {exc}")
             return
 
         try:

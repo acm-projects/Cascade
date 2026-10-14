@@ -6,8 +6,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-import anthropic
-
+from .anthropic_client import call_cost, make_client
 from .tools import OVERVIEW_ONLY_SCHEMAS, SUGGEST_ONLY_SCHEMAS, TOOL_SCHEMAS, ToolBox
 
 # Working turns after the forced overview turn.
@@ -15,21 +14,16 @@ MAX_ITERATIONS = 5
 TARGET_SUGGESTIONS = 3
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "claude-haiku-5-5")
 
-# USD per million tokens: (input, output) at <=100k-token prompts and >100k-token prompts.
-PRICING_PER_MTOK = {
-    "claude-haiku-5-5": {"small": (0.10, 0.50), "large": (0.50, 2.50)},
-}
-LARGE_PROMPT_TOKENS = 100_000
-
 SYSTEM_PROMPT = f"""You find the best short-form clips in a video for a given category (e.g. "funny", "interesting").
 
-Your first action is always get_overview (it is called for you on the first turn): it gives you the video's full transcript and a few sample frames. Read it carefully - it tells you what this video is about, who is speaking and where candidate moments might be. Base your searches on THIS video, not on generic ideas.
+Your first action is always get_overview (it is called for you on the first turn). For a short video it gives you the full transcript; for a long one (a podcast, an interview) it gives you an outline: per-chunk summaries with notable lines and exact timestamps. Either way you also get a few sample frames. Read it carefully - it tells you what this video is about, who is speaking and where candidate moments might be. Base your searches on THIS video, not on generic ideas.
 
 After the overview you have {MAX_ITERATIONS} turns and must end with up to {TARGET_SUGGESTIONS} distinct suggested clips.
 Tools:
-- search_video: embedding search over the video. Visual search (CLIP) understands concrete things on screen, NOT abstract words like "funny" - so write concrete queries about what you saw in the overview (e.g. "chef dropping a pan", "audience laughing"). Also try speech mode for punchlines, jokes or surprising statements.
+- search_video: embedding search over the video. Visual search (CLIP) understands concrete things on screen, NOT abstract words like "funny" - so write concrete queries about what you saw in the overview (e.g. "chef dropping a pan", "audience laughing"). Speech mode searches the transcript by meaning - good for punchlines, jokes, surprising statements and topics. For talk-heavy videos lean on speech mode.
+- read_transcript: read the exact words (with speaker labels) for a time range, up to 10 minutes at a time. Use it on the stretches the outline or a search hit points to - the outline summarizes, this shows what was actually said.
 - inspect_clip: look at frames and the transcript of a time range. Verify candidates before suggesting them.
-- suggest_clip: commit a clip (5-60s). Give a specific reason.
+- suggest_clip: commit a clip (5-60s) that starts and ends at natural sentence boundaries, with a little setup before the payoff. Give a specific reason.
 
 Be efficient: call several tools in the same turn (e.g. multiple searches at once, or inspecting several candidates at once). Do not spend turns narrating. If your searches are returning weak or irrelevant results, say so honestly in your suggestions' scores instead of inventing a justification."""
 
@@ -61,12 +55,7 @@ def run_agent(
     emit = progress or (lambda msg: None)
 
     if client is None:
-        if os.environ.get("ANTHROPIC_CALLS_DISABLED", "").lower() in ("1", "true", "yes"):
-            raise RuntimeError("Anthropic API calls are disabled (ANTHROPIC_CALLS_DISABLED=true in .env).")
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not set")
-        client = anthropic.Anthropic(api_key=api_key)
+        client = make_client()
 
     messages: list[dict[str, Any]] = [
         {
@@ -78,7 +67,14 @@ def run_agent(
         }
     ]
     final_text = ""
-    usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "cost_known": True}
+    # Start from what transcript summarization already spent (zero when cached / short video).
+    prior = getattr(toolbox.index, "summary_usage", None) or {}
+    usage = {
+        "input_tokens": prior.get("input_tokens", 0),
+        "output_tokens": prior.get("output_tokens", 0),
+        "cost_usd": prior.get("cost_usd", 0.0),
+        "cost_known": prior.get("cost_known", True),
+    }
 
     def record_usage(response: Any) -> str:
         u = getattr(response, "usage", None)
@@ -87,12 +83,11 @@ def run_agent(
         in_tok, out_tok = u.input_tokens, u.output_tokens
         usage["input_tokens"] += in_tok
         usage["output_tokens"] += out_tok
-        rates = PRICING_PER_MTOK.get(AGENT_MODEL)
-        if rates is None:
+        cost = call_cost(AGENT_MODEL, in_tok, out_tok)
+        if cost is None:
             usage["cost_known"] = False
         else:
-            r_in, r_out = rates["large" if in_tok > LARGE_PROMPT_TOKENS else "small"]
-            usage["cost_usd"] += (in_tok * r_in + out_tok * r_out) / 1_000_000
+            usage["cost_usd"] += cost
         return f" [{in_tok} in / {out_tok} out tokens]"
 
     def take_turn(label: str, tools: list, system: str, tool_choice: dict | None) -> bool:

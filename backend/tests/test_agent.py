@@ -116,7 +116,7 @@ def test_overview_truncates_long_transcripts():
     index = make_index()
     index.transcript = [{"start": float(i), "end": i + 1.0, "text": "word " * 20} for i in range(200)]
     blocks, _ = ToolBox(index, Path("fake.mp4"), frame_grabber=lambda p, t: b"j").call("get_overview", {})
-    assert "transcript truncated" in blocks[0]["text"]
+    assert "truncated" in blocks[0]["text"]
 
 
 # --- agent loop with a scripted fake client ---

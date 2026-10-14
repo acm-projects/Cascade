@@ -23,3 +23,6 @@ faster-whisper
 av==18.1.0
 sentence-transformers
 pillow
+
+# agent feature: Deepgram transcription (HTTP client, listed explicitly)
+httpx

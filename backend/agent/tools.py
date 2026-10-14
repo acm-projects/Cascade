@@ -1,4 +1,4 @@
-"""Agent tools: search_video, inspect_clip, suggest_clip.
+"""Agent tools: get_overview, search_video, inspect_clip, read_transcript, suggest_clip.
 
 Each tool returns (content_blocks, is_error) where content_blocks is what goes
 into the Anthropic tool_result. Errors are returned to the model (not raised) so
@@ -13,21 +13,25 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
+from .chunks import OVERVIEW_TRANSCRIPT_CHARS, fmt_time, format_segment, format_transcript
 from .index import VideoIndex
 
 MIN_CLIP_SECONDS = 5.0
 MAX_CLIP_SECONDS = 60.0
 MAX_INSPECT_FRAMES = 6
 MAX_OVERLAP_RATIO = 0.5
+MAX_READ_SECONDS = 600.0      # read_transcript window cap, so the agent can't pull hours back in
+MAX_READ_CHARS = 12000
+MAX_NOTABLE_CHARS = 200
 
 OVERVIEW_FRAMES = 6
-OVERVIEW_TRANSCRIPT_CHARS = 6000
 
 GET_OVERVIEW_SCHEMA: dict[str, Any] = {
     "name": "get_overview",
     "description": (
-        "Get an overview of the whole video: its duration, the full timestamped transcript, and "
-        "a few evenly spaced frames. Must be called first, exactly once; the search tools are "
+        "Get an overview of the whole video: its duration, the transcript (in full for short "
+        "videos; for long ones an outline of per-chunk summaries with notable lines), and a few "
+        "evenly spaced frames. Must be called first, exactly once; the other tools are "
         "available afterwards."
     ),
     "input_schema": {"type": "object", "properties": {}},
@@ -70,6 +74,22 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "num_frames": {"type": "integer", "minimum": 1, "maximum": MAX_INSPECT_FRAMES},
             },
             "required": ["start_time", "end_time", "num_frames"],
+        },
+    },
+    {
+        "name": "read_transcript",
+        "description": (
+            f"Read the exact timestamped transcript (with speaker labels when known) for a time "
+            f"range. At most {int(MAX_READ_SECONDS)} seconds per call - use it to read the words "
+            f"around a candidate moment from the outline or a search hit."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_time": {"type": "number", "description": "seconds"},
+                "end_time": {"type": "number", "description": "seconds"},
+            },
+            "required": ["start_time", "end_time"],
         },
     },
     {
@@ -132,6 +152,8 @@ class ToolBox:
                 return self._search_video(**args)
             if name == "inspect_clip":
                 return self._inspect_clip(**args)
+            if name == "read_transcript":
+                return self._read_transcript(**args)
             if name == "suggest_clip":
                 return self._suggest_clip(**args)
             return _text(f"Unknown tool '{name}'"), True
@@ -145,22 +167,26 @@ class ToolBox:
             return _text("You already have the overview. Do not call get_overview again."), True
         self.overview_given = True
 
-        lines = [
-            f"[{seg['start']:.1f}-{seg['end']:.1f}s] {seg['text']}" for seg in self.index.transcript
-        ]
-        transcript = "\n".join(lines) or "(no speech detected)"
-        if len(transcript) > OVERVIEW_TRANSCRIPT_CHARS:
-            transcript = (
-                transcript[:OVERVIEW_TRANSCRIPT_CHARS]
-                + "\n... (transcript truncated; use search_video mode='speech' for the rest)"
+        idx = self.index
+        header = f"Video duration: {idx.duration:.1f}s ({fmt_time(idx.duration)})"
+        full = format_transcript(idx.transcript)
+
+        if len(full) <= OVERVIEW_TRANSCRIPT_CHARS:
+            # Short video: the whole transcript fits, exactly as before.
+            body = f"{header}\n\nTranscript:\n{full or '(no speech detected)'}"
+        elif idx.chunk_summaries:
+            body = self._outline_text(header)
+        else:
+            body = (
+                f"{header}\n\nTranscript (truncated - it is long and no summaries are available; "
+                "use read_transcript or search_video mode='speech' for the rest):\n"
+                + full[:OVERVIEW_TRANSCRIPT_CHARS]
             )
 
-        blocks: list[dict[str, Any]] = [
-            {"type": "text", "text": f"Video duration: {self.index.duration:.1f}s\n\nTranscript:\n{transcript}"}
-        ]
+        blocks: list[dict[str, Any]] = [{"type": "text", "text": body}]
         n = OVERVIEW_FRAMES
         for i in range(n):
-            t = self.index.duration * (i + 0.5) / n
+            t = idx.duration * (i + 0.5) / n
             jpeg = self.frame_grabber(self.video_path, t)
             blocks.append({"type": "text", "text": f"Frame at {t:.1f}s:"})
             blocks.append(
@@ -174,6 +200,52 @@ class ToolBox:
                 }
             )
         return blocks, False
+
+    def _outline_text(self, header: str) -> str:
+        parts = [
+            header,
+            "",
+            f"The transcript is long, so here is an outline of {len(self.index.chunk_summaries)} "
+            "chunks instead of the full text. Each chunk gives its time range, speakers, topic, "
+            "summary and a few notable lines with exact timestamps. Use read_transcript(start_time, "
+            f"end_time) to read the exact words of any stretch (max {int(MAX_READ_SECONDS)}s per "
+            "call), search_video to find moments by meaning, and inspect_clip to look at frames.",
+            "",
+        ]
+        for c in self.index.chunk_summaries:
+            speakers = ", ".join(f"S{s}" for s in c.get("speakers", [])) or "speakers unknown"
+            parts.append(
+                f"#{c['index']} [{c['start']:.0f}-{c['end']:.0f}s | "
+                f"{fmt_time(c['start'])}-{fmt_time(c['end'])}] ({speakers}) {c['topic']}"
+            )
+            parts.append(f"  {c['summary']}")
+            for n in c.get("notable", []):
+                text = n["text"]
+                if len(text) > MAX_NOTABLE_CHARS:
+                    text = text[:MAX_NOTABLE_CHARS] + "..."
+                parts.append(f"  notable [{n['start']:.1f}-{n['end']:.1f}s]: {text}")
+        return "\n".join(parts)
+
+    def _read_transcript(self, start_time: float, end_time: float):
+        start, end = float(start_time), float(end_time)
+        duration = self.index.duration
+        if start < 0 or end > duration + 0.01 or end <= start:
+            return _text(f"Invalid range. Need 0 <= start < end <= {duration:.1f}s."), True
+        if end - start > MAX_READ_SECONDS:
+            return _text(
+                f"Range too long ({end - start:.0f}s). Read at most {int(MAX_READ_SECONDS)}s at a "
+                "time - narrow it to the stretch you care about."
+            ), True
+        segments = self.index.segments_between(start, end)
+        if not segments:
+            return _text(f"(no speech between {start:.1f}s and {end:.1f}s)"), False
+        text = "\n".join(format_segment(seg) for seg in segments)
+        if len(text) > MAX_READ_CHARS:
+            return _text(
+                f"That range has too much text ({len(text)} characters, limit {MAX_READ_CHARS}). "
+                "Narrow the range."
+            ), True
+        return _text(text), False
 
     def _search_video(self, query: str, mode: str = "visual", top_k: int = 5):
         if not query.strip():

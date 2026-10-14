@@ -1,9 +1,11 @@
-"""Per-video search index: CLIP frame embeddings + Whisper transcript embeddings.
+"""Per-video search index: CLIP frame embeddings + transcript embeddings.
 
-Built once per uploaded video and cached on disk by file hash, so re-running the
-agent on the same video skips the expensive embedding work. The heavy models are
-imported lazily from video_search.router (which already loads them once per
-process) so importing this module stays cheap.
+Built once per uploaded video and cached on disk. Two independent caches:
+  * frames:     keyed by file hash only (CLIP embedding is the expensive local step)
+  * transcript: keyed by file hash + transcription provider/model, so switching
+                provider re-transcribes but never re-embeds frames
+The heavy models are imported lazily from video_search.router (which already loads
+them once per process) so importing this module stays cheap.
 """
 
 from __future__ import annotations
@@ -11,17 +13,23 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 
+from .chunks import build_chunks
+from .transcribe import provider_tag, transcribe_video
+
 CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 MIN_FRAME_INTERVAL = 2.0
 MAX_FRAMES = 300
+FRAME_WIDTH = 448          # CLIP resizes to 224 anyway; smaller files seek/decode faster
+FRAME_WORKERS = 4
 
 
 def file_sha256(path: Path) -> str:
@@ -38,27 +46,34 @@ class VideoIndex:
     frame_interval: float
     frame_times: list[float]
     frame_embeddings: np.ndarray  # (n_frames, d), L2-normalized
-    transcript: list[dict[str, Any]]  # [{start, end, text}]
+    transcript: list[dict[str, Any]]  # [{start, end, text, speaker}]
     segment_embeddings: np.ndarray  # (n_segments, d), L2-normalized
     encode_visual_query: Callable[[str], np.ndarray] = field(repr=False, default=None)
     encode_text_query: Callable[[str], np.ndarray] = field(repr=False, default=None)
+    # Long-transcript support (filled by build_index / summaries.ensure_summaries):
+    chunks: list[dict[str, Any]] = field(default_factory=list)
+    chunk_summaries: list[dict[str, Any]] = field(default_factory=list)
+    summary_usage: dict[str, Any] = field(default_factory=dict)
 
     def search(self, query: str, mode: str = "visual", top_k: int = 5) -> list[dict[str, Any]]:
-        """Return up to top_k well-separated hits as {start, end, score, text?}."""
+        """Return up to top_k well-separated hits as {start, end, score, text?, speaker?}."""
         if mode == "speech":
             if len(self.transcript) == 0:
                 return []
             scores = self.segment_embeddings @ self.encode_text_query(query)
             order = np.argsort(-scores)[:top_k]
-            return [
-                {
+            hits = []
+            for i in order:
+                hit = {
                     "start": round(self.transcript[i]["start"], 1),
                     "end": round(self.transcript[i]["end"], 1),
                     "score": round(float(scores[i]), 3),
                     "text": self.transcript[i]["text"],
                 }
-                for i in order
-            ]
+                if self.transcript[i].get("speaker") is not None:
+                    hit["speaker"] = self.transcript[i]["speaker"]
+                hits.append(hit)
+            return hits
 
         scores = self.frame_embeddings @ self.encode_visual_query(query)
         hits: list[dict[str, Any]] = []
@@ -88,6 +103,15 @@ class VideoIndex:
         ]
         return " ".join(parts)
 
+    def segments_between(self, start: float, end: float) -> list[dict[str, Any]]:
+        return [seg for seg in self.transcript if seg["end"] > start and seg["start"] < end]
+
+
+def transcript_cache_paths(key: str, tag: str) -> tuple[Path, Path]:
+    """Transcript + segment-embedding cache files. `tag` is provider+model, so switching
+    transcription provider can never serve a transcript made by another one."""
+    return CACHE_DIR / f"transcript_{key}_{tag}.json", CACHE_DIR / f"segemb_{key}_{tag}.npy"
+
 
 def _probe_duration(video_path: Path) -> float:
     result = subprocess.run(
@@ -102,18 +126,30 @@ def _probe_duration(video_path: Path) -> float:
     return float(json.loads(result.stdout)["format"]["duration"])
 
 
-def _extract_sampled_frames(video_path: Path, frames_dir: Path, interval: float) -> list[Path]:
-    frames_dir.mkdir(exist_ok=True)
-    subprocess.run(
+def _grab_frame(video_path: Path, t: float, out_path: Path) -> None:
+    """One frame via input seeking - fast on long videos (no full-file decode)."""
+    result = subprocess.run(
         [
-            "ffmpeg", "-y", "-i", str(video_path),
-            "-vf", f"fps=1/{interval}",
-            "-frames:v", str(MAX_FRAMES),
-            str(frames_dir / "frame_%05d.jpg"),
+            "ffmpeg", "-y", "-v", "error",
+            "-ss", f"{t:.2f}", "-i", str(video_path),
+            "-an", "-sn", "-frames:v", "1",
+            "-vf", f"scale={FRAME_WIDTH}:-2", "-q:v", "4",
+            str(out_path),
         ],
-        check=True, capture_output=True, text=True,
+        capture_output=True, text=True,
     )
-    return sorted(frames_dir.glob("frame_*.jpg"))
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg could not extract a frame at {t:.1f}s: {result.stderr.strip()[-200:]}")
+
+
+def _sample_frames(video_path: Path, frames_dir: Path, duration: float, interval: float):
+    frames_dir.mkdir(exist_ok=True)
+    count = max(1, min(MAX_FRAMES, int(duration // interval)))
+    times = [round(min(i * interval, max(0.0, duration - 0.1)), 2) for i in range(count)]
+    paths = [frames_dir / f"frame_{i:05d}.jpg" for i in range(count)]
+    with ThreadPoolExecutor(max_workers=FRAME_WORKERS) as pool:
+        list(pool.map(lambda tp: _grab_frame(video_path, tp[0], tp[1]), zip(times, paths)))
+    return times, paths
 
 
 def build_index(
@@ -125,7 +161,7 @@ def build_index(
     emit = progress or (lambda msg: None)
 
     # Lazy: these load multi-hundred-MB models at import time.
-    from video_search.router import search_model, visual_model, whisper_model
+    from video_search.router import search_model, visual_model
     from PIL import Image
 
     def encode_visual_query(q: str) -> np.ndarray:
@@ -135,65 +171,52 @@ def build_index(
         return search_model.encode(q, normalize_embeddings=True)
 
     key = file_sha256(video_path)
-    meta_path = CACHE_DIR / f"{key}.json"
-    arrays_path = CACHE_DIR / f"{key}.npz"
 
-    if meta_path.exists() and arrays_path.exists():
-        emit("Loaded video index from cache")
-        meta = json.loads(meta_path.read_text())
-        arrays = np.load(arrays_path)
-        return VideoIndex(
-            duration=meta["duration"],
-            frame_interval=meta["frame_interval"],
-            frame_times=meta["frame_times"],
-            frame_embeddings=arrays["frame_embeddings"],
-            transcript=meta["transcript"],
-            segment_embeddings=arrays["segment_embeddings"],
-            encode_visual_query=encode_visual_query,
-            encode_text_query=encode_text_query,
-        )
-
-    duration = _probe_duration(video_path)
-    interval = max(MIN_FRAME_INTERVAL, duration / MAX_FRAMES)
-
-    emit("Sampling frames")
-    frame_paths = _extract_sampled_frames(video_path, work_dir / "index_frames", interval)
-    if not frame_paths:
-        raise RuntimeError("No frames could be extracted from this video.")
-
-    emit("Embedding frames with CLIP")
-    images = []
-    for p in frame_paths:
-        with Image.open(p) as img:
-            images.append(img.convert("RGB"))
-    frame_embeddings = visual_model.encode(images, normalize_embeddings=True, batch_size=32)
-    frame_times = [round(i * interval, 2) for i in range(len(frame_paths))]
-
-    emit("Transcribing speech")
-    segments, _ = whisper_model.transcribe(str(video_path))
-    transcript = [
-        {"start": s.start, "end": s.end, "text": s.text.strip()}
-        for s in segments
-        if s.text.strip()
-    ]
-    if transcript:
-        segment_embeddings = search_model.encode(
-            [seg["text"] for seg in transcript], normalize_embeddings=True
-        )
+    # ---- frames (provider-independent) ----
+    frames_path = CACHE_DIR / f"frames_{key}.npz"
+    if frames_path.exists():
+        emit("Loaded frame embeddings from cache")
+        data = np.load(frames_path)
+        duration = float(data["duration"])
+        interval = float(data["interval"])
+        frame_times = [float(t) for t in data["frame_times"]]
+        frame_embeddings = data["frame_embeddings"]
     else:
-        segment_embeddings = np.zeros((0, 1), dtype=np.float32)
-
-    meta_path.write_text(
-        json.dumps(
-            {
-                "duration": duration,
-                "frame_interval": interval,
-                "frame_times": frame_times,
-                "transcript": transcript,
-            }
+        duration = _probe_duration(video_path)
+        interval = max(MIN_FRAME_INTERVAL, duration / MAX_FRAMES)
+        emit("Sampling frames")
+        frame_times, frame_paths = _sample_frames(video_path, work_dir / "index_frames", duration, interval)
+        emit("Embedding frames with CLIP")
+        images = []
+        for p in frame_paths:
+            with Image.open(p) as img:
+                images.append(img.convert("RGB"))
+        frame_embeddings = visual_model.encode(images, normalize_embeddings=True, batch_size=32)
+        np.savez(
+            frames_path,
+            frame_embeddings=frame_embeddings,
+            frame_times=np.array(frame_times),
+            interval=np.array(interval),
+            duration=np.array(duration),
         )
-    )
-    np.savez(arrays_path, frame_embeddings=frame_embeddings, segment_embeddings=segment_embeddings)
+
+    # ---- transcript (keyed by provider + model) ----
+    tag = provider_tag()
+    transcript_path, segemb_path = transcript_cache_paths(key, tag)
+    if transcript_path.exists() and segemb_path.exists():
+        emit("Loaded transcript from cache")
+        transcript = json.loads(transcript_path.read_text())
+        segment_embeddings = np.load(segemb_path)
+    else:
+        transcript = transcribe_video(video_path, work_dir, progress=emit)
+        if transcript:
+            segment_embeddings = search_model.encode(
+                [seg["text"] for seg in transcript], normalize_embeddings=True
+            )
+        else:
+            segment_embeddings = np.zeros((0, 1), dtype=np.float32)
+        transcript_path.write_text(json.dumps(transcript))
+        np.save(segemb_path, segment_embeddings)
 
     return VideoIndex(
         duration=duration,
@@ -204,4 +227,5 @@ def build_index(
         segment_embeddings=segment_embeddings,
         encode_visual_query=encode_visual_query,
         encode_text_query=encode_text_query,
+        chunks=build_chunks(transcript),
     )
