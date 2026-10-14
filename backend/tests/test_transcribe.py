@@ -181,7 +181,7 @@ def test_deepgram_happy_path(monkeypatch, tmp_path):
     monkeypatch.setattr(
         transcribe,
         "deepgram_request",
-        lambda path, key, client=None: {
+        lambda path, key, client=None, info=None: {
             "results": {"channels": [{"alternatives": [{"words": [w("hi", 0.0, 0.2)]}]}]}
         },
     )
@@ -220,3 +220,41 @@ def test_cache_keys_differ_by_provider(monkeypatch):
     wh = transcribe.provider_tag()
     assert dg != wh
     assert transcript_cache_paths("abc", dg) != transcript_cache_paths("abc", wh)
+
+
+def test_diarization_drop_is_reported(tmp_path):
+    def handler(request):
+        if "diarize_model" in request.url.params:
+            return httpx.Response(400, json={"err": "bad param"})
+        return httpx.Response(200, json={"ok": True})
+
+    info = {}
+    transcribe.deepgram_request(audio_file(tmp_path), "K", client=mock_client(handler), info=info)
+    assert info["diarization_dropped"] is True
+
+    ok_info = {}
+    transcribe.deepgram_request(
+        audio_file(tmp_path), "K", client=mock_client(lambda r: httpx.Response(200, json={})), info=ok_info
+    )
+    assert "diarization_dropped" not in ok_info
+
+
+def test_transcribe_video_reports_cost_and_the_diarization_note(monkeypatch, tmp_path):
+    monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: True)
+    monkeypatch.setattr(transcribe, "extract_audio", lambda v, d: audio_file(tmp_path))
+
+    def fake_request(path, key, client=None, info=None):
+        info["diarization_dropped"] = True
+        return {
+            "metadata": {"duration": 7200.0},  # a 2-hour podcast
+            "results": {"channels": [{"alternatives": [{"words": [w("hi", 0.0, 0.2)]}]}]},
+        }
+
+    monkeypatch.setattr(transcribe, "deepgram_request", fake_request)
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "k")
+    monkeypatch.delenv("DEEPGRAM_CALLS_DISABLED", raising=False)
+    monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
+    steps, info = [], {}
+    transcribe.transcribe_video(Path("x.mp4"), tmp_path, progress=steps.append, info=info)
+    assert info["cost_usd"] == pytest.approx(120 * 0.0043)  # ~$0.52
+    assert any("without speaker labels" in s for s in steps)

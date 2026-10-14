@@ -21,7 +21,7 @@ MAX_CLIP_SECONDS = 60.0
 MAX_INSPECT_FRAMES = 6
 MAX_OVERLAP_RATIO = 0.5
 MAX_READ_SECONDS = 600.0      # read_transcript window cap, so the agent can't pull hours back in
-MAX_READ_CHARS = 12000
+MAX_READ_CHARS = 20000        # ~5k tokens; a normal 10-minute podcast window fits whole
 MAX_NOTABLE_CHARS = 200
 
 OVERVIEW_FRAMES = 6
@@ -239,13 +239,22 @@ class ToolBox:
         segments = self.index.segments_between(start, end)
         if not segments:
             return _text(f"(no speech between {start:.1f}s and {end:.1f}s)"), False
-        text = "\n".join(format_segment(seg) for seg in segments)
-        if len(text) > MAX_READ_CHARS:
-            return _text(
-                f"That range has too much text ({len(text)} characters, limit {MAX_READ_CHARS}). "
-                "Narrow the range."
-            ), True
-        return _text(text), False
+        # Never error on a dense window (that would cost the agent one of its few turns):
+        # return as many whole segments as fit and say where to continue.
+        lines: list[str] = []
+        used = 0
+        for pos, seg in enumerate(segments):
+            line = format_segment(seg)
+            if lines and used + len(line) + 1 > MAX_READ_CHARS:
+                next_start = segments[pos]["start"]
+                lines.append(
+                    f"(continues - dense speech; call read_transcript with start_time="
+                    f"{next_start:.1f} for the rest of this range)"
+                )
+                break
+            lines.append(line)
+            used += len(line) + 1
+        return _text("\n".join(lines)), False
 
     def _search_video(self, query: str, mode: str = "visual", top_k: int = 5):
         if not query.strip():

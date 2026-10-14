@@ -366,7 +366,8 @@ function renderAgentResult(result) {
     const cost = u.estimated_cost_usd === null ? 'cost unknown for this model' : `~$${u.estimated_cost_usd}`;
     const usage = document.createElement('p');
     usage.className = 'note';
-    usage.textContent = `Token usage (${u.model}): ${u.input_tokens} in / ${u.output_tokens} out, ${cost}`;
+    const dg = u.transcription_cost_usd > 0 ? ` (includes ~$${u.transcription_cost_usd} Deepgram transcription)` : '';
+    usage.textContent = `Token usage (${u.model}): ${u.input_tokens} in / ${u.output_tokens} out, ${cost}${dg}`;
     agentResult.appendChild(usage);
   }
   if (result.suggestions.length === 0) {

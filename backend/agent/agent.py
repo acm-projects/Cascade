@@ -74,6 +74,7 @@ def run_agent(
         "output_tokens": prior.get("output_tokens", 0),
         "cost_usd": prior.get("cost_usd", 0.0),
         "cost_known": prior.get("cost_known", True),
+        "transcription_cost_usd": getattr(toolbox.index, "transcription_cost_usd", 0.0),
     }
 
     def record_usage(response: Any) -> str:
@@ -164,8 +165,12 @@ def _usage_summary(usage: dict[str, Any]) -> dict[str, Any]:
         "input_tokens": usage["input_tokens"],
         "output_tokens": usage["output_tokens"],
         "model": AGENT_MODEL,
+        # LLM cost + Deepgram transcription (this run only; 0 when the transcript was cached).
         # None when we have no price for the configured model.
-        "estimated_cost_usd": round(usage["cost_usd"], 5) if usage["cost_known"] else None,
+        "estimated_cost_usd": (
+            round(usage["cost_usd"] + usage["transcription_cost_usd"], 5) if usage["cost_known"] else None
+        ),
+        "transcription_cost_usd": round(usage["transcription_cost_usd"], 5),
     }
 
 

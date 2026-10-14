@@ -54,6 +54,7 @@ class VideoIndex:
     chunks: list[dict[str, Any]] = field(default_factory=list)
     chunk_summaries: list[dict[str, Any]] = field(default_factory=list)
     summary_usage: dict[str, Any] = field(default_factory=dict)
+    transcription_cost_usd: float = 0.0  # Deepgram spend for this build; 0 on a cache hit
 
     def search(self, query: str, mode: str = "visual", top_k: int = 5) -> list[dict[str, Any]]:
         """Return up to top_k well-separated hits as {start, end, score, text?, speaker?}."""
@@ -203,12 +204,15 @@ def build_index(
     # ---- transcript (keyed by provider + model) ----
     tag = provider_tag()
     transcript_path, segemb_path = transcript_cache_paths(key, tag)
+    transcription_cost = 0.0
     if transcript_path.exists() and segemb_path.exists():
         emit("Loaded transcript from cache")
         transcript = json.loads(transcript_path.read_text())
         segment_embeddings = np.load(segemb_path)
     else:
-        transcript = transcribe_video(video_path, work_dir, progress=emit)
+        t_info: dict[str, Any] = {}
+        transcript = transcribe_video(video_path, work_dir, progress=emit, info=t_info)
+        transcription_cost = t_info.get("cost_usd", 0.0)
         if transcript:
             segment_embeddings = search_model.encode(
                 [seg["text"] for seg in transcript], normalize_embeddings=True
@@ -228,4 +232,5 @@ def build_index(
         encode_visual_query=encode_visual_query,
         encode_text_query=encode_text_query,
         chunks=build_chunks(transcript),
+        transcription_cost_usd=transcription_cost,
     )

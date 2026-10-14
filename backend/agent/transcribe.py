@@ -20,6 +20,7 @@ import httpx
 
 DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
 DEEPGRAM_MODEL = "nova-3"
+DEEPGRAM_USD_PER_MINUTE = 0.0043  # Nova-3 monolingual pay-as-you-go (deepgram.com/pricing)
 
 # Segmenting rules for turning Deepgram's word list into sentence-level segments.
 MAX_GAP_SECONDS = 1.0
@@ -86,8 +87,13 @@ def deepgram_request(
     audio_path: Path,
     api_key: str,
     client: httpx.Client | None = None,
+    info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """POST the audio to Deepgram and return the parsed JSON response."""
+    """POST the audio to Deepgram and return the parsed JSON response.
+
+    If `info` is given it records whether diarization had to be dropped
+    (info["diarization_dropped"]), so a wrong parameter is visible, not silent.
+    """
     base_params = {
         "model": DEEPGRAM_MODEL,
         "smart_format": "true",
@@ -115,6 +121,8 @@ def deepgram_request(
             # If the diarization parameter was the problem, transcribe without speakers
             # rather than failing the whole job.
             response = post(base_params)
+            if info is not None and response.status_code < 400:
+                info["diarization_dropped"] = True
     finally:
         if own_client:
             http.close()
@@ -204,7 +212,9 @@ def transcribe_video(
     video_path: Path,
     work_dir: Path,
     progress: Callable[[str], None] | None = None,
+    info: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    """Returns segments. If `info` is given it receives `cost_usd` (Deepgram only)."""
     emit = progress or (lambda msg: None)
 
     if not has_audio_stream(video_path):
@@ -230,6 +240,12 @@ def transcribe_video(
     emit("Extracting audio")
     audio_path = extract_audio(video_path, work_dir)
     emit(f"Transcribing with Deepgram ({audio_path.stat().st_size / 1e6:.1f} MB of audio)")
-    response = deepgram_request(audio_path, api_key)
+    dg_info: dict[str, Any] = {}
+    response = deepgram_request(audio_path, api_key, info=dg_info)
+    if dg_info.get("diarization_dropped"):
+        emit("Deepgram rejected diarization; continuing without speaker labels")
+    if info is not None:
+        minutes = float((response.get("metadata") or {}).get("duration") or 0.0) / 60.0
+        info["cost_usd"] = minutes * DEEPGRAM_USD_PER_MINUTE
     emit("Building transcript segments")
     return segments_from_deepgram(response)

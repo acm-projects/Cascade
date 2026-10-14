@@ -214,27 +214,51 @@ def test_read_transcript_returns_timestamped_lines_with_speakers():
     assert "line 3" not in text
 
 
-def test_read_transcript_bounds_and_caps():
+def test_read_transcript_bounds_and_window_cap():
     index = make_index(long_transcript())
     box = toolbox(index)
     assert box.call("read_transcript", {"start_time": -1, "end_time": 5})[1]
     assert box.call("read_transcript", {"start_time": 10, "end_time": 10})[1]
     assert box.call("read_transcript", {"start_time": 0, "end_time": 9999})[1]
 
-    # a 599s window passes the length check (this fixture is dense, so it may hit the char cap)
-    blocks, err = box.call("read_transcript", {"start_time": 0, "end_time": 599})
-    assert not err or "Narrow" in blocks[0]["text"]
-
-    # window cap: needs a video longer than the window
-    index.duration = 3000.0
+    index.duration = 3000.0  # window cap needs a video longer than the window
     wide, err = box.call("read_transcript", {"start_time": 0, "end_time": 601})
     assert err and "too long" in wide[0]["text"]
 
+
+def test_normal_ten_minute_podcast_window_fits_whole():
+    # ~150 wpm for 10 minutes is ~10k characters of speech plus labels: must NOT be an error
+    seg_text = "word " * 28  # ~140 chars per 10s segment... ~60 segments
+    index = make_index(
+        [{"start": i * 10.0, "end": (i + 1) * 10.0, "text": seg_text, "speaker": i % 2} for i in range(60)]
+    )
+    index.duration = 3000.0
+    blocks, err = toolbox(index).call("read_transcript", {"start_time": 0, "end_time": 600})
+    assert not err
+    assert "continues" not in blocks[0]["text"]
+    assert len(blocks[0]["text"].splitlines()) == 60
+
+
+def test_dense_window_is_cut_at_a_segment_with_a_continuation_note_not_an_error():
     dense = make_index(
         [{"start": float(i), "end": i + 1.0, "text": "x" * 400, "speaker": 0} for i in range(100)]
     )
     blocks, err = toolbox(dense).call("read_transcript", {"start_time": 0, "end_time": 100})
-    assert err and "Narrow" in blocks[0]["text"]
+    assert not err  # an error would burn one of the agent's few turns
+    text = blocks[0]["text"]
+    assert len(text) <= tools.MAX_READ_CHARS + 300
+    lines = text.splitlines()
+    assert lines[-1].startswith("(continues")
+    last_seg_line = lines[-2]
+    # continuation points at the first segment that was NOT returned
+    returned = len(lines) - 1
+    assert f"start_time={float(returned):.1f}" in lines[-1]
+    assert last_seg_line.startswith(f"[{returned - 1}.0-{returned}.0s]")
+    # following the note returns the rest
+    follow, err = toolbox(dense).call(
+        "read_transcript", {"start_time": float(returned), "end_time": 100}
+    )
+    assert not err and follow[0]["text"].startswith(f"[{returned}.0-")
 
 
 def test_read_transcript_empty_range_is_not_an_error():
@@ -272,3 +296,25 @@ def test_agent_total_usage_includes_summary_spend():
     result = agent_module.run_agent(toolbox(index), "funny", client=client)
     assert result["usage"]["input_tokens"] == spent_in + 500
     assert result["usage"]["estimated_cost_usd"] > 0
+
+
+def test_agent_cost_includes_deepgram_transcription():
+    index = make_index(long_transcript())
+    index.transcription_cost_usd = 0.52
+
+    class OneShot:
+        messages = None
+
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text="done")],
+                stop_reason="end_turn",
+                usage=SimpleNamespace(input_tokens=1000, output_tokens=100),
+            )
+
+    client = OneShot()
+    client.messages = client
+    usage = agent_module.run_agent(toolbox(index), "funny", client=client)["usage"]
+    llm = (1000 * 0.10 + 100 * 0.50) / 1_000_000
+    assert usage["transcription_cost_usd"] == 0.52
+    assert usage["estimated_cost_usd"] == pytest.approx(0.52 + llm, abs=1e-5)
