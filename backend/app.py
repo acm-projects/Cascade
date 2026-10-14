@@ -7,6 +7,7 @@ Feature routers (each owns its own job-dict / processing logic unchanged):
   /api/trends/...   - trend-analysis: compare an uploaded video against trending YouTube videos
   /api/v1/...       - clip-generation: burn in 4 styled caption treatments
   /api/search/...   - video-search: find the best-matching moment via speech/visual search
+  /api/agent/...    - clip-finding agent: LLM + embedding search to suggest funny/interesting clips
   /settings         - preferences form (video type, audience, tone, goal, platforms)
 
 Quick-look static pages for manually exercising a feature without the final
@@ -32,6 +33,7 @@ from trends.router import router as trends_router
 from clips.router import router as clips_router
 from video_search.router import router as video_search_router
 from settings.router import router as settings_router
+from agent.router import router as agent_router
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:8000")
 
@@ -49,6 +51,7 @@ app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
 app.include_router(clips_router, prefix="/api/v1", tags=["clips"])
 app.include_router(video_search_router, prefix="/api/search", tags=["video-search"])
 app.include_router(settings_router, tags=["settings"])
+app.include_router(agent_router, prefix="/api/agent", tags=["agent"])
 
 
 @app.get("/api/health")

@@ -23,8 +23,8 @@
     width: 100%; padding: 0.5rem; margin-top: 0.25rem;
   }
   button.submit { margin-top: 1rem; padding: 0.6rem 1.2rem; cursor: pointer; }
-  #trends-status, #search-status, #clips-status { margin-top: 1rem; color: #555; }
-  #trends-result, #search-result, #clips-result { margin-top: 1rem; white-space: pre-wrap; }
+  #trends-status, #search-status, #clips-status, #agent-status { margin-top: 1rem; color: #555; }
+  #trends-result, #search-result, #clips-result, #agent-result { margin-top: 1rem; white-space: pre-wrap; }
   .error { color: #b00; margin-top: 1rem; }
   .note { color: #777; font-size: 0.85rem; margin-top: 0.5rem; }
 </style>
@@ -38,6 +38,7 @@
   <button class="tab-btn active" data-tab="trends">Trends</button>
   <button class="tab-btn" data-tab="search">Video Search</button>
   <button class="tab-btn" data-tab="clips">Clips</button>
+  <button class="tab-btn" data-tab="agent">Agent</button>
 </div>
 
 <div id="trends-panel" class="tab-panel active">
@@ -103,6 +104,26 @@
   <div id="clips-status"></div>
   <div id="clips-error" class="error"></div>
   <div id="clips-result"></div>
+</div>
+
+<div id="agent-panel" class="tab-panel">
+  <form id="agent-form">
+    <label for="agent-video">Your video</label>
+    <input type="file" id="agent-video" accept="video/*" required>
+
+    <label for="agent-category">Category</label>
+    <input type="text" id="agent-category" value="funny" required>
+
+    <button type="submit" class="submit">Find top clips</button>
+  </form>
+  <p class="note">An LLM agent searches the video's embeddings, inspects candidates, and suggests clips.
+    Confidence (0&ndash;1) is the model's own estimate of how well a clip fits the category, based on the
+    frames and transcript it inspected. It is not a measured score, so use it to compare clips within one
+    run, not across videos.</p>
+  <div id="agent-status"></div>
+  <div id="agent-error" class="error"></div>
+  <ol id="agent-steps" class="note"></ol>
+  <div id="agent-result"></div>
 </div>
 
 <script>
@@ -261,6 +282,121 @@ async function pollClipsJob(jobId) {
       return;
     }
   }
+}
+
+// --- Agent tab ---
+const agentForm = document.getElementById('agent-form');
+const agentStatus = document.getElementById('agent-status');
+const agentError = document.getElementById('agent-error');
+const agentSteps = document.getElementById('agent-steps');
+const agentResult = document.getElementById('agent-result');
+let agentObjectUrl = null;
+
+agentForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  agentError.textContent = '';
+  agentResult.replaceChildren();
+  agentSteps.replaceChildren();
+  agentStatus.textContent = 'Starting...';
+
+  const file = document.getElementById('agent-video').files[0];
+  if (agentObjectUrl) URL.revokeObjectURL(agentObjectUrl);
+  agentObjectUrl = URL.createObjectURL(file);
+
+  const formData = new FormData();
+  formData.append('video', file);
+  formData.append('category', document.getElementById('agent-category').value);
+
+  try {
+    const response = await fetch('/api/agent/analyze', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed with status ${response.status}`);
+    }
+    const { job_id } = await response.json();
+    await pollAgentJob(job_id);
+  } catch (err) {
+    agentError.textContent = err.message || 'Something went wrong.';
+    agentStatus.textContent = '';
+  }
+});
+
+async function pollAgentJob(jobId) {
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+    const response = await fetch(`/api/agent/analyze/${jobId}/status`);
+    if (!response.ok) {
+      agentError.textContent = `Status check failed (${response.status})`;
+      agentStatus.textContent = '';
+      return;
+    }
+    const job = await response.json();
+    agentStatus.textContent = job.step;
+    agentSteps.replaceChildren(...job.steps_log.map(s => {
+      const li = document.createElement('li');
+      li.textContent = s;
+      return li;
+    }));
+
+    if (job.status === 'done') {
+      agentStatus.textContent = 'Done';
+      renderAgentResult(job.result);
+      return;
+    }
+    if (job.status === 'error') {
+      agentError.textContent = job.error || 'Agent failed.';
+      agentStatus.textContent = '';
+      return;
+    }
+  }
+}
+
+// Seconds -> m:ss (or h:mm:ss for videos over an hour), e.g. 91 -> "1:31".
+function formatTime(totalSeconds) {
+  const t = Math.round(totalSeconds);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = String(t % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+
+function renderAgentResult(result) {
+  if (result.usage) {
+    const u = result.usage;
+    const cost = u.estimated_cost_usd === null ? 'cost unknown for this model' : `~$${u.estimated_cost_usd}`;
+    const usage = document.createElement('p');
+    usage.className = 'note';
+    usage.textContent = `Token usage (${u.model}): ${u.input_tokens} in / ${u.output_tokens} out, ${cost}`;
+    agentResult.appendChild(usage);
+  }
+  if (result.suggestions.length === 0) {
+    const p = document.createElement('p');
+    p.textContent = 'The agent did not suggest any clips.' + (result.summary ? ' ' + result.summary : '');
+    agentResult.appendChild(p);
+    return;
+  }
+  result.suggestions.forEach((s, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = '1.5rem';
+
+    const title = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent =
+      `#${i + 1}: ${formatTime(s.start)} - ${formatTime(s.end)} ` +
+      `(${Math.round(s.end - s.start)}s long, confidence ${s.score})`;
+    title.appendChild(strong);
+
+    const reason = document.createElement('p');
+    reason.textContent = s.reason;
+
+    const video = document.createElement('video');
+    video.controls = true;
+    video.style.maxWidth = '100%';
+    video.src = `${agentObjectUrl}#t=${s.start},${s.end}`;
+
+    wrap.append(title, reason, video);
+    agentResult.appendChild(wrap);
+  });
 }
 </script>
 
