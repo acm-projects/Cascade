@@ -30,6 +30,8 @@ const FILES = {
 
 const STORAGE_KEY = "cascade-prototype-v1";
 
+const PROJECTS_API = "http://127.0.0.1:5000/api/projects";
+
 const page = document.body.dataset.page || "index";
 
 function escapeHTML(value) {
@@ -184,6 +186,96 @@ if (state.last) {
     .replace(/\.html$/i, "");
 
   state.last = FILES[savedPage] || FILES.canvas;
+}
+
+function parseTimestamp(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  const parsed = Date.parse(value);
+
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+function normalizeApiProject(row, previous = {}) {
+  return {
+    id: String(row.project_id ?? row.id),
+    name: row.title || row.name || "Untitled Project",
+    status: row.status || previous.status || "New",
+    modified: parseTimestamp(
+      row.updated_at ||
+      row.created_at ||
+      previous.modified
+    ),
+    source: row.raw_video_url || previous.source || "",
+    branches: previous.branches || [],
+    clips: previous.clips || {},
+    user_id: row.user_id,
+    job_id: row.job_id ?? previous.job_id ?? null
+  };
+}
+
+async function loadProjectsFromApi() {
+  const response = await fetch(PROJECTS_API);
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      payload.error || "Could not load projects from the database."
+    );
+  }
+
+  const previousById = Object.fromEntries(
+    (state.projects || []).map(project => [
+      String(project.id),
+      project
+    ])
+  );
+
+  state.projects = (payload.projects || []).map(row => {
+    return normalizeApiProject(
+      row,
+      previousById[String(row.project_id ?? row.id)]
+    );
+  });
+
+  if (
+    !state.projects.some(project => {
+      return project.id === state.project;
+    })
+  ) {
+    state.project = state.projects[0]?.id || null;
+  }
+
+  saveState();
+
+  return state.projects;
+}
+
+async function createProjectOnServer(name) {
+  const response = await fetch(PROJECTS_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      user_id: state.user?.id ?? 1,
+      name,
+      title: name,
+      status: "New"
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      payload.error || "Could not save the project to the database."
+    );
+  }
+
+  return normalizeApiProject(payload);
 }
 
 let editorTab = "chat";
@@ -945,7 +1037,7 @@ function openProject(projectId) {
   navigate("canvas");
 }
 
-function renderProjects() {
+async function renderProjects() {
   $("#app").innerHTML = `
     <div class="container">
       <p class="eyebrow">
@@ -999,7 +1091,11 @@ function renderProjects() {
       <div
         id="projects-grid"
         class="grid"
-      ></div>
+      >
+        <div class="card empty">
+          Loading projects…
+        </div>
+      </div>
     </div>
   `;
 
@@ -1008,7 +1104,9 @@ function renderProjects() {
       $("#project-search").value.toLowerCase();
 
     const projects = state.projects.filter(project => {
-      return project.name.toLowerCase().includes(search);
+      return (project.name || "")
+        .toLowerCase()
+        .includes(search);
     });
 
     projects.sort(
@@ -1033,7 +1131,7 @@ function renderProjects() {
               </span>
 
               <small>
-                ${Object.keys(project.clips).length}
+                ${Object.keys(project.clips || {}).length}
                 clips
               </small>
             </div>
@@ -1169,8 +1267,6 @@ function renderProjects() {
     });
   }
 
-  drawProjects();
-
   $("#project-search").oninput = drawProjects;
 
   $("#project-sort").onchange = drawProjects;
@@ -1188,34 +1284,46 @@ function renderProjects() {
           placeholder="Untitled project"
         >
       `,
-      () => {
-        const id = `p${Date.now()}`;
+      async () => {
+        const name =
+          $("#project-name").value.trim() ||
+          "Untitled project";
 
-        state.projects.push({
-          id,
+        const button = $("#modal-save");
 
-          name:
-            $("#project-name").value.trim() ||
-            "Untitled project",
+        button.disabled = true;
 
-          status: "New",
-          modified: Date.now(),
-          source: "",
-          branches: [],
-          clips: {}
-        });
+        try {
+          const project = await createProjectOnServer(name);
 
-        state.project = id;
+          state.projects.unshift(project);
 
-        state.selected = [];
+          state.project = project.id;
 
-        state.active = null;
+          state.selected = [];
 
-        navigate("canvas");
+          state.active = null;
+
+          saveState();
+
+          navigate("canvas");
+        } catch (error) {
+          button.disabled = false;
+
+          showToast(error.message);
+        }
       },
       "Create project"
     );
   };
+
+  try {
+    await loadProjectsFromApi();
+  } catch (error) {
+    showToast(error.message);
+  }
+
+  drawProjects();
 }
 
 /* Workspace heading */
@@ -4797,4 +4905,18 @@ const pageRenderers = {
 const renderPage =
   pageRenderers[page] || renderLanding;
 
-renderPage();
+async function startPage() {
+  if (page !== "projects") {
+    try {
+      await loadProjectsFromApi();
+    } catch (error) {
+      showToast(error.message);
+    }
+
+    renderHeader();
+  }
+
+  await renderPage();
+}
+
+startPage();
