@@ -355,6 +355,10 @@ def upload_clip_files(
     filename,
     captions_filename,
 ):
+    # Generated files already live in the job folder; S3 is an optional copy.
+    if not os.environ.get("S3_BUCKET_NAME", "").strip():
+        return {}
+
     owner = json.loads(
         (folder / "owner.json").read_text(
             encoding="utf-8"
@@ -2056,6 +2060,14 @@ def get_clip(
         if filename.endswith(".mp4")
         else "text/vtt"
     )
+
+    path = folder / filename
+    if path.is_file():
+        return FileResponse(
+            path,
+            media_type=media_type,
+            headers={"Cache-Control": "no-store"},
+        )
 
     if storage and storage.get(key_field):
         parameters = {
