@@ -111,7 +111,11 @@ async def analyze(
 
 def _result_cache_key(topic: str, video_hash: str) -> str:
     normalized_topic = topic.strip().lower()
-    return hashlib.sha256(f"{normalized_topic}|{video_hash}".encode("utf-8")).hexdigest()
+    # The tagging model is part of the key, so switching models re-analyzes instead of
+    # serving a result produced by the old one.
+    return hashlib.sha256(
+        f"{pipeline.TAGGING_MODEL}|{normalized_topic}|{video_hash}".encode("utf-8")
+    ).hexdigest()
 
 
 @router.get("/analyze/{job_id}/status")

@@ -19,7 +19,7 @@ import whisper
 import yt_dlp
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-TAGGING_MODEL = "claude-haiku-4-5-20251001"
+TAGGING_MODEL = os.environ.get("TAGGING_MODEL", "claude-haiku-5-5")
 # Hard kill-switch: when true, extract_tags() never calls the Anthropic API,
 # even on a cache miss — it raises instead. Set ANTHROPIC_CALLS_DISABLED=true
 # in .env to guarantee zero spend while testing other parts of the pipeline.
@@ -265,7 +265,10 @@ def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
 
     response = client.messages.create(
         model=TAGGING_MODEL,
-        max_tokens=1024,
+        # Haiku 5.5 thinks by default and thinking tokens count toward max_tokens, so leave room
+        # for it; low effort keeps this simple tagging call cheap.
+        max_tokens=4096,
+        output_config={"effort": "low"},
         tools=[
             {
                 "name": "record_video_tags",
