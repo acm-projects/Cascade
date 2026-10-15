@@ -1,6 +1,135 @@
+/* White page, matching the white around the painting */
 .editor {
-    min-height: 100vh;
-    padding: 40px;
-    background: #1e2a5a;
-    color: white;
+  height: 100vh;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Image-shaped box, as big as fits on screen (white margins blend in) */
+.editor-stage {
+  position: relative;
+  flex-shrink: 0;
+  width: min(100vw, 140.6vh);   /* 140.6 = 1440 / 1024 x 100 */
+  aspect-ratio: 1440 / 1024;
+  background-size: 100% 100%;
+  color: #f3e2c0;
+}
+
+/* Placeholder text style for panels that aren't built yet */
+.editor-toolbar,
+.editor-preview {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  opacity: 0.8;
+}
+
+.editor-toolbar {
+  left: 3.5%;
+  top: 11%;
+  width: 60.3%;
+  height: 14.5%;
+}
+
+.editor-preview {
+  left: 3.5%;
+  top: 36.5%;
+  width: 60.3%;
+  height: 52.5%;
+}
+
+/* Export: the small plank in the top-right */
+.editor-export {
+  position: absolute;
+  left: 69.3%;
+  top: 6%;
+  width: 29.3%;
+  height: 11.1%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f3e2c0;
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  text-decoration: none;
+  transition: scale 0.15s, filter 0.15s;
+}
+
+.editor-export:hover {
+  scale: 1.05;
+  filter: brightness(1.2);
+}
+
+/* ---------- Chat (lined up with the painted chat panel) ---------- */
+.editor-chat-messages {
+  position: absolute;
+  left: 71%;
+  top: 22%;
+  width: 26%;
+  height: 55%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-chat-message {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 240, 210, 0.85);
+  color: #3b2a1a;
+  word-wrap: break-word;
+}
+
+.editor-chat-input {
+  position: absolute;
+  left: 71.5%;
+  top: 81.5%;
+  width: 21%;
+  height: 5%;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: #f3e2c0;
+  font-size: 1rem;
+  outline: none;
+}
+
+.editor-chat-input::placeholder {
+  color: rgba(243, 226, 192, 0.6);
+}
+
+/* Invisible click areas over the painted icons */
+.editor-chat-attach,
+.editor-chat-send {
+  position: absolute;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.editor-chat-attach {
+  left: 71.7%;
+  top: 88.5%;
+  width: 2%;
+  height: 2.6%;
+}
+
+.editor-chat-send {
+  left: 93.3%;
+  top: 86.2%;
+  width: 3.3%;
+  height: 4.4%;
+}
+
+.editor-chat-attach:hover,
+.editor-chat-send:hover {
+  background: rgba(255, 255, 255, 0.15);
 }

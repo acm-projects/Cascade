@@ -278,3 +278,37 @@
   from { opacity: 0; scale: 0.5; }
   to   { opacity: 1; scale: 1; }
 }
+
+/* ---------- Selecting subclips ---------- */
+.subclip-pad.selected {
+  scale: 1.08;
+  filter: drop-shadow(0 0 10px #fff6a8) drop-shadow(0 0 4px #fff6a8);   /* soft yellow glow */
+}
+
+/* The green ✓ badge on a selected pad */
+.subclip-check {
+  position: absolute;
+  top: -6%;
+  right: -6%;
+  width: 28%;
+  aspect-ratio: 1;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #3e8e4e;
+  color: white;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The plank when nothing is selected yet: faded, not clickable */
+.drawing-title.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drawing-title.disabled:hover {
+  scale: 1;
+  filter: none;
+}

@@ -25,8 +25,8 @@ function makeFakeSubclips(duration) {
   return clips.sort((a, b) => a.start - b.start);            // in order through the video
 }
 
-// One small lily pad showing one subclip. Hover to play it.
-function SubclipPad({ videoUrl, start, end }) {
+// One small lily pad showing one subclip. Hover to play it, click to select it.
+function SubclipPad({ videoUrl, start, end, isSelected, onToggle }) {
   const videoRef = useRef(null);
 
   function jumpToStart() {
@@ -49,10 +49,11 @@ function SubclipPad({ videoUrl, start, end }) {
   return (
     <div className="subclip">
       <div
-        className="subclip-pad"
+        className={isSelected ? "subclip-pad selected" : "subclip-pad"}
         style={{ backgroundImage: `url(${smallPad})` }}
         onMouseEnter={startPreview}
         onMouseLeave={stopPreview}
+        onClick={onToggle}
       >
         <video
           ref={videoRef}
@@ -63,6 +64,7 @@ function SubclipPad({ videoUrl, start, end }) {
           onLoadedMetadata={jumpToStart}
           onTimeUpdate={loopWithinClip}
         />
+        {isSelected && <span className="subclip-check">✓</span>}
       </div>
       <span className="subclip-time">
         {formatTime(start)} – {formatTime(end)}
@@ -78,6 +80,7 @@ function DrawingPage() {
   const [text, setText] = useState("");
   const [subclips, setSubclips] = useState([]);           // [{ id, start, end }, ...]
   const [isGenerating, setIsGenerating] = useState(false); // show the loading animation?
+  const [selectedIds, setSelectedIds] = useState([]);     // ids of the subclips the user picked
 
   // Load a video file into the big lily pad
   function loadVideo(file) {
@@ -85,6 +88,7 @@ function DrawingPage() {
     if (mainVideo) URL.revokeObjectURL(mainVideo.url);
     setMainVideo({ name: file.name, url: URL.createObjectURL(file), duration: 0 });
     setSubclips([]);                                       // new video = old results no longer apply
+    setSelectedIds([]);
     setMessages([
       ...messages,
       { role: "assistant", text: `Got ${file.name}! Tell me what to look for.` },
@@ -97,10 +101,20 @@ function DrawingPage() {
     setMainVideo((current) => ({ ...current, duration: duration }));
   }
 
+  // Click a pad to select it, or unselect it if it's already selected
+  function toggleSubclip(id) {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter((selectedId) => selectedId !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  }
+
   function removeVideo() {
     URL.revokeObjectURL(mainVideo.url);
     setMainVideo(null);
     setSubclips([]);
+    setSelectedIds([]);
   }
 
   // --- Drag and drop on the big lily pad ---
@@ -143,6 +157,7 @@ function DrawingPage() {
     ]);
     setText("");
     setSubclips([]);
+    setSelectedIds([]);
     setIsGenerating(true);
 
     // Pretend the AI takes 2 seconds to search
@@ -152,7 +167,7 @@ function DrawingPage() {
       setIsGenerating(false);
       setMessages((current) => [
         ...current,
-        { role: "assistant", text: `Found ${results.length} moments! Hover a lily pad to preview.` },
+        { role: "assistant", text: `Found ${results.length} moments! Click the ones you want.` },
       ]);
     }, 2000);
   }
@@ -210,13 +225,22 @@ function DrawingPage() {
                   videoUrl={mainVideo.url}
                   start={clip.start}
                   end={clip.end}
+                  isSelected={selectedIds.includes(clip.id)}
+                  onToggle={() => toggleSubclip(clip.id)}
                 />
               ))}
             </div>
           )}
         </div>
 
-        <Link to="/editor" className="drawing-title">Continue to Editor</Link>
+        {/* Only a working link once at least one clip is picked */}
+        {selectedIds.length > 0 ? (
+          <Link to="/editor" className="drawing-title">
+            Continue to Editor ({selectedIds.length})
+          </Link>
+        ) : (
+          <span className="drawing-title disabled">Pick clips to continue</span>
+        )}
 
         <div className="chat-messages">
           {messages.map((message, index) => (
