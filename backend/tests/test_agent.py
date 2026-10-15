@@ -90,7 +90,7 @@ def add(box, start, end, score=0.5, reason="r"):
 def test_add_candidate_validation():
     box = make_toolbox()
     assert add(box, 0, 2)[1]      # too short
-    assert add(box, 0, 90)[1]     # too long
+    assert add(box, 0, 95)[1]     # too long (limit is 90s)
     assert add(box, 95, 105)[1]   # past the end
     assert not add(box, 10, 20, 0.9)[1]
     assert add(box, 12, 22)[1]    # heavy overlap with candidate #0 is rejected
@@ -366,3 +366,45 @@ def test_thinking_blocks_are_preserved_in_history():
     assistant_first = history[1]["content"]
     assert assistant_first[0] == {"type": "thinking", "thinking": "hmm", "signature": "sig123"}
     assert assistant_first[1]["type"] == "tool_use"
+
+
+def test_clip_limits_and_turn_budget():
+    assert agent_module.MAX_ITERATIONS == 8
+    box = make_toolbox()
+    blocks, err = add(box, 0, 90)   # exactly the limit is fine; a 90s podcast bit used to be rejected at 60
+    assert not err
+    blocks, err = add(box, 91, 100)  # 9s, in bounds, no overlap: fine
+    assert not err
+    other = make_toolbox()
+    blocks, err = add(other, 0, 91)  # one second over the limit
+    assert err and "5-90s" in blocks[0]["text"]
+
+
+def test_tool_not_offered_this_turn_is_never_executed():
+    n = agent_module.MAX_ITERATIONS
+    scripted = [OVERVIEW_TURN] + [
+        ([tool_use(f"s{i}", "search_video", query="10")], "tool_use") for i in range(n - 1)
+    ]
+    # final turn offers only rank_candidates, but the model asks for add_candidate anyway
+    scripted.append(([cand_call("x", 10, 20, 0.9)], "tool_use"))
+    client = FakeClient(scripted)
+    box = make_toolbox()
+    result = agent_module.run_agent(box, "funny", client=client)
+    assert box.candidates == []           # it was NOT run
+    last_results = client.calls[-1]["messages"][-1]["content"]
+    assert last_results[0]["is_error"] is True
+    assert "not available this turn" in last_results[0]["content"][0]["text"]
+    assert result["ranked_by_agent"] is False
+
+
+def test_pacing_notes_push_toward_ranking_before_the_last_turn():
+    n = agent_module.MAX_ITERATIONS
+    scripted = [OVERVIEW_TURN] + [
+        ([tool_use(f"s{i}", "search_video", query="10")], "tool_use") for i in range(n)
+    ]
+    client = FakeClient(scripted)
+    agent_module.run_agent(make_toolbox(), "funny", client=client)
+    systems = [c["system"] for c in client.calls]          # [overview, turn 1, ..., turn n]
+    assert "Stop researching" not in systems[1] and "Stop researching" not in systems[n - 3]
+    assert "Stop researching" in systems[n - 2] and "Stop researching" in systems[n - 1]
+    assert "FINAL turn" in systems[n] and "Stop researching" not in systems[n]

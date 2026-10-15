@@ -116,8 +116,10 @@
 
     <button type="submit" class="submit">Find top clips</button>
   </form>
-  <p class="note">An LLM agent searches the video's embeddings, inspects candidates, and suggests clips.
-    Confidence (0&ndash;1) is the model's own estimate of how well a clip fits the category, based on the
+  <label for="agent-previous">Previous runs</label>
+  <select id="agent-previous"><option value="">(none yet)</option></select>
+  <p class="note">An LLM agent searches the video's embeddings, inspects candidates, and ranks the best clips,
+    which are then cut into their own short video files. Confidence (0&ndash;1) is the model's own estimate of how well a clip fits the category, based on the
     frames and transcript it inspected. It is not a measured score, so use it to compare clips within one
     run, not across videos.</p>
   <div id="agent-status"></div>
@@ -290,13 +292,22 @@ const agentStatus = document.getElementById('agent-status');
 const agentError = document.getElementById('agent-error');
 const agentSteps = document.getElementById('agent-steps');
 const agentResult = document.getElementById('agent-result');
-let agentObjectUrl = null;
+const agentPrevious = document.getElementById('agent-previous');
+const LAST_JOB_KEY = 'cascade-agent-last-job';
+let agentObjectUrl = null;  // the local upload, only used if a clip file could not be cut
 
-agentForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+function rememberJob(id) { try { localStorage.setItem(LAST_JOB_KEY, id); } catch (e) { /* storage unavailable */ } }
+function lastJob() { try { return localStorage.getItem(LAST_JOB_KEY); } catch (e) { return null; } }
+
+function clearAgentOutput() {
   agentError.textContent = '';
   agentResult.replaceChildren();
   agentSteps.replaceChildren();
+}
+
+agentForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearAgentOutput();
   agentStatus.textContent = 'Starting...';
 
   const file = document.getElementById('agent-video').files[0];
@@ -314,6 +325,7 @@ agentForm.addEventListener('submit', async (e) => {
       throw new Error(body.detail || `Request failed with status ${response.status}`);
     }
     const { job_id } = await response.json();
+    rememberJob(job_id);
     await pollAgentJob(job_id);
   } catch (err) {
     agentError.textContent = err.message || 'Something went wrong.';
@@ -341,6 +353,7 @@ async function pollAgentJob(jobId) {
     if (job.status === 'done') {
       agentStatus.textContent = 'Done';
       renderAgentResult(job.result);
+      refreshPreviousRuns(jobId);
       return;
     }
     if (job.status === 'error') {
@@ -350,6 +363,62 @@ async function pollAgentJob(jobId) {
     }
   }
 }
+
+// Show a run that finished earlier (after a refresh, or picked from "Previous runs").
+async function showSavedJob(jobId) {
+  clearAgentOutput();
+  const response = await fetch(`/api/agent/analyze/${jobId}/status`);
+  if (!response.ok) {
+    agentStatus.textContent = '';
+    agentError.textContent = 'That run is no longer available.';
+    return;
+  }
+  const job = await response.json();
+  const when = job.created_at ? new Date(job.created_at * 1000).toLocaleString() : '';
+  agentStatus.textContent = `Saved run: ${job.source_name || 'video'} - "${job.category}" - ${when}`;
+  if (job.status === 'done') {
+    renderAgentResult(job.result);
+  } else if (job.status === 'running') {
+    await pollAgentJob(jobId);
+  } else {
+    agentError.textContent = job.error || 'This run failed.';
+  }
+}
+
+async function refreshPreviousRuns(selectId) {
+  try {
+    const response = await fetch('/api/agent/jobs');
+    if (!response.ok) return;
+    const { jobs } = await response.json();
+    agentPrevious.replaceChildren();
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = jobs.length ? '(choose a run)' : '(none yet)';
+    agentPrevious.appendChild(none);
+    jobs.forEach(j => {
+      const o = document.createElement('option');
+      o.value = j.job_id;
+      o.textContent = `${new Date(j.created_at * 1000).toLocaleString()} - ${j.source_name} - "${j.category}" (${j.clips} clips)`;
+      agentPrevious.appendChild(o);
+    });
+    if (selectId) agentPrevious.value = selectId;
+  } catch (e) { /* list is a convenience; ignore */ }
+}
+
+agentPrevious.addEventListener('change', () => {
+  if (!agentPrevious.value) return;
+  rememberJob(agentPrevious.value);
+  showSavedJob(agentPrevious.value);
+});
+
+// On page load: fill the list and bring back the last run.
+refreshPreviousRuns().then(() => {
+  const id = lastJob();
+  if (id) {
+    agentPrevious.value = id;
+    showSavedJob(id).catch(() => {});
+  }
+});
 
 // Seconds -> m:ss (or h:mm:ss for videos over an hour), e.g. 91 -> "1:31".
 function formatTime(totalSeconds) {
@@ -376,6 +445,7 @@ function renderAgentResult(result) {
     agentResult.appendChild(p);
     return;
   }
+
   const considered = document.createElement('p');
   considered.className = 'note';
   considered.textContent =
@@ -393,8 +463,8 @@ function renderAgentResult(result) {
     const title = document.createElement('p');
     const strong = document.createElement('strong');
     strong.textContent =
-      `#${s.rank}: ${formatTime(s.start)} - ${formatTime(s.end)} ` +
-      `(${Math.round(s.end - s.start)}s long, confidence ${s.score})`;
+      `#${s.rank}: ${formatTime(s.start)} - ${formatTime(s.end)} in the original ` +
+      `(${Math.round(s.end - s.start)}s clip, confidence ${s.score})`;
     title.appendChild(strong);
 
     const reason = document.createElement('p');
@@ -408,12 +478,36 @@ function renderAgentResult(result) {
       parts.push(why);
     }
 
-    const video = document.createElement('video');
-    video.controls = true;
-    video.style.maxWidth = '100%';
-    video.src = `${agentObjectUrl}#t=${s.start},${s.end}`;
+    if (s.clip_url) {
+      // A real short video file, cut out of the source - not the full video at a timestamp.
+      const video = document.createElement('video');
+      video.controls = true;
+      video.preload = 'metadata';
+      video.style.maxWidth = '100%';
+      video.src = s.clip_url;
+      parts.push(video);
 
-    wrap.append(...parts, video);
+      const dl = document.createElement('a');
+      dl.href = s.download_url;
+      dl.textContent = 'Download clip';
+      dl.style.display = 'inline-block';
+      dl.style.marginTop = '0.4rem';
+      parts.push(dl);
+    } else {
+      const err = document.createElement('p');
+      err.className = 'error';
+      err.textContent = `This clip could not be cut${s.clip_error ? ' (' + s.clip_error + ')' : ''}.`;
+      parts.push(err);
+      if (agentObjectUrl) {  // fallback: the full upload at the clip's time range (this session only)
+        const video = document.createElement('video');
+        video.controls = true;
+        video.style.maxWidth = '100%';
+        video.src = `${agentObjectUrl}#t=${s.start},${s.end}`;
+        parts.push(video);
+      }
+    }
+
+    wrap.append(...parts);
     agentResult.appendChild(wrap);
   });
 }

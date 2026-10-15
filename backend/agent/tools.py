@@ -18,7 +18,7 @@ from .chunks import OVERVIEW_TRANSCRIPT_CHARS, fmt_time, format_segment, format_
 from .index import VideoIndex
 
 MIN_CLIP_SECONDS = 5.0
-MAX_CLIP_SECONDS = 60.0
+MAX_CLIP_SECONDS = 90.0  # a podcast bit often needs setup + payoff; 60s rejected good ones
 MAX_INSPECT_FRAMES = 6
 MAX_OVERLAP_RATIO = 0.5
 
