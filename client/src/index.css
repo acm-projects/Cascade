@@ -41,3 +41,27 @@
   scale: 1.05;               /* separate from transform, so it won't undo any positioning */
   filter: brightness(1.15);  /* the wood lights up a little on hover */
 }
+
+/* Load the Crayon Libre font from our project files */
+@font-face {
+  font-family: "Crayon Libre";
+  src: url("./assets/fonts/CrayonLibre.ttf") format("truetype");
+  font-display: swap;
+}
+
+/* Use it for the whole app */
+body {
+  font-family: "Crayon Libre", sans-serif;
+}
+
+/* Buttons and inputs don't copy the page font by default, so tell them to */
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+/* Base text size for the whole app (the browser default is 100%, which is 16px) */
+html {
+  font-size: 125%;
+}

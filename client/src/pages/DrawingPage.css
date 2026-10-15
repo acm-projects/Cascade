@@ -1,9 +1,280 @@
 .drawing-page {
   position: relative;
-  width: 100%;
-  min-height: 100vh;
-  padding: 40px;
-  background-size: cover;
-  background-position: center;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Image-shaped box, big enough to COVER the screen (extra water on the sides gets trimmed) */
+.drawing-stage {
+  position: relative;
+  flex-shrink: 0;
+  width: max(100vw, 200vh);     /* 200 = 1976 / 988 x 100 */
+  aspect-ratio: 1976 / 988;
+  background-size: 100% 100%;
   color: #1a3d2b;
+}
+
+/* "Continue to Editor" button on the small plank above the chat */
+.drawing-title {
+  position: absolute;
+  left: 61.79%;
+  top: 3.7%;
+  width: 21.29%;
+  height: 10.4%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f3e2c0;
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  text-decoration: none;
+  border-radius: 40px;
+  transition: scale 0.15s, filter 0.15s;
+}
+
+.drawing-title:hover {
+  scale: 1.05;
+  filter: brightness(1.2);
+}
+
+/* ---------- Chat (lined up with the painted chat box) ---------- */
+.chat-messages {
+  position: absolute;
+  left: 63.08%;
+  top: 18.5%;
+  width: 19.01%;
+  height: 51%;
+  overflow-y: auto;             /* scroll when there are lots of messages */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-message {
+  align-self: flex-end;         /* messages sit on the right, like your own texts */
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 240, 210, 0.85);
+  color: #3b2a1a;
+  word-wrap: break-word;
+}
+
+.chat-input {
+  position: absolute;
+  left: 63.22%;
+  top: 80.5%;
+  width: 18.22%;
+  height: 5%;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: #f3e2c0;
+  font-size: 1rem;
+  outline: none;
+}
+
+.chat-input::placeholder {
+  color: rgba(243, 226, 192, 0.6);
+}
+
+/* Invisible click areas over the painted icons */
+.chat-attach,
+.chat-send {
+  position: absolute;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.chat-attach {
+  left: 63.43%;
+  top: 86.6%;
+  width: 1.86%;
+  height: 3.6%;
+}
+
+.chat-send {
+  left: 79.15%;
+  top: 84.8%;
+  width: 2.86%;
+  height: 5.6%;
+}
+
+.chat-attach:hover,
+.chat-send:hover {
+  background: rgba(255, 255, 255, 0.15);   /* subtle glow so you know it's clickable */
+}
+
+/* ---------- Big lily pad: the main video drop zone ---------- */
+.big-pad {
+  position: absolute;
+  left: 10%;
+  top: 15%;
+  width: 24%;
+  aspect-ratio: 376 / 384;          /* same shape as the lily pad image */
+  background-size: 100% 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: scale 0.2s, filter 0.2s;
+}
+
+/* While a file is dragged over it: grow and glow */
+.big-pad.dragging {
+  scale: 1.06;
+  filter: brightness(1.15) drop-shadow(0 0 20px rgba(255, 255, 255, 0.8));
+}
+
+.big-pad-hint {
+  padding: 0 15%;
+  text-align: center;
+  color: #1f4d2b;
+  font-size: clamp(1rem, 1.6vw, 1.5rem);
+  pointer-events: none;
+}
+
+/* The video, cut into the lily pad's shape (slightly smaller, so the green rim shows) */
+.big-pad-video {
+  position: absolute;
+  inset: 7%;
+  width: 86%;
+  height: 86%;
+  object-fit: cover;
+  mask-image: url("../assets/lilypad-big.png");
+  mask-size: 100% 100%;
+  pointer-events: none;
+}
+
+/* ---------- Chat: two speakers ---------- */
+/* Your messages stay on the right (the existing .chat-message style) */
+
+/* Cascade's replies: on the left, darker wood color */
+.chat-message.assistant {
+  align-self: flex-start;
+  background: rgba(60, 40, 20, 0.75);
+  color: #f3e2c0;
+}
+
+/* ---------- The video tag above the text box ---------- */
+.chat-video-tag {
+  position: absolute;
+  left: 63.3%;
+  top: 70.5%;
+  max-width: 18.5%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 240, 210, 0.9);
+  color: #3b2a1a;
+  font-size: 0.85rem;
+}
+
+.chat-video-tag span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;   /* long file names end in "..." instead of overflowing */
+}
+
+.chat-video-tag button {
+  border: none;
+  background: none;
+  color: #3b2a1a;
+  cursor: pointer;
+}
+
+/* ---------- Subclip results: small lily pads on a stem ---------- */
+.subclip-area {
+  position: absolute;
+  left: 37%;
+  top: 12%;
+  width: 22%;
+  height: 80%;
+  overflow-y: auto;            /* scroll if there are lots of results */
+}
+
+/* The stem: a green line down the left side */
+.subclip-list {
+  margin-left: 6%;
+  padding: 10px 0;
+  border-left: 8px solid #3e8e4e;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* One result: branch + pad + time */
+.subclip {
+  display: flex;
+  align-items: center;
+  gap: 4%;
+  animation: sprout 0.4s ease-out both;   /* pops in when it appears */
+}
+
+/* The branch from the stem to the pad */
+.subclip::before {
+  content: "";
+  width: 14%;
+  height: 8px;
+  border-radius: 4px;
+  background: #3e8e4e;
+}
+
+.subclip-pad {
+  position: relative;
+  width: 42%;
+  aspect-ratio: 137 / 118;     /* same shape as the small lily pad image */
+  background-size: 100% 100%;
+  cursor: pointer;
+  transition: scale 0.15s;
+}
+
+.subclip-pad:hover {
+  scale: 1.08;
+}
+
+/* The clip, cut into the small pad's shape */
+.subclip-video {
+  position: absolute;
+  inset: 8%;
+  width: 84%;
+  height: 84%;
+  object-fit: cover;
+  mask-image: url("../assets/lilypad-small.png");
+  mask-size: 100% 100%;
+  pointer-events: none;
+}
+
+.subclip-time {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: #1a3d2b;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+/* Loading text that gently fades in and out */
+.subclip-loading {
+  color: #1a3d2b;
+  font-size: 1.2rem;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+/* Pads "sprout": grow from small to full size */
+@keyframes sprout {
+  from { opacity: 0; scale: 0.5; }
+  to   { opacity: 1; scale: 1; }
 }
