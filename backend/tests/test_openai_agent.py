@@ -20,10 +20,10 @@ from agent import summaries  # noqa: E402
 from agent.chunks import build_chunks  # noqa: E402
 from agent.index import VideoIndex  # noqa: E402
 from agent.tools import ToolBox  # noqa: E402
-from cascade_llm import OpenAIConversation, call_cost  # noqa: E402
+from cascade_llm import MODELS, OpenAIConversation, call_cost  # noqa: E402
 from trends import pipeline  # noqa: E402
 
-LUNA = "gpt-6-luna"
+LUNA = MODELS["openai"]
 
 
 # ---------- fake Responses API ----------
@@ -86,11 +86,8 @@ def add(call_id, start, end, score=0.9):
 
 
 @pytest.fixture(autouse=True)
-def luna_agent(monkeypatch):
-    monkeypatch.setattr(agent_module, "AGENT_MODEL", LUNA)
-    monkeypatch.delenv("AGENT_REASONING_EFFORT", raising=False)
-    monkeypatch.delenv("OPENAI_IMAGE_TOOL_OUTPUT", raising=False)
-    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+def openai_selected(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")  # the one switch
 
 
 def outputs_by_call_id(items):
@@ -125,7 +122,7 @@ def test_full_loop_request_shapes_history_and_guards():
     assert [t["name"] for t in first["tools"]] == ["get_overview"]
     assert first["tools"][0]["type"] == "function" and first["tools"][0]["strict"] is False
     assert first["tools"][0]["parameters"] == {"type": "object", "properties": {}}
-    assert first["reasoning"] == {"effort": "medium"}
+    assert first["reasoning"] == {"effort": "low"}
     assert first["max_output_tokens"] >= 8000
     assert "best clips of a whole video" in first["instructions"]
     assert first["input"][0]["role"] == "user" and "'funny'" in first["input"][0]["content"]
@@ -208,11 +205,10 @@ def test_incomplete_and_failed_responses_raise_clear_errors():
         agent_module.run_agent(toolbox(), "funny", client=FakeOpenAI(failed))
 
 
-def test_reasoning_effort_is_configurable(monkeypatch):
-    monkeypatch.setenv("AGENT_REASONING_EFFORT", "high")
+def test_reasoning_effort_is_low_on_every_turn():
     client = FakeOpenAI(response(fc("o", "get_overview")), response(message("done")))
     agent_module.run_agent(toolbox(), "funny", client=client)
-    assert client.calls[0]["reasoning"] == {"effort": "high"}
+    assert [c["reasoning"] for c in client.calls] == [{"effort": "low"}, {"effort": "low"}]
 
 
 # ---------- images inside tool results ----------
@@ -267,7 +263,6 @@ class SummaryOpenAI:
 
 
 def test_summaries_run_on_openai_with_strict_schema_and_lunas_price(monkeypatch, tmp_path):
-    monkeypatch.setattr(summaries, "SUMMARY_MODEL", LUNA)
     monkeypatch.setattr(summaries, "CACHE_DIR", tmp_path)
     transcript = long_transcript()
     index = VideoIndex(
@@ -309,7 +304,6 @@ def frames(tmp_path):
 
 
 def test_trends_tagging_uses_openai_and_caches(monkeypatch, tmp_path, frames):
-    monkeypatch.setattr(pipeline, "TAGGING_MODEL", LUNA)
     monkeypatch.setattr(pipeline, "TAGS_CACHE_DIR", tmp_path / "tags")
     (tmp_path / "tags").mkdir()
     client = FakeOpenAI(response(reasoning(0), message(json.dumps(TAGS))))
@@ -327,15 +321,14 @@ def test_trends_tagging_uses_openai_and_caches(monkeypatch, tmp_path, frames):
     assert len(client.calls) == 1
 
 
-def test_trends_kill_switch_names_the_right_provider(monkeypatch, tmp_path, frames):
+def test_trends_missing_key_names_the_selected_providers_variable(monkeypatch, tmp_path, frames):
     monkeypatch.setattr(pipeline, "TAGS_CACHE_DIR", tmp_path / "tags")
     (tmp_path / "tags").mkdir()
-    monkeypatch.setattr(pipeline, "TAGGING_MODEL", LUNA)
-    monkeypatch.setenv("OPENAI_CALLS_DISABLED", "true")
-    with pytest.raises(RuntimeError, match="OPENAI_CALLS_DISABLED"):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY is not set"):
         pipeline.extract_tags(frames, "t")
 
-    monkeypatch.setattr(pipeline, "TAGGING_MODEL", "claude-haiku-5-5")
-    monkeypatch.setenv("ANTHROPIC_CALLS_DISABLED", "true")
-    with pytest.raises(RuntimeError, match="ANTHROPIC_CALLS_DISABLED"):
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY is not set"):
         pipeline.extract_tags(frames, "t")

@@ -299,12 +299,13 @@ def test_prompt_states_the_best_of_whole_video_spread_out_goal():
         assert needle in prompt
 
 
-def test_agent_respects_disabled_flag(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_CALLS_DISABLED", "true")
+def test_missing_api_key_is_a_clear_error(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     try:
         agent_module.run_agent(make_toolbox(), "funny")
     except RuntimeError as exc:
-        assert "disabled" in str(exc)
+        assert "ANTHROPIC_API_KEY is not set" in str(exc)
     else:
         raise AssertionError("expected RuntimeError")
 
@@ -333,7 +334,10 @@ def test_usage_is_accumulated_and_priced():
 
 
 def test_usage_cost_unknown_for_unpriced_model(monkeypatch):
-    monkeypatch.setattr(agent_module, "AGENT_MODEL", "some-other-model")
+    from cascade_llm import clients
+
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.setitem(clients.MODELS, "anthropic", "some-other-model")
     class OneShot:
         messages = None
 

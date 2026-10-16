@@ -1,6 +1,6 @@
 """Live check of the OpenAI (Responses API) path with a REAL key. Costs well under a cent.
 
-Run from backend/:   python scripts/check_openai.py [model]
+Run from backend/:   python scripts/check_openai.py
 
 It proves the things the unit tests (which use a fake client) cannot:
   1. the model id exists for your key
@@ -28,9 +28,11 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(BACKEND.parent / ".env")
 
-from cascade_llm import OpenAIConversation, call_cost, make_client, structured_json  # noqa: E402
+from cascade_llm import MODELS, OpenAIConversation, call_cost, make_client, structured_json  # noqa: E402
 
-DEFAULT_MODEL = "gpt-6-luna"
+# This script always exercises the OpenAI path, whatever LLM_PROVIDER is set to in .env.
+os.environ["LLM_PROVIDER"] = "openai"
+MODEL = MODELS["openai"]
 TOOL = {
     "name": "look_at_frame",
     "description": "Returns one video frame. Call it once with the frame number.",
@@ -104,9 +106,7 @@ def check_image_mode(client, model: str, mode: str) -> bool:
 
 
 def main() -> int:
-    model = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("AGENT_MODEL", DEFAULT_MODEL)
-    if not model.lower().startswith(("gpt-", "o1", "o3", "o4", "chatgpt")):
-        model = DEFAULT_MODEL
+    model = MODEL
     print(f"model: {model}")
     try:
         client = make_client("openai")
@@ -148,11 +148,12 @@ def main() -> int:
     print(f"image in a function_call_output array : {'works' if modes['array'] else 'FAILED'}")
     print(f"image in a follow-up user message     : {'works' if modes['user_message'] else 'FAILED'}")
     if modes["array"]:
-        print("recommendation: set OPENAI_IMAGE_TOOL_OUTPUT=array (frames stay attached to the call that returned them)")
+        print("note: both image modes work. The agent uses 'user_message' (the default in cascade_llm/conversation.py);")
+        print("      'array' also works and keeps frames attached to the call that returned them.")
     elif modes["user_message"]:
-        print("recommendation: keep the default OPENAI_IMAGE_TOOL_OUTPUT=user_message")
+        print("the agent's default image mode ('user_message') works")
     ok = (modes["array"] or modes["user_message"]) and not failures
-    print("OVERALL:", "PASS - the agent can run on this model" if ok else "FAIL - do not switch AGENT_MODEL yet")
+    print("OVERALL:", "PASS - the agent can run on this model" if ok else "FAIL - do not set LLM_PROVIDER=openai yet")
     return 0 if ok else 1
 
 

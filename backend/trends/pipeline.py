@@ -17,19 +17,7 @@ from typing import Any, Callable
 import whisper
 import yt_dlp
 
-from cascade_llm import (
-    OPENAI,
-    calls_disabled,
-    make_client,
-    provider_for_model,
-    provider_label,
-    structured_json,
-)
-
-TAGGING_MODEL = os.environ.get("TAGGING_MODEL", "claude-haiku-5-5")
-# Hard kill-switch: when true, extract_tags() never calls the Anthropic API,
-# even on a cache miss — it raises instead. Set ANTHROPIC_CALLS_DISABLED=true
-# in .env to guarantee zero spend while testing other parts of the pipeline.
+from cascade_llm import OPENAI, make_client, selected_model, selected_provider, structured_json
 
 # Loaded once per process — reused across requests.
 _whisper_model = None
@@ -219,7 +207,7 @@ def transcribe(audio_path: Path | None) -> str:
 
 def _tags_cache_key(frame_paths: list[Path], transcript: str) -> str:
     hasher = hashlib.sha256()
-    hasher.update(TAGGING_MODEL.encode("utf-8"))
+    hasher.update(selected_model().encode("utf-8"))
     hasher.update(transcript.encode("utf-8"))
     for frame_path in frame_paths:
         hasher.update(frame_path.read_bytes())
@@ -227,7 +215,7 @@ def _tags_cache_key(frame_paths: list[Path], transcript: str) -> str:
 
 
 def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
-    """Call the configured LLM (Claude or OpenAI, by TAGGING_MODEL) with frames + transcript for structured tags.
+    """Call the configured LLM (Claude or OpenAI, by LLM_PROVIDER) with frames + transcript for structured tags.
 
     Results are cached on disk by a hash of the input frames + transcript, so
     re-analyzing the same video never re-calls the API.
@@ -237,14 +225,9 @@ def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
     if cache_path.exists():
         return json.loads(cache_path.read_text())
 
-    provider = provider_for_model(TAGGING_MODEL)
-    if calls_disabled(provider):
-        raise RuntimeError(
-            f"{provider_label(provider)} API calls are disabled ({provider.upper()}_CALLS_DISABLED=true "
-            "in .env) and this video has no cached tags."
-        )
-
-    # Keys and kill switches are read now (not at import), so a change in .env applies to the next job.
+    provider = selected_provider()
+    model = selected_model()
+    # The key is read now (not at import), so a change in .env applies to the next job.
     client = make_client(provider)  # raises if the key is missing
 
     prompt_text = (
@@ -255,7 +238,6 @@ def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
 
     if provider == OPENAI:
         result = structured_json(
-            TAGGING_MODEL,
             prompt_text,
             TAG_SCHEMA,
             name="video_tags",
@@ -284,7 +266,7 @@ def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
         )
 
     response = client.messages.create(
-        model=TAGGING_MODEL,
+        model=model,
         # Haiku 5.5 thinks by default and thinking tokens count toward max_tokens, so leave room
         # for it; low effort keeps this simple tagging call cheap.
         max_tokens=4096,

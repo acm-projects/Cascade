@@ -13,12 +13,11 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
-from cascade_llm import call_cost, make_client, provider_for_model, structured_json
+from cascade_llm import call_cost, make_client, selected_model, structured_json
 from .chunks import build_chunks, fmt_time, is_long_transcript
 from .index import CACHE_DIR, VideoIndex
 
 PROMPT_VERSION = "v1"
-SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", "claude-haiku-5-5")
 MAX_WORKERS = 5
 MAX_NOTABLE_LINES = 4
 
@@ -50,7 +49,7 @@ Transcript:
 
 def _cache_path(transcript: list[dict[str, Any]]):
     digest = hashlib.sha256(
-        (json.dumps(transcript, sort_keys=True) + PROMPT_VERSION + SUMMARY_MODEL).encode("utf-8")
+        (json.dumps(transcript, sort_keys=True) + PROMPT_VERSION + selected_model()).encode("utf-8")
     ).hexdigest()
     return CACHE_DIR / f"summaries_{digest}.json"
 
@@ -69,7 +68,6 @@ def summarize_chunk(
 ) -> tuple[dict[str, Any], int, int]:
     """Returns (chunk summary, input_tokens, output_tokens)."""
     result = structured_json(
-        SUMMARY_MODEL,
         _chunk_prompt(chunk, transcript),
         SUMMARY_SCHEMA,
         name="chunk_summary",
@@ -134,8 +132,7 @@ def ensure_summaries(
         emit("Loaded transcript summaries from cache")
         return
 
-    # raises if API calls are disabled / no key for the provider SUMMARY_MODEL belongs to
-    client = client or make_client(provider_for_model(SUMMARY_MODEL))
+    client = client or make_client()  # raises if the selected provider's key is missing
     emit(f"Summarizing transcript in {len(chunks)} chunks")
 
     results: dict[int, dict[str, Any]] = {}
@@ -152,7 +149,7 @@ def ensure_summaries(
                 results[chunk["index"]] = summary
                 in_tok += i
                 out_tok += o
-                c = call_cost(SUMMARY_MODEL, i, o)
+                c = call_cost(selected_model(), i, o)
                 if c is None:
                     cost_known = False
                 else:

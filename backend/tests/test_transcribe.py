@@ -166,15 +166,6 @@ def test_missing_key_is_a_clear_error(monkeypatch, tmp_path):
         transcribe.transcribe_video(Path("x.mp4"), tmp_path)
 
 
-def test_kill_switch(monkeypatch, tmp_path):
-    monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: True)
-    monkeypatch.setenv("DEEPGRAM_API_KEY", "k")
-    monkeypatch.setenv("DEEPGRAM_CALLS_DISABLED", "true")
-    monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
-    with pytest.raises(transcribe.TranscriptionError, match="disabled"):
-        transcribe.transcribe_video(Path("x.mp4"), tmp_path)
-
-
 def test_deepgram_happy_path(monkeypatch, tmp_path):
     monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: True)
     monkeypatch.setattr(transcribe, "extract_audio", lambda v, d: audio_file(tmp_path))
@@ -186,7 +177,6 @@ def test_deepgram_happy_path(monkeypatch, tmp_path):
         },
     )
     monkeypatch.setenv("DEEPGRAM_API_KEY", "k")
-    monkeypatch.delenv("DEEPGRAM_CALLS_DISABLED", raising=False)
     monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
     segs = transcribe.transcribe_video(Path("x.mp4"), tmp_path)
     assert segs[0]["text"] == "hi"
@@ -252,7 +242,6 @@ def test_transcribe_video_reports_cost_and_the_diarization_note(monkeypatch, tmp
 
     monkeypatch.setattr(transcribe, "deepgram_request", fake_request)
     monkeypatch.setenv("DEEPGRAM_API_KEY", "k")
-    monkeypatch.delenv("DEEPGRAM_CALLS_DISABLED", raising=False)
     monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
     steps, info = [], {}
     transcribe.transcribe_video(Path("x.mp4"), tmp_path, progress=steps.append, info=info)

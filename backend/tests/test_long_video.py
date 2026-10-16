@@ -78,7 +78,7 @@ class SummaryClient:
 @pytest.fixture(autouse=True)
 def isolated_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(summaries, "CACHE_DIR", tmp_path)
-    monkeypatch.delenv("ANTHROPIC_CALLS_DISABLED", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
 
 
 # ---------- summaries ----------
@@ -139,20 +139,20 @@ def test_usage_is_aggregated_and_priced():
     assert u["cached"] is False
 
 
-def test_cache_hit_needs_no_client_even_when_calls_disabled(monkeypatch):
+def test_cache_hit_needs_no_client_or_key(monkeypatch):
     transcript = long_transcript()
     summaries.ensure_summaries(make_index(transcript), client=SummaryClient())
 
-    monkeypatch.setenv("ANTHROPIC_CALLS_DISABLED", "true")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     again = make_index(transcript)
     summaries.ensure_summaries(again)  # would raise if it tried to build a client
     assert again.chunk_summaries and again.summary_usage["cached"] is True
     assert again.summary_usage["input_tokens"] == 0
 
 
-def test_kill_switch_without_cache(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_CALLS_DISABLED", "true")
-    with pytest.raises(RuntimeError, match="disabled"):
+def test_missing_key_without_cache_is_a_clear_error(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY is not set"):
         summaries.ensure_summaries(make_index(long_transcript()))
 
 

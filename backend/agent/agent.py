@@ -1,4 +1,4 @@
-"""The agent loop: the model (Claude or OpenAI, chosen by AGENT_MODEL) first calls get_overview
+"""The agent loop: the model (Claude or OpenAI, chosen by LLM_PROVIDER) first calls get_overview
 (forced), then gathers a pool of candidate
 moments from across the whole video (search_video / read_transcript / inspect_clip /
 add_candidate), compares them, and ranks them (rank_candidates). Code then picks the best
@@ -6,10 +6,9 @@ TARGET_CLIPS from that ranking, spread out through the video."""
 
 from __future__ import annotations
 
-import os
 from typing import Any, Callable
 
-from cascade_llm import ToolResult, call_cost, make_conversation
+from cascade_llm import ToolResult, call_cost, make_conversation, selected_model
 from .tools import (
     FINAL_SCHEMAS,
     MAX_CLIP_SECONDS,
@@ -23,7 +22,6 @@ from .tools import (
 # Working turns after the forced overview turn.
 MAX_ITERATIONS = 8
 TARGET_SUGGESTIONS = TARGET_CLIPS  # final clips returned (set in tools.py)
-AGENT_MODEL = os.environ.get("AGENT_MODEL", "claude-haiku-5-5")
 
 SYSTEM_PROMPT = f"""You find the {TARGET_SUGGESTIONS} best clips of a whole video for a given category (e.g. "funny", "interesting"). They must be the best of the ENTIRE video and spread out through it - not four moments from the same stretch.
 
@@ -69,11 +67,12 @@ def run_agent(
     client: Any = None,
     conversation: Any = None,
 ) -> dict[str, Any]:
-    """`conversation` (or the provider implied by AGENT_MODEL, using `client` if given) supplies
+    """`conversation` (or the provider chosen by LLM_PROVIDER, using `client` if given) supplies
     the wire format; everything below - tool guard, pacing, forced final turn - is provider-neutral."""
     emit = progress or (lambda msg: None)
 
-    conv = conversation or make_conversation(AGENT_MODEL, client)
+    conv = conversation or make_conversation(client)
+    model = selected_model()
     conv.start(
         f"Find the {TARGET_SUGGESTIONS} best '{category}' moments of this whole video, spread out "
         f"through it (duration {toolbox.index.duration:.1f}s)."
@@ -87,6 +86,7 @@ def run_agent(
         "cost_usd": prior.get("cost_usd", 0.0),
         "cost_known": prior.get("cost_known", True),
         "transcription_cost_usd": getattr(toolbox.index, "transcription_cost_usd", 0.0),
+        "model": model,
     }
 
     def record_usage(turn: Any) -> str:
@@ -94,7 +94,7 @@ def run_agent(
             return ""
         usage["input_tokens"] += turn.input_tokens
         usage["output_tokens"] += turn.output_tokens
-        cost = call_cost(AGENT_MODEL, turn.input_tokens, turn.output_tokens, turn.cached_tokens)
+        cost = call_cost(model, turn.input_tokens, turn.output_tokens, turn.cached_tokens)
         if cost is None:
             usage["cost_known"] = False
         else:
@@ -173,7 +173,7 @@ def _usage_summary(usage: dict[str, Any]) -> dict[str, Any]:
     return {
         "input_tokens": usage["input_tokens"],
         "output_tokens": usage["output_tokens"],
-        "model": AGENT_MODEL,
+        "model": usage["model"],
         # LLM cost + Deepgram transcription (this run only; 0 when the transcript was cached).
         # None when we have no price for the configured model.
         "estimated_cost_usd": (

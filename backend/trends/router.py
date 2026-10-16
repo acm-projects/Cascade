@@ -18,6 +18,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
+from cascade_llm import selected_model
+
 from . import pipeline
 from . import youtube_trends
 
@@ -111,10 +113,10 @@ async def analyze(
 
 def _result_cache_key(topic: str, video_hash: str) -> str:
     normalized_topic = topic.strip().lower()
-    # The tagging model is part of the key, so switching models re-analyzes instead of
-    # serving a result produced by the old one.
+    # The model is part of the key, so switching provider re-analyzes instead of serving a
+    # result produced by the other one.
     return hashlib.sha256(
-        f"{pipeline.TAGGING_MODEL}|{normalized_topic}|{video_hash}".encode("utf-8")
+        f"{selected_model()}|{normalized_topic}|{video_hash}".encode("utf-8")
     ).hexdigest()
 
 

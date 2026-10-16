@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from .clients import OPENAI, make_client, provider_for_model
+from .clients import OPENAI, make_client, selected_model, selected_provider
 
 
 @dataclass
@@ -22,7 +22,6 @@ class StructuredResult:
 
 
 def structured_json(
-    model: str,
     prompt: str,
     schema: dict[str, Any],
     *,
@@ -32,7 +31,8 @@ def structured_json(
     max_output_tokens: int = 4096,  # reasoning tokens count against this on both providers
     client: Any = None,
 ) -> StructuredResult:
-    provider = provider_for_model(model)
+    provider = selected_provider()
+    model = selected_model()
     client = client or make_client(provider)
     if provider == OPENAI:
         return _openai(client, model, prompt, schema, name, images or [], effort, max_output_tokens)

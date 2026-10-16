@@ -1,7 +1,9 @@
-"""The trends tab tags videos with Haiku 5.5, and a model change must not serve old cached results."""
+"""The Trends tab uses the one LLM_PROVIDER switch, and a provider change must not serve old cached results."""
 
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -9,16 +11,25 @@ from trends import pipeline  # noqa: E402
 from trends import router as trends_router  # noqa: E402
 
 
-def test_default_tagging_model_is_haiku_5_5():
-    assert pipeline.TAGGING_MODEL == "claude-haiku-5-5"
+@pytest.fixture(autouse=True)
+def default_provider(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
 
 
-def test_result_cache_key_changes_with_the_model(monkeypatch):
-    monkeypatch.setattr(pipeline, "TAGGING_MODEL", "claude-haiku-5-5")
-    new = trends_router._result_cache_key("Fitness ", "abc")
-    monkeypatch.setattr(pipeline, "TAGGING_MODEL", "claude-haiku-4-5-20251001")
-    old = trends_router._result_cache_key("Fitness ", "abc")
-    assert new != old
+def test_result_cache_key_changes_with_the_provider(monkeypatch):
+    claude = trends_router._result_cache_key("Fitness ", "abc")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    openai_key = trends_router._result_cache_key("Fitness ", "abc")
+    assert claude != openai_key
     # still normalizes the topic, so case/whitespace don't defeat the cache
-    monkeypatch.setattr(pipeline, "TAGGING_MODEL", "claude-haiku-5-5")
-    assert trends_router._result_cache_key("fitness", "abc") == new
+    assert trends_router._result_cache_key("fitness", "abc") == openai_key
+    monkeypatch.delenv("LLM_PROVIDER")
+    assert trends_router._result_cache_key("fitness", "abc") == claude
+
+
+def test_tag_cache_key_changes_with_the_provider(monkeypatch, tmp_path):
+    frame = tmp_path / "f.jpg"
+    frame.write_bytes(b"\xff\xd8jpeg")
+    claude = pipeline._tags_cache_key([frame], "hello")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    assert pipeline._tags_cache_key([frame], "hello") != claude

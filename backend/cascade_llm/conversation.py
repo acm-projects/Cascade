@@ -16,11 +16,10 @@ AnthropicConversation sends exactly the history the agent always sent.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from typing import Any
 
-from .clients import ANTHROPIC, OPENAI, make_client, provider_for_model
+from .clients import ANTHROPIC, make_client, selected_model, selected_provider
 
 
 @dataclass
@@ -162,26 +161,25 @@ class OpenAIConversation:
     """Responses API conversation. History is our own list of input items: every response item
     (including reasoning items) is appended and sent back, then one function_call_output per call.
 
-    Images in tool results: `image_mode="array"` puts input_image items inside the
-    function_call_output; `"user_message"` (the default until the array form is proven against the
-    live API) sends the tool's text as the output and the frames in a following user message.
-    Set OPENAI_IMAGE_TOOL_OUTPUT=array to switch.
+    Images in tool results: `image_mode="user_message"` (fixed default) sends the tool's text as the
+    output and the frames in a following user message; `"array"` puts input_image items inside the
+    function_call_output instead (only used by tests and scripts/check_openai.py).
     """
+
+    REASONING_EFFORT = "low"
 
     def __init__(
         self,
         client: Any,
         model: str,
-        reasoning_effort: str | None = None,
-        image_mode: str | None = None,
+        image_mode: str = "user_message",
         max_output_tokens: int = 16000,  # reasoning tokens count against this
     ):
         self.client = client
         self.model = model
-        self.reasoning_effort = reasoning_effort or os.environ.get("AGENT_REASONING_EFFORT", "medium")
-        self.image_mode = image_mode or os.environ.get("OPENAI_IMAGE_TOOL_OUTPUT", "user_message")
+        self.image_mode = image_mode
         if self.image_mode not in ("array", "user_message"):
-            raise ValueError("OPENAI_IMAGE_TOOL_OUTPUT must be 'array' or 'user_message'")
+            raise ValueError("image_mode must be 'array' or 'user_message'")
         self.max_output_tokens = max_output_tokens
         self.input: list[Any] = []
 
@@ -195,7 +193,7 @@ class OpenAIConversation:
             input=self.input,
             tools=[_tool_to_openai(t) for t in tools],
             tool_choice=_choice_to_openai(tool_choice),
-            reasoning={"effort": self.reasoning_effort},
+            reasoning={"effort": self.REASONING_EFFORT},
             max_output_tokens=self.max_output_tokens,
         )
         status = _get(response, "status")
@@ -264,9 +262,10 @@ class OpenAIConversation:
             self.input.append({"role": "user", "content": followup})
 
 
-def make_conversation(model: str, client: Any = None) -> AnthropicConversation | OpenAIConversation:
-    """Conversation for `model`'s provider. An injected `client` is used as-is (tests)."""
-    provider = provider_for_model(model)
-    if provider == OPENAI:
-        return OpenAIConversation(client or make_client(OPENAI), model)
-    return AnthropicConversation(client or make_client(ANTHROPIC), model)
+def make_conversation(client: Any = None) -> AnthropicConversation | OpenAIConversation:
+    """Conversation for the provider chosen by LLM_PROVIDER. An injected `client` is used as-is."""
+    provider = selected_provider()
+    model = selected_model()
+    if provider == ANTHROPIC:
+        return AnthropicConversation(client or make_client(provider), model)
+    return OpenAIConversation(client or make_client(provider), model)

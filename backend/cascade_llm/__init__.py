@@ -1,18 +1,19 @@
-"""Provider-agnostic LLM layer shared by the agent, the transcript summarizer and the Trends tab.
+"""LLM layer shared by the agent, the transcript summarizer and the Trends tab.
 
-Anthropic is the default; `gpt-*` models route to OpenAI (Responses API). See clients.py for how
-the provider is chosen and conversation.py / structured.py for the two kinds of call.
+LLM_PROVIDER=anthropic (default) or openai picks the provider for everything; the model is fixed
+per provider. See clients.py. conversation.py is the agent loop's wire format per provider and
+structured.py is the "prompt in, schema-shaped JSON out" call.
 """
 
 from .clients import (  # noqa: F401
     ANTHROPIC,
+    MODELS,
     OPENAI,
     PRICING,
-    calls_disabled,
     call_cost,
     make_client,
-    provider_for_model,
-    provider_label,
+    selected_model,
+    selected_provider,
 )
 from .conversation import (  # noqa: F401
     AnthropicConversation,

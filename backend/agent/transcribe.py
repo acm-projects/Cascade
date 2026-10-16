@@ -225,11 +225,6 @@ def transcribe_video(
         emit("Transcribing speech with local Whisper (slow on CPU)")
         return _transcribe_whisper(video_path)
 
-    if os.environ.get("DEEPGRAM_CALLS_DISABLED", "").lower() in ("1", "true", "yes"):
-        raise TranscriptionError(
-            "Deepgram calls are disabled (DEEPGRAM_CALLS_DISABLED=true in .env) "
-            "and this video has no cached transcript."
-        )
     api_key = os.environ.get("DEEPGRAM_API_KEY", "").strip()
     if not api_key:
         raise TranscriptionError(

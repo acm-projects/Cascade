@@ -1,8 +1,8 @@
-"""Provider selection, client factories, kill switches and pricing for every LLM call site.
+"""Which LLM every call site uses, plus client creation and pricing.
 
-The provider is inferred from the model id, so a mismatched provider/model pair is impossible:
-`claude-*` -> Anthropic, `gpt-*` / `o1` / `o3` / `o4` -> OpenAI. An unrecognized id falls back to
-LLM_PROVIDER if set, else Anthropic (the default).
+ONE setting chooses the provider for everything (the agent, the transcript summaries and the
+Trends tab):  LLM_PROVIDER=anthropic (default) or openai.  The model is fixed per provider
+(MODELS below) - there are no per-feature model settings and no model names to edit in .env.
 """
 
 from __future__ import annotations
@@ -13,41 +13,33 @@ from typing import Any
 ANTHROPIC = "anthropic"
 OPENAI = "openai"
 
-_OPENAI_PREFIXES = ("gpt-", "chatgpt", "o1", "o3", "o4", "codex")
+# One fixed model per provider.
+MODELS: dict[str, str] = {
+    ANTHROPIC: "claude-haiku-5-5",
+    OPENAI: "gpt-6-luna",
+}
 
 
-def provider_for_model(model: str) -> str:
-    name = (model or "").strip().lower()
-    if name.startswith(_OPENAI_PREFIXES):
-        return OPENAI
-    if name.startswith("claude"):
-        return ANTHROPIC
-    override = os.environ.get("LLM_PROVIDER", "").strip().lower()
-    return override if override in (ANTHROPIC, OPENAI) else ANTHROPIC
+def selected_provider() -> str:
+    """The provider chosen by LLM_PROVIDER, read at call time (default: anthropic)."""
+    value = os.environ.get("LLM_PROVIDER", "").strip().lower() or ANTHROPIC
+    if value not in MODELS:
+        raise RuntimeError(f"LLM_PROVIDER must be 'anthropic' or 'openai' (got '{value}').")
+    return value
 
 
-def _env_names(provider: str) -> tuple[str, str]:
-    return (f"{provider.upper()}_API_KEY", f"{provider.upper()}_CALLS_DISABLED")
+def selected_model() -> str:
+    return MODELS[selected_provider()]
 
 
-def provider_label(provider: str) -> str:
-    return "OpenAI" if provider == OPENAI else "Anthropic"
-
-
-def calls_disabled(provider: str) -> bool:
-    """Per-provider kill switch (ANTHROPIC_CALLS_DISABLED / OPENAI_CALLS_DISABLED), read at call time."""
-    return os.environ.get(_env_names(provider)[1], "").lower() in ("1", "true", "yes")
-
-
-def make_client(provider: str) -> Any:
-    """Build a client, reading the key now (not at import) so a key added to .env applies to the
-    next job. Raises RuntimeError with a message that is safe to show the user."""
-    key_name, disabled_name = _env_names(provider)
-    if calls_disabled(provider):
-        raise RuntimeError(f"{provider_label(provider)} API calls are disabled ({disabled_name}=true in .env).")
+def make_client(provider: str | None = None) -> Any:
+    """Build the client for the selected provider. The key is read now (not at import), so a key
+    added to .env applies to the next job. Raises RuntimeError with a message safe to show."""
+    provider = provider or selected_provider()
+    key_name = f"{provider.upper()}_API_KEY"
     api_key = os.environ.get(key_name, "").strip()
     if not api_key:
-        raise RuntimeError(f"{key_name} is not set")
+        raise RuntimeError(f"{key_name} is not set (LLM_PROVIDER is '{provider}').")
     if provider == OPENAI:
         try:
             import openai
