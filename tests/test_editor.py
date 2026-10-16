@@ -149,6 +149,19 @@ class EditorTests(unittest.TestCase):
             result=editor.apply_actions(editor.Edit(start=0,end=3),actions,3)
             self.assertEqual((result.start,result.end),expected)
 
+    def test_vtt_entities_are_plain_text_without_mutating_manual_edits(self):
+        text="Let's say <that> & \"again\"."
+        path=Path(self.temp.name)/'escaped.vtt'
+        app1.write_captions(path,[{'start':100,'end':102,'text':text}],100,103)
+        self.assertNotIn('&#x27;',path.read_text())
+        cues=editor.parse_vtt(path.read_text())
+        self.assertEqual(cues,[{'start':0,'end':2,'text':text}])
+        legacy=editor.parse_vtt('WEBVTT\n\n00:00.500 --> 00:02.500\n<b>Let&#x27;s</b> &amp; &lt;tag&gt; &#39;again&#39;\n')
+        self.assertEqual(legacy[0]['text'],"Let's & <tag> 'again'")
+        state=editor.Edit(start=1,end=2,texts={'0':'Keep literal &#x27; if typed'})
+        self.assertEqual(editor.trimmed_cues(legacy,state)[0],{'start':0,'end':1,'text':'Keep literal &#x27; if typed'})
+        self.assertIn("Let's",editor.make_ass(legacy,state.captions,320,180))
+
     def test_trimmed_caption_timing_and_real_export(self):
         state=editor.Edit(start=1,end=2,captions=editor.Captions(color='#ffff00',bold=True,position='top',background='#ff0000',opacity=.5))
         cues=editor.trimmed_cues([{'start':.5,'end':2.5,'text':'Hello {tag} \\bad'}],state)

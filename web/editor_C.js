@@ -160,7 +160,23 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
       window.CascadeCaptions.draw(overlay,text,state.captions,g.width,g.height); previewSignature=signature;
     }
     const stage=$('preview-wrap'),frame=$('composition-frame');
-    const scale=Math.min(stage.clientWidth/g.width,stage.clientHeight/g.height);
+    // Device screen and encoded output are independent rectangles. Never pass
+    // device geometry into compositionGeometry, caption rasterization, or export.
+    const shell=$('device-shell'),screen=$('device-screen');
+    const choice=$('preview-device').value;
+    const ratio=comparison==='original'?'original':state.composition.ratio;
+    const device=comparison==='original'?'clean':choice==='auto'?({'9:16':'phone','4:3':'tablet','16:9':'desktop'}[ratio] || 'clean'):choice;
+    shell.dataset.device=device;
+    const screenRatio=({phone:9/19.5,tablet:4/3,desktop:16/9,tv:16/9})[device] || g.width/g.height;
+    const bezel=device==='clean'?3:device==='phone'?10:14;
+    const foot=device==='desktop'?34:device==='tv'?20:0;
+    const availableWidth=Math.max(1,stage.clientWidth-48-bezel*2);
+    const availableHeight=Math.max(1,stage.clientHeight-36-bezel*2-foot);
+    const screenWidth=Math.min(availableWidth,availableHeight*screenRatio),screenHeight=screenWidth/screenRatio;
+    shell.style.width=screenWidth+'px'; shell.style.height=screenHeight+'px';
+    shell.style.padding=bezel+'px'; shell.style.marginBottom=foot+'px';
+    screen.style.width=screenWidth+'px'; screen.style.height=screenHeight+'px';
+    const scale=Math.min(screenWidth/g.width,screenHeight/g.height);
     frame.style.width=g.width*scale+'px'; frame.style.height=g.height*scale+'px';
     frame.style.background=comparison==='original'?defaultComposition.background:state.composition.background;
     const fill=comparison==='edited' && state.composition.mode==='fill';
@@ -212,6 +228,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     if(!history || busy) return; endGesture(); useEdited();
     const next=clone(history.state); next.composition.ratio=button.dataset.ratio; commit(next);
   });
+  $('preview-device').onchange=()=>tick();
   $('framing').onchange=event=>{
     if(!history || busy) return; const value=event.target.value; endGesture(); useEdited();
     const next=clone(history.state); next.composition.mode=value; commit(next);

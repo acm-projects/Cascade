@@ -1,0 +1,1485 @@
+<!--% set legacy_clerk_publishable_key = "pk_test_cHJvbW90ZWQtc2VhZ3VsbC03Njg4LmNsZXJrLmFjY291bnRzLmRldiQ" %--><!--% if view == "home" %--><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Home</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .home {
+      min-height: calc(100vh - 75px);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .home-card {
+      width: 100%;
+      max-width: 460px;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .waterfall-logo {
+      display: grid;
+      place-items: center;
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 24px;
+      border-radius: 18px;
+      background: var(--panel2);
+      color: var(--teal);
+      font-size: 46px;
+    }
+
+    .home-card h1 {
+      margin-bottom: 12px;
+    }
+
+    .home-card p {
+      margin-bottom: 28px;
+    }
+
+    .home-card .button {
+      width: 100%;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+  </header>
+
+  <main class="home">
+    <section class="card home-card">
+      <div class="waterfall-logo" aria-hidden="true">
+        ≋
+      </div>
+
+      <h1>Cascade</h1>
+
+      <p class="muted">
+        Upload a video, find clips, and edit them.
+      </p>
+
+      <a
+        class="button primary"
+        href="login_C.html"
+      >
+        Get started →
+      </a>
+    </section>
+  </main>
+</body>
+</html><!--% elif view == "login" %--><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Sign In</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .login-page {
+      min-height: calc(100vh - 75px);
+      display: grid;
+      place-items: center;
+      padding: 32px 20px;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+    }
+
+    .login-container h1 {
+      margin-bottom: 10px;
+    }
+
+    .login-description {
+      margin-bottom: 24px;
+    }
+
+    #sign-in {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      text-align: left;
+    }
+
+    .cl-rootBox,
+    .cl-cardBox {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    #status {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+
+<body data-page="login">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+  </header>
+
+  <main class="login-page">
+    <section class="login-container">
+      <h1>Sign in</h1>
+
+      <p class="muted login-description">
+        Sign in or create an account to open your projects.
+      </p>
+
+      <!-- Clerk inserts its sign-in and sign-up interface here. -->
+      <div id="sign-in"></div>
+
+      <p
+        id="status"
+        role="status"
+        aria-live="polite"
+      >
+        Loading sign-in…
+      </p>
+
+      <a class="back-link" href="index_C.html">
+        ← Back
+      </a>
+    </section>
+  </main>
+
+  <noscript>
+    <p>Please enable JavaScript to sign in.</p>
+  </noscript>
+
+  <script src="flow_C.js"></script>
+</body>
+</html><!--% elif view == "projects" %--><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Projects</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .projects-page {
+      min-height: calc(100vh - 75px);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .project-panel {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .project-panel h1 {
+      margin-bottom: 12px;
+      font-size: 30px;
+    }
+
+    .continue-button {
+      width: 100%;
+      margin-top: 24px;
+    }
+
+    .account-name {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .account-id {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      padding: 16px 24px;
+      color: var(--muted);
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    #status:empty {
+      display: none;
+    }
+  </style>
+</head>
+
+<body data-page="projects">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+
+    <div id="account" class="row" hidden>
+      <span
+        id="account-name"
+        class="account-name"
+      ></span>
+
+      <button id="sign-out" type="button">
+        Sign out
+      </button>
+    </div>
+  </header>
+
+  <p
+    id="status"
+    role="status"
+    aria-live="polite"
+  >
+    Checking sign-in…
+  </p>
+
+  <!-- Shown after app1.py verifies the Clerk session. -->
+  <main
+    id="protected-page"
+    class="projects-page"
+    hidden
+  >
+    <section class="card project-panel">
+      <h1>Your projects</h1>
+      <div id="project-tiles" class="project-tiles"></div>
+      <details><summary>Previous generated clips</summary><div id="clip-library" class="project-tiles"></div></details>
+
+      <p class="muted">
+        Name your project, then open the canvas.
+      </p>
+
+      <form id="project-form">
+        <label for="project-name">
+          Project name
+        </label>
+
+        <input
+          id="project-name"
+          type="text"
+          placeholder="Untitled project"
+          maxlength="100"
+          required
+        >
+
+        <button
+          class="primary continue-button"
+          type="submit"
+        >
+          Create project →
+        </button>
+      </form>
+
+      <p
+        id="account-id"
+        class="account-id"
+      ></p>
+    </section>
+  </main>
+
+  <noscript>
+    <p>Please enable JavaScript to open your projects.</p>
+  </noscript>
+
+  <script src="flow_C.js"></script>
+</body>
+</html><!--% elif view == "canvas" %--><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Canvas</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .canvas-page {
+      padding: 28px;
+    }
+
+    .page-heading {
+      margin-bottom: 28px;
+    }
+
+    .page-heading h1 {
+      margin-bottom: 8px;
+      font-size: 30px;
+    }
+
+    .simple-canvas {
+      overflow-x: auto;
+      padding: 40px 20px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background-color: var(--bg);
+      background-image: radial-gradient(
+        #45625155 1px,
+        transparent 1px
+      );
+      background-size: 22px 22px;
+    }
+
+    .canvas-flow {
+      display: flex;
+      min-width: 860px;
+      align-items: center;
+    }
+
+    .canvas-card {
+      width: 240px;
+      flex-shrink: 0;
+    }
+
+    .connector {
+      height: 2px;
+      min-width: 50px;
+      flex: 1;
+      background: var(--teal);
+    }
+
+    .clip-group {
+      display: grid;
+      gap: 16px;
+      width: 270px;
+      flex-shrink: 0;
+      padding-left: 20px;
+      border-left: 2px solid var(--teal);
+    }
+
+    .clip-placeholder {
+      position: relative;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+
+    .clip-placeholder::before {
+      position: absolute;
+      top: 50%;
+      left: -22px;
+      width: 20px;
+      height: 2px;
+      background: var(--teal);
+      content: "";
+    }
+
+    .clip-placeholder h3 {
+      margin-bottom: 6px;
+    }
+
+    .clip-placeholder p {
+      margin-bottom: 0;
+      font-size: 12px;
+    }
+
+    .source-preview {
+      display: grid;
+      height: 120px;
+      place-items: center;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      background: var(--panel2);
+      color: var(--muted);
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      border-radius: 8px;
+      background: #06110d;
+    }
+
+    #source-player {
+      max-height: 160px;
+      margin-bottom: 16px;
+    }
+
+    #clip-video {
+      margin: 12px 0;
+    }
+
+    #clip-title:empty,
+    #clip-timing:empty,
+    #clip-explanation:empty {
+      display: none;
+    }
+
+    #file-name,
+    #clip-title,
+    #clip-explanation,
+    #status {
+      overflow-wrap: anywhere;
+    }
+
+    .canvas-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    .disabled-link {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    #status {
+      padding: 16px 28px;
+      color: var(--muted);
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      .canvas-page {
+        padding: 18px;
+      }
+
+      #status {
+        padding: 16px 18px;
+      }
+    }
+  </style>
+</head>
+
+<body data-page="canvas">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+
+    <div class="row">
+      <a class="button" href="projects_C.html">
+        ← Projects
+      </a>
+
+      <div id="account" class="row" hidden>
+        <span id="account-name" class="muted"></span>
+
+        <button id="sign-out" type="button">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Shown only after FastAPI verifies the Clerk session. -->
+  <main id="protected-page" class="canvas-page" hidden>
+    <div class="page-heading">
+      <h1 id="project-title">Your project</h1>
+      <label for="job-history">Jump to generation</label>
+      <select id="job-history"><option value="">Choose a generation</option></select>
+
+      <p class="muted">
+        Choose a video and describe the clip you want.
+      </p>
+    </div>
+
+
+
+    <section
+      class="simple-canvas"
+      aria-label="Source video, prompt, and clips"
+    >
+      <div class="canvas-flow">
+
+        <div class="connector" aria-hidden="true"></div>
+
+        <!-- Search prompt -->
+        <section class="card canvas-card">
+          <h3>Find clip</h3>
+
+          <p id="prompt-source-context" class="muted" role="status">Searching the full original video</p>
+          <label for="clip-prompt">
+            What are you looking for?
+          </label>
+
+          <textarea
+            id="clip-prompt"
+            maxlength="2000"
+            placeholder="Find funny moments…"
+          ></textarea>
+
+          <div id="followup-parent" hidden><strong>Build on selected clip</strong><p id="followup-description"></p><video id="followup-video" controls playsinline hidden></video><button id="cancel-followup" type="button">Cancel follow-up · search full video</button></div>
+          <label for="clip-count">Number of clips</label><input id="clip-count" type="number" min="1" max="12" step="1" value="4" required aria-describedby="clip-count-help"><p id="clip-count-help" class="muted">1–12 distinct clips per request to bound processing time. If fewer suitable moments exist, we return those available.</p>
+          <label for="search-engine">Search method</label>
+          <select id="search-engine"><option value="openai">AI scene analysis — OpenAI</option><option value="visual">Local visual search</option><option value="speech">Local speech search</option><option value="qwen">Local Ollama analysis — slower</option></select>
+          <button
+            id="generate-clip"
+            class="primary"
+            type="button"
+            style="
+              width: 100%;
+              margin-top: 16px;
+            "
+          >
+            Generate clips
+          </button>
+          <button id="stop-generation" type="button" hidden>Stop processing</button>
+          <p class="muted">AI scene analysis sends sampled images and transcript text to OpenAI to find the requested distinct moments. API usage is billed to your configured key. Video cutting stays local; Ollama is optional.</p>
+          <details class="research-section">
+            <summary>Research current trends</summary>
+            <p class="muted">Analyze the selected upload or this generation’s original video. Research does not require a matching clip.</p>
+            <form id="research-form"><label for="research-topic">Topic</label><input id="research-topic" maxlength="200" required><button type="submit">Analyze trends</button></form>
+            <div id="research-result" aria-live="polite"></div>
+          </details>
+        </section>
+
+        <div class="connector" aria-hidden="true"></div>
+
+      </div>
+      <div class="branch-toolbar"><strong>Generation branches</strong><span class="muted">Scroll sideways to follow a branch · scroll within a column to see its clips</span><button id="branch-left" type="button" aria-label="Scroll branches left">←</button><button id="branch-right" type="button" aria-label="Scroll branches right">→</button></div>
+      <div id="branch-viewport" tabindex="0" role="region" aria-label="Generation branches, scroll horizontally">
+        <div id="branch-plane"><section id="branch-track" class="clip-group" aria-label="Saved generation groups">        <!-- Source video -->
+        <section id="flow-source" class="card canvas-card flow-source">
+          <h3>Source video</h3>
+
+          <div id="source-empty" class="source-preview">
+            Video preview
+          </div>
+
+          <video
+            id="source-player"
+            controls
+            playsinline
+            hidden
+          ></video>
+
+          <label for="source-video">
+            Choose a video
+          </label>
+
+          <input
+            id="source-video"
+            type="file"
+            accept="video/*"
+          >
+
+          <p
+            id="file-name"
+            class="muted"
+            style="margin-top: 12px;"
+          >
+            No video selected
+          </p>
+        </section>
+
+</section></div>
+      </div>
+    </section>
+
+    <div class="canvas-footer">
+      <a class="button" href="projects_C.html">
+        ← Back
+      </a>
+
+      <a
+        id="open-editor"
+        class="button primary disabled-link"
+        href="editor_C.html"
+        aria-disabled="true"
+      >
+        Open editor →
+      </a>
+    </div>
+  </main>
+
+  <p
+    id="status"
+    role="status"
+    aria-live="polite"
+  >
+    Checking sign-in…
+  </p>
+
+  <noscript>
+    <p>Please enable JavaScript to open the canvas.</p>
+  </noscript>
+
+  <script src="canvas_branches.js"></script>
+  <script src="flow_C.js"></script>
+</body>
+</html>
+<!--% elif view == "editor" %--><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Editor</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .editor-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .editor-heading h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .simple-editor {
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr) 300px;
+      min-height: calc(100vh - 160px);
+    }
+
+    .mini-canvas {
+      padding: 20px;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .mini-source,
+    .mini-clip {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .mini-source {
+      margin-bottom: 16px;
+      color: var(--teal);
+    }
+
+    .mini-branches {
+      display: grid;
+      gap: 12px;
+      margin-left: 8px;
+      padding-left: 12px;
+      border-left: 2px solid var(--teal);
+    }
+
+    .mini-clip.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .editor-center {
+      min-width: 0;
+      padding: 24px;
+    }
+
+    #editor-clip-title {
+      overflow-wrap: anywhere;
+    }
+
+    .video-placeholder {
+      display: grid;
+      height: 320px;
+      place-items: center;
+      margin-bottom: 24px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #06110d;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    #editor-video {
+      display: block;
+      width: 100%;
+      height: 320px;
+      margin-bottom: 24px;
+      border-radius: 12px;
+      background: #06110d;
+      object-fit: contain;
+    }
+
+    .simple-timeline {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+
+    .time-ruler {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 60px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .timeline-row span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .timeline-bar {
+      height: 26px;
+      border-radius: 5px;
+      background: #355743;
+    }
+
+    .audio-bar {
+      background: #28584d;
+    }
+
+    .caption-bar {
+      background: #66593c;
+    }
+
+    .broll-bar {
+      background: #354653;
+    }
+
+    .editor-controls {
+      padding: 20px;
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .editor-controls .tabs {
+      flex-wrap: wrap;
+    }
+
+    .tab-panel h3 {
+      margin-top: 20px;
+    }
+
+    .tab-panel p {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chat-placeholder {
+      min-height: 180px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+    }
+
+    .placeholder-controls {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .placeholder-controls:disabled {
+      opacity: 0.7;
+    }
+
+    #status {
+      padding: 16px 24px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    @media (max-width: 950px) {
+      .simple-editor {
+        grid-template-columns: minmax(0, 1fr) 280px;
+      }
+
+      .mini-canvas {
+        grid-column: 1 / -1;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .mini-branches {
+        display: flex;
+        flex-wrap: wrap;
+      }
+    }
+
+    @media (max-width: 650px) {
+      .simple-editor {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .editor-controls {
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+
+      .editor-center {
+        padding: 18px;
+      }
+
+      #editor-video,
+      .video-placeholder {
+        height: 240px;
+      }
+    }
+  </style>
+</head>
+
+<body data-page="editor">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+
+    <div id="account" class="row" hidden>
+      <span id="account-name" class="muted"></span>
+
+      <button id="sign-out" type="button">
+        Sign out
+      </button>
+    </div>
+  </header>
+
+  <p
+    id="status"
+    role="status"
+    aria-live="polite"
+  >
+    Checking sign-in…
+  </p>
+
+  <!-- Appears after the backend verifies the Clerk session. -->
+  <main id="protected-page" hidden>
+    <div class="editor-heading">
+      <h1 id="project-title">Your project</h1>
+
+      <div class="row">
+        <button id="undo" type="button" disabled>Undo</button><button id="redo" type="button" disabled>Redo</button>
+        <span id="save-status" role="status"></span><button id="retry-save" type="button" hidden>Retry save</button>
+        <button id="export-edit" type="button">Download edited MP4</button>
+        <button id="save-clip" type="button">Save clip</button>
+        <a class="button" href="canvas_C.html">
+          ← Canvas
+        </a>
+
+        <a class="button primary" href="exports_C.html">
+          Open exports →
+        </a>
+      </div>
+    </div>
+
+    <div class="simple-editor">
+
+      <!-- Mini canvas layout -->
+      <aside class="mini-canvas">
+        <h3>Canvas</h3>
+
+        <div class="mini-source">
+          Source video
+        </div>
+
+        <div class="mini-branches" id="editor-sessions"></div>
+      </aside>
+
+      <!-- Actual generated clip -->
+      <section class="editor-center">
+        <h3 id="editor-clip-title">
+          Clip 1
+        </h3>
+
+        <div
+          id="editor-empty"
+          class="video-placeholder"
+        >
+          Choose an available clip, or generate a clip on the canvas.
+        </div>
+
+        <div class="preview-heading">
+          <div><strong id="preview-label">Edited preview</strong><p id="preview-description">Live trim and captions · original media preserved</p></div>
+          <div class="comparison" role="group" aria-label="Compare original and edited">
+            <button id="preview-original" type="button" aria-pressed="false">Original</button>
+            <button id="preview-edited" type="button" aria-pressed="true">Edited</button>
+          </div>
+        </div>
+        <p id="preview-warning" role="note" hidden></p>
+        <div id="preview-wrap"><div id="device-shell" data-device="clean"><div id="device-screen"><div id="composition-frame"><canvas id="caption-overlay" aria-hidden="true"></canvas><video
+          id="editor-video"
+          disablepictureinpicture
+          playsinline
+          hidden
+        ></video></div></div><span class="device-detail" aria-hidden="true"></span></div></div><div class="preview-transport"><button id="preview-play" type="button" aria-label="Play preview">▶ Play</button><span id="preview-time"></span><span id="playback-status" role="status"></span></div>
+
+        <section class="simple-timeline" id="timeline-controls" aria-label="Clip timeline">
+          <div class="timeline-toolbar">
+            <button id="play-toggle" type="button">Play</button><span id="time-label">0:00 / 0:00</span>
+            <div class="timeline-zoom-controls" role="group" aria-label="Timeline zoom">
+              <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+              <input id="timeline-zoom" type="range" min="1" max="12" step="0.25" value="1" aria-label="Timeline zoom">
+              <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+              <output id="zoom-label">1.0×</output><button id="zoom-fit" type="button">Fit</button>
+            </div>
+          </div>
+          <div class="timeline-tracks">
+            <div class="track-labels" aria-hidden="true"><span>Time</span><span>Video</span><span>Captions</span></div>
+            <div id="timeline-scroll" tabindex="0" aria-label="Scrollable timeline">
+              <div id="timeline-content">
+                <div id="timeline-ruler"></div>
+                <div id="timeline-video"><div id="thumbnail-strip"></div><div class="trim-shade trim-before"></div><div class="trim-shade trim-after"></div></div>
+                <div id="timeline-captions"></div><span id="timeline-caption-empty">No timed captions</span>
+                <div id="trim-selection" aria-hidden="true"></div>
+                <button id="handle-start" type="button" data-trim="start" role="slider" aria-label="Trim start" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">❙</button>
+                <button id="handle-end" type="button" data-trim="end" role="slider" aria-label="Trim end" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">❙</button>
+                <div id="timeline-playhead" role="slider" tabindex="0" aria-label="Playhead" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="trim-inputs">
+            <label for="trim-start">In <input id="trim-start" type="number" min="0" max="0" step="0.01" value="0"> <output id="start-label"></output></label>
+            <label for="trim-end">Out <input id="trim-end" type="number" min="0" max="0" step="0.01" value="0"> <output id="end-label"></output></label>
+            <button id="reset-trim" type="button">Reset trim</button>
+          </div>
+          <label for="seek" class="sr-only">Seek in generated clip</label><input id="seek" class="sr-only" type="range" min="0" max="0" step="0.01" value="0">
+          <p id="trim-summary"></p><p id="thumbnail-status" role="status"></p>
+        </section>
+      </section>
+
+      <!-- Feature tabs -->
+      <aside class="editor-controls">
+        <div
+          class="tabs"
+          role="tablist"
+          aria-label="Editor tools"
+        >
+          <button
+            id="chat-tab"
+            class="active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="chat-panel"
+            data-tab="chat"
+          >
+            Chat
+          </button>
+
+          <button
+            id="captions-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="captions-panel"
+            data-tab="captions"
+          >
+            Captions
+          </button>
+
+          <button
+            id="ratio-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="ratio-panel"
+            data-tab="ratio"
+          >
+            Aspect ratio
+          </button>
+
+          <button
+            id="broll-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="broll-panel"
+            data-tab="broll"
+          >
+            B-roll
+          </button>
+        </div>
+
+        <section
+          id="chat-panel"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="chat-tab"
+        >
+          <h3>Editing chat</h3>
+
+          <div id="chat-history" class="chat-placeholder" aria-live="polite"></div>
+          <form id="chat-form"><label for="chat-input">Editing request</label>
+            <textarea id="chat-input" maxlength="2000" required placeholder="Trim the first two seconds…"></textarea>
+            <button id="chat-send" type="submit">Send</button>
+          </form><p id="chat-status" role="status"></p>
+        </section>
+
+        <section
+          id="captions-panel"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="captions-tab"
+          hidden
+        >
+          <h3>Captions</h3>
+          <fieldset id="caption-controls">
+            <label for="caption-cue">Caption segment</label><select id="caption-cue"></select>
+            <label for="cap-text">Caption text</label><textarea id="cap-text" maxlength="2000" rows="3" placeholder="No caption data available"></textarea>
+            <p id="caption-preview-note" role="status"></p>
+            <label><input id="cap-enabled" type="checkbox"> Captions on</label>
+            <label for="caption-preset">Style preset</label><select id="caption-preset"><option value="custom">Custom</option><option value="classic">Classic</option><option value="bold">Bold</option><option value="yellow">Yellow highlight</option></select>
+            <label for="cap-font">Font</label><select id="cap-font"><option>Arial</option><option>Georgia</option><option>Verdana</option></select>
+            <label for="cap-size">Font size</label><input id="cap-size" type="number" min="12" max="80">
+            <label><input id="cap-bold" type="checkbox"> Bold</label>
+            <label for="cap-color">Text color</label><input id="cap-color" type="color">
+            <label for="cap-stroke">Outline color</label><input id="cap-stroke" type="color">
+            <label for="cap-thickness">Outline thickness</label><input id="cap-thickness" type="number" min="0" max="8" step="0.5">
+            <label for="cap-background">Background color</label><input id="cap-background" type="color">
+            <label for="cap-opacity">Background opacity</label><input id="cap-opacity" type="range" min="0" max="1" step="0.05">
+            <label for="cap-position">Position</label><select id="cap-position"><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select>
+          </fieldset><p id="caption-warning"></p>
+        </section>
+
+        <section
+          id="ratio-panel"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="ratio-tab"
+          hidden
+        >
+          <h3>Aspect ratio</h3>
+
+          <fieldset id="ratio-controls">
+            <legend class="sr-only">Output composition</legend>
+            <div id="ratio-presets" role="group" aria-label="Aspect ratio presets">
+              <button type="button" data-ratio="original" aria-pressed="true"><span class="ratio-icon" style="--ratio:16/9"></span><strong>Original</strong><small>Clip’s ratio</small></button>
+              <button type="button" data-ratio="9:16" aria-pressed="false"><span class="ratio-icon" style="--ratio:9/16"></span><strong>9:16</strong><small>Phone / Reels / TikTok</small></button>
+              <button type="button" data-ratio="1:1" aria-pressed="false"><span class="ratio-icon" style="--ratio:1"></span><strong>1:1</strong><small>Square</small></button>
+              <button type="button" data-ratio="4:5" aria-pressed="false"><span class="ratio-icon" style="--ratio:4/5"></span><strong>4:5</strong><small>Portrait feed</small></button>
+              <button type="button" data-ratio="16:9" aria-pressed="false"><span class="ratio-icon" style="--ratio:16/9"></span><strong>16:9</strong><small>Desktop / YouTube / TV</small></button>
+              <button type="button" data-ratio="4:3" aria-pressed="false"><span class="ratio-icon" style="--ratio:4/3"></span><strong>4:3</strong><small>Tablet</small></button>
+            </div>
+            <label for="preview-device">Preview display</label><select id="preview-device"><option value="auto">Match preset</option><option value="phone">Phone</option><option value="tablet">Tablet</option><option value="desktop">Desktop monitor</option><option value="tv">Television</option><option value="clean">Clean frame</option></select><p class="device-note">Device decoration is preview only. Output ratio and downloads stay unchanged.</p>
+            <label for="framing">Video framing</label><select id="framing"><option value="fit">Fit — entire video</option><option value="fill">Fill — crop to frame</option></select>
+            <div id="fit-options"><label for="frame-background">Fit background</label><input id="frame-background" type="color" value="#06110d"></div>
+            <div id="crop-options" hidden>
+              <label for="crop-x">Horizontal position <output id="crop-x-label">50%</output></label><input id="crop-x" type="range" min="0" max="1" step="0.01" value="0.5">
+              <label for="crop-y">Vertical position <output id="crop-y-label">50%</output></label><input id="crop-y" type="range" min="0" max="1" step="0.01" value="0.5">
+              <button id="crop-center" type="button">Center video</button>
+            </div>
+            <p id="composition-summary"></p>
+          </fieldset>
+        </section>
+
+        <section
+          id="broll-panel"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="broll-tab"
+          hidden
+        >
+          <h3>B-roll</h3>
+
+          <fieldset class="placeholder-controls" disabled>
+            <label for="broll-upload">
+              Upload image or video
+            </label>
+
+            <input
+              id="broll-upload"
+              type="file"
+              accept="image/*,video/*"
+            >
+
+            <label for="broll-prompt">
+              AI generation prompt
+            </label>
+
+            <textarea
+              id="broll-prompt"
+              placeholder="Describe the B-roll you want…"
+            ></textarea>
+          </fieldset>
+        </section>
+        <section class="card">
+          <h3>Research current trends</h3>
+          <form id="research-form"><label for="research-topic">Topic</label><input id="research-topic" maxlength="200" required><button type="submit">Analyze trends</button></form>
+          <div id="research-result" aria-live="polite"></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <noscript>
+    <p>Please enable JavaScript to open the editor.</p>
+  </noscript>
+
+  <link rel="stylesheet" href="editor_C.css">
+  <script src="editor_state.js"></script>
+  <script src="editor_captions.js"></script>
+  <script src="editor_timeline.js"></script>
+  <script src="editor_C.js"></script>
+  <script src="flow_C.js"></script>
+</body>
+</html><!--% elif view == "exports" %--><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Exports</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .exports-page {
+      max-width: 900px;
+      margin: auto;
+      padding: 32px 24px;
+    }
+
+    .exports-page h1 {
+      margin-bottom: 24px;
+      font-size: 30px;
+    }
+
+    .export-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 24px;
+    }
+
+    .clip-preview {
+      display: grid;
+      min-height: 220px;
+      place-items: center;
+      margin-bottom: 18px;
+      border-radius: 10px;
+      background: #06110d;
+      color: var(--muted);
+    }
+
+    .placeholder-controls {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .placeholder-controls:disabled {
+      opacity: 0.7;
+    }
+
+    .export-button {
+      width: 100%;
+      margin-top: 24px;
+    }
+
+    .exports-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 28px;
+    }
+
+    #status {
+      padding: 16px 24px;
+      color: var(--muted);
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    @media (max-width: 650px) {
+      .export-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .exports-page {
+        padding: 24px 18px;
+      }
+    }
+  </style>
+</head>
+
+<body data-page="exports">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+
+    <div id="account" class="row" hidden>
+      <span id="account-name" class="muted"></span>
+
+      <button id="sign-out" type="button">
+        Sign out
+      </button>
+    </div>
+  </header>
+
+  <p
+    id="status"
+    role="status"
+    aria-live="polite"
+  >
+    Checking sign-in…
+  </p>
+
+  <main
+    id="protected-page"
+    class="exports-page"
+    hidden
+  >
+    <h1>Exports</h1>
+
+    <div class="export-layout">
+      <div id="saved-clips"></div>
+
+      <section class="card">
+        <h3>Export settings</h3>
+        <p class="muted">Download the actual generated MP4 and caption file. Format conversion and resolution changes are unfinished.</p>
+
+        <fieldset class="placeholder-controls" disabled>
+          <label for="export-format">
+            Format
+          </label>
+
+          <select id="export-format">
+            <option>MP4</option>
+            <option>MOV</option>
+          </select>
+
+          <label for="export-resolution">
+            Resolution
+          </label>
+
+          <select id="export-resolution">
+            <option>1080p</option>
+            <option>720p</option>
+          </select>
+
+          <label>
+            <input type="checkbox" checked>
+            Include captions
+          </label>
+
+          <button
+            class="primary export-button"
+            type="button"
+            disabled
+          >
+            Export clip
+          </button>
+        </fieldset>
+      </section>
+    </div>
+
+    <div class="exports-footer">
+      <a class="button" href="editor_C.html">
+        ← Back to editor
+      </a>
+
+      <a class="button primary" href="projects_C.html">
+        Back to projects →
+      </a>
+    </div>
+  </main>
+
+  <noscript>
+    <p>Please enable JavaScript to open exports.</p>
+  </noscript>
+
+  <script src="flow_C.js"></script>
+</body>
+</html><!--% elif view == "settings" %--><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Settings</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .projects-page {
+      min-height: calc(100vh - 75px);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .project-panel {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .project-panel h1 {
+      margin-bottom: 12px;
+      font-size: 30px;
+    }
+
+    .continue-button {
+      width: 100%;
+      margin-top: 24px;
+    }
+
+    .account-name {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .account-id {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      padding: 16px 24px;
+      color: var(--muted);
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    #status:empty {
+      display: none;
+    }
+  </style>
+</head>
+
+<body data-page="settings">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+
+    <div id="account" class="row" hidden>
+      <span
+        id="account-name"
+        class="account-name"
+      ></span>
+
+      <button id="sign-out" type="button">
+        Sign out
+      </button>
+    </div>
+  </header>
+
+  <p
+    id="status"
+    role="status"
+    aria-live="polite"
+  >
+    Checking sign-in…
+  </p>
+
+  <!-- Shown after app1.py verifies the Clerk session. -->
+  <main
+    id="protected-page"
+    class="projects-page"
+    hidden
+  >
+    <section class="card project-panel">
+      <h1>Video preferences</h1>
+      <p class="muted">Save your video type, audience, tone, goal, and platforms. These preferences are stored for your account. Existing processing features do not yet use them to change generated output.</p>
+      <form id="settings-form">
+        <label for="settings-video-type">Video type</label>
+        <select id="settings-video-type"><option value="">Choose a type</option><option value="tutorial">Tutorial</option><option value="vlog">Vlog</option><option value="interview">Interview</option><option value="podcast">Podcast clip</option></select>
+        <label for="settings-audience">Audience</label><input id="settings-audience" maxlength="200">
+        <label for="settings-tone">Tone</label><select id="settings-tone"><option value="">Choose a tone</option><option value="casual">Casual</option><option value="professional">Professional</option><option value="funny">Funny</option><option value="educational">Educational</option></select>
+        <label for="settings-goal">Goal</label><input id="settings-goal" maxlength="500">
+        <fieldset><legend>Platforms</legend>
+          <label><input type="checkbox" name="platforms" value="tiktok"> TikTok</label>
+          <label><input type="checkbox" name="platforms" value="instagram"> Instagram</label>
+          <label><input type="checkbox" name="platforms" value="linkedin"> LinkedIn</label>
+          <label><input type="checkbox" name="platforms" value="youtube"> YouTube</label>
+        </fieldset>
+        <button class="primary continue-button" type="submit">Save preferences</button>
+      </form>
+      <a class="button" href="projects_C.html">Back to projects</a>
+    </section>
+  </main>
+
+  <noscript>
+    <p>Please enable JavaScript to load your settings.</p>
+  </noscript>
+
+  <script src="flow_C.js"></script>
+</body>
+</html><!--% endif %-->

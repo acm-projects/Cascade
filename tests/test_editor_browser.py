@@ -85,6 +85,9 @@ async def main():
         await c.click('#captions-tab'); await c.input('caption-cue','0')
         await c.until("Math.abs(document.querySelector('#editor-video').currentTime-.501)<.02")
         await asyncio.sleep(.15)
+        assert await c.js("document.querySelector('#cap-text').value")=="Let's say that one more time."
+        # Compare the actual live caption raster with plain apostrophe text.
+        assert await c.js("""(async()=>{const live=document.querySelector('#caption-overlay');const expected=document.createElement('canvas');const state=(await apiJSON('/api/projects/'+ 'd'.repeat(32)+'/editor/'+ 'a'.repeat(32)+'/0')).draft.state;CascadeCaptions.draw(expected,"Let's say that one more time.",state.captions,live.width,live.height);return live.toDataURL()===expected.toDataURL();})()""")
         before=await c.shot('01-before.png')
         # Real canvas and composited Chrome screenshots must visibly change for each setting.
         old=await c.js("document.querySelector('#caption-overlay').toDataURL()")
@@ -95,7 +98,7 @@ async def main():
             if id!='cap-background': assert old!=now, 'No caption pixel change for '+id
             old=now
         text_pixels=await c.js("document.querySelector('#caption-overlay').toDataURL()")
-        await c.click('#undo'); assert await c.js("document.querySelector('#cap-text').value")== 'A real caption'
+        await c.click('#undo'); assert await c.js("document.querySelector('#cap-text').value")== "Let's say that one more time."
         assert await c.js("document.querySelector('#caption-overlay').toDataURL()")!=text_pixels
         await c.click('#redo'); assert await c.js("document.querySelector('#cap-text').value")== 'Live caption text'
         after=await c.shot('02-live-edited.png'); assert ImageChops.difference(before,after).getbbox()

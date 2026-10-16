@@ -1199,3 +1199,82 @@ a {
 #research-result { overflow-wrap:anywhere; max-height:420px; overflow:auto; }
 #research-result h4 { margin:16px 0 8px; }
 #settings-form label, #settings-form legend { margin-top:12px; }
+
+/* Project actions and saved generation groups reuse the existing cards. */
+.project-card {display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:12px}
+.project-card .project-tile {flex:1;min-width:0}
+.project-delete {font-size:12px;color:#efb8ae;border-color:#765047}
+.generation-group {min-width:0;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:16px}
+.generation-group>h3 {overflow-wrap:anywhere}
+.generation-clips {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.generation-clips video,#followup-video {width:100%;max-height:220px;object-fit:contain;background:#09130f;border-radius:8px}
+.generation-clips .button,.generation-clips button {margin:4px;font-size:12px}
+.clip-group:has(.generation-group) {display:block}
+#followup-parent {border:1px solid var(--accent);border-radius:10px;padding:12px;margin-bottom:12px}
+#followup-parent[hidden] {display:none}
+.canvas-page .canvas-flow {align-items:flex-start}
+.canvas-page .clip-group {width:clamp(300px,43vw,680px)}
+#followup-parent #followup-video {display:block;aspect-ratio:16/9;min-height:110px}
+
+/* Bounded, scrollable generation graph. Full-video requests are independent roots. */
+.canvas-page {min-width:0;max-width:100%}
+.canvas-page .simple-canvas {overflow:hidden;max-width:100%;padding:18px}
+.canvas-page .canvas-flow {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-width:0;gap:20px;align-items:start;margin-bottom:20px}
+.canvas-page .canvas-card {width:auto;min-width:0}
+.canvas-page .connector {display:none}
+.branch-toolbar {display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+.branch-toolbar span {flex:1;font-size:12px}
+.branch-toolbar button {min-width:40px}
+#branch-viewport {width:100%;height:clamp(420px,68vh,720px);overflow:scroll;scrollbar-gutter:stable;scrollbar-color:#77a58d #14271f;border:1px solid var(--line);border-radius:10px;touch-action:pan-x pan-y;position:relative;overscroll-behavior-x:contain}
+#branch-viewport:focus-visible {outline:2px solid var(--accent);outline-offset:3px}
+.canvas-page #branch-track {display:grid;position:relative;grid-auto-columns:clamp(240px,78vw,340px);grid-template-rows:clamp(340px,56vh,580px);grid-auto-flow:column;gap:0 76px;width:max-content;min-width:100%;border:0;padding:60px 24px 18px;align-items:stretch;isolation:isolate}
+.canvas-page .generation-group {position:relative;z-index:1;overflow-y:auto;overflow-x:hidden;height:100%;margin:0;background:var(--bg);scrollbar-gutter:stable;scrollbar-color:#77a58d #14271f}
+.canvas-page .generation-clips {display:flex;flex-direction:column;gap:14px}
+.canvas-page .generation-group>h3 {font-size:14px;line-height:1.5}
+.canvas-page .generation-group>p {font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.canvas-page .clip-placeholder::before {display:none}
+.canvas-page .clip-placeholder {padding:12px}
+.branch-connectors {position:absolute;top:0;left:0;pointer-events:none;z-index:0;overflow:visible}
+.branch-connectors path {fill:none;stroke:#79ac92;stroke-width:2;opacity:.65;stroke-linejoin:round}
+.parent-reveal {font-size:11px;margin-bottom:12px}
+.branch-highlight {animation:branch-focus 1.8s ease}
+@keyframes branch-focus {0%,60% {box-shadow:inset 0 0 0 2px #b8e58e,0 0 15px #b8e58e55}100% {box-shadow:none}}
+.history-jump {display:block;text-align:left;white-space:normal;border:0;padding:0;background:none;color:var(--text);line-height:1.5}
+.prompt-node p {font-size:12px;line-height:1.4;margin:8px 0}
+.history-reuse,.generation-retry {font-size:12px;margin-right:8px}
+.history-error {color:#efb8ae}
+@media(max-width:650px) {.canvas-page .canvas-flow {grid-template-columns:minmax(0,1fr)}.canvas-page .simple-canvas {padding:10px}.branch-toolbar span {flex-basis:100%}.canvas-page #branch-track {column-gap:54px;padding:60px 12px 12px}.canvas-page .page-heading select {max-width:100%}}
+@media(prefers-reduced-motion:reduce) {.branch-highlight {animation:none;outline:2px solid var(--accent)}}
+
+#branch-plane {position:relative;width:max-content;min-width:100%;isolation:isolate}
+.canvas-page #branch-track {z-index:1}
+/* Keep the composer and branches together within a laptop viewport. */
+.canvas-page .simple-canvas {display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:16px}
+.canvas-page .canvas-flow {grid-column:1;grid-row:1 / span 2;display:flex;flex-direction:column;max-height:74vh;overflow-y:auto;margin:0;padding-right:6px;scrollbar-gutter:stable}
+.canvas-page .canvas-card {width:100%;flex-shrink:0}
+.canvas-page .branch-toolbar {grid-column:2;grid-row:1;margin:0}
+.canvas-page #branch-viewport {grid-column:2;grid-row:2}
+@media(max-width:900px) {.canvas-page .simple-canvas {grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto}.canvas-page .canvas-flow {grid-column:1;grid-row:1;max-height:360px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}.canvas-page .branch-toolbar {grid-column:1;grid-row:2}.canvas-page #branch-viewport {grid-column:1;grid-row:3}}
+@media(max-width:650px) {.canvas-page .canvas-flow {grid-template-columns:minmax(0,1fr)}}
+#branch-viewport::-webkit-scrollbar {width:12px;height:12px}
+#branch-viewport::-webkit-scrollbar-track {background:#14271f;border-radius:8px}
+#branch-viewport::-webkit-scrollbar-thumb {background:#77a58d;border:3px solid #14271f;border-radius:8px}
+#branch-viewport::-webkit-scrollbar-corner {background:#14271f}
+
+#followup-parent #followup-video[hidden] {visibility:hidden}
+
+/* Generations never wrap: vertical overflow belongs to each column. */
+.canvas-page #branch-viewport {overflow-x:scroll;overflow-y:hidden}
+/* Keep a real scrollbar visible even when macOS normally hides overlays. */
+@supports selector(::-webkit-scrollbar) {#branch-viewport {scrollbar-color:auto;scrollbar-width:auto}#branch-viewport::-webkit-scrollbar {display:block}}
+
+/* Saved prompts are stages of the graph, not a detached history drawer. */
+.canvas-page .flow-source {grid-column:1;grid-row:1;align-self:center;height:auto;max-height:100%;overflow:auto}
+.canvas-page .prompt-node {align-self:center;max-height:100%;overflow:auto;padding:18px;overflow-wrap:anywhere;border-top:3px solid #79ac92;background:var(--bg);position:relative;z-index:1}
+.canvas-page .generation-group {padding-left:32px;background:transparent}
+.canvas-page .generation-group>h3,.canvas-page .generation-group>p {background:var(--bg);position:relative;z-index:1}
+.canvas-page .clip-placeholder {position:relative;z-index:1;background:var(--bg)}
+.clip-connectors {position:absolute;left:0;top:0;pointer-events:none;z-index:0;overflow:hidden}
+.clip-connectors path {fill:none;stroke:#79ac92;stroke-width:2}
+.canvas-page #branch-track {padding-top:120px}
+.canvas-page .flow-source video {width:100%;max-height:230px}

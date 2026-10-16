@@ -33,10 +33,23 @@ async def main():
         ratios={'original':16/9,'9:16':9/16,'1:1':1,'4:5':4/5,'16:9':16/9,'4:3':4/3}
         for preset,ratio in ratios.items():
             await c.click('[data-ratio="'+preset+'"]')
+            assert await c.js("document.querySelector('#device-shell').dataset.device")=={'9:16':'phone','4:3':'tablet','16:9':'desktop'}.get(preset,'clean')
             measurement=await c.js("(()=>{const f=document.querySelector('#composition-frame').getBoundingClientRect();const v=document.querySelector('#editor-video').getBoundingClientRect();return {ratio:f.width/f.height,videoRatio:v.width/v.height};})()")
             assert abs(measurement['ratio']-ratio)<.003,(preset,measurement)
             assert abs(measurement['videoRatio']-16/9)<.02,(preset,measurement)
             assert await c.js("document.querySelector('[data-ratio=\\\""+preset+"\\\"]').getAttribute('aria-pressed')")=='true'
+        # Preview hardware is independent from output ratio and saved edits.
+        for device, expected_ratio in [('phone',9/19.5),('tablet',4/3),('desktop',16/9),('tv',16/9),('clean',4/3)]:
+            await c.input('preview-device',device)
+            await asyncio.sleep(.3)
+            measured=await c.js("(()=>{const s=document.querySelector('#device-screen').getBoundingClientRect();return {device:document.querySelector('#device-shell').dataset.device,ratio:s.width/s.height}})()")
+            assert measured['device']==device and abs(measured['ratio']-expected_ratio)<.003,measured
+        await c.input('preview-device','phone')
+        for preset, ratio in [('1:1',1),('4:5',4/5)]:
+            await c.click('[data-ratio="'+preset+'"]');await asyncio.sleep(.3)
+            result=await c.js("(()=>{const s=document.querySelector('#device-screen').getBoundingClientRect(),f=document.querySelector('#composition-frame').getBoundingClientRect(),o=document.querySelector('#caption-overlay').getBoundingClientRect();return {screen:s.width/s.height,output:f.width/f.height,space:s.height-f.height,overlay:Math.abs(o.width-f.width)+Math.abs(o.height-f.height)}})()")
+            assert abs(result['screen']-9/19.5)<.003 and abs(result['output']-ratio)<.003 and result['space']>20 and result['overlay']<1,result
+        await c.input('preview-device','auto')
         await c.click('[data-ratio="9:16"]');await c.input('frame-background','#334455')
         fit=await c.js("({frame:document.querySelector('#composition-frame').getBoundingClientRect().toJSON(),video:document.querySelector('#editor-video').getBoundingClientRect().toJSON(),background:getComputedStyle(document.querySelector('#composition-frame')).backgroundColor})")
         assert fit['video']['height']<fit['frame']['height'] and fit['background']=='rgb(51, 68, 85)'

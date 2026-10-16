@@ -35,7 +35,7 @@ class LocalSelectionTests(unittest.TestCase):
 
     def test_speech_matches_remain_complete_and_clustered_matches_are_not_duplicated(self):
         anchors = [{'time': t + 1, 'score': .8, 'match': str(t), 'evidence_start': t, 'evidence_end': t + 2}
-                   for t in (1, 32, 65, 98)]
+                   for t in (1, 32, 65, 98, 132)]
         clips = select_windows(anchors, 130, 30, 3)
         self.assertEqual(len(clips), 4)
         self.assertTrue(all(c['start'] <= c['evidence_start'] and c['end'] >= c['evidence_end'] for c in clips))
@@ -48,7 +48,7 @@ class LocalSelectionTests(unittest.TestCase):
 
 
 class LocalRenderingTests(unittest.TestCase):
-    def test_both_engines_render_four_distinct_clips_with_audio_and_local_caption_times(self):
+    def test_both_engines_render_variable_distinct_clips_with_audio_and_local_caption_times(self):
         fake_speech = types.ModuleType('faster_whisper'); fake_speech.WhisperModel = Mock()
         fake_search = types.ModuleType('sentence_transformers'); fake_search.SentenceTransformer = Mock()
         with patch.dict(sys.modules, {'faster_whisper': fake_speech, 'sentence_transformers': fake_search}):
@@ -57,25 +57,25 @@ class LocalRenderingTests(unittest.TestCase):
             def encode(self, values, **kwargs):
                 return np.array([1., 0.]) if isinstance(values, str) else np.array([[1., 0.]] * len(values))
             def similarity(self, query, embeddings):
-                return np.array([[.9, .8, .7, .6]])
+                return np.array([[.9, .8, .7, .6, .55]])
         class Speech:
             def transcribe(self, path, **kwargs):
-                starts = (0,) if Path(path).suffix == '.wav' else (1, 32, 65, 98)
+                starts = (0,) if Path(path).suffix == '.wav' else (1, 32, 65, 98, 132)
                 return iter([types.SimpleNamespace(start=float(t), end=float(t + 2), text=f'Speech match {i}')
                              for i, t in enumerate(starts)]), None
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / 'source.mp4'
-            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=160x120:r=10:d=130',
-                            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=130', '-c:v', 'libx264',
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=160x120:r=10:d=170',
+                            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=170', '-c:v', 'libx264',
                             '-preset', 'ultrafast', '-c:a', 'aac', '-shortest', str(source)], check=True, timeout=45)
-            for mode in ('visual', 'speech'):
-                with self.subTest(mode=mode), patch.object(router, 'OUTPUTS', root), patch.object(router, 'load_models'), \
+            for mode, count in [('visual',4),('speech',4),('visual',5),('speech',5)]:
+                with self.subTest(mode=mode, count=count), patch.object(router, 'OUTPUTS', root), patch.object(router, 'load_models'), \
                      patch.object(router, 'visual_model', Encoder()), patch.object(router, 'search_model', Encoder()), \
                      patch.object(router, 'whisper_model', Speech()):
                     with source.open('rb') as file:
-                        result = router.search_video(UploadFile(file, filename='source.mp4'), 'a spoken moment', mode, 30)
-                    self.assertEqual(len(result['clips']), 4)
+                        result = router.search_video(UploadFile(file, filename='source.mp4'), 'a spoken moment', mode, 30, requested_count=count)
+                    self.assertEqual(len(result['clips']), count)
                     self.assertEqual(result['selection_note'], '')
                     ordered = sorted(result['clips'], key=lambda c: c['start'])
                     self.assertTrue(all(a['end'] <= b['start'] for a, b in zip(ordered, ordered[1:])))

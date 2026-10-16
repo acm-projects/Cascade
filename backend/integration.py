@@ -36,7 +36,7 @@ class SettingsInput(BaseModel):
 
 class ClipInput(BaseModel):
     job_id: str
-    clip_index: int = Field(default=0, ge=0, le=3)
+    clip_index: int = Field(default=0, ge=0)
 
 
 class ResearchInput(BaseModel):
@@ -64,11 +64,15 @@ def project_jobs(project_id, user_id):
     result = []
     for path in host.JOBS_DIR.glob('*/owner.json'):
         owner = json.loads(path.read_text())
-        if owner.get('user_id') == user_id and owner.get('project_id') == project_id:
+        if owner.get('user_id') == user_id and owner.get('project_id') == project_id and not owner.get('project_deleted'):
             result.append({'job_id': path.parent.name, 'prompt': owner.get('prompt', ''),
                            'source_name': owner.get('source_name', ''),
                            'kind': owner.get('kind', 'generation'), 'has_source': (path.parent / 'source.video').is_file(),
-                           'created_at': path.stat().st_mtime})
+                           'created_at': owner.get('created_at', path.stat().st_mtime),
+                           'history_id': owner.get('history_id', path.parent.name), 'creation_order': owner.get('creation_order'),
+                           'retry_attempts': owner.get('retry_attempts', []),
+                           'requested_clip_count': owner.get('requested_clip_count', 4),
+                           'source_job': owner.get('source_job', path.parent.name), 'parent_clip': owner.get('parent_clip')})
     return sorted(result, key=lambda item: item['created_at'], reverse=True)
 
 
@@ -94,9 +98,16 @@ def selected_clip(project_id, body, user_id):
 
 def original_source(project_id, job_id, user_id):
     visited = set()
-    while job_id and job_id not in visited and len(visited) < 20:
+    while job_id and job_id not in visited:
         visited.add(job_id)
         owner = owner_for_job(project_id, job_id, user_id)
+        if owner.get('parent_job'):
+            job_id = owner.get('parent_job')
+            continue
+        root = owner.get('source_job')
+        if root and root != job_id:
+            job_id = root
+            continue
         source = host.JOBS_DIR / job_id / 'source.video'
         if source.is_file():
             return source
@@ -108,7 +119,7 @@ def new_feature_job(owner, kind, parent_job=None):
     job_id = uuid4().hex
     folder = host.JOBS_DIR / job_id
     folder.mkdir()
-    host.save_json(folder / 'owner.json', {**owner, 'kind': kind, 'parent_job': parent_job})
+    host.save_json(folder / 'owner.json', {**owner, 'kind': kind, 'parent_job': parent_job, 'created_at': time.time()})
     with host.jobs_lock:
         host.jobs[job_id] = {'state': 'queued', 'message': 'Waiting to process...', 'clips': []}
     return job_id, folder
@@ -139,7 +150,7 @@ def publish_clip(folder, job_id, number, path, start, end, title, explanation=''
     else:
         (folder / captions_filename).write_text('WEBVTT\n\n')
     storage = host.upload_clip_files(folder, job_id, filename, captions_filename)
-    return {**storage, 'start': start, 'end': end, 'title': title, 'explanation': explanation,
+    return {**storage, 'clip_id': f'{job_id}:{number-1}', 'start': start, 'end': end, 'title': title, 'explanation': explanation,
             'clip_url': f'/clips/{job_id}/{filename}',
             'captions_url': f'/clips/{job_id}/{captions_filename}'}
 
@@ -158,13 +169,15 @@ def process_search(job_id, video_path, search, mode, target):
     try:
         timer.start('Dependency imports')
         from backend.video_search.router import search_video, OUTPUTS
+        from backend.generation import options, contextual_prompt
+        requested_count, parent = options(video_path.parent)
         initial = timer.finish()
         def search_timing(timings, active):
             timing({**initial, **timings}, active)
         host.update_job(job_id, state='processing', message='Searching video and rendering captions...')
         with video_path.open('rb') as file:
             upload = UploadFile(file, filename='source.mp4')
-            result = search_video(upload, search, mode, target, progress=progress, timing=search_timing)
+            result = search_video(upload, contextual_prompt(search, parent), mode, target, progress=progress, timing=search_timing, requested_count=requested_count, parent_context=parent, followup_prompt=search)
         matches = result.get('clips', [result] if result.get('clip_url') else [])
         outputs = [OUTPUTS / Path(match['clip_url']).name for match in matches]
         try:
@@ -178,8 +191,8 @@ def process_search(job_id, video_path, search, mode, target):
                 clips.append(publish_clip(video_path.parent, job_id, number, output, match['start'], match['end'],
                                           search, match['match'] + ' · Captions are burned into the video.', captions=captions))
             timings = timer.finish()
-            finish_feature(job_id, {'clips': clips, 'timings': timings,
-                                    'selection_note': result.get('selection_note', '')})
+            finish_feature(job_id, {'clips': clips, 'timings': timings, 'requested_clip_count': requested_count,
+                                    'selection_note': (f'Found {len(clips)} of {requested_count} requested suitable clips. ' if len(clips) < requested_count else '') + result.get('selection_note', '')})
         finally:
             for output in outputs:
                 output.unlink(missing_ok=True)

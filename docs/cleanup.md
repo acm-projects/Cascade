@@ -1,3 +1,5 @@
+Historical cleanup record: the later [HTML consolidation](frontend.md) supersedes the retained root `login.html` and the separate frontend HTML source files described below.
+
 # Project cleanup audit
 
 Checkpoint: `dd3b7c2` (Save editor updates and mutli-clip fixes before cleanup). The working tree was clean on `manila/editor-work` before cleanup. Cleanup is intentionally uncommitted.

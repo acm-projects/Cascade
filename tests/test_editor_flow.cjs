@@ -29,7 +29,8 @@ async function apiJSON(url, options={}) {
  return {duration:12,width:1280,height:720,cues:[{start:0,end:12,text:'Caption'}],warning:'',draft:responseDraft(key(url))};
 }
 function setup(search='?project=p') {
- const ids = [...fs.readFileSync('web/editor_C.html','utf8').matchAll(/id="([^"]+)"/g)].map(m=>m[1]);
+ const markup = require('node:child_process').execFileSync('python3',['-c',"from pathlib import Path; from backend.frontend import render_page; print(render_page('editor_C.html',Path('web')),end='')"],{encoding:'utf8'});
+ const ids = [...markup.matchAll(/id="([^"]+)"/g)].map(m=>m[1]);
  const elements = Object.fromEntries(ids.map(id=>[id,new Element('div',id)]));
  for(const name of Object.keys(defaults)) { const e=elements['cap-'+name]; e.tagName='INPUT'; e.type=['enabled','bold'].includes(name)?'checkbox':name==='opacity'?'range':['size','thickness'].includes(name)?'number':'text'; }
  for(const id of ['seek','trim-start','trim-end']) Object.assign(elements[id],{tagName:'INPUT',type:'range'});

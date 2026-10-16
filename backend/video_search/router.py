@@ -85,7 +85,7 @@ async def upload_video(
     return await run_in_threadpool(search_video, video, search, mode, clip_length)
 
 
-def search_video(video, search, mode, clip_length, progress=lambda message: None, timing=lambda timings, active: None):
+def search_video(video, search, mode, clip_length, progress=lambda message: None, timing=lambda timings, active: None, requested_count=4, parent_context=None, followup_prompt=None):
     from backend.video_search.selection import select_matches
     import numpy as np
     timer = StageTimer(timing)
@@ -167,8 +167,10 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                            for index, score in enumerate(scores)]
 
             timer.start('Match selection')
-            progress('Selecting up to four distinct non-overlapping matches...')
-            selected = select_matches(anchors, duration, clip_length, 3 if mode == 'speech' else 5)
+            progress(f'Selecting up to {requested_count} distinct non-overlapping matches...')
+            selected = select_matches(anchors, duration, clip_length, 3 if mode == 'speech' else 5, limit=requested_count)
+            from backend.generation import followup_windows
+            selected = followup_windows(selected, parent_context, followup_prompt or search, duration, clip_length, requested_count)
             has_audio = False
             if mode == 'visual' and selected:
                 timer.start('Audio inspection')
@@ -226,11 +228,11 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                                 'match': selection['match'], 'mode': mode, 'captions_vtt': '\n'.join(vtt_lines)})
         timings = timer.finish()
         note = ''
-        if len(outputs) < 4:
-            note = f'Found {len(outputs)} distinct clip(s). The source duration or spacing of searchable moments does not allow four separate clips, even with shorter windows.'
+        if len(outputs) < requested_count:
+            note = f'Found {len(outputs)} distinct clip(s). The source duration or spacing of searchable moments does not allow the requested separate clips, even with shorter windows.'
         elif selected and selected[0]['end'] - selected[0]['start'] < clip_length - .01:
             seconds = selected[0]['end'] - selected[0]['start']
-            note = f'Used {seconds:g}-second clips instead of the {clip_length}-second target to keep four distinct matches without overlap.'
+            note = f'Used {seconds:g}-second clips instead of the {clip_length}-second target to keep distinct matches without overlap.'
         # Keep the first-clip fields for older standalone clients.
         return {**(outputs[0] if outputs else {}), 'clips': outputs, 'timings': timings, 'selection_note': note}
     except BaseException:

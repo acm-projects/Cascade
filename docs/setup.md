@@ -12,7 +12,7 @@ Open http://127.0.0.1:8000. `backend.app:app` remains an alternate import alias.
 
 ## Authentication and storage
 
-Configure `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and `CLERK_AUTHORIZED_PARTIES` for the local origins you use. The old root `login.html` supplies a publishable-key fallback when no environment key is set, so it remains required for compatible existing installations. Production requests still require Clerk authentication and ownership checks.
+Configure `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and `CLERK_AUTHORIZED_PARTIES` for the local origins you use. The consolidated `web/index.html` template retains the original publishable-key fallback when no environment key is set; root `login.html` is superseded. Only the selected view is rendered, and the fallback template declaration is not emitted into the page. Production requests still require Clerk authentication and ownership checks.
 
 `CASCADE_STORAGE=local` keeps media locally. `auto` selects S3 when configured; `s3` requires `S3_BUCKET_NAME`, region and AWS credentials. Existing local source files are needed for editing and exports even when generated delivery uses S3. Preserve the complete `video_jobs/` directory: it includes uploads, transcripts, results, owner metadata, projects, settings and editor drafts. Project/editor persistence is owner-scoped atomic JSON; cleanup introduced no schema migration. Do not delete root JSON records or `outputs/` simply because they are outside the active jobs directory.
 

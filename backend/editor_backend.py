@@ -1,5 +1,6 @@
 """Owner-scoped, nondestructive editor; no generation behavior is changed."""
 import json
+import html
 import base64
 import io
 import math
@@ -169,7 +170,9 @@ def parse_vtt(text):
             try:
                 a, b = line.split('-->')
                 start, end = seconds(a.strip()), seconds(b.strip().split()[0])
-                caption = re.sub(r'<[^>]*>', '', '\n'.join(lines[i+1:])).strip()
+                # VTT cue markup is removed before entity decoding, so escaped
+                # literal angle brackets remain text rather than becoming tags.
+                caption = html.unescape(re.sub(r'<[^>]*>', '', '\n'.join(lines[i+1:]))).strip()
                 if 0 <= start < end and math.isfinite(end) and caption:
                     cues.append({'start': start, 'end': end, 'text': caption})
             except (ValueError, IndexError):

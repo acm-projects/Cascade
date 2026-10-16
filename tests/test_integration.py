@@ -63,7 +63,10 @@ class IntegrationTests(unittest.TestCase):
         with patch.object(app1.worker, 'submit') as submit:
             with patch.dict(os.environ, {'OPENAI_API_KEY': ''}):
                 response = self.client.post('/upload', headers=self.headers, data=data, files={'video': ('a.mp4', b'video')})
-            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.status_code, 202)
+            failed=response.json()['job_id']
+            self.assertEqual(self.client.get('/api/features/'+failed,headers=self.headers).json()['state'],'error')
+            self.assertTrue((app1.JOBS_DIR/failed/'failure.json').is_file())
             submit.assert_not_called()
             response = self.client.post('/upload', headers=self.headers, data=data, files={'video': ('a.mp4', b'video')})
             self.assertEqual(response.status_code, 202)
@@ -148,7 +151,7 @@ class IntegrationTests(unittest.TestCase):
         fake.OUTPUTS = Path(self.temp.name)
         output = fake.OUTPUTS / 'generated.mp4'
         output.write_bytes(b'fixture')
-        def search(*args, progress, timing):
+        def search(*args, progress, timing, **options):
             timing({}, 'Image embeddings')
             values = {'Image embeddings': 2.5, 'Whisper transcription': 1.0}
             timing(values, None)

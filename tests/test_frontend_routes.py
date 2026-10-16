@@ -39,7 +39,7 @@ class FrontendRoutesTests(unittest.TestCase):
     def test_source_and_configuration_remain_private(self):
         with TestClient(app1.app) as client:
             for path in ('/.env', '/.env.example', '/login.html', '/app1.py',
-                         '/backend/editor_backend.py', '/web/editor_C.html',
+                         '/backend/editor_backend.py', '/web/editor_C.html', '/web/index.html',
                          '/docs/setup.md'):
                 with self.subTest(path=path):
                     self.assertEqual(client.get(path).status_code, 404)

@@ -91,3 +91,27 @@
 #crop-options output {float:right;font-variant-numeric:tabular-nums}
 #composition-summary {font-size:11px;line-height:1.4;color:var(--muted)}
 #crop-options[hidden],#fit-options[hidden] {display:none}
+
+/* Preview hardware is outside the output composition and never rasterized. */
+#preview-wrap {background:radial-gradient(ellipse at 50% 35%,#29322f 0%,#1b2220 55%,#151b19 100%);isolation:isolate}
+#device-shell {position:relative;box-sizing:content-box;flex:none;background:linear-gradient(135deg,#626d68,#222925 35%,#111713 80%,#54605a);border-radius:14px;box-shadow:0 16px 30px #0006,0 0 0 1px #76877a66;transition:width .22s ease,height .22s ease,border-radius .22s ease,padding .22s ease,margin .22s ease}
+#device-screen {position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#090d0b;border-radius:4px;transition:width .22s ease,height .22s ease}
+#device-shell[data-device=phone] {border-radius:32px;background:linear-gradient(125deg,#818a84,#222824 30%,#141916 75%,#69766e)}
+#device-shell[data-device=phone] #device-screen {border-radius:23px}
+#device-shell[data-device=phone]::before {content:"";position:absolute;left:-3px;top:23%;width:3px;height:32px;border-radius:2px;background:#78877d}
+#device-shell[data-device=phone] .device-detail {position:absolute;bottom:4px;left:38%;width:24%;height:3px;border-radius:8px;background:#a2aca580;pointer-events:none}
+#device-shell[data-device=tablet] {border-radius:22px}
+#device-shell[data-device=tablet] #device-screen {border-radius:10px}
+#device-shell[data-device=desktop]::after {content:"";position:absolute;top:100%;left:calc(50% - 27px);width:54px;height:24px;background:linear-gradient(90deg,#333d37,#748078,#333d37);clip-path:polygon(32% 0,68% 0,85% 100%,15% 100%)}
+#device-shell[data-device=desktop] .device-detail {position:absolute;top:calc(100% + 23px);left:calc(50% - 55px);width:110px;height:7px;border-radius:50%;background:#65736a;box-shadow:0 5px 7px #0004}
+#device-shell[data-device=tv] {border-radius:6px;background:#151b17;box-shadow:0 0 0 1px #65756a,0 15px 25px #0006}
+#device-shell[data-device=tv]::before,#device-shell[data-device=tv]::after {content:"";position:absolute;top:100%;width:5px;height:18px;background:#56645b;transform:skew(-25deg);left:15%}
+#device-shell[data-device=tv]::after {left:auto;right:15%;transform:skew(25deg)}
+#device-shell[data-device=clean] {border-radius:7px;background:#66756a;box-shadow:0 10px 24px #0004}
+.device-note {font-size:11px;color:var(--muted);line-height:1.5}
+#ratio-presets .ratio-icon {position:relative;background:linear-gradient(145deg,#668875,#203b2e);box-shadow:0 2px 4px #0003}
+#ratio-presets [data-ratio="9:16"] .ratio-icon {border-radius:5px;box-shadow:0 0 0 2px #63776b55}
+#ratio-presets [data-ratio="4:3"] .ratio-icon {border-radius:4px}
+#ratio-presets [data-ratio="16:9"] .ratio-icon::after {content:"";position:absolute;top:100%;left:35%;width:30%;height:4px;background:currentColor}
+@media (prefers-reduced-motion:reduce) {#device-shell,#device-screen {transition:none}}
+@media (max-height:800px) {#preview-wrap {height:clamp(230px,38vh,340px)}}

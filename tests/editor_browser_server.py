@@ -36,7 +36,7 @@ if __name__ == '__main__':
             for i in range(count):
                 import shutil
                 shutil.copyfile(source,folder/f'clip_{i+1}.mp4')
-                (folder/f'clip_{i+1}.vtt').write_text('WEBVTT\n\n00:00.500 --> 00:02.400\nA real caption\n\n00:03.000 --> 00:04.500\nAnother spoken moment\n\n00:06.000 --> 00:07.500\nFinal caption\n')
+                (folder/f'clip_{i+1}.vtt').write_text('WEBVTT\n\n00:00.500 --> 00:02.400\nLet&#x27;s say that one more time.\n\n00:03.000 --> 00:04.500\nAnother spoken moment\n\n00:06.000 --> 00:07.500\nFinal caption\n')
                 clips.append({'start':100,'end':108,'clip_url':f'/clips/{j}/clip_{i+1}.mp4','captions_url':f'/clips/{j}/clip_{i+1}.vtt'})
             app1.save_json(folder/'results.json',{'clips':clips})
         def ai(payload):
@@ -52,7 +52,7 @@ if __name__ == '__main__':
             return {'reset':True}
         @app1.app.get('/__editor_test',response_class=HTMLResponse)
         def fixture_page():
-            html=(app1.FRONTEND_DIR/'editor_C.html').read_text()
+            html=app1.frontend.render_page('editor_C.html',app1.FRONTEND_DIR)
             bootstrap='''<script>
               document.getElementById('protected-page').hidden=false;
               const apiFetch=async(url,options={})=>{

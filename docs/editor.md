@@ -1,3 +1,5 @@
+All HTML view markup now lives in `web/index.html`; names such as `editor_C.html` below refer to preserved public routes. CSS and JavaScript files remain separate.
+
 Frontend filenames below live under `web/`; backend service filenames live under `backend/`. Public URLs are unchanged. Run test commands from the repository root.
 
 # Editor implementation
