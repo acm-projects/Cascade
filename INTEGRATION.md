@@ -23,19 +23,25 @@ The updated `_C.html` pages, shared CSS, and existing `flow_C.js` remain the act
 
 ## Storage and configuration
 
-No SQL/Neon database code exists in either inspected branch. No database configuration was replaced and no SQL migration is required. This is an additive local-filesystem implementation using the website backend's existing `video_jobs` directory, not a claim of Neon integration.
+The integrated app now uses Neon Postgres whenever `DATABASE_URL` is configured.
+`metadata_store.py` stores projects, per-user settings, job ownership, status,
+results, saved clip references and media metadata in `cascade_app.records` as
+JSONB. Views expose projects, settings, jobs and clips. Existing `public` tables
+are preserved, and Clerk remains responsible for authentication. See [DATABASE.md](DATABASE.md)
+for migration commands, schema details and verification.
 
-New projects live at `video_jobs/projects/<SHA256-of-user-ID>/<project-ID>.json`. Job ownership records for new uploads additionally include `project_id`, `prompt`, and `source_name`. Saved clip references live in the project record. Account preferences live at `video_jobs/projects/<SHA256-of-user-ID>/settings/preferences.json`; existing preferences are read as initial defaults, then account changes are stored separately. New derived jobs include an optional `parent_job` link. Existing job directories are left intact. Back up `video_jobs` and retain it across service restarts/deployments; S3 holds generated media, but does not hold the project index or original uploads. There is no multi-process database locking: run one Uvicorn worker on one persistent filesystem.
-
-Existing `.env`, Clerk validation/configuration, AWS credential resolution, S3 bucket/region, and root preferences files remain unchanged. No secrets are included in the integration files. Do not commit `.env`, runtime records, or generated media.
-
-`backend/` contains feature source copied from fetched `origin/main`. `backend/app.py` delegates to the authenticated website app. The old standalone search/clip/trend routers and diagnostic HTML are not mounted publicly; `integration.py` calls their processing functionality behind Clerk and ownership checks. `/settings` opens the updated settings page. Its authenticated JSON API reuses the teammate persistence helper with a per-user destination. The original standalone global form/router source is retained and not mounted publicly.
+`migrate_metadata.py` imports the existing `video_jobs` metadata without overwriting
+records already in Neon or deleting local files. Local JSON remains a working
+copy; a configured database outage returns an error instead of falling back to it.
+Original videos and processing caches remain local. Generated media stays in S3
+or local storage according to `CASCADE_STORAGE`. Keep `video_jobs` for source-video
+reopening and rendering, and continue using one Uvicorn worker.
 
 ## Unfinished behavior
 
 Free-form editing chat, editable caption text/fonts/colors/placement, timeline edits, aspect ratio/cropping, subject tracking, B-roll uploads/generation/compositing, merged multi-clip sequences, format/resolution conversion, and direct social publishing have no integrated implementation. Those existing controls stay disabled or explicitly labeled unfinished. Selecting clips opens one selected clip at a time, rather than assembling a multi-clip sequence. The four caption treatments are rendered presets; tone/audience inputs in the old renderer do not affect rendering.
 
-There is no cross-device source upload storage, automatic interrupted-job retry, or project database synchronization. The browser reloads the saved source as a Blob/File, so opening a large project downloads its source into browser memory. Clip playback/download also retains the existing authenticated Blob approach.
+Project metadata is shared through Neon. Original source videos still require the local job directory, and interrupted jobs do not retry automatically. The browser reloads the saved source as a Blob/File, so opening a large project downloads its source into browser memory. Clip playback/download also retains the existing authenticated Blob approach.
 
 ## Install and run
 

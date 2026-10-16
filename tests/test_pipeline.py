@@ -16,6 +16,11 @@ from starlette.datastructures import UploadFile
 
 
 class PipelineTests(unittest.TestCase):
+    def setUp(self):
+        mode = patch.dict(os.environ, {'CASCADE_METADATA_STORE': 'local'})
+        mode.start()
+        self.addCleanup(mode.stop)
+
     def test_vision_context_overflow_splits_without_dropping_or_reordering_frames(self):
         completed = []
         sheets = {}

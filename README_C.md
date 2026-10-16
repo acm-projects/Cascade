@@ -34,3 +34,11 @@ python -m uvicorn app1:app --host 127.0.0.1 --port 8000
 Open http://127.0.0.1:8000/. HTML files should not be opened directly or served with the simple Python static server: authentication and media require the backend.
 
 Active pages are `index_C.html`, `login_C.html`, `projects_C.html`, `canvas_C.html`, `editor_C.html`, and `exports_C.html`, and `settings_C.html`, with `flow_C.js` and `styles_C.css`. The separate `app_C.js` simulation prototype is preserved but unused by these pages.
+
+## Neon database
+
+The root `.env` `DATABASE_URL` connects project/settings/job/clip metadata to Neon.
+See [DATABASE.md](DATABASE.md) for the additive schema, existing-data migration,
+and persistence checks. Video files remain local/S3. Stop the API, run
+`.\.venv\Scripts\python.exe migrate_metadata.py`, then restart it.
+`/api/health` reports `metadata_storage: "neon"` when connected.

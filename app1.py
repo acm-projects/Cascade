@@ -390,11 +390,7 @@ def upload_clip_files(
     # Local media already uses the same ownership-checked /clips route.
     if uses_local_storage():
         return {"storage": "local"}
-    owner = json.loads(
-        (folder / "owner.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    owner = load_json(folder / "owner.json")
 
     user_folder = (
         safe_folder_name(owner.get("user_folder"))
@@ -778,17 +774,13 @@ def require_job_owner(job_id, user_id):
         JOBS_DIR / job_id / "owner.json"
     )
 
-    if not owner_path.is_file():
+    if not metadata_exists(owner_path):
         raise HTTPException(
             404,
             "Job not found. Upload the video again.",
         )
 
-    owner = json.loads(
-        owner_path.read_text(
-            encoding="utf-8"
-        )
-    )
+    owner = load_json(owner_path)
 
     if owner.get("user_id") != user_id:
         raise HTTPException(
@@ -797,19 +789,37 @@ def require_job_owner(job_id, user_id):
         )
 
 
+def metadata_store():
+    from metadata_store import get_store
+    return get_store(JOBS_DIR)
+
+
+def load_json(path):
+    return metadata_store().read(path)
+
+
+def metadata_exists(path):
+    return metadata_store().exists(path)
+
+
+def metadata_paths(pattern):
+    return metadata_store().paths(pattern)
+
+
+def metadata_documents(pattern, user_id=None):
+    return metadata_store().documents(pattern, user_id)
+
+
 def save_json(path, data):
-    temporary = path.with_suffix(".tmp")
+    metadata_store().write(path, data)
 
-    temporary.write_text(
-        json.dumps(
-            data,
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
 
-    temporary.replace(path)
+@app.on_event('startup')
+def initialize_metadata():
+    store = metadata_store()
+    if store.database_url:
+        with store.connection() as conn, conn.cursor() as cur:
+            cur.execute('SELECT 1')
 
 
 def update_job(job_id, **changes):
@@ -1029,11 +1039,7 @@ def transcribe_video(
             "Reusing saved speech transcript..."
         )
 
-        return json.loads(
-            transcript_path.read_text(
-                encoding="utf-8"
-            )
-        )
+        return load_json(transcript_path)
 
     if not has_audio:
         save_json(transcript_path, [])
@@ -1144,12 +1150,8 @@ def describe_video(
     cache_settings = {'version': 2, 'interval': interval, 'maximum_frames': maximum_frames}
     settings_path = folder / 'visual_analysis_settings.json'
 
-    if descriptions_path.is_file() and settings_path.is_file() and json.loads(settings_path.read_text()) == cache_settings:
-        descriptions = json.loads(
-            descriptions_path.read_text(
-                encoding="utf-8"
-            )
-        )
+    if descriptions_path.is_file() and settings_path.is_file() and load_json(settings_path) == cache_settings:
+        descriptions = load_json(descriptions_path)
 
         if (
             descriptions
@@ -2047,6 +2049,7 @@ def upload_video(
                 "prompt": search,
                 "source_name": Path(video.filename or "video").name,
                 "video_sha256": fingerprint.hexdigest(),
+                "created_at": time.time(),
 
                 "user_folder": (
                     storage_information["folder"]
@@ -2058,12 +2061,8 @@ def upload_video(
             },
         )
         # Reuse only analysis from the same verified account and project.
-        for previous in JOBS_DIR.glob('*/owner.json'):
+        for previous, owner in metadata_documents('*/owner.json', request.state.user_id):
             if previous.parent == folder:
-                continue
-            try:
-                owner = json.loads(previous.read_text(encoding='utf-8'))
-            except (OSError, ValueError):
                 continue
             if (owner.get('user_id') == request.state.user_id and owner.get('project_id') == project_id
                     and owner.get('video_sha256') == fingerprint.hexdigest()):
@@ -2120,12 +2119,8 @@ def get_job(
         JOBS_DIR / job_id / "results.json"
     )
 
-    if results_path.is_file():
-        results = json.loads(
-            results_path.read_text(
-                encoding="utf-8"
-            )
-        )
+    if metadata_exists(results_path):
+        results = load_json(results_path)
 
         clips = [
             public_clip(clip)
@@ -2186,12 +2181,8 @@ def get_clip(
 
     storage = None
 
-    if results_path.is_file():
-        results = json.loads(
-            results_path.read_text(
-                encoding="utf-8"
-            )
-        )
+    if metadata_exists(results_path):
+        results = load_json(results_path)
 
         for clip in results.get("clips", []):
             field = (
@@ -2330,51 +2321,24 @@ def get_clip(
 def get_my_clips(request: Request):
     saved_clips = []
 
-    folders = [
-        folder
-        for folder in JOBS_DIR.iterdir()
-        if (
-            folder.is_dir()
-            and re.fullmatch(
-                r"[0-9a-f]{32}",
-                folder.name,
-            )
-        )
-    ]
+    owners = metadata_documents('*/owner.json', request.state.user_id)
+    owners.sort(key=lambda item: item[1].get('created_at', 0), reverse=True)
 
-    folders.sort(
-        key=lambda folder: folder.stat().st_mtime,
-        reverse=True,
-    )
-
-    for folder in folders:
-        owner_path = folder / "owner.json"
+    for owner_path, owner in owners:
+        folder = owner_path.parent
         results_path = folder / "results.json"
 
-        if not owner_path.is_file():
-            continue
-
         try:
-            owner = json.loads(
-                owner_path.read_text(
-                    encoding="utf-8"
-                )
-            )
-
             if (
                 owner.get("user_id")
                 != request.state.user_id
             ):
                 continue
 
-            if not results_path.is_file():
+            if not metadata_exists(results_path):
                 continue
 
-            results = json.loads(
-                results_path.read_text(
-                    encoding="utf-8"
-                )
-            )
+            results = load_json(results_path)
 
             clips = results.get("clips", [])
 

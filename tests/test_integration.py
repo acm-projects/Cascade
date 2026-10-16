@@ -15,7 +15,7 @@ import integration
 
 class IntegrationTests(unittest.TestCase):
     def setUp(self):
-        self.storage = patch.dict(os.environ, {'CASCADE_STORAGE': 'local', 'OPENAI_API_KEY': 'test-key'})
+        self.storage = patch.dict(os.environ, {'CASCADE_STORAGE': 'local', 'OPENAI_API_KEY': 'test-key', 'CASCADE_METADATA_STORE': 'local'})
         self.storage.start()
         self.temp = tempfile.TemporaryDirectory()
         self.directory = patch.object(app1, 'JOBS_DIR', Path(self.temp.name))

@@ -22,6 +22,11 @@ def completed(proposal):
 
 
 class OpenAISceneTests(unittest.TestCase):
+    def setUp(self):
+        mode = patch.dict(os.environ, {'CASCADE_METADATA_STORE': 'local'})
+        mode.start()
+        self.addCleanup(mode.stop)
+
     def test_four_distinct_candidates_survive_adjacent_boundaries(self):
         proposal = scene.Proposal.model_validate({'candidates': [candidate(i, i + 10) for i in (0, 10, 20, 30)],
                                                    'insufficient_material_reason': ''})

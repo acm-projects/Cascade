@@ -1,8 +1,7 @@
 """Persistent, owner-checked adapters for the existing website and origin/main features.
-No database configuration is replaced; records live beside existing video_jobs.
+Metadata uses Neon when DATABASE_URL is configured; media stays local/S3.
 """
 import hashlib
-import json
 import logging
 import time
 import re
@@ -13,7 +12,7 @@ from uuid import uuid4
 from typing import Literal
 from pipeline_timing import StageTimer
 
-from backend.settings.preferences import load_preferences, save_preferences
+from backend.settings.preferences import load_preferences
 
 from fastapi import HTTPException, Request, File, Form, UploadFile
 from pydantic import BaseModel, Field
@@ -52,9 +51,9 @@ def require_project(project_id, user_id):
     if not re.fullmatch(r'[0-9a-f]{32}', project_id):
         raise HTTPException(404, 'Project not found.')
     path = project_dir(user_id) / (project_id + '.json')
-    if not path.is_file():
+    if not host.metadata_exists(path):
         raise HTTPException(404, 'Project not found.')
-    data = json.loads(path.read_text())
+    data = host.load_json(path)
     if data['user_id'] != user_id:
         raise HTTPException(404, 'Project not found.')
     return data
@@ -62,20 +61,19 @@ def require_project(project_id, user_id):
 
 def project_jobs(project_id, user_id):
     result = []
-    for path in host.JOBS_DIR.glob('*/owner.json'):
-        owner = json.loads(path.read_text())
+    for path, owner in host.metadata_documents('*/owner.json', user_id):
         if owner.get('user_id') == user_id and owner.get('project_id') == project_id:
             result.append({'job_id': path.parent.name, 'prompt': owner.get('prompt', ''),
                            'source_name': owner.get('source_name', ''),
                            'kind': owner.get('kind', 'generation'), 'has_source': (path.parent / 'source.video').is_file(),
-                           'created_at': path.stat().st_mtime})
+                           'created_at': owner.get('created_at', path.stat().st_mtime if path.is_file() else 0)})
     return sorted(result, key=lambda item: item['created_at'], reverse=True)
 
 
 def owner_for_job(project_id, job_id, user_id):
     require_project(project_id, user_id)
     host.require_job_owner(job_id, user_id)
-    owner = json.loads((host.JOBS_DIR / job_id / 'owner.json').read_text())
+    owner = host.load_json(host.JOBS_DIR / job_id / 'owner.json')
     if owner.get('project_id') != project_id:
         raise HTTPException(404, 'Job not found in this project.')
     return owner
@@ -84,9 +82,9 @@ def owner_for_job(project_id, job_id, user_id):
 def selected_clip(project_id, body, user_id):
     owner = owner_for_job(project_id, body.job_id, user_id)
     path = host.JOBS_DIR / body.job_id / 'results.json'
-    if not path.is_file():
+    if not host.metadata_exists(path):
         raise HTTPException(409, 'Clip is not ready.')
-    clips = json.loads(path.read_text()).get('clips', [])
+    clips = host.load_json(path).get('clips', [])
     if body.clip_index >= len(clips):
         raise HTTPException(404, 'Clip not found.')
     return owner, clips[body.clip_index]
@@ -108,7 +106,7 @@ def new_feature_job(owner, kind, parent_job=None):
     job_id = uuid4().hex
     folder = host.JOBS_DIR / job_id
     folder.mkdir()
-    host.save_json(folder / 'owner.json', {**owner, 'kind': kind, 'parent_job': parent_job})
+    host.save_json(folder / 'owner.json', {**owner, 'kind': kind, 'parent_job': parent_job, 'created_at': time.time()})
     with host.jobs_lock:
         host.jobs[job_id] = {'state': 'queued', 'message': 'Waiting to process...', 'clips': []}
     return job_id, folder
@@ -229,7 +227,7 @@ def research(job_id, source, topic):
         digest = hasher.hexdigest()
         cache = RESULTS_CACHE_DIR / (_result_cache_key(topic, digest) + '.json')
         if cache.is_file():
-            result = json.loads(cache.read_text())
+            result = host.load_json(cache)
         else:
             _run_analysis(internal_id, topic, source, work, cache,
                           progress=lambda message: host.update_job(job_id, message=message))
@@ -255,7 +253,11 @@ def register(app, backend):
 
     @app.get('/api/health')
     def health():
-        return {'status': 'ok'}
+        store = host.metadata_store()
+        if store.database_url:
+            with store.connection() as conn, conn.cursor() as cur:
+                cur.execute('SELECT 1')
+        return {'status': 'ok', 'metadata_storage': 'neon' if store.database_url else 'local'}
 
     @app.get('/settings', include_in_schema=False)
     def settings_page():
@@ -265,8 +267,8 @@ def register(app, backend):
     def get_settings(request: Request):
         path = project_dir(request.state.user_id) / 'settings' / 'preferences.json'
         with lock:
-            if path.is_file():
-                return load_preferences(path)
+            if host.metadata_exists(path):
+                return host.load_json(path)
             # Retain original global preferences as defaults; never overwrite them.
             legacy = Path(host.PROJECT_DIR) / 'preferences.json'
             return load_preferences(legacy if legacy.is_file() else None)
@@ -275,13 +277,14 @@ def register(app, backend):
     def set_settings(body: SettingsInput, request: Request):
         path = project_dir(request.state.user_id) / 'settings' / 'preferences.json'
         with lock:
-            save_preferences(body.model_dump(), path)
+            host.save_json(path, body.model_dump())
         return {'saved': True, 'preferences': body.model_dump()}
 
     @app.get('/api/projects')
     def list_projects(request: Request):
         directory = project_dir(request.state.user_id)
-        items = [json.loads(p.read_text()) for p in directory.glob('*.json')]
+        items = [data for path, data in host.metadata_documents(
+            directory.relative_to(host.JOBS_DIR).as_posix() + '/*.json', request.state.user_id)]
         return {'projects': sorted(items, key=lambda p: p['created_at'], reverse=True)}
 
     @app.post('/api/projects', status_code=201)
@@ -317,11 +320,10 @@ def register(app, backend):
     def save_clip(project_id: str, body: ClipInput, request: Request):
         selected_clip(project_id, body, request.state.user_id)
         with lock:
-            project = require_project(project_id, request.state.user_id)
-            entry = body.model_dump()
-            if entry not in project['saved_clips']:
-                project['saved_clips'].append(entry)
-                host.save_json(project_dir(request.state.user_id) / (project_id + '.json'), project)
+            require_project(project_id, request.state.user_id)
+            host.metadata_store().append_saved_clip(
+                project_dir(request.state.user_id) / (project_id + '.json'),
+                request.state.user_id, body.model_dump())
         return {'saved': True}
 
     @app.post('/api/projects/{project_id}/caption-styles', status_code=202)
@@ -381,10 +383,10 @@ def register(app, backend):
             if job_id in host.jobs:
                 return dict(host.jobs[job_id])
         folder = host.JOBS_DIR / job_id
-        if (folder / 'failure.json').is_file():
-            return {'state': 'error', **json.loads((folder / 'failure.json').read_text())}
-        if (folder / 'results.json').is_file():
-            result = json.loads((folder / 'results.json').read_text())
+        if host.metadata_exists(folder / 'failure.json'):
+            return {'state': 'error', **host.load_json(folder / 'failure.json')}
+        if host.metadata_exists(folder / 'results.json'):
+            result = host.load_json(folder / 'results.json')
             return {'state': 'done', **result, 'clips': [host.public_clip(c) for c in result.get('clips', [])]}
         return {'state': 'error', 'message': 'Processing was interrupted by a server restart. Retry the operation.'}
 
