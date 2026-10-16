@@ -42,32 +42,77 @@ def model_name():
 
 
 def choose_clips(proposal, duration, target):
-    """Prefer four distinct qualifying moments; never duplicate or merge them."""
+    return select_with_diagnostics(proposal, duration, target)[0]
+
+
+def select_with_diagnostics(proposal, duration, target):
+    """Keep supported short moments by adding context, never by duplicating evidence.
+
+    The provider sometimes returns complete moments shorter than the requested
+    minimum. Dropping those silently discarded otherwise strong, separate matches.
+    Each expansion contains the entire proposed moment and stays inside the source.
+    Try leading/centered/trailing context so padding does not unnecessarily collide.
+    """
+    import math
+    stats = {'proposed': len(proposal.candidates), 'invalid_bounds': 0, 'too_long': 0,
+             'low_score': 0, 'duplicates': 0, 'context_candidates': 0, 'eligible': 0,
+             'selected': 0, 'selected_with_context': 0}
+    if not math.isfinite(duration) or duration <= 0 or not math.isfinite(target) or target <= 0:
+        return [], stats
     minimum = min(8.0, duration)
     maximum = min(duration, target * 1.5)
-    valid = []
-    seen = set()
-    for item in proposal.candidates:
-        length = item.end - item.start
-        if item.end > duration + .05 or length < minimum - .05 or length > maximum + .05:
+    valid, seen = [], set()
+    for index, item in enumerate(proposal.candidates):
+        end = min(item.end, duration)
+        length = end - item.start
+        if item.end > duration + .05 or item.start < 0 or length <= 0:
+            stats['invalid_bounds'] += 1
             continue
-        bounds = (round(item.start, 3), round(min(item.end, duration), 3))
-        if item.score < 5 or bounds in seen:
+        if length > maximum + .05:
+            stats['too_long'] += 1
+            continue
+        if item.score < 5:
+            stats['low_score'] += 1
+            continue
+        bounds = (round(item.start, 3), round(end, 3))
+        if bounds in seen:
+            stats['duplicates'] += 1
             continue
         seen.add(bounds)
-        valid.append({**item.model_dump(), 'start': bounds[0], 'end': bounds[1]})
-    best = []
-    best_score = -1
-    for count in range(1, min(4, len(valid)) + 1):
+        stats['eligible'] += 1
+        expand = length < minimum - .001
+        if expand:
+            stats['context_candidates'] += 1
+        starts = [item.start]
+        if expand:
+            extra = minimum - length
+            starts = [item.start - extra / 2, item.start - extra, item.start]
+        variants = set()
+        for start in starts:
+            start = max(0., min(start, duration - minimum)) if expand else start
+            finish = start + minimum if expand else end
+            variant = (round(start, 3), min(round(finish, 3), duration))
+            if variant in variants:
+                continue
+            variants.add(variant)
+            valid.append({**item.model_dump(), 'start': variant[0], 'end': variant[1],
+                          '_candidate': index, '_context': expand})
+    best, best_score = [], -1
+    for count in range(1, min(4, stats['eligible']) + 1):
         for group in itertools.combinations(valid, count):
+            if len({c['_candidate'] for c in group}) < count:
+                continue
             ordered = sorted(group, key=lambda c: c['start'])
             if any(left['end'] > right['start'] for left, right in zip(ordered, ordered[1:])):
                 continue
             score = sum(c['score'] for c in group)
             if count > len(best) or (count == len(best) and score > best_score):
                 best, best_score = list(group), score
-    return [{'start': c['start'], 'end': c['end'], 'title': c['title'], 'explanation': c['explanation']}
-            for c in sorted(best, key=lambda c: c['score'], reverse=True)]
+    stats['selected'] = len(best)
+    stats['selected_with_context'] = sum(c['_context'] for c in best)
+    clips = [{'start': c['start'], 'end': c['end'], 'title': c['title'], 'explanation': c['explanation']}
+             for c in sorted(best, key=lambda c: c['score'], reverse=True)]
+    return clips, stats
 
 
 def request_proposal(body, progress):
@@ -187,9 +232,12 @@ def select_scenes(video_path, folder, duration, transcript, search, target, prog
         save_json(cache, {'fingerprint': fingerprint, 'proposal': proposal.model_dump(), 'metadata': metadata})
     stage('Clip boundary validation')
     progress('Validating distinct clip boundaries...')
-    clips = choose_clips(proposal, duration, target)
+    clips, diagnostics = select_with_diagnostics(proposal, duration, target)
     note = proposal.insufficient_material_reason if len(clips) < 4 else ''
     if len(clips) < 4 and not note:
         note = f'Found {len(clips)} distinct supported matches after validating duration and overlap; no clips were duplicated to fill four slots.'
-    return clips, {'provider': 'openai', **metadata, 'selection_note': note, 'preview_image_bytes': image_bytes,
+    if diagnostics['selected_with_context']:
+        context_note = f"Added surrounding context to {diagnostics['selected_with_context']} supported short moment(s) to meet the {min(8.0, duration):g}-second minimum."
+        note = (note + ' ' + context_note).strip()
+    return clips, {'selection_diagnostics': diagnostics, 'provider': 'openai', **metadata, 'selection_note': note, 'preview_image_bytes': image_bytes,
                    'preview_frame_count': len(paths), 'selection_cached': cached is not None}

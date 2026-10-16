@@ -261,6 +261,9 @@
       <h1 id="project-title">Your project</h1>
 
       <div class="row">
+        <button id="undo" type="button" disabled>Undo</button><button id="redo" type="button" disabled>Redo</button>
+        <span id="save-status" role="status"></span><button id="retry-save" type="button" hidden>Retry save</button>
+        <button id="export-edit" type="button">Download edited MP4</button>
         <button id="save-clip" type="button">Save clip</button>
         <a class="button" href="canvas_C.html">
           ← Canvas
@@ -282,23 +285,7 @@
           Source video
         </div>
 
-        <div class="mini-branches">
-          <div class="mini-clip active">
-            Clip 1
-          </div>
-
-          <div class="mini-clip">
-            Clip 2
-          </div>
-
-          <div class="mini-clip">
-            Clip 3
-          </div>
-
-          <div class="mini-clip">
-            Clip 4
-          </div>
-        </div>
+        <div class="mini-branches" id="editor-sessions"></div>
       </aside>
 
       <!-- Actual generated clip -->
@@ -311,44 +298,55 @@
           id="editor-empty"
           class="video-placeholder"
         >
-          Generate Clip 1 on the canvas first.
+          Choose an available clip, or generate a clip on the canvas.
         </div>
 
-        <video
+        <div class="preview-heading">
+          <div><strong id="preview-label">Edited preview</strong><p id="preview-description">Live trim and captions · original media preserved</p></div>
+          <div class="comparison" role="group" aria-label="Compare original and edited">
+            <button id="preview-original" type="button" aria-pressed="false">Original</button>
+            <button id="preview-edited" type="button" aria-pressed="true">Edited</button>
+          </div>
+        </div>
+        <p id="preview-warning" role="note" hidden></p>
+        <div id="preview-wrap"><div id="composition-frame"><canvas id="caption-overlay" aria-hidden="true"></canvas><video
           id="editor-video"
-          controls
+          disablepictureinpicture
           playsinline
           hidden
-        ></video>
+        ></video></div></div><div class="preview-transport"><button id="preview-play" type="button" aria-label="Play preview">▶ Play</button><span id="preview-time"></span><span id="playback-status" role="status"></span></div>
 
-        <!-- Timeline remains a visual placeholder. -->
-        <section class="simple-timeline">
-          <h3>Timeline</h3>
-
-          <div class="time-ruler">
-            <span>00:00</span>
-            <span id="timeline-end">—</span>
+        <section class="simple-timeline" id="timeline-controls" aria-label="Clip timeline">
+          <div class="timeline-toolbar">
+            <button id="play-toggle" type="button">Play</button><span id="time-label">0:00 / 0:00</span>
+            <div class="timeline-zoom-controls" role="group" aria-label="Timeline zoom">
+              <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+              <input id="timeline-zoom" type="range" min="1" max="12" step="0.25" value="1" aria-label="Timeline zoom">
+              <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+              <output id="zoom-label">1.0×</output><button id="zoom-fit" type="button">Fit</button>
+            </div>
           </div>
-
-          <div class="timeline-row">
-            <span>Video</span>
-            <div class="timeline-bar"></div>
+          <div class="timeline-tracks">
+            <div class="track-labels" aria-hidden="true"><span>Time</span><span>Video</span><span>Captions</span></div>
+            <div id="timeline-scroll" tabindex="0" aria-label="Scrollable timeline">
+              <div id="timeline-content">
+                <div id="timeline-ruler"></div>
+                <div id="timeline-video"><div id="thumbnail-strip"></div><div class="trim-shade trim-before"></div><div class="trim-shade trim-after"></div></div>
+                <div id="timeline-captions"></div><span id="timeline-caption-empty">No timed captions</span>
+                <div id="trim-selection" aria-hidden="true"></div>
+                <button id="handle-start" type="button" data-trim="start" role="slider" aria-label="Trim start" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">❙</button>
+                <button id="handle-end" type="button" data-trim="end" role="slider" aria-label="Trim end" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">❙</button>
+                <div id="timeline-playhead" role="slider" tabindex="0" aria-label="Playhead" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span></span></div>
+              </div>
+            </div>
           </div>
-
-          <div class="timeline-row">
-            <span>Audio</span>
-            <div class="timeline-bar audio-bar"></div>
+          <div class="trim-inputs">
+            <label for="trim-start">In <input id="trim-start" type="number" min="0" max="0" step="0.01" value="0"> <output id="start-label"></output></label>
+            <label for="trim-end">Out <input id="trim-end" type="number" min="0" max="0" step="0.01" value="0"> <output id="end-label"></output></label>
+            <button id="reset-trim" type="button">Reset trim</button>
           </div>
-
-          <div class="timeline-row">
-            <span>Captions</span>
-            <div class="timeline-bar caption-bar"></div>
-          </div>
-
-          <div class="timeline-row">
-            <span>B-roll</span>
-            <div class="timeline-bar broll-bar"></div>
-          </div>
+          <label for="seek" class="sr-only">Seek in generated clip</label><input id="seek" class="sr-only" type="range" min="0" max="0" step="0.01" value="0">
+          <p id="trim-summary"></p><p id="thumbnail-status" role="status"></p>
         </section>
       </section>
 
@@ -413,24 +411,11 @@
         >
           <h3>Editing chat</h3>
 
-          <div class="chat-placeholder">
-            Your conversation will appear here.
-          </div>
-
-          <fieldset class="placeholder-controls" disabled>
-            <label for="chat-input">
-              Editing request
-            </label>
-
-            <textarea
-              id="chat-input"
-              placeholder="Describe an edit…"
-            ></textarea>
-          </fieldset>
-
-          <p>
-            Editing controls are not connected yet.
-          </p>
+          <div id="chat-history" class="chat-placeholder" aria-live="polite"></div>
+          <form id="chat-form"><label for="chat-input">Editing request</label>
+            <textarea id="chat-input" maxlength="2000" required placeholder="Trim the first two seconds…"></textarea>
+            <button id="chat-send" type="submit">Send</button>
+          </form><p id="chat-status" role="status"></p>
         </section>
 
         <section
@@ -441,53 +426,22 @@
           hidden
         >
           <h3>Captions</h3>
-          <button id="caption-styles" type="button">Render four caption styles</button>
-          <p class="muted">Renders this selected clip in Hormozi, minimalist, bold viral, and cinematic styles.</p>
-
-          <fieldset class="placeholder-controls" disabled>
-            <label for="caption-text">
-              Caption text
-            </label>
-
-            <textarea
-              id="caption-text"
-              placeholder="Caption editing will appear here."
-            ></textarea>
-
-            <label for="caption-font">
-              Font
-            </label>
-
-            <select id="caption-font">
-              <option>Arial</option>
-              <option>Georgia</option>
-            </select>
-
-            <label for="caption-color">
-              Color
-            </label>
-
-            <input
-              id="caption-color"
-              type="color"
-              value="#ffffff"
-            >
-
-            <label for="caption-placement">
-              Placement
-            </label>
-
-            <select id="caption-placement">
-              <option>Bottom</option>
-              <option>Center</option>
-              <option>Top</option>
-            </select>
-          </fieldset>
-
-          <p>
-            Generated speech captions can be viewed
-            in the video player.
-          </p>
+          <fieldset id="caption-controls">
+            <label for="caption-cue">Caption segment</label><select id="caption-cue"></select>
+            <label for="cap-text">Caption text</label><textarea id="cap-text" maxlength="2000" rows="3" placeholder="No caption data available"></textarea>
+            <p id="caption-preview-note" role="status"></p>
+            <label><input id="cap-enabled" type="checkbox"> Captions on</label>
+            <label for="caption-preset">Style preset</label><select id="caption-preset"><option value="custom">Custom</option><option value="classic">Classic</option><option value="bold">Bold</option><option value="yellow">Yellow highlight</option></select>
+            <label for="cap-font">Font</label><select id="cap-font"><option>Arial</option><option>Georgia</option><option>Verdana</option></select>
+            <label for="cap-size">Font size</label><input id="cap-size" type="number" min="12" max="80">
+            <label><input id="cap-bold" type="checkbox"> Bold</label>
+            <label for="cap-color">Text color</label><input id="cap-color" type="color">
+            <label for="cap-stroke">Outline color</label><input id="cap-stroke" type="color">
+            <label for="cap-thickness">Outline thickness</label><input id="cap-thickness" type="number" min="0" max="8" step="0.5">
+            <label for="cap-background">Background color</label><input id="cap-background" type="color">
+            <label for="cap-opacity">Background opacity</label><input id="cap-opacity" type="range" min="0" max="1" step="0.05">
+            <label for="cap-position">Position</label><select id="cap-position"><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select>
+          </fieldset><p id="caption-warning"></p>
         </section>
 
         <section
@@ -499,26 +453,24 @@
         >
           <h3>Aspect ratio</h3>
 
-          <fieldset class="placeholder-controls" disabled>
-            <label for="aspect-ratio">
-              Display format
-            </label>
-
-            <select id="aspect-ratio">
-              <option>9:16 — Phone</option>
-              <option selected>16:9 — Desktop</option>
-              <option>4:3 — Tablet</option>
-              <option>1:1 — Square</option>
-            </select>
-
-            <label for="framing">
-              Framing
-            </label>
-
-            <select id="framing">
-              <option>Crop</option>
-              <option>Fit</option>
-            </select>
+          <fieldset id="ratio-controls">
+            <legend class="sr-only">Output composition</legend>
+            <div id="ratio-presets" role="group" aria-label="Aspect ratio presets">
+              <button type="button" data-ratio="original" aria-pressed="true"><span class="ratio-icon" style="--ratio:16/9"></span><strong>Original</strong><small>Clip’s ratio</small></button>
+              <button type="button" data-ratio="9:16" aria-pressed="false"><span class="ratio-icon" style="--ratio:9/16"></span><strong>9:16</strong><small>Phone / Reels / TikTok</small></button>
+              <button type="button" data-ratio="1:1" aria-pressed="false"><span class="ratio-icon" style="--ratio:1"></span><strong>1:1</strong><small>Square</small></button>
+              <button type="button" data-ratio="4:5" aria-pressed="false"><span class="ratio-icon" style="--ratio:4/5"></span><strong>4:5</strong><small>Portrait feed</small></button>
+              <button type="button" data-ratio="16:9" aria-pressed="false"><span class="ratio-icon" style="--ratio:16/9"></span><strong>16:9</strong><small>Desktop / YouTube / TV</small></button>
+              <button type="button" data-ratio="4:3" aria-pressed="false"><span class="ratio-icon" style="--ratio:4/3"></span><strong>4:3</strong><small>Tablet</small></button>
+            </div>
+            <label for="framing">Video framing</label><select id="framing"><option value="fit">Fit — entire video</option><option value="fill">Fill — crop to frame</option></select>
+            <div id="fit-options"><label for="frame-background">Fit background</label><input id="frame-background" type="color" value="#06110d"></div>
+            <div id="crop-options" hidden>
+              <label for="crop-x">Horizontal position <output id="crop-x-label">50%</output></label><input id="crop-x" type="range" min="0" max="1" step="0.01" value="0.5">
+              <label for="crop-y">Vertical position <output id="crop-y-label">50%</output></label><input id="crop-y" type="range" min="0" max="1" step="0.01" value="0.5">
+              <button id="crop-center" type="button">Center video</button>
+            </div>
+            <p id="composition-summary"></p>
           </fieldset>
         </section>
 
@@ -565,6 +517,11 @@
     <p>Please enable JavaScript to open the editor.</p>
   </noscript>
 
+  <link rel="stylesheet" href="editor_C.css">
+  <script src="editor_state.js"></script>
+  <script src="editor_captions.js"></script>
+  <script src="editor_timeline.js"></script>
+  <script src="editor_C.js"></script>
   <script src="flow_C.js"></script>
 </body>
 </html>

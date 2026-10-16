@@ -98,6 +98,11 @@ FRONTEND_FILES = {
     "settings_C.html",
     "styles_C.css",
     "flow_C.js",
+    "editor_C.js",
+    "editor_captions.js",
+    "editor_timeline.js",
+    "editor_state.js",
+    "editor_C.css",
 }
 
 PRIVATE_CLIP_FIELDS = {
@@ -2047,6 +2052,9 @@ def upload_video(
                 "prompt": search,
                 "source_name": Path(video.filename or "video").name,
                 "video_sha256": fingerprint.hexdigest(),
+                "engine": engine,
+                "mode": mode if engine in ("qwen", "openai") else engine,
+                "clip_length": clip_length,
 
                 "user_folder": (
                     storage_information["folder"]
@@ -2433,3 +2441,7 @@ def get_my_clips(request: Request):
 import sys
 import integration
 integration.register(app, sys.modules[__name__])
+
+# Editor-only routes use the existing ownership and JSON persistence adapters.
+import editor_backend
+editor_backend.register(app, integration)

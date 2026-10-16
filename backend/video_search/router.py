@@ -213,6 +213,8 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                            '-t', str(clip_end - clip_start), '-map', '0:v:0', '-map', '0:a:0?']
                 filters = ['scale=trunc(iw/2)*2:trunc(ih/2)*2']
                 if subtitle_lines:
+                    from video_tools import subtitle_ffmpeg
+                    command[0] = subtitle_ffmpeg()
                     filters.append('subtitles=filename=' + subtitle_name)
                 command += ['-vf', ','.join(filters), '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
                             '-c:a', 'aac', '-movflags', '+faststart', str(output)]
