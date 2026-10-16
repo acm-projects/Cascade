@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
-from cascade_llm import selected_model
+from backend.cascade_llm import selected_model
 
 from . import pipeline
 from . import youtube_trends

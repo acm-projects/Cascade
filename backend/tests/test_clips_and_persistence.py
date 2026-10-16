@@ -12,10 +12,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from agent import clipper  # noqa: E402
-from agent import router as router_module  # noqa: E402
+from backend.agent import clipper  # noqa: E402
+from backend.agent import router as router_module  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None, reason="needs ffmpeg"

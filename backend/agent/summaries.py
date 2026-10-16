@@ -13,7 +13,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
-from cascade_llm import call_cost, make_client, selected_model, structured_json
+from backend.cascade_llm import call_cost, make_client, selected_model, structured_json
 from .chunks import build_chunks, fmt_time, is_long_transcript
 from .index import CACHE_DIR, VideoIndex
 

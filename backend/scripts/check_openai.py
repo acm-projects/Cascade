@@ -1,6 +1,6 @@
 """Live check of the OpenAI (Responses API) path with a REAL key. Costs well under a cent.
 
-Run from backend/:   python scripts/check_openai.py
+Run from the repo root:   python backend/scripts/check_openai.py
 
 It proves the things the unit tests (which use a fake client) cannot:
   1. the model id exists for your key
@@ -21,14 +21,14 @@ import os
 import sys
 from pathlib import Path
 
-BACKEND = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BACKEND))
+ROOT = Path(__file__).resolve().parents[2]  # repo root: backend code is imported as backend.*
+sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv  # noqa: E402
 
-load_dotenv(BACKEND.parent / ".env")
+load_dotenv(ROOT / ".env")
 
-from cascade_llm import MODELS, OpenAIConversation, call_cost, make_client, structured_json  # noqa: E402
+from backend.cascade_llm import MODELS, OpenAIConversation, call_cost, make_client, structured_json  # noqa: E402
 
 # This script always exercises the OpenAI path, whatever LLM_PROVIDER is set to in .env.
 os.environ["LLM_PROVIDER"] = "openai"
@@ -85,7 +85,7 @@ def check_image_mode(client, model: str, mode: str) -> bool:
         call = turn1.tool_calls[0]
         print(f"  forced call OK: look_at_frame({call.input}) parse_error={call.error}")
 
-        from cascade_llm import ToolResult
+        from backend.cascade_llm import ToolResult
 
         conv.add_tool_results([
             ToolResult(call.id, [

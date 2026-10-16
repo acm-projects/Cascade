@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from trends import pipeline  # noqa: E402
-from trends import router as trends_router  # noqa: E402
+from backend.trends import pipeline  # noqa: E402
+from backend.trends import router as trends_router  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

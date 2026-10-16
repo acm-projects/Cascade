@@ -12,14 +12,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from agent import agent as agent_module  # noqa: E402
-from agent import summaries  # noqa: E402
-from agent import tools  # noqa: E402
-from agent.chunks import build_chunks  # noqa: E402
-from agent.index import VideoIndex  # noqa: E402
-from agent.tools import ToolBox  # noqa: E402
+from backend.agent import agent as agent_module  # noqa: E402
+from backend.agent import summaries  # noqa: E402
+from backend.agent import tools  # noqa: E402
+from backend.agent.chunks import build_chunks  # noqa: E402
+from backend.agent.index import VideoIndex  # noqa: E402
+from backend.agent.tools import ToolBox  # noqa: E402
 
 
 def long_transcript(n=60, length=10.0):

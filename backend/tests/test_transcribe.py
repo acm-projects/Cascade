@@ -6,10 +6,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from agent import transcribe  # noqa: E402
-from agent.index import transcript_cache_paths  # noqa: E402
+from backend.agent import transcribe  # noqa: E402
+from backend.agent.index import transcript_cache_paths  # noqa: E402
 
 
 def w(word, start, end, speaker=0, punctuated=None):

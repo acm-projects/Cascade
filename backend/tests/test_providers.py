@@ -7,10 +7,10 @@ from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import cascade_llm as llm  # noqa: E402
-from cascade_llm.structured import structured_json  # noqa: E402
+import backend.cascade_llm as llm  # noqa: E402
+from backend.cascade_llm.structured import structured_json  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -208,8 +208,8 @@ def _strict_ok(schema, path="schema"):
 
 
 def test_schemas_sent_to_openai_satisfy_strict_mode():
-    from agent.summaries import SUMMARY_SCHEMA
-    from trends.pipeline import TAG_SCHEMA
+    from backend.agent.summaries import SUMMARY_SCHEMA
+    from backend.trends.pipeline import TAG_SCHEMA
 
     assert _strict_ok(SUMMARY_SCHEMA) == []
     assert _strict_ok(TAG_SCHEMA) == []

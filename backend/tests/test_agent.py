@@ -9,11 +9,11 @@ from types import SimpleNamespace
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from agent import agent as agent_module  # noqa: E402
-from agent.index import VideoIndex  # noqa: E402
-from agent.tools import ToolBox  # noqa: E402
+from backend.agent import agent as agent_module  # noqa: E402
+from backend.agent.index import VideoIndex  # noqa: E402
+from backend.agent.tools import ToolBox  # noqa: E402
 
 
 def make_index(duration=100.0):
@@ -334,7 +334,7 @@ def test_usage_is_accumulated_and_priced():
 
 
 def test_usage_cost_unknown_for_unpriced_model(monkeypatch):
-    from cascade_llm import clients
+    from backend.cascade_llm import clients
 
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setitem(clients.MODELS, "anthropic", "some-other-model")

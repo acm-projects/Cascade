@@ -17,7 +17,7 @@ from typing import Any, Callable
 import whisper
 import yt_dlp
 
-from cascade_llm import OPENAI, make_client, selected_model, selected_provider, structured_json
+from backend.cascade_llm import OPENAI, make_client, selected_model, selected_provider, structured_json
 
 # Loaded once per process — reused across requests.
 _whisper_model = None
