@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Sign In</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .login-page {
+      min-height: calc(100vh - 75px);
+      display: grid;
+      place-items: center;
+      padding: 32px 20px;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+    }
+
+    .login-container h1 {
+      margin-bottom: 10px;
+    }
+
+    .login-description {
+      margin-bottom: 24px;
+    }
+
+    #sign-in {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      text-align: left;
+    }
+
+    .cl-rootBox,
+    .cl-cardBox {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    #status {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+
+<body data-page="login">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+  </header>
+
+  <main class="login-page">
+    <section class="login-container">
+      <h1>Sign in</h1>
+
+      <p class="muted login-description">
+        Sign in or create an account to open your projects.
+      </p>
+
+      <!-- Clerk inserts its sign-in and sign-up interface here. -->
+      <div id="sign-in"></div>
+
+      <p
+        id="status"
+        role="status"
+        aria-live="polite"
+      >
+        Loading sign-in…
+      </p>
+
+      <a class="back-link" href="index_C.html">
+        ← Back
+      </a>
+    </section>
+  </main>
+
+  <noscript>
+    <p>Please enable JavaScript to sign in.</p>
+  </noscript>
+
+  <script src="flow_C.js"></script>
+</body>
+</html>

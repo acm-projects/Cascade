@@ -130,10 +130,15 @@ def analyze_status(job_id: str):
 
 
 def _run_analysis(
-    job_id: str, topic: str, upload_path: Path, work_dir: Path, cache_path: Path
+    job_id: str, topic: str, upload_path: Path, work_dir: Path, cache_path: Path, progress=None
 ) -> None:
+    def report_progress(message):
+        _update_job(job_id, message)
+        if progress:
+            progress(message)
+
     try:
-        _update_job(job_id, f"Fetching trending videos for '{topic}'...")
+        report_progress(f"Fetching trending videos for '{topic}'...")
         try:
             trending_videos = youtube_trends.get_trending_videos(topic, limit=TRENDING_LIMIT)
         except Exception as exc:
@@ -144,7 +149,7 @@ def _run_analysis(
         trending_results = []
         for i, tv in enumerate(trending_videos, start=1):
             def report(msg: str, i=i, title=tv["title"]) -> None:
-                _update_job(job_id, f"Trending video {i}/{len(trending_videos)} ({title}): {msg}")
+                report_progress(f"Trending video {i}/{len(trending_videos)} ({title}): {msg}")
 
             try:
                 analysis = pipeline.analyze_youtube_video(tv["video_id"], work_dir, progress=report)
@@ -159,7 +164,7 @@ def _run_analysis(
             return
 
         def report_upload(msg: str) -> None:
-            _update_job(job_id, f"Your video: {msg}")
+            report_progress(f"Your video: {msg}")
 
         try:
             your_analysis = pipeline.analyze_video_file(upload_path, work_dir, progress=report_upload)
@@ -168,7 +173,7 @@ def _run_analysis(
             _fail_job(job_id, f"Could not analyze your video: {exc}")
             return
 
-        _update_job(job_id, "Comparing your video against trending videos...")
+        report_progress("Comparing your video against trending videos...")
         comparison = _compare_tags(your_analysis["tags"], [r["tags"] for r in trending_results])
 
         result = {

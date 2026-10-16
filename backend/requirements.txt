@@ -13,7 +13,7 @@ anthropic
 yt-dlp
 
 # clips feature
-moviepy
+moviepy>=2,<3
 imageio_ffmpeg
 
 # video_search feature
