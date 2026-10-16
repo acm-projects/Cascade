@@ -84,6 +84,13 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(response.status_code, 202)
             self.assertIs(submit.call_args.args[0], app1.process_upload)
 
+            # speech and visual search transcribe with Deepgram too, so they check that key at upload
+            for engine in ('speech', 'visual'):
+                with patch.dict(os.environ, {'DEEPGRAM_API_KEY': ''}):
+                    response = self.client.post('/upload', headers=self.headers, data={**data, 'engine': engine}, files=files())
+                self.assertEqual(response.status_code, 503, engine)
+                self.assertIn('DEEPGRAM_API_KEY', response.json()['detail'])
+
             # the engines the agent replaced are gone
             for engine in ('openai', 'qwen'):
                 response = self.client.post('/upload', headers=self.headers, data={**data, 'engine': engine}, files=files())

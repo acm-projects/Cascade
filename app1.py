@@ -1175,10 +1175,15 @@ def upload_video(
     validate_clip_storage()
     if engine not in ("agent", "speech", "visual"):
         raise HTTPException(400, "Invalid search engine.")
+    # a missing key fails now, with a clear message, not mid-job
     if engine == 'agent':
-        problem = requirements_error()  # a missing key fails now, with a clear message, not mid-job
-        if problem:
-            raise HTTPException(503, problem)
+        problem = requirements_error()
+    elif not os.environ.get('DEEPGRAM_API_KEY', '').strip():
+        problem = 'DEEPGRAM_API_KEY is not set. Add it to .env and restart the server.'
+    else:
+        problem = None
+    if problem:
+        raise HTTPException(503, problem)
     search = search.strip()
 
     if not search or len(search) > 2000:
