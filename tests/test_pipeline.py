@@ -11,57 +11,11 @@ from unittest.mock import Mock, patch
 
 import app1
 import numpy as np
-from PIL import Image
 from starlette.datastructures import UploadFile
 
 
 class PipelineTests(unittest.TestCase):
-    def test_vision_context_overflow_splits_without_dropping_or_reordering_frames(self):
-        completed = []
-        sheets = {}
-        def preview(images):
-            name = 'sheet-' + ','.join(images)
-            sheets[name] = images
-            return name
-        def respond(prompt, images):
-            frames = sheets.get(images[0], images)
-            if len(frames) > 2:
-                raise app1.ResponseError('request exceeds the available context size', 400)
-            completed.extend(frames)
-            return ','.join(frames)
-        messages = []
-        with patch.object(app1, 'ask_qwen', side_effect=respond), patch.object(app1, 'scene_preview', side_effect=preview):
-            answer = app1.describe_frame_group('describe', ['1', '2', '3', '4', '5'], messages.append)
-        self.assertEqual(completed, ['1', '2', '3', '4', '5'])
-        self.assertEqual(answer, '1,2\n3\n4,5')
-        self.assertTrue(any('splitting' in message for message in messages))
 
-    def test_unrelated_model_errors_are_not_retried(self):
-        with patch.object(app1, 'ask_qwen', side_effect=app1.ResponseError('model not found', 404)) as ask, \
-             patch.object(app1, 'scene_preview', return_value='sheet.jpg'):
-            with self.assertRaises(app1.ResponseError):
-                app1.describe_frame_group('describe', ['1', '2'], lambda _: None)
-        self.assertEqual(ask.call_count, 1)
-
-    def test_scene_preview_keeps_all_frames_in_one_bounded_image(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            paths = []
-            for index in range(5):
-                path = Path(tmp) / f'frame_{index}.jpg'
-                Image.new('RGB', (100, 300), 'blue').save(path)
-                paths.append(path)
-            preview = app1.scene_preview(paths)
-            with Image.open(preview) as image:
-                self.assertEqual(image.size, (672, 488))
-            with patch.object(app1, 'ask_qwen', return_value='scene') as ask:
-                app1.describe_frame_group('describe', paths, lambda _: None)
-            self.assertEqual(len(ask.call_args.kwargs['images']), 1)
-
-    def test_single_frame_context_failure_is_actionable(self):
-        with patch.object(app1, 'ask_qwen', side_effect=app1.ResponseError('request exceeds context size', 400)):
-            with self.assertRaises(app1.HTTPException) as caught:
-                app1.describe_frame_group('describe', ['1'], lambda _: None)
-        self.assertIn('CASCADE_MODEL_CONTEXT', caught.exception.detail)
 
     def test_local_storage_needs_no_aws_calls(self):
         with patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}), patch.object(app1, 's3_client') as client:
@@ -81,11 +35,6 @@ class PipelineTests(unittest.TestCase):
                 app1.validate_clip_storage()
         self.assertIn('AWS credentials are missing', caught.exception.detail)
 
-    def test_failed_scoring_is_not_reported_as_no_match(self):
-        observations = [{'start': 0, 'end': 3, 'text': 'blue screen'}]
-        with patch.object(app1, 'ask_qwen', side_effect=RuntimeError('invalid JSON')):
-            with self.assertRaises(RuntimeError):
-                app1.score_observations(observations, 'blue', 'blue screen', lambda _: None)
 
     def test_visual_pipeline_renders_and_transcribes_only_selected_audio(self):
         fake_search = types.ModuleType('sentence_transformers')

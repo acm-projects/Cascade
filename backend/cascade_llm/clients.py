@@ -13,6 +13,11 @@ from typing import Any
 ANTHROPIC = "anthropic"
 OPENAI = "openai"
 
+
+class LLMConfigError(RuntimeError):
+    """A setup problem (missing key, bad LLM_PROVIDER) with a message that is safe to show a user."""
+
+
 # One fixed model per provider.
 MODELS: dict[str, str] = {
     ANTHROPIC: "claude-haiku-5-5",
@@ -24,7 +29,7 @@ def selected_provider() -> str:
     """The provider chosen by LLM_PROVIDER, read at call time (default: anthropic)."""
     value = os.environ.get("LLM_PROVIDER", "").strip().lower() or ANTHROPIC
     if value not in MODELS:
-        raise RuntimeError(f"LLM_PROVIDER must be 'anthropic' or 'openai' (got '{value}').")
+        raise LLMConfigError(f"LLM_PROVIDER must be 'anthropic' or 'openai' (got '{value}').")
     return value
 
 
@@ -39,12 +44,12 @@ def make_client(provider: str | None = None) -> Any:
     key_name = f"{provider.upper()}_API_KEY"
     api_key = os.environ.get(key_name, "").strip()
     if not api_key:
-        raise RuntimeError(f"{key_name} is not set (LLM_PROVIDER is '{provider}').")
+        raise LLMConfigError(f"{key_name} is not set (LLM_PROVIDER is '{provider}').")
     if provider == OPENAI:
         try:
             import openai
         except ImportError as exc:  # pragma: no cover - depends on the environment
-            raise RuntimeError("The openai package is not installed (pip install openai).") from exc
+            raise LLMConfigError("The openai package is not installed (pip install openai).") from exc
         return openai.OpenAI(api_key=api_key)
     import anthropic
 

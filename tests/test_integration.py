@@ -15,7 +15,7 @@ import integration
 
 class IntegrationTests(unittest.TestCase):
     def setUp(self):
-        self.storage = patch.dict(os.environ, {'CASCADE_STORAGE': 'local', 'OPENAI_API_KEY': 'test-key'})
+        self.storage = patch.dict(os.environ, {'CASCADE_STORAGE': 'local', 'LLM_PROVIDER': 'anthropic', 'ANTHROPIC_API_KEY': 'test-key', 'DEEPGRAM_API_KEY': 'test-key'})
         self.storage.start()
         self.temp = tempfile.TemporaryDirectory()
         self.directory = patch.object(app1, 'JOBS_DIR', Path(self.temp.name))
@@ -58,16 +58,36 @@ class IntegrationTests(unittest.TestCase):
         self.assertIs(submit.call_args.args[0], integration.process_search)
         return result.json()['job_id']
 
-    def test_openai_upload_checks_key_and_dispatches_without_ollama(self):
-        data = {'project_id': self.project['id'], 'search': 'four funny moments', 'engine': 'openai'}
+    def test_agent_upload_checks_keys_and_dispatches(self):
+        data = {'project_id': self.project['id'], 'search': 'four funny moments', 'engine': 'agent'}
+        files = lambda: {'video': ('a.mp4', b'video')}
         with patch.object(app1.worker, 'submit') as submit:
-            with patch.dict(os.environ, {'OPENAI_API_KEY': ''}):
-                response = self.client.post('/upload', headers=self.headers, data=data, files={'video': ('a.mp4', b'video')})
+            # a missing key fails at upload with a clear message, not minutes into a job
+            for missing in ('DEEPGRAM_API_KEY', 'ANTHROPIC_API_KEY'):
+                with patch.dict(os.environ, {missing: ''}):
+                    response = self.client.post('/upload', headers=self.headers, data=data, files=files())
+                self.assertEqual(response.status_code, 503, missing)
+                self.assertIn(missing, response.json()['detail'])
+            with patch.dict(os.environ, {'LLM_PROVIDER': 'openai', 'OPENAI_API_KEY': ''}):
+                response = self.client.post('/upload', headers=self.headers, data=data, files=files())
             self.assertEqual(response.status_code, 503)
+            self.assertIn('OPENAI_API_KEY', response.json()['detail'])
             submit.assert_not_called()
-            response = self.client.post('/upload', headers=self.headers, data=data, files={'video': ('a.mp4', b'video')})
+
+            response = self.client.post('/upload', headers=self.headers, data=data, files=files())
             self.assertEqual(response.status_code, 202)
-            self.assertIs(submit.call_args.args[0], app1.process_openai_upload)
+            self.assertIs(submit.call_args.args[0], app1.process_upload)
+
+            # the agent is the default engine
+            del data['engine']
+            response = self.client.post('/upload', headers=self.headers, data=data, files=files())
+            self.assertEqual(response.status_code, 202)
+            self.assertIs(submit.call_args.args[0], app1.process_upload)
+
+            # the engines the agent replaced are gone
+            for engine in ('openai', 'qwen'):
+                response = self.client.post('/upload', headers=self.headers, data={**data, 'engine': engine}, files=files())
+                self.assertEqual(response.status_code, 400, engine)
 
     def test_upload_project_association_history_and_source(self):
         job_id = self.upload()
@@ -191,13 +211,6 @@ class IntegrationTests(unittest.TestCase):
         self.assertTrue(all(not (fake.OUTPUTS / Path(m['clip_url']).name).exists() for m in matches))
         self.assertEqual(self.client.get('/api/features/' + job_id, headers=self.other).status_code, 404)
 
-    def test_prompt_selection_returns_real_nonoverlapping_candidates(self):
-        observations = [{'start': i*40, 'end': i*40+10, 'score': 8, 'title': str(i), 'reason': 'match'} for i in range(5)]
-        with patch.object(app1, 'interpret_request', return_value=('criteria', True)), patch.object(app1, 'score_observations', return_value=observations):
-            clips = app1.select_clips(observations, 'prompt', 220, 15, lambda _: None)
-        self.assertEqual(len(clips), 4)
-        self.assertEqual([clip['title'] for clip in clips], ['0', '1', '2', '3'])
-        self.assertTrue(all(a['end'] <= b['start'] for a, b in zip(clips, clips[1:])))
 
     def test_feature_adapters_validate_ownership_before_workers(self):
         job_id = self.upload()

@@ -4,13 +4,12 @@ The updated website runs through the existing Clerk-authenticated FastAPI app on
 
 See [INTEGRATION.md](INTEGRATION.md) for dependency installation, services/configuration, exact startup commands, verification, and remaining unfinished controls.
 
-AI scene analysis now uses OpenAI by default to select up to four distinct clips
-from sampled images and timestamped transcript text. Add `OPENAI_API_KEY` to your
-existing local `.env`; the default model is `gpt-5.4-mini` (override with
-`OPENAI_SCENE_MODEL`). Ollama can stay off. Transcription and FFmpeg rendering
-remain local. Local visual/speech search and the legacy Ollama mode are optional
-alternatives. The timing panel shows each stage; fewer than four supported
-matches are explained instead of duplicating clips.
+The **AI agent** is the default way to find clips. It transcribes the video with Deepgram, then searches,
+reads and compares moments across the whole video and returns up to four ranked clips spread through it. Set
+`DEEPGRAM_API_KEY` and `LLM_PROVIDER` (`anthropic` by default, or `openai`) with the matching API key in your
+`.env`; the models are fixed in code. A "What the agent is doing" panel shows each step while it works, and
+there is no default time limit. Local visual/speech search are optional alternatives and transcribe with
+Deepgram too (there is no local Whisper). The OpenAI scene-analysis and Ollama engines were removed.
 
 Local visual and speech search also return up to four non-overlapping clips.
 They rank image/transcript matches once per job, preserve audio, and generate

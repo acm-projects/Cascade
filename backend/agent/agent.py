@@ -70,6 +70,7 @@ def run_agent(
     progress: Callable[[str], None] | None = None,
     client: Any = None,
     conversation: Any = None,
+    target_seconds: float | None = None,
 ) -> dict[str, Any]:
     """`conversation` (or the provider chosen by LLM_PROVIDER, using `client` if given) supplies
     the wire format; everything below - tool guard, pacing, forced final turn - is provider-neutral."""
@@ -77,10 +78,17 @@ def run_agent(
 
     conv = conversation or make_conversation(client)
     model = selected_model()
-    conv.start(
+    first_message = (
         f"Find the {TARGET_SUGGESTIONS} best '{category}' moments of this whole video, spread out "
         f"through it (duration {toolbox.index.duration:.1f}s)."
     )
+    if toolbox.min_clip_seconds != MIN_CLIP_SECONDS or toolbox.max_clip_seconds != MAX_CLIP_SECONDS or target_seconds:
+        first_message += (
+            f" For this request every clip must be between {toolbox.min_clip_seconds:g} and "
+            f"{toolbox.max_clip_seconds:g} seconds long"
+            + (f" (aim for about {target_seconds:g}s)." if target_seconds else ".")
+        )
+    conv.start(first_message)
     final_text = ""
     # Start from what transcript summarization already spent (zero when cached / short video).
     prior = getattr(toolbox.index, "summary_usage", None) or {}

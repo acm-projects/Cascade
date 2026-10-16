@@ -114,10 +114,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "properties": {
                 "start_time": {"type": "number"},
                 "end_time": {"type": "number"},
+                "title": {"type": "string", "description": "a short headline for the clip, under 80 characters"},
                 "reason": {"type": "string"},
                 "score": {"type": "number", "minimum": 0, "maximum": 1},
             },
-            "required": ["start_time", "end_time", "reason", "score"],
+            "required": ["start_time", "end_time", "title", "reason", "score"],
         },
     },
     {
@@ -177,10 +178,15 @@ class ToolBox:
         index: VideoIndex,
         video_path: Path,
         frame_grabber: Callable[[Path, float], bytes] = grab_frame_jpeg,
+        min_clip_seconds: float = MIN_CLIP_SECONDS,
+        max_clip_seconds: float = MAX_CLIP_SECONDS,
     ):
         self.index = index
         self.video_path = video_path
         self.frame_grabber = frame_grabber
+        # Per-run limits (the website lets users pick a target length), never beyond the global ones.
+        self.min_clip_seconds = max(MIN_CLIP_SECONDS, min_clip_seconds)
+        self.max_clip_seconds = min(MAX_CLIP_SECONDS, max_clip_seconds)
         self.candidates: list[dict[str, Any]] = []
         self.ranking: list[dict[str, Any]] | None = None
         self.finalized = False
@@ -338,14 +344,14 @@ class ToolBox:
         blocks.append({"type": "text", "text": f"Transcript {start:.1f}s-{end:.1f}s: {spoken}"})
         return blocks, False
 
-    def _add_candidate(self, start_time: float, end_time: float, reason: str, score: float):
+    def _add_candidate(self, start_time: float, end_time: float, reason: str, score: float, title: str = ""):
         start, end = float(start_time), float(end_time)
         length = end - start
         if start < 0 or end > self.index.duration + 0.01:
             return _text(f"Clip must lie within 0-{self.index.duration:.1f}s."), True
-        if not (MIN_CLIP_SECONDS <= length <= MAX_CLIP_SECONDS):
+        if not (self.min_clip_seconds <= length <= self.max_clip_seconds):
             return _text(
-                f"Clip length must be {MIN_CLIP_SECONDS:g}-{MAX_CLIP_SECONDS:g}s (got {length:.1f}s)."
+                f"Clip length must be {self.min_clip_seconds:g}-{self.max_clip_seconds:g}s (got {length:.1f}s)."
             ), True
         for existing in self.candidates:
             overlap = min(end, existing["end"]) - max(start, existing["start"])
@@ -358,6 +364,7 @@ class ToolBox:
             "id": len(self.candidates),
             "start": round(start, 1),
             "end": round(end, 1),
+            "title": (str(title).strip() or str(reason).strip())[:80],
             "reason": str(reason),
             "score": round(max(0.0, min(1.0, float(score))), 2),
         }
@@ -442,6 +449,7 @@ class ToolBox:
                 "candidate_id": cid,
                 "start": by_id[cid]["start"],
                 "end": by_id[cid]["end"],
+                "title": by_id[cid]["title"],
                 "reason": by_id[cid]["reason"],
                 "score": by_id[cid]["score"],
                 "comparison": notes.get(cid, ""),

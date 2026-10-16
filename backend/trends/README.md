@@ -2,7 +2,7 @@
 
 A demo full-stack tool: upload a video, give it a topic, and it compares your
 video's style/content tags against the top 5 trending YouTube videos for that
-topic, using ffmpeg + Whisper for transcription/frames and Claude for tagging.
+topic, using ffmpeg for frames, Deepgram for transcription and the configured AI model (`LLM_PROVIDER`) for tagging.
 
 ## Prerequisites
 

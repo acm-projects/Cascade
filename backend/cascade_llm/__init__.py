@@ -7,6 +7,7 @@ structured.py is the "prompt in, schema-shaped JSON out" call.
 
 from .clients import (  # noqa: F401
     ANTHROPIC,
+    LLMConfigError,
     MODELS,
     OPENAI,
     PRICING,
