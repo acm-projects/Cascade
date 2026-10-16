@@ -76,6 +76,11 @@ from the same Deepgram transcript. Clerk ownership and local/S3 delivery are the
 step as it happens (indexing, each model turn, each tool call, then cutting and saving). The steps are saved
 with the job, so a finished or failed job still shows them after a reload or server restart.
 
+**Speed.** The final clips are encoded in parallel (CPU only, about half the cores, never more than the number of
+clips); captions and storage run as each clip finishes. Each step in the panel shows seconds since the job started,
+so the gaps show where time goes. The CLIP and MiniLM search models load in the background when the server starts;
+set `CASCADE_WARM_MODELS=0` to skip that (they hold roughly 700 MB of RAM).
+
 **Time limits.** There is no default time limit: a first run on a long video can legitimately take several
 minutes. **Stop processing** takes effect at the next step. `CASCADE_JOB_TIMEOUT` (seconds) is an optional
 safety net; leave it unset for no limit.

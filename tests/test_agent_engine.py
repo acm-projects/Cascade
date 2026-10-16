@@ -189,6 +189,67 @@ class AgentEngineTests(unittest.TestCase):
         failure = json.loads((self.folder / 'failure.json').read_text())
         self.assertIn('steps_log', failure)  # a failed job still shows where it stopped, after a restart too
 
+    # ------------------------------------------------------------------ parallel rendering and step timings
+    def test_render_worker_counts_follow_the_machine(self):
+        for cores, clips, workers, threads in ((2, 4, 1, 2), (4, 4, 2, 2), (8, 4, 4, 2), (16, 4, 4, 4), (32, 2, 2, 16), (None, 4, 1, 1)):
+            with patch.object(app1.os, 'cpu_count', return_value=cores):
+                self.assertEqual(app1.render_workers(clips), workers, (cores, clips))
+                self.assertEqual(app1.encoder_threads(workers), threads, (cores, clips))
+
+    def test_clips_render_in_parallel_but_come_back_in_rank_order(self):
+        import threading
+        import time as clock
+        lock, running, peak = threading.Lock(), [0], [0]
+        real = app1.render_clip
+
+        def slow_render(video_path, selection, output_path, threads):
+            with lock:
+                running[0] += 1
+                peak[0] = max(peak[0], running[0])
+            clock.sleep(0.4 if selection['title'] == 'Moment 0' else 0.05)  # the first clip finishes last
+            try:
+                real(video_path, selection, output_path, threads)
+            finally:
+                with lock:
+                    running[0] -= 1
+
+        with patch.object(app1.os, 'cpu_count', return_value=8), patch.object(app1, 'render_clip', side_effect=slow_render):
+            job = self.run_job(fake_agent({}))
+        self.assertEqual(job['state'], 'done')
+        self.assertGreater(peak[0], 1)  # more than one encode ran at once
+        self.assertEqual([c['title'] for c in job['clips']], [f'Moment {i}' for i in range(4)])
+        self.assertIn('Video rendering and storage', job['timings'])
+
+    def test_a_failed_render_fails_the_job_with_a_safe_message(self):
+        def broken(video_path, selection, output_path, threads):
+            raise RuntimeError('ffmpeg exploded at /secret/path with key sk-secret-123')
+
+        with patch.object(app1, 'render_clip', side_effect=broken):
+            job = self.run_job(fake_agent({}))
+        self.assertEqual(job['state'], 'error')
+        self.assertNotIn('sk-secret', job['message'])
+        self.assertNotIn('/secret/path', job['message'])
+
+    def test_every_step_carries_its_elapsed_time(self):
+        job = self.run_job(fake_agent({}))
+        self.assertEqual(len(job['steps_elapsed']), len(job['steps_log']))
+        self.assertEqual(job['steps_elapsed'], sorted(job['steps_elapsed']))  # never goes backwards
+        saved = json.loads((self.folder / 'results.json').read_text())
+        self.assertEqual(saved['steps_elapsed'], job['steps_elapsed'])
+        restored = (app1.jobs.clear(), self.client.get('/api/features/' + JOB, headers=self.headers).json())[1]
+        self.assertEqual(restored['steps_elapsed'], job['steps_elapsed'])
+
+    def test_model_warmup_can_be_switched_off_and_never_breaks_startup(self):
+        with patch.object(app1.threading, 'Thread') as thread:
+            with patch.dict(os.environ, {'CASCADE_WARM_MODELS': '0'}):
+                app1.start_model_warmup()
+            thread.assert_not_called()
+            with patch.dict(os.environ, {'CASCADE_WARM_MODELS': '1'}):
+                app1.start_model_warmup()
+            thread.assert_called_once()
+        with patch('backend.video_search.router.load_models', side_effect=RuntimeError('no model files')):
+            app1.warm_models()  # a failed warm-up is logged, not raised
+
 
 if __name__ == '__main__':
     unittest.main()

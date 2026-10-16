@@ -167,6 +167,7 @@ def build_index(
     from PIL import Image
     from backend.video_search import router as vs
 
+    emit("Preparing search models")
     vs.load_models("visual", emit)
     vs.load_models("speech", emit)
 
@@ -219,6 +220,7 @@ def build_index(
         transcript = transcribe_media(video_path, work_dir, progress=emit, info=t_info)
         transcription_cost = t_info.get("cost_usd", 0.0)
         if transcript:
+            emit("Embedding transcript")
             segment_embeddings = vs.search_model.encode(
                 [seg["text"] for seg in transcript], normalize_embeddings=True
             )

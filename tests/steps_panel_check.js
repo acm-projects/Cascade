@@ -47,6 +47,10 @@ check(panel.hidden === false && panel.open === true, "panel is shown and open wh
 check(list.children.length === 3 && list.children[1].textContent === "Agent turn 1/8", "each step is one list row, in order");
 check(list.children[2].textContent.includes("<img src=x"), "tool arguments are shown as text (textContent), not parsed as HTML");
 check(list.children.every(c => c.tag === "li"), "rows are <li> elements");
+showAgentSteps({ state: "processing", steps_log: ["Indexing video", "Agent turn 1/8", "x"], steps_elapsed: [0.4, 121.26] }, "job-1");
+list = $("agent-steps-list");
+check(list.children[0].textContent === "[0.4s] Indexing video" && list.children[1].textContent === "[121.3s] Agent turn 1/8", "each step shows its elapsed time");
+check(list.children[2].textContent === "x", "a step without a time is shown as plain text");
 
 // 3. new steps follow the bottom when the user is already at the bottom
 list.scrollTop = list.scrollHeight - list.clientHeight; // at the bottom

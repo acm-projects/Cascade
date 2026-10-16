@@ -429,7 +429,12 @@
     panel.hidden = steps.length === 0;
     const list = $("agent-steps-list");
     const followBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 24;
-    list.replaceChildren(...steps.map(step => { const row = document.createElement("li"); row.textContent = step; return row; }));
+    const times = Array.isArray(job.steps_elapsed) ? job.steps_elapsed : [];
+    list.replaceChildren(...steps.map((step, i) => {
+      const row = document.createElement("li");
+      row.textContent = typeof times[i] === "number" ? "[" + times[i].toFixed(1) + "s] " + step : step;
+      return row;
+    }));
     if (followBottom) list.scrollTop = list.scrollHeight;
     if (["done", "error"].includes(job.state) && !panel.dataset.collapsed) { panel.dataset.collapsed = "1"; panel.open = false; }
   }

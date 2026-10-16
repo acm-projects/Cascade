@@ -1,5 +1,5 @@
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from uuid import uuid4
 from functools import lru_cache
@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 import traceback
 import httpx
@@ -56,6 +57,24 @@ from backend.cascade_stt import TranscriptionError
 # --------------------------------------------------
 
 app = FastAPI()
+
+
+def warm_models():
+    """Load the CLIP and MiniLM search models in the background so the first upload does not pay for it."""
+    try:
+        from backend.video_search import router as video_search
+        video_search.load_models("visual")
+        video_search.load_models("speech")
+        print("Search models loaded.", flush=True)
+    except Exception as error:  # a failed warm-up only means the first upload loads them itself
+        print(f"Search model warm-up failed: {error}", flush=True)
+
+
+@app.on_event("startup")
+def start_model_warmup():
+    # CASCADE_WARM_MODELS=0 skips it (the models hold roughly 700 MB of RAM once loaded).
+    if os.getenv("CASCADE_WARM_MODELS", "1") != "0":
+        threading.Thread(target=warm_models, name="model-warmup", daemon=True).start()
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
@@ -988,6 +1007,31 @@ def write_captions(
 # Background processing
 # --------------------------------------------------
 
+def render_workers(clip_count):
+    """How many clips to encode at once: about half the cores (x264 already uses several per encode)."""
+    cores = os.cpu_count() or 1
+    return max(1, min(clip_count, cores // 2))
+
+
+def encoder_threads(workers):
+    """Split the cores between the parallel encodes so they do not oversubscribe the CPU."""
+    return max(1, (os.cpu_count() or 1) // workers)
+
+
+def render_clip(video_path, selection, output_path, threads):
+    run_command([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-ss", str(selection["start"]),
+        "-i", str(video_path),
+        "-t", str(selection["end"] - selection["start"]),
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-c:v", "libx264", "-preset", "veryfast", "-threads", str(threads),
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart",
+        str(output_path),
+    ])
+
+
 MAX_STEPS = 400  # the step log shown on the website is capped
 
 
@@ -1002,6 +1046,7 @@ def process_upload(
     started = time.monotonic()
     stage = 'starting analysis'
     steps = []
+    steps_elapsed = []  # seconds since the job started, one per step (shown beside each step)
     timer = StageTimer(lambda timings, active: update_job(
         job_id, timings=timings, timing_stage=active, timing_stage_started_at=time.time()))
 
@@ -1014,9 +1059,10 @@ def process_upload(
             raise TimeoutError('Job processing budget exceeded')
         stage = message
         steps.append(message)
-        del steps[:-MAX_STEPS]
+        steps_elapsed.append(round(time.monotonic() - started, 1))
+        del steps[:-MAX_STEPS], steps_elapsed[:-MAX_STEPS]
         # update_job also raises JobCancelled if the user stopped the job, so cancel works mid-agent.
-        update_job(job_id, message=message, steps_log=list(steps))
+        update_job(job_id, message=message, steps_log=list(steps), steps_elapsed=list(steps_elapsed))
 
     try:
         update_job(
@@ -1043,95 +1089,48 @@ def process_upload(
             },
         )
 
-        clips = []
+        total = len(selected)
+        workers = render_workers(total)
+        threads = encoder_threads(workers)
+        timer.start('Video rendering and storage')
+        results = {}
 
-        for number, selection in enumerate(
-            selected,
-            start=1,
-        ):
-            progress(
-                f"Cutting clip {number}/{len(selected)}..."
-            )
-            timer.start('Video rendering')
+        # Encoding runs in parallel (CPU only); captions and storage happen on this thread as each
+        # clip finishes, so uploads overlap with the encodes still running. Progress, cancel and the
+        # optional job timeout are only ever checked here, never from the encoder threads.
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {}
+            for number, selection in enumerate(selected, start=1):
+                progress(f"Cutting clip {number}/{total}...")
+                filename = f"clip_{number}.mp4"
+                futures[pool.submit(render_clip, video_path, selection, folder / filename, threads)] = number
+            try:
+                for future in as_completed(futures):
+                    number = futures[future]
+                    future.result()
+                    selection = selected[number - 1]
+                    filename = f"clip_{number}.mp4"
+                    captions_filename = f"clip_{number}.vtt"
+                    write_captions(folder / captions_filename, transcript, selection["start"], selection["end"])
+                    progress(f"Saving clip {number}/{total}...")
+                    storage = upload_clip_files(folder, job_id, filename, captions_filename)
+                    results[number] = {
+                        **selection,
+                        **storage,
+                        "clip_url": f"/clips/{job_id}/{filename}",
+                        "captions_url": f"/clips/{job_id}/{captions_filename}",
+                    }
+            except BaseException:
+                for future in futures:
+                    future.cancel()  # clips not started yet are skipped; running encodes finish on their own
+                raise
 
-            filename = f"clip_{number}.mp4"
-
-            captions_filename = (
-                f"clip_{number}.vtt"
-            )
-
-            run_command([
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-y",
-                "-ss",
-                str(selection["start"]),
-                "-i",
-                str(video_path),
-                "-t",
-                str(
-                    selection["end"]
-                    - selection["start"]
-                ),
-                "-map",
-                "0:v:0",
-                "-map",
-                "0:a:0?",
-                "-vf",
-                "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-pix_fmt",
-                "yuv420p",
-                "-c:a",
-                "aac",
-                "-movflags",
-                "+faststart",
-                str(folder / filename),
-            ])
-
-            timer.start('Caption preparation')
-            write_captions(
-                folder / captions_filename,
-                transcript,
-                selection["start"],
-                selection["end"],
-            )
-
-            progress(
-                f"Saving clip {number}/{len(selected)}..."
-            )
-            timer.start('Clip storage')
-
-            storage = upload_clip_files(
-                folder,
-                job_id,
-                filename,
-                captions_filename,
-            )
-
-            clips.append({
-                **selection,
-                **storage,
-
-                "clip_url": (
-                    f"/clips/{job_id}/{filename}"
-                ),
-
-                "captions_url": (
-                    f"/clips/{job_id}/"
-                    f"{captions_filename}"
-                ),
-            })
+        clips = [results[number] for number in sorted(results)]
 
         timings = timer.finish()
         save_json(
             folder / "results.json",
-            {"clips": clips, 'timings': timings, 'steps_log': list(steps), **metadata},
+            {"clips": clips, 'timings': timings, 'steps_log': list(steps), 'steps_elapsed': list(steps_elapsed), **metadata},
         )
 
         update_job(
@@ -1337,6 +1336,7 @@ def get_job(
 
             "clips": clips,
             "steps_log": results.get("steps_log", []),
+            "steps_elapsed": results.get("steps_elapsed", []),
             "timings": results.get("timings"),
             "selection_note": results.get("selection_note", ""),
         }

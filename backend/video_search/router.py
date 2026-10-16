@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import os
+import threading
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -20,15 +21,19 @@ OUTPUTS = PROJECT_DIR / "outputs"
 OUTPUTS.mkdir(exist_ok=True)
 
 search_model = visual_model = None
+_model_lock = threading.Lock()
+
 
 def load_models(mode, progress=lambda message: None):
     global search_model, visual_model
-    if mode == "speech" and search_model is None:
-        progress('Loading speech search model (first use may download model files)...')
-        search_model = SentenceTransformer("all-MiniLM-L6-v2")
-    if mode == "visual" and visual_model is None:
-        progress('Loading visual search model (first use may download model files)...')
-        visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
+    # One lock: the startup warm-up and an early upload never load the same model twice.
+    with _model_lock:
+        if mode == "speech" and search_model is None:
+            progress('Loading speech search model (first use may download model files)...')
+            search_model = SentenceTransformer("all-MiniLM-L6-v2")
+        if mode == "visual" and visual_model is None:
+            progress('Loading visual search model (first use may download model files)...')
+            visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
 
 
 # Note: the standalone "/" page is now served via StaticFiles at /search-ui
