@@ -1,5 +1,5 @@
 """Opt-in PAID OpenAI smoke test on an existing local source.
-python tests/live_openai_smoke.py video_jobs/<id>/source.video [--keep]
+python tests/manual/live_openai_smoke.py video_jobs/<id>/source.video [--keep]
 One scene-selection request normally; a transient service error may retry once.
 --keep saves a new owned job in the source project; outputs use local storage.
 """
@@ -15,7 +15,7 @@ import time
 from unittest.mock import patch
 from uuid import uuid4
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import app1
 
 parser = argparse.ArgumentParser(description=__doc__)

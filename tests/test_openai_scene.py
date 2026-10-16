@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import httpx
 import app1
-import openai_scene as scene
+from backend import openai_scene as scene
 
 
 def candidate(start, end, score=8):

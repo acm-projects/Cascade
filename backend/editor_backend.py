@@ -257,7 +257,7 @@ def proposal_schema():
 
 
 def request_edit(payload):
-    from openai_scene import require_api_key, model_name, SceneAnalysisError
+    from backend.openai_scene import require_api_key, model_name, SceneAnalysisError
     try:
         key = require_api_key()
     except SceneAnalysisError:

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {History, normalize, cueAt, defaultComposition, compositionGeometry} = require('../editor_state.js');
+const {History, normalize, cueAt, defaultComposition, compositionGeometry} = require('../web/editor_state.js');
 const initial = {start:0,end:12,composition:{...defaultComposition},texts:{},captions:{enabled:true,color:'#ffffff',bold:false,font:'Arial',size:32,position:'bottom',stroke:'#000000',thickness:2,background:'#000000',opacity:0}};
 const a = new History(initial), b = new History(initial);
 a.commit({...initial,start:2});

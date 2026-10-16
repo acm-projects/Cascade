@@ -11,8 +11,8 @@ import uvicorn
 from fastapi import HTTPException
 from fastapi.responses import HTMLResponse
 import app1
-import integration
-import editor_backend as editor
+from backend import integration
+from backend import editor_backend as editor
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='cascade-browser-') as directory:
@@ -52,7 +52,7 @@ if __name__ == '__main__':
             return {'reset':True}
         @app1.app.get('/__editor_test',response_class=HTMLResponse)
         def fixture_page():
-            html=(app1.PROJECT_DIR/'editor_C.html').read_text()
+            html=(app1.FRONTEND_DIR/'editor_C.html').read_text()
             bootstrap='''<script>
               document.getElementById('protected-page').hidden=false;
               const apiFetch=async(url,options={})=>{

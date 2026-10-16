@@ -21,3 +21,8 @@ backend/**/.cache/
 backend/video_search/outputs/
 backend/clips/output_clip_*.mp4
 backend/settings/preferences.json
+
+# Disposable test tooling caches
+.pytest_cache/
+.coverage
+htmlcov/

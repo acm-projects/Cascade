@@ -1,5 +1,5 @@
 """Optional real MoviePy/FFmpeg render smoke test; transcription is mocked.
-Run from the repo root: python tests/render_smoke.py
+Run from the repo root: python tests/manual/render_smoke.py
 Uses only synthetic media in a temporary folder; no AI or storage API calls.
 """
 import json
@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from backend.clips.render_subtitles import generate_four_styled_clips
 
 class Transcript:

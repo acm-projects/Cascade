@@ -11,7 +11,7 @@ from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 from typing import Literal
-from pipeline_timing import StageTimer
+from backend.pipeline_timing import StageTimer
 
 from backend.settings.preferences import load_preferences, save_preferences
 

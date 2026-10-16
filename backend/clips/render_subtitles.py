@@ -135,12 +135,3 @@ def generate_four_styled_clips(video_path: str, styles: list, tone: str = "engag
         return output_filenames
     finally:
         full_video.close()
-
-# Retain single-video function for standalone testing
-def generate_subtitled_video():
-    generate_four_styled_clips(
-        str(MODULE_DIR / "sample.mp4"), ["hormozi", "minimalist", "bold_viral", "cinematic"]
-    )
-
-if __name__ == "__main__":
-    generate_subtitled_video()

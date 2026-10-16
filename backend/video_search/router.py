@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from faster_whisper import WhisperModel
 from PIL import Image
 from sentence_transformers import SentenceTransformer
-from pipeline_timing import StageTimer
+from backend.pipeline_timing import StageTimer
 
 router = APIRouter()
 
@@ -34,7 +34,7 @@ def load_models(mode, progress=lambda message: None):
         visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
 
 
-# Note: the standalone "/" page is now served via StaticFiles at /search-ui
+# The main app calls this worker internally; this legacy router is not mounted.
 # (see backend/app.py) instead of a dedicated route here, since this router
 # is mounted under /api/search alongside the other features' APIs.
 
@@ -213,7 +213,7 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                            '-t', str(clip_end - clip_start), '-map', '0:v:0', '-map', '0:a:0?']
                 filters = ['scale=trunc(iw/2)*2:trunc(ih/2)*2']
                 if subtitle_lines:
-                    from video_tools import subtitle_ffmpeg
+                    from backend.video_tools import subtitle_ffmpeg
                     command[0] = subtitle_ffmpeg()
                     filters.append('subtitles=filename=' + subtitle_name)
                 command += ['-vf', ','.join(filters), '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',

@@ -45,8 +45,8 @@ from fastapi.responses import (
 
 from starlette.concurrency import run_in_threadpool
 from ollama import Client, ResponseError
-from pipeline_timing import StageTimer
-from openai_scene import SceneAnalysisError
+from backend.pipeline_timing import StageTimer
+from backend.openai_scene import SceneAnalysisError
 
 
 # --------------------------------------------------
@@ -56,6 +56,7 @@ from openai_scene import SceneAnalysisError
 app = FastAPI()
 
 PROJECT_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = PROJECT_DIR / "web"
 
 load_dotenv(PROJECT_DIR / ".env", override=True)
 # Accept existing local names without rewriting the user's secrets file.
@@ -691,12 +692,12 @@ def serve_new_page(filename):
             "Page not found.",
         )
 
-    path = PROJECT_DIR / filename
+    path = FRONTEND_DIR / filename
 
     if not path.is_file():
         raise HTTPException(
             404,
-            f"Put {filename} beside app1.py.",
+            f"Frontend file {filename} is missing.",
         )
 
     return FileResponse(
@@ -1797,7 +1798,7 @@ def process_upload(
 
         progress("Reading uploaded video...")
         if provider == 'openai':
-            from openai_scene import require_api_key
+            from backend.openai_scene import require_api_key
             require_api_key()
         else:
             progress('Checking Ollama connection and installed model...')
@@ -1821,7 +1822,7 @@ def process_upload(
 
         metadata = {}
         if provider == 'openai':
-            from openai_scene import select_scenes
+            from backend.openai_scene import select_scenes
             selected, metadata = select_scenes(video_path, folder, duration, transcript, search, target,
                                                progress, timer.start, run_command, save_json)
         else:
@@ -1983,7 +1984,7 @@ def upload_video(
     if engine not in ("openai", "qwen", "speech", "visual"):
         raise HTTPException(400, "Invalid search engine.")
     if engine == 'openai':
-        from openai_scene import require_api_key
+        from backend.openai_scene import require_api_key
         try:
             require_api_key()
         except SceneAnalysisError as error:
@@ -2439,9 +2440,9 @@ def get_my_clips(request: Request):
 
 # Integrate remote backend features under the existing authenticated app.
 import sys
-import integration
+from backend import integration
 integration.register(app, sys.modules[__name__])
 
 # Editor-only routes use the existing ownership and JSON persistence adapters.
-import editor_backend
+from backend import editor_backend
 editor_backend.register(app, integration)

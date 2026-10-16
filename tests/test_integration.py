@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
-import integration
+from backend import integration
 
 
 class IntegrationTests(unittest.TestCase):

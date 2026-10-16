@@ -1,3 +1,7 @@
+# Historical investigation
+
+Paths in the original findings refer to the pre-cleanup layout: active frontend files now live in `web/`, and backend support modules in `backend/`. Public URLs and pipeline behavior are unchanged by that reorganization.
+
 # Four-clip investigation on manila/editor-work
 
 HEAD and the local `origin/please-god-fix` reference both resolve to `40201e6177995d5e2786459efe62ec087944ed1c`. No branch operation, fetch/pull, stash operation or cleanup of pre-existing work was needed. The restored editor files remain present.
@@ -59,4 +63,4 @@ OpenAI and Clerk key fields, AWS access/secret fields, `S3_BUCKET_NAME` and `AWS
 - **Saved OpenAI response replay:** actual source and saved real proposal passed through `/upload`, real frame extraction, real FFmpeg rendering, actual API/persistence/media/editor routes, producing **four playable eight-second clips**. Identity, local storage selection and the provider-response boundary were replaced for this isolated test. This verifies the fix against real historical provider data, not a fresh live OpenAI generation.
 - **Real Chrome canvas/editor check:** consumed those API results using the actual canvas/shared flow, displayed four playable card videos, selected radio 4, verified `clip=3`, and loaded **Session 1 · Clip 4** with four clips in the editor sidebar. Only test identity/startup bootstrap was replaced. No production authentication changes were made.
 
-Reproduction helpers: `tests/replay_saved_generation.py`, `tests/replay_four_clip_browser.py`, and existing `tests/live_search_smoke.py`. Logs/artifacts for this investigation are under the temporary directory, not original job storage. Fresh paid OpenAI access, live Clerk and S3 delivery were not tested end to end.
+The one-off replay helpers used during this investigation were removed during cleanup. Permanent regressions remain in `tests/test_local_multi_clip.py`, `tests/test_pipeline.py`, and `tests/test_openai_scene.py`; opt-in search verification is in `tests/manual/live_search_smoke.py`. Logs/artifacts for this investigation are under the temporary directory, not original job storage. Fresh paid OpenAI access, live Clerk and S3 delivery were not tested end to end.

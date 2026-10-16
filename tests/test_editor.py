@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import app1
-import editor_backend as editor
+from backend import editor_backend as editor
 
 
 class EditorTests(unittest.TestCase):

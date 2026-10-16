@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
-const state = require('../editor_state.js');
+const state = require('../web/editor_state.js');
 class Element {
   constructor(tag='div', id='') { this.tagName=tag.toUpperCase(); this.id=id; this.children=[]; this.dataset={}; this.style={}; this.listeners={}; this.value=''; this.type=''; this.classList={toggle(){}}; this.clientWidth=640; this.clientHeight=320; this.paused=true; this.currentTime=0; this.readyState=1; }
   append(...els) { this.children.push(...els); }
@@ -29,7 +29,7 @@ async function apiJSON(url, options={}) {
  return {duration:12,width:1280,height:720,cues:[{start:0,end:12,text:'Caption'}],warning:'',draft:responseDraft(key(url))};
 }
 function setup(search='?project=p') {
- const ids = [...fs.readFileSync('editor_C.html','utf8').matchAll(/id="([^"]+)"/g)].map(m=>m[1]);
+ const ids = [...fs.readFileSync('web/editor_C.html','utf8').matchAll(/id="([^"]+)"/g)].map(m=>m[1]);
  const elements = Object.fromEntries(ids.map(id=>[id,new Element('div',id)]));
  for(const name of Object.keys(defaults)) { const e=elements['cap-'+name]; e.tagName='INPUT'; e.type=['enabled','bold'].includes(name)?'checkbox':name==='opacity'?'range':['size','thickness'].includes(name)?'number':'text'; }
  for(const id of ['seek','trim-start','trim-end']) Object.assign(elements[id],{tagName:'INPUT',type:'range'});
@@ -45,7 +45,7 @@ function setup(search='?project=p') {
  const window={CascadeEditorState:state,CascadeTimeline:class {setDisabled(){} update(){} setClip(){}},CascadeCaptions:{draw(){},exportFrames(){return[];}},history:{replaceState(a,b,url){location.href=url.href;}},addEventListener(){}};
  const timers=new Map(); let timer=0;
  const context={window,document,location,console,URL,URLSearchParams,ResizeObserver:class {observe(){}},requestAnimationFrame:()=>1,cancelAnimationFrame(){},setTimeout:fn=>{timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id)};
- vm.runInNewContext(fs.readFileSync('editor_C.js','utf8'),context);
+ vm.runInNewContext(fs.readFileSync('web/editor_C.js','utf8'),context);
  return {elements,document,docListeners,window,apiFetch:async()=>{if(failMedia)throw Error('Media missing');return {blob:async()=>new Blob(['video'])};}, timers};
 }
 async function initialize(ctx) {

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from fastapi import HTTPException
-import video_tools
+from backend import video_tools
 
 
 class SubtitleBinaryTests(unittest.TestCase):

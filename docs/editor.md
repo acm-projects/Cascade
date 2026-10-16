@@ -1,3 +1,5 @@
+Frontend filenames below live under `web/`; backend service filenames live under `backend/`. Public URLs are unchanged. Run test commands from the repository root.
+
 # Editor implementation
 
 The editor uses existing Clerk authentication, project IDs, generation job IDs and zero-based clip indexes. Only `initializeEditor()` changed in shared `flow_C.js`. `app1.py` registers editor routes and allows editor assets. Canvas, clip-count selection, generation, scene selection and generation prompts are unchanged.

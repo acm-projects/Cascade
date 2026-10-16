@@ -1,5 +1,5 @@
 """Opt-in offline visual search using cached models and a local input video.
-Run: python tests/live_search_smoke.py path/to/video.mp4 [visual|speech]
+Run: python tests/manual/live_search_smoke.py path/to/video.mp4 [visual|speech]
 No downloads, S3, paid APIs, or changes to the input video.
 """
 import json
@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 os.environ['HF_HUB_OFFLINE'] = '1'
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 start = time.monotonic()
 from starlette.datastructures import UploadFile
 from backend.video_search import router
