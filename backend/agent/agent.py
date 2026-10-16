@@ -6,9 +6,11 @@ TARGET_CLIPS from that ranking, spread out through the video."""
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from cascade_llm import ToolResult, call_cost, make_conversation, selected_model
+from . import research
 from .tools import (
     FINAL_SCHEMAS,
     MAX_CLIP_SECONDS,
@@ -18,6 +20,8 @@ from .tools import (
     TOOL_SCHEMAS,
     ToolBox,
 )
+
+logger = logging.getLogger("cascade_agent")
 
 # Working turns after the forced overview turn.
 MAX_ITERATIONS = 8
@@ -83,6 +87,7 @@ def run_agent(
     usage = {
         "input_tokens": prior.get("input_tokens", 0),
         "output_tokens": prior.get("output_tokens", 0),
+        "cached_tokens": 0,
         "cost_usd": prior.get("cost_usd", 0.0),
         "cost_known": prior.get("cost_known", True),
         "transcription_cost_usd": getattr(toolbox.index, "transcription_cost_usd", 0.0),
@@ -94,18 +99,22 @@ def run_agent(
             return ""
         usage["input_tokens"] += turn.input_tokens
         usage["output_tokens"] += turn.output_tokens
-        cost = call_cost(model, turn.input_tokens, turn.output_tokens, turn.cached_tokens)
+        usage["cached_tokens"] += turn.cached_tokens
+        cost = call_cost(model, turn.input_tokens, turn.output_tokens, turn.cached_tokens, turn.cache_write_tokens)
         if cost is None:
             usage["cost_known"] = False
         else:
             usage["cost_usd"] += cost
         return f" [{turn.input_tokens} in / {turn.output_tokens} out tokens]"
 
-    def take_turn(label: str, tools: list, system: str, tool_choice: dict | None) -> bool:
-        """One model call plus tool execution. Returns True if tools were run (loop continues)."""
+    def take_turn(label: str, tools: list, tool_choice: dict | None, note: str | None = None) -> bool:
+        """One model call plus tool execution. Returns True if tools were run (loop continues).
+
+        The instructions are identical on every turn (so prompt caching keeps working); per-turn
+        reminders travel as `note`, appended to the end of the conversation instead."""
         nonlocal final_text
         emit(label)
-        turn = conv.take_turn(system=system, tools=tools, tool_choice=tool_choice)
+        turn = conv.take_turn(system=SYSTEM_PROMPT, tools=tools, tool_choice=tool_choice, note=note)
         emit(f"{label} done{record_usage(turn)}")
         if turn.text:
             final_text = turn.text
@@ -136,7 +145,6 @@ def run_agent(
     if not take_turn(
         "Agent: getting video overview",
         OVERVIEW_ONLY_SCHEMAS,
-        SYSTEM_PROMPT,
         {"type": "tool", "name": "get_overview"},
     ):
         return {"suggestions": [], "summary": final_text, "iterations": 0, "usage": _usage_summary(usage)}
@@ -148,8 +156,8 @@ def run_agent(
         keep_going = take_turn(
             f"Agent turn {iterations}/{MAX_ITERATIONS}",
             FINAL_SCHEMAS if last_turn else TOOL_SCHEMAS,
-            SYSTEM_PROMPT + (LAST_TURN_NOTE if last_turn else pacing_note(iterations)),
             {"type": "any"} if last_turn else None,
+            note=(LAST_TURN_NOTE if last_turn else pacing_note(iterations)).strip() or None,
         )
         # The agent ends the search itself by ranking; otherwise it runs to the turn limit.
         if not keep_going or toolbox.finalized:
@@ -158,6 +166,17 @@ def run_agent(
     # If the agent never ranked (ran out of turns / stopped talking), the selection falls back to
     # its own candidate scores - still spread out through the video.
     suggestions = toolbox.final_selection()
+
+    # Remember what this run found, per video, so later prompts on the same video can build on it.
+    # (Stored only; nothing reads it back into a prompt yet.) Never let this break a finished run.
+    try:
+        research.save_run(
+            getattr(toolbox.index, "video_key", ""), category, toolbox.candidates, suggestions,
+            toolbox.index.duration,
+        )
+    except Exception:
+        logger.exception("Could not save research for this video")
+
     return {
         "suggestions": suggestions,
         "candidates_considered": len(toolbox.candidates),
@@ -173,6 +192,7 @@ def _usage_summary(usage: dict[str, Any]) -> dict[str, Any]:
     return {
         "input_tokens": usage["input_tokens"],
         "output_tokens": usage["output_tokens"],
+        "cached_input_tokens": usage["cached_tokens"],  # part of input_tokens served from the prompt cache
         "model": usage["model"],
         # LLM cost + Deepgram transcription (this run only; 0 when the transcript was cached).
         # None when we have no price for the configured model.

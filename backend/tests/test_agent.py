@@ -401,6 +401,15 @@ def test_tool_not_offered_this_turn_is_never_executed():
     assert result["ranked_by_agent"] is False
 
 
+def user_text_blocks(messages):
+    """Plain-text blocks the agent loop appended to user messages (the per-turn notes), in order."""
+    out = []
+    for m in messages:
+        if m["role"] == "user" and isinstance(m["content"], list):
+            out += [b["text"] for b in m["content"] if b.get("type") == "text"]
+    return out
+
+
 def test_pacing_notes_push_toward_ranking_before_the_last_turn():
     n = agent_module.MAX_ITERATIONS
     scripted = [OVERVIEW_TURN] + [
@@ -408,7 +417,10 @@ def test_pacing_notes_push_toward_ranking_before_the_last_turn():
     ]
     client = FakeClient(scripted)
     agent_module.run_agent(make_toolbox(), "funny", client=client)
-    systems = [c["system"] for c in client.calls]          # [overview, turn 1, ..., turn n]
-    assert "Stop researching" not in systems[1] and "Stop researching" not in systems[n - 3]
-    assert "Stop researching" in systems[n - 2] and "Stop researching" in systems[n - 1]
-    assert "FINAL turn" in systems[n] and "Stop researching" not in systems[n]
+    # the notes live at the end of the conversation, in order, and never in the instructions
+    notes = user_text_blocks(client.calls[-1]["messages"])
+    assert len(notes) == 3
+    assert notes[0].startswith(f"Turn {n - 2} of {n}") and notes[1].startswith(f"Turn {n - 1} of {n}")
+    assert "Stop researching" in notes[0] and "Stop researching" in notes[1]
+    assert "FINAL turn" in notes[2] and "only rank_candidates" in notes[2]
+    assert all("Stop researching" not in c["system"] and "FINAL turn" not in c["system"] for c in client.calls)

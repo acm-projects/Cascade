@@ -55,6 +55,7 @@ class VideoIndex:
     chunk_summaries: list[dict[str, Any]] = field(default_factory=list)
     summary_usage: dict[str, Any] = field(default_factory=dict)
     transcription_cost_usd: float = 0.0  # Deepgram spend for this build; 0 on a cache hit
+    video_key: str = ""  # sha256 of the video file; ties per-video caches (and saved research) together
 
     def search(self, query: str, mode: str = "visual", top_k: int = 5) -> list[dict[str, Any]]:
         """Return up to top_k well-separated hits as {start, end, score, text?, speaker?}."""
@@ -233,4 +234,5 @@ def build_index(
         encode_text_query=encode_text_query,
         chunks=build_chunks(transcript),
         transcription_cost_usd=transcription_cost,
+        video_key=key,
     )

@@ -42,9 +42,10 @@ class Turn:
     text: str
     tool_calls: list[ToolCall]
     continue_loop: bool  # True if the model asked for tools and the loop should go on
-    input_tokens: int = 0
+    input_tokens: int = 0       # TOTAL prompt tokens, including cached and newly cached ones
     output_tokens: int = 0
-    cached_tokens: int = 0
+    cached_tokens: int = 0      # of input_tokens: read from the prompt cache
+    cache_write_tokens: int = 0  # of input_tokens: newly written to the prompt cache
 
 
 # ---------------------------------------------------------------- Anthropic
@@ -72,7 +73,19 @@ class AnthropicConversation:
     def start(self, user_text: str) -> None:
         self.messages.append({"role": "user", "content": user_text})
 
-    def take_turn(self, *, system: str, tools: list[dict], tool_choice: dict | None) -> Turn:
+    def _add_note(self, note: str) -> None:
+        """Append a per-turn reminder to the user message that has NOT been sent yet (the pending tool
+        results). Earlier messages are never edited, so the cached prefix and thinking blocks stay valid."""
+        last = self.messages[-1]
+        if last["role"] != "user":
+            return
+        if isinstance(last["content"], str):
+            last["content"] = [{"type": "text", "text": last["content"]}]
+        last["content"].append({"type": "text", "text": note})
+
+    def take_turn(self, *, system: str, tools: list[dict], tool_choice: dict | None, note: str | None = None) -> Turn:
+        if note:
+            self._add_note(note)
         kwargs: dict[str, Any] = {"tool_choice": tool_choice} if tool_choice else {}
         response = self.client.messages.create(
             model=self.model,
@@ -80,18 +93,27 @@ class AnthropicConversation:
             system=system,
             tools=tools,
             messages=self.messages,
+            # Automatic prompt caching: the last cacheable block gets the breakpoint, so each turn
+            # reuses the whole earlier conversation at the cheap cached rate.
+            cache_control={"type": "ephemeral"},
             **kwargs,
         )
         self.messages.append({"role": "assistant", "content": [_block_to_dict(b) for b in response.content]})
         text = " ".join(b.text for b in response.content if b.type == "text")
         calls = [ToolCall(b.id, b.name, b.input) for b in response.content if b.type == "tool_use"]
         usage = getattr(response, "usage", None)
+        # Anthropic's input_tokens EXCLUDES cached tokens; the total prompt is the three added up.
+        fresh = (getattr(usage, "input_tokens", 0) or 0) if usage else 0
+        read = (getattr(usage, "cache_read_input_tokens", 0) or 0) if usage else 0
+        written = (getattr(usage, "cache_creation_input_tokens", 0) or 0) if usage else 0
         return Turn(
             text=text,
             tool_calls=calls,
             continue_loop=response.stop_reason == "tool_use" and bool(calls),
-            input_tokens=getattr(usage, "input_tokens", 0) if usage else 0,
-            output_tokens=getattr(usage, "output_tokens", 0) if usage else 0,
+            input_tokens=fresh + read + written,
+            output_tokens=(getattr(usage, "output_tokens", 0) or 0) if usage else 0,
+            cached_tokens=read,
+            cache_write_tokens=written,
         )
 
     def add_tool_results(self, results: list[ToolResult]) -> None:
@@ -186,7 +208,11 @@ class OpenAIConversation:
     def start(self, user_text: str) -> None:
         self.input.append({"role": "user", "content": user_text})
 
-    def take_turn(self, *, system: str, tools: list[dict], tool_choice: dict | None) -> Turn:
+    def take_turn(self, *, system: str, tools: list[dict], tool_choice: dict | None, note: str | None = None) -> Turn:
+        if note:
+            # A trailing user message: the instructions and everything before it stay byte-identical,
+            # so OpenAI's automatic prompt cache keeps matching the earlier turns.
+            self.input.append({"role": "user", "content": note})
         response = self.client.responses.create(
             model=self.model,
             instructions=system,
@@ -238,6 +264,7 @@ class OpenAIConversation:
             input_tokens=_get(usage, "input_tokens", 0) or 0,
             output_tokens=_get(usage, "output_tokens", 0) or 0,
             cached_tokens=_get(details, "cached_tokens", 0) or 0,
+            cache_write_tokens=_get(details, "cache_write_tokens", 0) or 0,
         )
 
     def add_tool_results(self, results: list[ToolResult]) -> None:

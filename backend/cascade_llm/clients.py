@@ -52,14 +52,15 @@ def make_client(provider: str | None = None) -> Any:
 
 
 # USD per million tokens. Each entry: the prompt size above which the "large" rates apply, and
-# (<=threshold, >threshold) pairs for input, output and cached input. Cached input is OpenAI's
-# automatic prompt-cache discount; Anthropic's is listed for completeness (we do not use it).
+# (<=threshold, >threshold) pairs for input, output, cached input (cache READS) and cache WRITES.
+# Prompt caching: reads cost 0.1x the input rate, newly cached tokens cost 1.25x (both providers).
 PRICING: dict[str, dict[str, Any]] = {
     "claude-haiku-5-5": {
         "threshold": 100_000,
         "input": (0.10, 0.50),
         "output": (0.50, 2.50),
         "cached": (0.01, 0.05),
+        "cache_write": (0.125, 0.625),  # 5-minute cache, from the Anthropic pricing page
     },
     "gpt-6-luna": {
         # per developers.openai.com: prompts over 272K input tokens cost 2x input/cache, 1.5x output
@@ -67,21 +68,34 @@ PRICING: dict[str, dict[str, Any]] = {
         "input": (0.10, 0.20),
         "output": (0.50, 0.75),
         "cached": (0.01, 0.02),
+        "cache_write": (0.125, 0.25),  # 1.25x input (developers.openai.com prompt caching guide)
     },
 }
 
 
-def call_cost(model: str, input_tokens: int, output_tokens: int, cached_tokens: int = 0) -> float | None:
+def call_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cached_tokens: int = 0,
+    cache_write_tokens: int = 0,
+) -> float | None:
     """Estimated USD for one API call, or None when we have no price for the model.
 
-    `input_tokens` is the total prompt size; `cached_tokens` of it are billed at the cached rate.
+    `input_tokens` is the TOTAL prompt size. Of it, `cached_tokens` were read from the prompt cache
+    (cheap) and `cache_write_tokens` were newly written to it (1.25x); the rest is ordinary input.
+    The price tier is picked from the total prompt size.
     """
     price = PRICING.get(model)
     if price is None:
         return None
     tier = 1 if input_tokens > price["threshold"] else 0
     cached = max(0, min(cached_tokens, input_tokens))
-    uncached = input_tokens - cached
+    written = max(0, min(cache_write_tokens, input_tokens - cached))
+    ordinary = input_tokens - cached - written
     return (
-        uncached * price["input"][tier] + cached * price["cached"][tier] + output_tokens * price["output"][tier]
+        ordinary * price["input"][tier]
+        + cached * price["cached"][tier]
+        + written * price["cache_write"][tier]
+        + output_tokens * price["output"][tier]
     ) / 1_000_000
