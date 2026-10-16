@@ -1,4 +1,5 @@
-"""The agent loop: Claude first calls get_overview (forced), then gathers a pool of candidate
+"""The agent loop: the model (Claude or OpenAI, chosen by AGENT_MODEL) first calls get_overview
+(forced), then gathers a pool of candidate
 moments from across the whole video (search_video / read_transcript / inspect_clip /
 add_candidate), compares them, and ranks them (rank_candidates). Code then picks the best
 TARGET_CLIPS from that ranking, spread out through the video."""
@@ -8,7 +9,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from .anthropic_client import call_cost, make_client
+from cascade_llm import ToolResult, call_cost, make_conversation
 from .tools import (
     FINAL_SCHEMAS,
     MAX_CLIP_SECONDS,
@@ -61,39 +62,22 @@ LAST_TURN_NOTE = (
 )
 
 
-def _block_to_dict(block: Any) -> dict[str, Any]:
-    if block.type == "text":
-        return {"type": "text", "text": block.text}
-    if block.type == "tool_use":
-        return {"type": "tool_use", "id": block.id, "name": block.name, "input": block.input}
-    if block.type == "thinking":
-        # Must be passed back unchanged (signature included) when continuing a tool-use turn.
-        return {"type": "thinking", "thinking": block.thinking, "signature": block.signature}
-    if block.type == "redacted_thinking":
-        return {"type": "redacted_thinking", "data": block.data}
-    raise ValueError(f"Unexpected content block type: {block.type}")
-
-
 def run_agent(
     toolbox: ToolBox,
     category: str,
     progress: Callable[[str], None] | None = None,
     client: Any = None,
+    conversation: Any = None,
 ) -> dict[str, Any]:
+    """`conversation` (or the provider implied by AGENT_MODEL, using `client` if given) supplies
+    the wire format; everything below - tool guard, pacing, forced final turn - is provider-neutral."""
     emit = progress or (lambda msg: None)
 
-    if client is None:
-        client = make_client()
-
-    messages: list[dict[str, Any]] = [
-        {
-            "role": "user",
-            "content": (
-                f"Find the {TARGET_SUGGESTIONS} best '{category}' moments of this whole video, spread out "
-                f"through it (duration {toolbox.index.duration:.1f}s)."
-            ),
-        }
-    ]
+    conv = conversation or make_conversation(AGENT_MODEL, client)
+    conv.start(
+        f"Find the {TARGET_SUGGESTIONS} best '{category}' moments of this whole video, spread out "
+        f"through it (duration {toolbox.index.duration:.1f}s)."
+    )
     final_text = ""
     # Start from what transcript summarization already spent (zero when cached / short video).
     prior = getattr(toolbox.index, "summary_usage", None) or {}
@@ -105,64 +89,47 @@ def run_agent(
         "transcription_cost_usd": getattr(toolbox.index, "transcription_cost_usd", 0.0),
     }
 
-    def record_usage(response: Any) -> str:
-        u = getattr(response, "usage", None)
-        if u is None:
+    def record_usage(turn: Any) -> str:
+        if not (turn.input_tokens or turn.output_tokens):
             return ""
-        in_tok, out_tok = u.input_tokens, u.output_tokens
-        usage["input_tokens"] += in_tok
-        usage["output_tokens"] += out_tok
-        cost = call_cost(AGENT_MODEL, in_tok, out_tok)
+        usage["input_tokens"] += turn.input_tokens
+        usage["output_tokens"] += turn.output_tokens
+        cost = call_cost(AGENT_MODEL, turn.input_tokens, turn.output_tokens, turn.cached_tokens)
         if cost is None:
             usage["cost_known"] = False
         else:
             usage["cost_usd"] += cost
-        return f" [{in_tok} in / {out_tok} out tokens]"
+        return f" [{turn.input_tokens} in / {turn.output_tokens} out tokens]"
 
     def take_turn(label: str, tools: list, system: str, tool_choice: dict | None) -> bool:
         """One model call plus tool execution. Returns True if tools were run (loop continues)."""
         nonlocal final_text
         emit(label)
-        kwargs: dict[str, Any] = {"tool_choice": tool_choice} if tool_choice else {}
-        response = client.messages.create(
-            model=AGENT_MODEL,
-            max_tokens=2048,
-            system=system,
-            tools=tools,
-            messages=messages,
-            **kwargs,
-        )
-        emit(f"{label} done{record_usage(response)}")
-        messages.append({"role": "assistant", "content": [_block_to_dict(b) for b in response.content]})
-        text_parts = [b.text for b in response.content if b.type == "text"]
-        if text_parts:
-            final_text = " ".join(text_parts)
-
-        tool_uses = [b for b in response.content if b.type == "tool_use"]
-        if response.stop_reason != "tool_use" or not tool_uses:
+        turn = conv.take_turn(system=system, tools=tools, tool_choice=tool_choice)
+        emit(f"{label} done{record_usage(turn)}")
+        if turn.text:
+            final_text = turn.text
+        if not turn.continue_loop:
             return False
 
         offered = {t["name"] for t in tools}
         results = []
-        for block in tool_uses:
-            emit(f"Tool call: {block.name}({_short_args(block.input)})")
-            if block.name not in offered:
+        for call in turn.tool_calls:
+            emit(f"Tool call: {call.name}({_short_args(call.input)})")
+            if call.error:
+                # The arguments were not valid JSON: tell the model instead of guessing.
+                content = [{"type": "text", "text": call.error}]
+                is_error = True
+            elif call.name not in offered:
                 # The model asked for a tool it was not given this turn (it can still see earlier
                 # calls in the history). Never run it.
-                content = [{"type": "text", "text": f"Tool '{block.name}' is not available this turn. "
+                content = [{"type": "text", "text": f"Tool '{call.name}' is not available this turn. "
                             f"Available: {', '.join(sorted(offered))}."}]
                 is_error = True
             else:
-                content, is_error = toolbox.call(block.name, block.input)
-            results.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": content,
-                    **({"is_error": True} if is_error else {}),
-                }
-            )
-        messages.append({"role": "user", "content": results})
+                content, is_error = toolbox.call(call.name, call.input)
+            results.append(ToolResult(call.id, content, is_error))
+        conv.add_tool_results(results)
         return True
 
     # Turn 0: the overview is always the first call, and only the overview is offered.

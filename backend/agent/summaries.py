@@ -13,7 +13,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
-from .anthropic_client import call_cost, make_client
+from cascade_llm import call_cost, make_client, provider_for_model, structured_json
 from .chunks import build_chunks, fmt_time, is_long_transcript
 from .index import CACHE_DIR, VideoIndex
 
@@ -64,28 +64,22 @@ def _chunk_prompt(chunk: dict[str, Any], transcript: list[dict[str, Any]]) -> st
     return PROMPT.format(max_notable=MAX_NOTABLE_LINES, lines="\n".join(lines))
 
 
-def _parse_response(response: Any) -> dict[str, Any]:
-    # Haiku 5.5 thinks by default, so the JSON is the text block - skip thinking blocks.
-    text = next((b.text for b in response.content if b.type == "text"), None)
-    if text is None:
-        raise ValueError("model returned no text block")
-    data = json.loads(text)
-    if not isinstance(data, dict) or "summary" not in data:
-        raise ValueError("model returned unexpected JSON")
-    return data
-
-
 def summarize_chunk(
     client: Any, chunk: dict[str, Any], transcript: list[dict[str, Any]]
 ) -> tuple[dict[str, Any], int, int]:
     """Returns (chunk summary, input_tokens, output_tokens)."""
-    response = client.messages.create(
-        model=SUMMARY_MODEL,
-        max_tokens=2048,
-        output_config={"effort": "low", "format": {"type": "json_schema", "schema": SUMMARY_SCHEMA}},
-        messages=[{"role": "user", "content": _chunk_prompt(chunk, transcript)}],
+    result = structured_json(
+        SUMMARY_MODEL,
+        _chunk_prompt(chunk, transcript),
+        SUMMARY_SCHEMA,
+        name="chunk_summary",
+        effort="low",
+        max_output_tokens=4096,
+        client=client,
     )
-    data = _parse_response(response)
+    data = result.data
+    if not isinstance(data, dict) or "summary" not in data:
+        raise ValueError("model returned unexpected JSON")
 
     notable = []
     for seg_id in data.get("notable_segment_ids", []):
@@ -102,7 +96,6 @@ def summarize_chunk(
         {transcript[i]["speaker"] for i in range(chunk["first"], chunk["last"] + 1)
          if transcript[i].get("speaker") is not None}
     )
-    usage = getattr(response, "usage", None)
     return (
         {
             "index": chunk["index"],
@@ -113,8 +106,8 @@ def summarize_chunk(
             "notable": notable,
             "speakers": speakers,
         },
-        getattr(usage, "input_tokens", 0),
-        getattr(usage, "output_tokens", 0),
+        result.input_tokens,
+        result.output_tokens,
     )
 
 
@@ -141,7 +134,8 @@ def ensure_summaries(
         emit("Loaded transcript summaries from cache")
         return
 
-    client = client or make_client()  # raises if API calls are disabled / no key
+    # raises if API calls are disabled / no key for the provider SUMMARY_MODEL belongs to
+    client = client or make_client(provider_for_model(SUMMARY_MODEL))
     emit(f"Summarizing transcript in {len(chunks)} chunks")
 
     results: dict[int, dict[str, Any]] = {}

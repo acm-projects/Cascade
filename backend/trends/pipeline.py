@@ -14,16 +14,22 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
-import anthropic
 import whisper
 import yt_dlp
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+from cascade_llm import (
+    OPENAI,
+    calls_disabled,
+    make_client,
+    provider_for_model,
+    provider_label,
+    structured_json,
+)
+
 TAGGING_MODEL = os.environ.get("TAGGING_MODEL", "claude-haiku-5-5")
 # Hard kill-switch: when true, extract_tags() never calls the Anthropic API,
 # even on a cache miss — it raises instead. Set ANTHROPIC_CALLS_DISABLED=true
 # in .env to guarantee zero spend while testing other parts of the pipeline.
-ANTHROPIC_CALLS_DISABLED = os.environ.get("ANTHROPIC_CALLS_DISABLED", "").lower() in ("1", "true", "yes")
 
 # Loaded once per process — reused across requests.
 _whisper_model = None
@@ -70,6 +76,7 @@ TAG_SCHEMA = {
         },
     },
     "required": ["hook_style", "pacing", "visual_style", "topics", "tone", "audio_style", "call_to_action"],
+    "additionalProperties": False,  # required by OpenAI strict structured outputs; harmless for Claude
 }
 
 
@@ -220,7 +227,7 @@ def _tags_cache_key(frame_paths: list[Path], transcript: str) -> str:
 
 
 def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
-    """Call the Anthropic API with frames + transcript to get structured tags.
+    """Call the configured LLM (Claude or OpenAI, by TAGGING_MODEL) with frames + transcript for structured tags.
 
     Results are cached on disk by a hash of the input frames + transcript, so
     re-analyzing the same video never re-calls the API.
@@ -230,27 +237,40 @@ def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
     if cache_path.exists():
         return json.loads(cache_path.read_text())
 
-    if ANTHROPIC_CALLS_DISABLED:
+    provider = provider_for_model(TAGGING_MODEL)
+    if calls_disabled(provider):
         raise RuntimeError(
-            "Anthropic API calls are disabled (ANTHROPIC_CALLS_DISABLED=true in .env) "
-            "and this video has no cached tags."
+            f"{provider_label(provider)} API calls are disabled ({provider.upper()}_CALLS_DISABLED=true "
+            "in .env) and this video has no cached tags."
         )
 
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    # Keys and kill switches are read now (not at import), so a change in .env applies to the next job.
+    client = make_client(provider)  # raises if the key is missing
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    prompt_text = (
+        "Analyze this short video's frames and transcript. "
+        "Extract structured tags describing its style and content.\n\n"
+        f"Transcript:\n{transcript or '(no speech detected)'}"
+    )
 
-    content: list[dict[str, Any]] = [
-        {
-            "type": "text",
-            "text": (
-                "Analyze this short video's frames and transcript. "
-                "Extract structured tags describing its style and content.\n\n"
-                f"Transcript:\n{transcript or '(no speech detected)'}"
-            ),
-        }
-    ]
+    if provider == OPENAI:
+        result = structured_json(
+            TAGGING_MODEL,
+            prompt_text,
+            TAG_SCHEMA,
+            name="video_tags",
+            images=[
+                {"media_type": "image/jpeg", "data": base64.b64encode(p.read_bytes()).decode("utf-8")}
+                for p in frame_paths
+            ],
+            effort="low",
+            max_output_tokens=4096,
+            client=client,
+        )
+        cache_path.write_text(json.dumps(result.data))
+        return result.data
+
+    content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
     for frame_path in frame_paths:
         content.append(
             {
