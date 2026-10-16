@@ -409,6 +409,36 @@
     }
   }
 
+  // The agent's steps (indexing, each model turn, each tool call), so a long job is never a silent wait.
+  // Text only is ever shown (textContent): tool arguments can contain the user's own prompt text.
+  function showAgentSteps(job, jobId) {
+    const steps = Array.isArray(job.steps_log) ? job.steps_log : [];
+    let panel = $("agent-steps");
+    if (!panel) {
+      const anchor = $("processing-timings") || $("status");
+      if (!anchor) return;
+      panel = document.createElement("details");
+      panel.id = "agent-steps";
+      const summary = document.createElement("summary");
+      summary.textContent = "What the agent is doing";
+      const list = document.createElement("ol"); list.id = "agent-steps-list";
+      list.style.maxHeight = "14rem"; list.style.overflowY = "auto"; list.style.fontSize = "0.85em";
+      panel.append(summary, list); anchor.after(panel);
+    }
+    if (panel.dataset.job !== jobId) { panel.dataset.job = jobId; panel.open = true; delete panel.dataset.collapsed; }
+    panel.hidden = steps.length === 0;
+    const list = $("agent-steps-list");
+    const followBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 24;
+    const times = Array.isArray(job.steps_elapsed) ? job.steps_elapsed : [];
+    list.replaceChildren(...steps.map((step, i) => {
+      const row = document.createElement("li");
+      row.textContent = typeof times[i] === "number" ? "[" + times[i].toFixed(1) + "s] " + step : step;
+      return row;
+    }));
+    if (followBottom) list.scrollTop = list.scrollHeight;
+    if (["done", "error"].includes(job.state) && !panel.dataset.collapsed) { panel.dataset.collapsed = "1"; panel.open = false; }
+  }
+
   async function pollJob(jobId) {
     const stop = $("stop-generation");
     if (stop) {
@@ -428,6 +458,7 @@
         "/api/features/" + encodeURIComponent(jobId)
       );
       showProcessingTimings(job);
+      showAgentSteps(job, jobId);
 
       if (job.state === "error") {
         throw new Error(
@@ -579,7 +610,6 @@
         const formData = new FormData();
 
         formData.append("project_id", project.id);
-        formData.append("engine", $("search-engine").value);
         formData.append(
           "video",
           file

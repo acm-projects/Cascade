@@ -49,20 +49,19 @@ class LocalSelectionTests(unittest.TestCase):
 
 class LocalRenderingTests(unittest.TestCase):
     def test_both_engines_render_four_distinct_clips_with_audio_and_local_caption_times(self):
-        fake_speech = types.ModuleType('faster_whisper'); fake_speech.WhisperModel = Mock()
         fake_search = types.ModuleType('sentence_transformers'); fake_search.SentenceTransformer = Mock()
-        with patch.dict(sys.modules, {'faster_whisper': fake_speech, 'sentence_transformers': fake_search}):
+        with patch.dict(sys.modules, {'sentence_transformers': fake_search}):
             router = importlib.import_module('backend.video_search.router')
         class Encoder:
             def encode(self, values, **kwargs):
                 return np.array([1., 0.]) if isinstance(values, str) else np.array([[1., 0.]] * len(values))
             def similarity(self, query, embeddings):
                 return np.array([[.9, .8, .7, .6]])
-        class Speech:
-            def transcribe(self, path, **kwargs):
-                starts = (0,) if Path(path).suffix == '.wav' else (1, 32, 65, 98)
-                return iter([types.SimpleNamespace(start=float(t), end=float(t + 2), text=f'Speech match {i}')
-                             for i, t in enumerate(starts)]), None
+        def fake_transcribe(path, work=None, progress=None, info=None):
+            # Deepgram stand-in: whole video for speech search, a short .wav for per-clip captions
+            starts = (0,) if Path(path).suffix == '.wav' else (1, 32, 65, 98)
+            return [{'start': float(t), 'end': float(t + 2), 'text': f'Speech match {i}', 'speaker': None}
+                    for i, t in enumerate(starts)]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / 'source.mp4'
@@ -72,7 +71,7 @@ class LocalRenderingTests(unittest.TestCase):
             for mode in ('visual', 'speech'):
                 with self.subTest(mode=mode), patch.object(router, 'OUTPUTS', root), patch.object(router, 'load_models'), \
                      patch.object(router, 'visual_model', Encoder()), patch.object(router, 'search_model', Encoder()), \
-                     patch.object(router, 'whisper_model', Speech()):
+                     patch.object(router, 'transcribe_media', fake_transcribe):
                     with source.open('rb') as file:
                         result = router.search_video(UploadFile(file, filename='source.mp4'), 'a spoken moment', mode, 30)
                     self.assertEqual(len(result['clips']), 4)

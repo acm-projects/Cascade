@@ -126,7 +126,7 @@ def fail_feature(job_id, message=None):
     host.update_job(job_id, state='error', message=message)
     with host.jobs_lock:
         job = host.jobs[job_id]
-        details = {key: job[key] for key in ('timings', 'timing_stage', 'timing_stage_started_at', 'updated_at') if key in job}
+        details = {key: job[key] for key in ('timings', 'timing_stage', 'timing_stage_started_at', 'updated_at', 'steps_log', 'steps_elapsed') if key in job}
     host.save_json(host.JOBS_DIR / job_id / 'failure.json', {'message': message, **details})
 
 

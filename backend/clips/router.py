@@ -1,6 +1,6 @@
 """Clip-generation feature: burn in 4 differently-styled caption treatments.
 
-Mounted by backend/app.py under the /api/v1 prefix. Endpoints:
+Mounted by app1.py under the /api/v1 prefix. Endpoints:
   POST /api/v1/process-video     - upload a video, start a background job generating 4 styled clips
   GET  /api/v1/job/{job_id}      - poll job progress / result
 """
