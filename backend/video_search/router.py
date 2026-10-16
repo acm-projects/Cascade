@@ -32,7 +32,7 @@ def load_models(mode, progress=lambda message: None):
 
 
 # Note: the standalone "/" page is now served via StaticFiles at /search-ui
-# (see backend/app.py) instead of a dedicated route here, since this router
+# (see app1.py) instead of a dedicated route here, since this router
 # is mounted under /api/search alongside the other features' APIs.
 
 

@@ -29,7 +29,7 @@ New projects live at `video_jobs/projects/<SHA256-of-user-ID>/<project-ID>.json`
 
 Existing `.env`, Clerk validation/configuration, AWS credential resolution, S3 bucket/region, and root preferences files remain unchanged. No secrets are included in the integration files. Do not commit `.env`, runtime records, or generated media.
 
-`backend/` contains feature source copied from fetched `origin/main`. `backend/app.py` delegates to the authenticated website app. The old standalone search/clip/trend routers and diagnostic HTML are not mounted publicly; `integration.py` calls their processing functionality behind Clerk and ownership checks. `/settings` opens the updated settings page. Its authenticated JSON API reuses the teammate persistence helper with a per-user destination. The original standalone global form/router source is retained and not mounted publicly.
+`backend/` contains feature source copied from fetched `origin/main`. `app1.py` is the single application entrypoint. The old standalone search/clip/trend routers and diagnostic HTML are not mounted publicly; `integration.py` calls their processing functionality behind Clerk and ownership checks. `/settings` opens the updated settings page. Its authenticated JSON API reuses the teammate persistence helper with a per-user destination. The original standalone global form/router source is retained and not mounted publicly.
 
 ## Unfinished behavior
 
@@ -187,7 +187,7 @@ source .venv/bin/activate
 python -m uvicorn app1:app --host 127.0.0.1 --port 8000
 ```
 
-Open **http://127.0.0.1:8000/**. The same service serves both the website and APIs. Do not use `python -m http.server`, open the HTML with `file://`, or start the old Flask/standalone apps. `python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000` is an equivalent entrypoint from the repository root.
+Open **http://127.0.0.1:8000/**. The same service serves both the website and APIs. Do not use `python -m http.server`, open the HTML with `file://`, or start the old Flask/standalone apps.
 
 The SentenceTransformer (CLIP / MiniLM) models download on first use. The AI agent, speech/visual search, caption presets and Trends all need FFmpeg, Internet access and `DEEPGRAM_API_KEY`, and can incur Deepgram and AI-provider charges. Research also needs the YouTube API. Caption presets require an audio track.
 
@@ -246,7 +246,6 @@ Neither `main` nor `cascade/new-website` was changed. Fetch updated remote refer
 
 Imported backend files (all new on the integration branch):
 
-- `backend/app.py`
 - `backend/clips/__init__.py`
 - `backend/clips/render_subtitles.py`
 - `backend/clips/router.py`

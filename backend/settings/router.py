@@ -3,7 +3,7 @@
 Ported from a standalone Flask app to a FastAPI APIRouter so it can share one
 process with the rest of Cascade's features. Same behavior, same template.
 
-Mounted by backend/app.py with no extra prefix (keeps the original /settings path).
+Mounted by app1.py with no extra prefix (keeps the original /settings path).
 """
 
 from pathlib import Path

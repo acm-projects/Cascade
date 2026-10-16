@@ -1,6 +1,6 @@
 """Trend-analysis feature: compare an uploaded video against trending YouTube videos.
 
-Mounted by backend/app.py under the /api/trends prefix. Endpoints:
+Mounted by app1.py under the /api/trends prefix. Endpoints:
   POST /api/trends/analyze                  - upload a video + topic, starts a background job
   GET  /api/trends/analyze/{job_id}/status  - poll job progress / result
 """
