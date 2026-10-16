@@ -12,6 +12,12 @@ remain local. Local visual/speech search and the legacy Ollama mode are optional
 alternatives. The timing panel shows each stage; fewer than four supported
 matches are explained instead of duplicating clips.
 
+Local visual and speech search also return up to four non-overlapping clips.
+They rank image/transcript matches once per job, preserve audio, and generate
+separate captions for each result. When necessary to fit four distinct moments,
+they can shorten the preferred duration down to eight seconds and explain the
+change. They return fewer if four separate searchable moments cannot fit.
+
 Windows startup from the repository root:
 
 ```powershell

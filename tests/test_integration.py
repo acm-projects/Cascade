@@ -164,6 +164,33 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(result['timings']['Image embeddings'], 2.5)
         self.assertIn('Clip storage', result['timings'])
 
+    def test_search_adapter_publishes_all_four_clips_and_captions(self):
+        import sys
+        import types
+        job_id = self.upload()
+        folder = app1.JOBS_DIR / job_id
+        fake = types.ModuleType('backend.video_search.router')
+        fake.OUTPUTS = Path(self.temp.name)
+        matches = []
+        for index in range(4):
+            name = f'generated_{index}.mp4'
+            (fake.OUTPUTS / name).write_bytes(f'video-{index}'.encode())
+            matches.append({'clip_url': '/search/' + name, 'start': index * 30, 'end': (index + 1) * 30,
+                            'match': f'Match {index}', 'captions_vtt': f'WEBVTT\n\nCaption {index}'})
+        fake.search_video = lambda *args, **kwargs: {'clips': matches, 'timings': {'Image embeddings': 1.5}, 'selection_note': ''}
+        with patch.dict(sys.modules, {'backend.video_search.router': fake}), \
+             patch.object(app1, 'upload_clip_files', return_value={'storage': 'local'}) as storage:
+            integration.process_search(job_id, folder / 'source.video', 'blue', 'visual', 30)
+        self.assertEqual(storage.call_count, 4)
+        app1.jobs.clear()
+        result = self.client.get('/api/features/' + job_id, headers=self.headers).json()
+        self.assertEqual(len(result['clips']), 4)
+        for number in range(1, 5):
+            self.assertEqual((folder / f'clip_{number}.mp4').read_bytes(), f'video-{number - 1}'.encode())
+            self.assertIn(f'Caption {number - 1}', (folder / f'clip_{number}.vtt').read_text())
+        self.assertTrue(all(not (fake.OUTPUTS / Path(m['clip_url']).name).exists() for m in matches))
+        self.assertEqual(self.client.get('/api/features/' + job_id, headers=self.other).status_code, 404)
+
     def test_prompt_selection_returns_real_nonoverlapping_candidates(self):
         observations = [{'start': i*40, 'end': i*40+10, 'score': 8, 'title': str(i), 'reason': 'match'} for i in range(5)]
         with patch.object(app1, 'interpret_request', return_value=('criteria', True)), patch.object(app1, 'score_observations', return_value=observations):

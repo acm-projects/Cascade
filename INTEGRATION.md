@@ -133,8 +133,20 @@ and scoring batches of up to eight observations. Long videos are sampled more
 sparsely, so very brief events may be missed. Repeated AI requests on an identical
 upload reuse transcripts and visual descriptions within the same account/project.
 Speech search avoids the vision language model. Visual search samples across the
-whole video and transcribes only the selected clip for captions; silent videos
+whole video and transcribes only the selected clips for captions; silent videos
 do not load Whisper just for captions. First use may download model files.
+
+Both local speech and local visual search now rank candidate windows and select
+up to four non-overlapping clips, rather than only the single best match. Embeddings
+are computed once per job. Speech search transcribes once and reuses that transcript
+for every clip; visual search captions only the selected windows and loads Whisper
+once. Every clip retains source audio and receives its own burned captions and VTT.
+The requested duration is preferred. If needed to fit four distinct matches, local
+search tries shorter windows down to eight seconds and explains the shorter length
+in the results. If four still cannot fit, it returns fewer preferred-length clips
+with an explanation instead of repeating the same footage.
+Local similarity scores rank the available footage; they do not guarantee that
+every selected scene satisfies a subjective prompt such as “funny.”
 
 AI analysis combines each group into one numbered contact sheet (up to 672×488),
 read chronologically. This reduces per-image token overhead. Scene descriptions

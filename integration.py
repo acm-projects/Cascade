@@ -165,19 +165,24 @@ def process_search(job_id, video_path, search, mode, target):
         with video_path.open('rb') as file:
             upload = UploadFile(file, filename='source.mp4')
             result = search_video(upload, search, mode, target, progress=progress, timing=search_timing)
-        output = OUTPUTS / Path(result['clip_url']).name
-        captions = video_path.parent / "search.vtt"
-        captions.write_text(result["captions_vtt"], encoding="utf-8")
+        matches = result.get('clips', [result] if result.get('clip_url') else [])
+        outputs = [OUTPUTS / Path(match['clip_url']).name for match in matches]
         try:
-            progress('Saving the generated clip...')
             timer.timings = {**initial, **result['timings']}
-            timer.start('Clip storage')
-            clip = publish_clip(video_path.parent, job_id, 1, output, result['start'], result['end'],
-                                search, result['match'] + ' · Captions are burned into the video.', captions=captions)
+            clips = []
+            for number, (match, output) in enumerate(zip(matches, outputs), 1):
+                progress(f'Saving clip {number}/{len(matches)}...')
+                captions = video_path.parent / f'search_{number}.vtt'
+                captions.write_text(match['captions_vtt'], encoding='utf-8')
+                timer.start('Clip storage')
+                clips.append(publish_clip(video_path.parent, job_id, number, output, match['start'], match['end'],
+                                          search, match['match'] + ' · Captions are burned into the video.', captions=captions))
             timings = timer.finish()
-            finish_feature(job_id, {'clips': [clip], 'timings': timings})
+            finish_feature(job_id, {'clips': clips, 'timings': timings,
+                                    'selection_note': result.get('selection_note', '')})
         finally:
-            output.unlink(missing_ok=True)
+            for output in outputs:
+                output.unlink(missing_ok=True)
     except ImportError:
         fail_feature(job_id, 'A processing dependency is missing. Install requirements.txt and restart the service.')
     except Exception as error:

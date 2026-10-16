@@ -116,7 +116,7 @@ class PipelineTests(unittest.TestCase):
                  patch.object(router, 'visual_model', Encoder()), patch.object(router, 'whisper_model', Speech()):
                 with source.open('rb') as file:
                     result = router.search_video(UploadFile(file, filename='source.mp4'), 'blue screen', 'visual', 15, messages.append)
-            self.assertEqual(seen_audio, ['selected.wav'])
+            self.assertEqual(seen_audio, ['selected_1.wav'])
             self.assertIn('Test caption', result['captions_vtt'])
             output = root / Path(result['clip_url']).name
             self.assertTrue(output.is_file())
