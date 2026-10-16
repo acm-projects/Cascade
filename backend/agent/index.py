@@ -4,7 +4,7 @@ Built once per uploaded video and cached on disk. Two independent caches:
   * frames:     keyed by file hash only (CLIP embedding is the expensive local step)
   * transcript: keyed by file hash + transcription provider/model, so switching
                 provider re-transcribes but never re-embeds frames
-The heavy models are imported lazily from video_search.router (which already loads
+The heavy models come from the website's lazy loader in backend.video_search.router (which loads
 them once per process) so importing this module stays cheap.
 """
 
@@ -21,7 +21,7 @@ from typing import Any, Callable
 import numpy as np
 
 from .chunks import build_chunks
-from .transcribe import provider_tag, transcribe_video
+from backend.cascade_stt import TRANSCRIPT_TAG, transcribe_media
 
 CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -162,15 +162,19 @@ def build_index(
     """Build (or load from cache) the search index for a video file."""
     emit = progress or (lambda msg: None)
 
-    # Lazy: these load multi-hundred-MB models at import time.
-    from video_search.router import search_model, visual_model
+    # Use the website's own lazy model loader, through its one module path (backend.video_search.router),
+    # so CLIP / MiniLM are loaded once per process even when the visual/speech engines run too.
     from PIL import Image
+    from backend.video_search import router as vs
+
+    vs.load_models("visual", emit)
+    vs.load_models("speech", emit)
 
     def encode_visual_query(q: str) -> np.ndarray:
-        return visual_model.encode(q, normalize_embeddings=True)
+        return vs.visual_model.encode(q, normalize_embeddings=True)
 
     def encode_text_query(q: str) -> np.ndarray:
-        return search_model.encode(q, normalize_embeddings=True)
+        return vs.search_model.encode(q, normalize_embeddings=True)
 
     key = file_sha256(video_path)
 
@@ -193,7 +197,7 @@ def build_index(
         for p in frame_paths:
             with Image.open(p) as img:
                 images.append(img.convert("RGB"))
-        frame_embeddings = visual_model.encode(images, normalize_embeddings=True, batch_size=32)
+        frame_embeddings = vs.visual_model.encode(images, normalize_embeddings=True, batch_size=32)
         np.savez(
             frames_path,
             frame_embeddings=frame_embeddings,
@@ -203,7 +207,7 @@ def build_index(
         )
 
     # ---- transcript (keyed by provider + model) ----
-    tag = provider_tag()
+    tag = TRANSCRIPT_TAG
     transcript_path, segemb_path = transcript_cache_paths(key, tag)
     transcription_cost = 0.0
     if transcript_path.exists() and segemb_path.exists():
@@ -212,10 +216,10 @@ def build_index(
         segment_embeddings = np.load(segemb_path)
     else:
         t_info: dict[str, Any] = {}
-        transcript = transcribe_video(video_path, work_dir, progress=emit, info=t_info)
+        transcript = transcribe_media(video_path, work_dir, progress=emit, info=t_info)
         transcription_cost = t_info.get("cost_usd", 0.0)
         if transcript:
-            segment_embeddings = search_model.encode(
+            segment_embeddings = vs.search_model.encode(
                 [seg["text"] for seg in transcript], normalize_embeddings=True
             )
         else:

@@ -1,18 +1,19 @@
-"""Speech-to-text: Deepgram (default) or local Whisper (opt-in).
+"""Speech-to-text with Deepgram - the only transcription path in the project.
 
-Whatever the provider, the result is a list of sentence-level segments
-{start, end, text, speaker} - the shape VideoIndex.transcript already uses - so
-speech search, inspect_clip and read_transcript don't care where it came from.
+Every feature that needs a transcript (the clip agent, the website's speech/visual search, caption
+styles and the Trends tab) calls `transcribe_media()`. It accepts any audio or video file, extracts
+its own small mono MP3, sends it to Deepgram and returns sentence-level segments:
 
-There is deliberately NO automatic fallback from Deepgram to Whisper: silently
-switching would turn a seconds-long step into hours of CPU work on a long video.
-Set TRANSCRIPTION_PROVIDER=whisper in .env to use Whisper on purpose.
+    [{"start": 0.0, "end": 3.2, "text": "Welcome back.", "speaker": 0}, ...]
+
+There is no local Whisper anywhere: no model download, no hours of CPU on a long video.
 """
 
 from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -21,6 +22,9 @@ import httpx
 DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
 DEEPGRAM_MODEL = "nova-3"
 DEEPGRAM_USD_PER_MINUTE = 0.0043  # Nova-3 monolingual pay-as-you-go (deepgram.com/pricing)
+
+# Part of every transcript cache key, so a model change can never serve an old transcript.
+TRANSCRIPT_TAG = f"deepgram-{DEEPGRAM_MODEL}"
 
 # Segmenting rules for turning Deepgram's word list into sentence-level segments.
 MAX_GAP_SECONDS = 1.0
@@ -36,42 +40,27 @@ class TranscriptionError(RuntimeError):
     """A transcription failure with a message that is safe to show the user."""
 
 
-def provider() -> str:
-    value = os.environ.get("TRANSCRIPTION_PROVIDER", "deepgram").strip().lower()
-    if value not in ("deepgram", "whisper"):
-        raise TranscriptionError(
-            f"TRANSCRIPTION_PROVIDER must be 'deepgram' or 'whisper' (got '{value}')."
-        )
-    return value
-
-
-def provider_tag() -> str:
-    """Identifies provider + model; part of the transcript cache key."""
-    p = provider()
-    return f"{p}-{DEEPGRAM_MODEL}" if p == "deepgram" else "whisper-base"
-
-
-def has_audio_stream(video_path: Path) -> bool:
+def has_audio_stream(media_path: Path) -> bool:
     result = subprocess.run(
         [
             "ffprobe", "-v", "error",
             "-select_streams", "a",
             "-show_entries", "stream=index",
             "-of", "csv=p=0",
-            str(video_path),
+            str(media_path),
         ],
         capture_output=True, text=True,
     )
     return bool(result.stdout.strip())
 
 
-def extract_audio(video_path: Path, dest_dir: Path) -> Path:
-    """Mono 16 kHz MP3 (~20 MB/hour) - small enough to upload quickly."""
+def extract_audio(media_path: Path, dest_dir: Path) -> Path:
+    """Mono 16 kHz MP3 (~20 MB/hour) from any audio or video file - small enough to upload fast."""
     audio_path = dest_dir / "audio.mp3"
     result = subprocess.run(
         [
             "ffmpeg", "-y", "-v", "error",
-            "-i", str(video_path),
+            "-i", str(media_path),
             "-vn", "-ac", "1", "-ar", "16000",
             "-c:a", "libmp3lame", "-b:a", "48k",
             str(audio_path),
@@ -106,9 +95,7 @@ def deepgram_request(
 
     def post(params: dict[str, str]) -> httpx.Response:
         try:
-            return http.post(
-                DEEPGRAM_URL, params=params, headers=headers, content=audio_bytes
-            )
+            return http.post(DEEPGRAM_URL, params=params, headers=headers, content=audio_bytes)
         except httpx.TimeoutException as exc:
             raise TranscriptionError("Deepgram timed out. Try again, or use a shorter file.") from exc
         except httpx.HTTPError as exc:
@@ -196,47 +183,40 @@ def segments_from_deepgram(response: dict[str, Any]) -> list[dict[str, Any]]:
     return words_to_segments(words)
 
 
-def _transcribe_whisper(video_path: Path) -> list[dict[str, Any]]:
-    # Lazy: importing video_search.router loads the heavy models.
-    from video_search.router import whisper_model
-
-    segments, _ = whisper_model.transcribe(str(video_path))
-    return [
-        {"start": s.start, "end": s.end, "text": s.text.strip(), "speaker": None}
-        for s in segments
-        if s.text.strip()
-    ]
-
-
-def transcribe_video(
-    video_path: Path,
-    work_dir: Path,
+def transcribe_media(
+    media_path: Path,
+    work_dir: Path | None = None,
     progress: Callable[[str], None] | None = None,
     info: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Returns segments. If `info` is given it receives `cost_usd` (Deepgram only)."""
-    emit = progress or (lambda msg: None)
+    """Transcribe any audio or video file. Returns segments (see the module docstring).
 
-    if not has_audio_stream(video_path):
+    `work_dir` holds the temporary MP3 (a temp folder is made and removed when omitted).
+    If `info` is given it receives `cost_usd` (Deepgram bills per minute of audio).
+    A file with no audio track returns [] without calling Deepgram.
+    """
+    emit = progress or (lambda msg: None)
+    media_path = Path(media_path)
+
+    if not has_audio_stream(media_path):
         emit("No audio track found; skipping transcription")
         return []
 
-    if provider() == "whisper":
-        emit("Transcribing speech with local Whisper (slow on CPU)")
-        return _transcribe_whisper(video_path)
-
+    # Read the key now (not at import), so a key added to .env applies to the next job.
     api_key = os.environ.get("DEEPGRAM_API_KEY", "").strip()
     if not api_key:
-        raise TranscriptionError(
-            "DEEPGRAM_API_KEY is not set. Add it to .env and restart, or set "
-            "TRANSCRIPTION_PROVIDER=whisper to use local Whisper instead."
-        )
+        raise TranscriptionError("DEEPGRAM_API_KEY is not set. Add it to .env and restart the server.")
 
-    emit("Extracting audio")
-    audio_path = extract_audio(video_path, work_dir)
-    emit(f"Transcribing with Deepgram ({audio_path.stat().st_size / 1e6:.1f} MB of audio)")
-    dg_info: dict[str, Any] = {}
-    response = deepgram_request(audio_path, api_key, info=dg_info)
+    with tempfile.TemporaryDirectory(prefix="stt_") as scratch:
+        folder = Path(work_dir) if work_dir is not None else Path(scratch)
+        emit("Extracting audio")
+        audio_path = extract_audio(media_path, folder)
+        emit(f"Transcribing with Deepgram ({audio_path.stat().st_size / 1e6:.1f} MB of audio)")
+        dg_info: dict[str, Any] = {}
+        response = deepgram_request(audio_path, api_key, info=dg_info)
+        if work_dir is not None:
+            audio_path.unlink(missing_ok=True)  # never leave the MP3 behind in a caller's folder
+
     if dg_info.get("diarization_dropped"):
         emit("Deepgram rejected diarization; continuing without speaker labels")
     if info is not None:

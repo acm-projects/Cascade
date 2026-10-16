@@ -14,13 +14,10 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
-import whisper
 import yt_dlp
 
 from backend.cascade_llm import OPENAI, make_client, selected_model, selected_provider, structured_json
-
-# Loaded once per process — reused across requests.
-_whisper_model = None
+from backend.cascade_stt import transcribe_media
 
 # Content-addressed cache for Claude tag extractions: same frames + transcript
 # (i.e. the same video, re-analyzed) never re-calls the API. Persists across
@@ -66,13 +63,6 @@ TAG_SCHEMA = {
     "required": ["hook_style", "pacing", "visual_style", "topics", "tone", "audio_style", "call_to_action"],
     "additionalProperties": False,  # required by OpenAI strict structured outputs; harmless for Claude
 }
-
-
-def _get_whisper_model():
-    global _whisper_model
-    if _whisper_model is None:
-        _whisper_model = whisper.load_model("base")
-    return _whisper_model
 
 
 def download_video(video_id: str, dest_dir: Path) -> Path:
@@ -200,9 +190,8 @@ def extract_audio(video_path: Path, dest_dir: Path) -> Path | None:
 def transcribe(audio_path: Path | None) -> str:
     if audio_path is None:
         return ""
-    model = _get_whisper_model()
-    result = model.transcribe(str(audio_path))
-    return result.get("text", "").strip()
+    segments = transcribe_media(audio_path)  # Deepgram
+    return " ".join(segment["text"] for segment in segments).strip()
 
 
 def _tags_cache_key(frame_paths: list[Path], transcript: str) -> str:

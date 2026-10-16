@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from backend.agent import transcribe  # noqa: E402
+from backend.cascade_stt import TRANSCRIPT_TAG, transcribe  # noqa: E402
 from backend.agent.index import transcript_cache_paths  # noqa: E402
 
 
@@ -152,64 +152,88 @@ def test_timeout_and_bad_json(tmp_path):
 
 # ---------- transcribe_video orchestration ----------
 
-def test_no_audio_track_skips_provider(monkeypatch, tmp_path):
+def test_no_audio_track_skips_deepgram(monkeypatch, tmp_path):
     monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: False)
     monkeypatch.setattr(transcribe, "deepgram_request", lambda *a, **k: pytest.fail("called"))
-    assert transcribe.transcribe_video(Path("x.mp4"), tmp_path) == []
+    steps = []
+    assert transcribe.transcribe_media(Path("x.mp4"), tmp_path, progress=steps.append) == []
+    assert any("No audio track" in s for s in steps)
 
 
 def test_missing_key_is_a_clear_error(monkeypatch, tmp_path):
     monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: True)
     monkeypatch.delenv("DEEPGRAM_API_KEY", raising=False)
-    monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
-    with pytest.raises(transcribe.TranscriptionError, match="DEEPGRAM_API_KEY"):
-        transcribe.transcribe_video(Path("x.mp4"), tmp_path)
+    with pytest.raises(transcribe.TranscriptionError, match="DEEPGRAM_API_KEY is not set"):
+        transcribe.transcribe_media(Path("x.mp4"), tmp_path)
 
 
-def test_deepgram_happy_path(monkeypatch, tmp_path):
+def _fake_pipeline(monkeypatch, seen):
+    """Stub the ffmpeg + HTTP steps; record what each was given."""
     monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: True)
-    monkeypatch.setattr(transcribe, "extract_audio", lambda v, d: audio_file(tmp_path))
+
+    def fake_extract(media, dest):
+        seen["media"], seen["dest"] = Path(media), Path(dest)
+        out = Path(dest) / "audio.mp3"
+        out.write_bytes(b"mp3")
+        seen["audio"] = out
+        return out
+
+    monkeypatch.setattr(transcribe, "extract_audio", fake_extract)
     monkeypatch.setattr(
         transcribe,
         "deepgram_request",
         lambda path, key, client=None, info=None: {
-            "results": {"channels": [{"alternatives": [{"words": [w("hi", 0.0, 0.2)]}]}]}
+            "metadata": {"duration": 3600.0},
+            "results": {"channels": [{"alternatives": [{"words": [w("hi", 0.0, 0.2)]}]}]},
         },
     )
     monkeypatch.setenv("DEEPGRAM_API_KEY", "k")
-    monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
-    segs = transcribe.transcribe_video(Path("x.mp4"), tmp_path)
-    assert segs[0]["text"] == "hi"
 
 
-def test_whisper_is_opt_in_never_a_silent_fallback(monkeypatch, tmp_path):
+def test_happy_path_cost_and_no_leftover_mp3_in_the_callers_folder(monkeypatch, tmp_path):
+    seen, info = {}, {}
+    _fake_pipeline(monkeypatch, seen)
+    segs = transcribe.transcribe_media(Path("x.mp4"), tmp_path, info=info)
+    assert segs[0]["text"] == "hi" and segs[0]["speaker"] == 0
+    assert seen["dest"] == tmp_path
+    assert not list(tmp_path.glob("*.mp3"))  # the temporary MP3 is cleaned up
+    assert info["cost_usd"] == pytest.approx(60 * 0.0043)  # one hour of audio
+
+
+def test_without_a_work_dir_it_uses_and_removes_its_own_temp_folder(monkeypatch):
+    seen = {}
+    _fake_pipeline(monkeypatch, seen)
+    assert transcribe.transcribe_media(Path("x.mp4"))[0]["text"] == "hi"
+    assert not seen["dest"].exists()
+
+
+def test_any_media_type_is_accepted_wav_is_converted_to_mp3_first(monkeypatch, tmp_path):
+    seen = {}
+    _fake_pipeline(monkeypatch, seen)
+    transcribe.transcribe_media(Path("selected_1.wav"), tmp_path)
+    assert seen["media"].suffix == ".wav"  # extract_audio re-encodes whatever it is given
+    assert seen["audio"].suffix == ".mp3"
+
+
+def test_diarization_drop_is_reported_as_a_step(monkeypatch, tmp_path):
     monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: True)
-    monkeypatch.setattr(transcribe, "_transcribe_whisper", lambda p: [{"start": 0, "end": 1, "text": "w", "speaker": None}])
-    monkeypatch.delenv("DEEPGRAM_API_KEY", raising=False)
 
-    # Default provider with no key: error, NOT a quiet switch to Whisper.
-    monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
-    with pytest.raises(transcribe.TranscriptionError):
-        transcribe.transcribe_video(Path("x.mp4"), tmp_path)
+    def fake_extract(media, dest):
+        out = Path(dest) / "a.mp3"
+        out.write_bytes(b"x")
+        return out
 
-    # Explicit opt-in works.
-    monkeypatch.setenv("TRANSCRIPTION_PROVIDER", "whisper")
-    assert transcribe.transcribe_video(Path("x.mp4"), tmp_path)[0]["text"] == "w"
+    monkeypatch.setattr(transcribe, "extract_audio", fake_extract)
 
+    def fake_request(path, key, client=None, info=None):
+        info["diarization_dropped"] = True
+        return {"results": {"channels": [{"alternatives": [{"words": [w("hi", 0.0, 0.2)]}]}]}}
 
-def test_invalid_provider(monkeypatch):
-    monkeypatch.setenv("TRANSCRIPTION_PROVIDER", "carrier-pigeon")
-    with pytest.raises(transcribe.TranscriptionError):
-        transcribe.provider()
-
-
-def test_cache_keys_differ_by_provider(monkeypatch):
-    monkeypatch.setenv("TRANSCRIPTION_PROVIDER", "deepgram")
-    dg = transcribe.provider_tag()
-    monkeypatch.setenv("TRANSCRIPTION_PROVIDER", "whisper")
-    wh = transcribe.provider_tag()
-    assert dg != wh
-    assert transcript_cache_paths("abc", dg) != transcript_cache_paths("abc", wh)
+    monkeypatch.setattr(transcribe, "deepgram_request", fake_request)
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "k")
+    steps = []
+    transcribe.transcribe_media(Path("x.mp4"), tmp_path, progress=steps.append)
+    assert any("without speaker labels" in s for s in steps)
 
 
 def test_diarization_drop_is_reported(tmp_path):
@@ -229,21 +253,12 @@ def test_diarization_drop_is_reported(tmp_path):
     assert "diarization_dropped" not in ok_info
 
 
-def test_transcribe_video_reports_cost_and_the_diarization_note(monkeypatch, tmp_path):
-    monkeypatch.setattr(transcribe, "has_audio_stream", lambda p: True)
-    monkeypatch.setattr(transcribe, "extract_audio", lambda v, d: audio_file(tmp_path))
+def test_there_is_no_local_whisper_path_left():
+    assert not hasattr(transcribe, "_transcribe_whisper") and not hasattr(transcribe, "provider")
+    source = Path(transcribe.__file__).read_text(encoding="utf-8").lower()
+    assert "import whisper" not in source and "faster_whisper" not in source
 
-    def fake_request(path, key, client=None, info=None):
-        info["diarization_dropped"] = True
-        return {
-            "metadata": {"duration": 7200.0},  # a 2-hour podcast
-            "results": {"channels": [{"alternatives": [{"words": [w("hi", 0.0, 0.2)]}]}]},
-        }
 
-    monkeypatch.setattr(transcribe, "deepgram_request", fake_request)
-    monkeypatch.setenv("DEEPGRAM_API_KEY", "k")
-    monkeypatch.delenv("TRANSCRIPTION_PROVIDER", raising=False)
-    steps, info = [], {}
-    transcribe.transcribe_video(Path("x.mp4"), tmp_path, progress=steps.append, info=info)
-    assert info["cost_usd"] == pytest.approx(120 * 0.0043)  # ~$0.52
-    assert any("without speaker labels" in s for s in steps)
+def test_transcript_cache_key_carries_the_model(tmp_path):
+    assert "nova-3" in TRANSCRIPT_TAG and TRANSCRIPT_TAG.startswith("deepgram")
+    assert transcript_cache_paths("abc", TRANSCRIPT_TAG) != transcript_cache_paths("abc", "deepgram-other")

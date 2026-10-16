@@ -88,23 +88,20 @@ class PipelineTests(unittest.TestCase):
                 app1.score_observations(observations, 'blue', 'blue screen', lambda _: None)
 
     def test_visual_pipeline_renders_and_transcribes_only_selected_audio(self):
-        fake_speech = types.ModuleType('faster_whisper')
-        fake_speech.WhisperModel = Mock()
         fake_search = types.ModuleType('sentence_transformers')
         fake_search.SentenceTransformer = Mock()
-        with patch.dict(sys.modules, {'faster_whisper': fake_speech, 'sentence_transformers': fake_search}):
+        with patch.dict(sys.modules, {'sentence_transformers': fake_search}):
             router = importlib.import_module('backend.video_search.router')
         class Encoder:
             def encode(self, values, **kwargs):
                 return np.array([1., 0.]) if isinstance(values, str) else np.array([[1., 0.]] * len(values))
         seen_audio = []
-        class Speech:
-            def transcribe(self, path, **kwargs):
-                seen_audio.append(Path(path).name)
-                self_duration = router.get_duration(Path(path))
-                self_test.assertLessEqual(self_duration, 15.1)
-                return iter([types.SimpleNamespace(start=0., end=1., text='Test caption')]), None
         self_test = self
+        def fake_transcribe(path, work=None, progress=None, info=None):
+            # Deepgram stand-in: it must only ever be sent the short selected-clip audio
+            seen_audio.append(Path(path).name)
+            self_test.assertLessEqual(router.get_duration(Path(path)), 15.1)
+            return [{'start': 0., 'end': 1., 'text': 'Test caption', 'speaker': None}]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / 'source.mp4'
@@ -113,7 +110,7 @@ class PipelineTests(unittest.TestCase):
                             '-preset', 'ultrafast', '-c:a', 'aac', '-shortest', str(source)], check=True, timeout=30)
             messages = []
             with patch.object(router, 'OUTPUTS', root), patch.object(router, 'load_models'), \
-                 patch.object(router, 'visual_model', Encoder()), patch.object(router, 'whisper_model', Speech()):
+                 patch.object(router, 'visual_model', Encoder()), patch.object(router, 'transcribe_media', fake_transcribe):
                 with source.open('rb') as file:
                     result = router.search_video(UploadFile(file, filename='source.mp4'), 'blue screen', 'visual', 15, messages.append)
             self.assertEqual(seen_audio, ['selected_1.wav'])
@@ -122,7 +119,7 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue(output.is_file())
             self.assertAlmostEqual(router.get_duration(output), 15, delta=.2)
             self.assertTrue(any('Rendering' in message for message in messages))
-            for stage in ('Frame extraction', 'Prompt embedding', 'Image embeddings', 'Whisper transcription', 'Video rendering'):
+            for stage in ('Frame extraction', 'Prompt embedding', 'Image embeddings', 'Deepgram transcription', 'Video rendering'):
                 self.assertIn(stage, result['timings'])
                 self.assertGreaterEqual(result['timings'][stage], 0)
 
@@ -131,13 +128,13 @@ class PipelineTests(unittest.TestCase):
             subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=160x120:r=10:d=0.5',
                             '-c:v', 'libx264', str(short)], check=True, timeout=30)
             with patch.object(router, 'OUTPUTS', root), patch.object(router, 'load_models') as models, \
-                 patch.object(router, 'visual_model', Encoder()), patch.object(router, 'whisper_model') as speech:
+                 patch.object(router, 'visual_model', Encoder()), patch.object(router, 'transcribe_media') as speech:
                 with short.open('rb') as file:
                     result = router.search_video(UploadFile(file, filename='short.mp4'), 'blue', 'visual', 15)
-                speech.transcribe.assert_not_called()
+                speech.assert_not_called()
                 self.assertEqual([c.args[0] for c in models.call_args_list], ['visual'])
                 self.assertTrue((root / Path(result['clip_url']).name).is_file())
-                self.assertNotIn('Whisper transcription', result['timings'])
+                self.assertNotIn('Deepgram transcription', result['timings'])
 
 
 if __name__ == '__main__':

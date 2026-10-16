@@ -7,7 +7,7 @@ import imageio_ffmpeg
 
 MODULE_DIR = Path(__file__).resolve().parent
 
-# Fix FFmpeg PATH for Whisper and MoviePy on Windows
+# Fix FFmpeg PATH for MoviePy on Windows
 ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 ffmpeg_dir = os.path.dirname(ffmpeg_exe)
 os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
@@ -20,8 +20,9 @@ if not os.path.exists(expected_ffmpeg) and os.path.exists(ffmpeg_exe):
     except Exception:
         pass
 
-import whisper
 from moviepy import VideoFileClip, TextClip, CompositeVideoClip
+
+from backend.cascade_stt import transcribe_media
 
 # Map style names to specific aesthetic parameters
 STYLE_PRESETS = {
@@ -48,9 +49,8 @@ def generate_four_styled_clips(video_path: str, styles: list, tone: str = "engag
         if full_video.audio is None:
             raise ValueError("Video does not contain an audio track.")
     
-        print("Transcribing audio with Whisper...")
-        model = whisper.load_model("tiny")
-        transcription = model.transcribe(input_video_path)
+        print("Transcribing audio with Deepgram...")
+        transcription = {"segments": transcribe_media(input_video_path)}
     
         font_path = os.environ.get("CASCADE_CAPTION_FONT") or next((p for p in ["C:/Windows/Fonts/arialbd.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"] if os.path.exists(p)), None)
         destination = Path(output_dir) if output_dir else MODULE_DIR
