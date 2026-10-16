@@ -4,12 +4,14 @@ from uuid import uuid4
 import json
 import shutil
 import subprocess
+import os
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from faster_whisper import WhisperModel
 from PIL import Image
 from sentence_transformers import SentenceTransformer
+from pipeline_timing import StageTimer
 
 router = APIRouter()
 
@@ -17,9 +19,19 @@ PROJECT_DIR = Path(__file__).resolve().parent
 OUTPUTS = PROJECT_DIR / "outputs"
 OUTPUTS.mkdir(exist_ok=True)
 
-whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
-search_model = SentenceTransformer("all-MiniLM-L6-v2")
-visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
+whisper_model = search_model = visual_model = None
+
+def load_models(mode, progress=lambda message: None):
+    global whisper_model, search_model, visual_model
+    if mode in ('speech', 'captions') and whisper_model is None:
+        progress('Loading speech model (first use may download model files)...')
+        whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+    if mode == "speech" and search_model is None:
+        progress('Loading speech search model (first use may download model files)...')
+        search_model = SentenceTransformer("all-MiniLM-L6-v2")
+    if mode == "visual" and visual_model is None:
+        progress('Loading visual search model (first use may download model files)...')
+        visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
 
 
 # Note: the standalone "/" page is now served via StaticFiles at /search-ui
@@ -49,6 +61,7 @@ def get_duration(video_path: Path) -> float:
         check=True,
         capture_output=True,
         text=True,
+        timeout=30,
     )
     return float(json.loads(result.stdout)["format"]["duration"])
 
@@ -68,189 +81,157 @@ async def upload_video(
     mode: str = Form("speech"),
     clip_length: int = Form(15),
 ):
+    from starlette.concurrency import run_in_threadpool
+    return await run_in_threadpool(search_video, video, search, mode, clip_length)
+
+
+def search_video(video, search, mode, clip_length, progress=lambda message: None, timing=lambda timings, active: None):
+    from backend.video_search.selection import select_matches
+    import numpy as np
+    timer = StageTimer(timing)
     if not search.strip():
-        raise HTTPException(status_code=400, detail="Type what you want to find.")
+        raise HTTPException(400, 'Type what you want to find.')
+    if mode not in ('speech', 'visual') or clip_length not in (15, 30, 60):
+        raise HTTPException(400, 'Choose speech/visual search and a 15, 30, or 60 second clip length.')
+    if shutil.which('ffmpeg') is None or shutil.which('ffprobe') is None:
+        raise HTTPException(500, 'FFmpeg and ffprobe must be installed.')
 
-    if mode not in ("speech", "visual"):
-        raise HTTPException(status_code=400, detail="Mode must be speech or visual.")
+    def run(command, timeout=300):
+        return subprocess.run(command, check=True, capture_output=True, text=True, timeout=timeout)
 
-    if clip_length not in (15, 30, 60):
-        raise HTTPException(
-            status_code=400,
-            detail="Choose 15, 30, or 60 seconds.",
-        )
+    progress('Loading search models...')
+    timer.start('Search model loading')
+    load_models(mode, progress)
+    outputs = []
+    created = []
+    try:
+        with TemporaryDirectory() as folder:
+            work = Path(folder)
+            source = work / ('uploaded' + (Path(video.filename or 'source.mp4').suffix or '.mp4'))
+            timer.start('Video preparation')
+            with source.open('wb') as destination:
+                shutil.copyfileobj(video.file, destination)
+            duration = get_duration(source)
+            if not np.isfinite(duration) or duration <= 0:
+                raise HTTPException(400, 'Could not read a valid video duration.')
+            transcript = []
+            if mode == 'speech':
+                timer.start('Whisper transcription')
+                progress('Transcribing video for speech search...')
+                segments, _ = whisper_model.transcribe(str(source), vad_filter=True)
+                for segment in segments:
+                    if segment.text.strip():
+                        transcript.append({'start': float(segment.start), 'end': float(segment.end), 'text': segment.text.strip()})
+                    progress(f'Transcribing speech: reached {segment.end:.0f} seconds...')
+                if not transcript:
+                    raise HTTPException(400, 'Whisper could not find speech in this video.')
+                timer.start('Text embeddings')
+                progress('Comparing your prompt with transcript segments...')
+                embeddings = search_model.encode([part['text'] for part in transcript])
+                query = search_model.encode(search)
+                scores = search_model.similarity(query, embeddings).reshape(-1).tolist()
+                anchors = [{'time': (part['start'] + part['end']) / 2, 'score': float(score),
+                            'evidence_start': part['start'], 'evidence_end': part['end'], 'match': part['text']}
+                           for part, score in zip(transcript, scores)]
+            else:
+                interval = max(3., duration / 100)
+                timer.start('Frame extraction')
+                progress('Extracting up to 100 preview frames across the video...')
+                frames = work / 'frames'
+                frames.mkdir()
+                run(['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-vf',
+                     (f'fps=1/{interval},' if duration >= interval else '') + 'scale=320:-2',
+                     '-frames:v', '100' if duration >= interval else '1', str(frames / 'frame_%04d.jpg')])
+                paths = sorted(frames.glob('frame_*.jpg'))
+                if not paths:
+                    raise HTTPException(400, 'No preview frames could be extracted.')
+                timer.start('Prompt embedding')
+                query = visual_model.encode(search, normalize_embeddings=True)
+                embeddings = []
+                for offset in range(0, len(paths), 8):
+                    timer.start('Image decoding')
+                    images = []
+                    try:
+                        for path in paths[offset:offset + 8]:
+                            with Image.open(path) as image:
+                                images.append(image.convert('RGB'))
+                        timer.start('Image embeddings')
+                        progress(f'Comparing video frames {offset + 1}–{min(offset + 8, len(paths))}/{len(paths)}...')
+                        embeddings.extend(visual_model.encode(images, normalize_embeddings=True))
+                    finally:
+                        for image in images:
+                            image.close()
+                scores = np.asarray(embeddings) @ query
+                anchors = [{'time': min(duration - .001, (index + .5) * interval) if duration >= interval else 0.,
+                            'score': float(score), 'match': f'Visual match near {min(duration, (index + .5) * interval):.1f} seconds'}
+                           for index, score in enumerate(scores)]
 
-    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
-        raise HTTPException(
-            status_code=500,
-            detail="FFmpeg and ffprobe must be installed.",
-        )
+            timer.start('Match selection')
+            progress('Selecting up to four distinct non-overlapping matches...')
+            selected = select_matches(anchors, duration, clip_length, 3 if mode == 'speech' else 5)
+            has_audio = False
+            if mode == 'visual' and selected:
+                timer.start('Audio inspection')
+                probe = run(['ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=index',
+                             '-of', 'csv=p=0', str(source)], 30)
+                has_audio = bool(probe.stdout.strip())
+                if has_audio:
+                    timer.start('Whisper model loading')
+                    load_models('captions', progress)
 
-    with TemporaryDirectory() as folder:
-        work_dir = Path(folder)
-        suffix = Path(video.filename or "video.mp4").suffix or ".mp4"
-        video_path = work_dir / f"uploaded{suffix}"
-
-        with video_path.open("wb") as destination:
-            shutil.copyfileobj(video.file, destination)
-
-        try:
-            duration = get_duration(video_path)
-        except (subprocess.CalledProcessError, ValueError, KeyError):
-            raise HTTPException(
-                status_code=400,
-                detail="Could not read this video's duration.",
-            )
-
-        if mode == "speech":
-            segments, _ = whisper_model.transcribe(str(video_path))
-            transcript = [
-                {"start": s.start, "end": s.end, "text": s.text.strip()}
-                for s in segments
-                if s.text.strip()
-            ]
-
-            if not transcript:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Whisper could not find speech in this video.",
-                )
-
-            sentences = [part["text"] for part in transcript]
-            embeddings = search_model.encode(sentences)
-            query_embedding = search_model.encode(search)
-            scores = search_model.similarity(query_embedding, embeddings)
-
-            best_index = scores.argmax().item()
-            match = transcript[best_index]
-
-            clip_start = max(0, match["start"] - 3)
-            clip_end = min(duration, clip_start + clip_length)
-            match_text = match["text"]
-
-        else:
-            # Take one picture from the video every 3 seconds.
-            frames_dir = work_dir / "frames"
-            frames_dir.mkdir()
-
-            try:
-                subprocess.run(
-                    [
-                        "ffmpeg",
-                        "-y",
-                        "-i", str(video_path),
-                        "-vf", "fps=1/3",
-                        "-frames:v", "100",
-                        str(frames_dir / "frame_%04d.jpg"),
-                    ],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-            except subprocess.CalledProcessError as error:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Could not extract frames: {error.stderr[-500:]}",
-                )
-
-            frame_paths = sorted(frames_dir.glob("frame_*.jpg"))
-            if not frame_paths:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No pictures could be taken from this video.",
-                )
-
-            images = []
-            for path in frame_paths:
-                with Image.open(path) as image:
-                    images.append(image.convert("RGB"))
-
-            # CLIP compares the search with each picture.
-            query_embedding = visual_model.encode(
-                search, normalize_embeddings=True
-            )
-            frame_embeddings = visual_model.encode(
-                images, normalize_embeddings=True
-            )
-            scores = frame_embeddings @ query_embedding
-            best_index = int(scores.argmax())
-
-            matched_second = best_index * 3
-            clip_start = max(0, matched_second - 5)
-            clip_end = min(duration, clip_start + clip_length)
-            match_text = f"Best visual match near {matched_second} seconds"
-
-            # Visual search did not need speech, but captions do.
-            segments, _ = whisper_model.transcribe(str(video_path))
-            transcript = [
-                {"start": s.start, "end": s.end, "text": s.text.strip()}
-                for s in segments
-                if s.text.strip()
-            ]
-
-        # Keep only speech inside the selected clip. Adjust timestamps so
-        # the captions start at 0 seconds in the new video.
-        subtitle_lines = []
-        for part in transcript:
-            start = max(part["start"], clip_start)
-            end = min(part["end"], clip_end)
-
-            if end <= start:
-                continue
-
-            subtitle_lines.append(
-                f"{len(subtitle_lines) + 1}\n"
-                f"{srt_time(start - clip_start)} --> "
-                f"{srt_time(end - clip_start)}\n"
-                f"{part['text']}\n"
-            )
-
-        if subtitle_lines:
-            (work_dir / "captions.srt").write_text(
-                "\n".join(subtitle_lines),
-                encoding="utf-8",
-            )
-
-        filename = f"{uuid4().hex}.mp4"
-        output_path = OUTPUTS / filename
-
-        command = [
-            "ffmpeg",
-            "-y",
-            "-ss", str(clip_start),
-            "-i", str(video_path),
-            "-t", str(clip_end - clip_start),
-        ]
-
-        # Burn subtitles onto the video if Whisper found speech.
-        if subtitle_lines:
-            command += ["-vf", "subtitles=filename=captions.srt"]
-
-        command += [
-            "-c:v", "libx264",
-            "-c:a", "aac",
-            "-movflags", "+faststart",
-            str(output_path),
-        ]
-
-        try:
-            subprocess.run(
-                command,
-                cwd=work_dir,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as error:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Could not make clip: {error.stderr[-500:]}",
-            )
-
-    return {
-        "clip_url": f"/api/search/clips/{filename}",
-        "start": round(clip_start, 1),
-        "end": round(clip_end, 1),
-        "match": match_text,
-        "mode": mode,
-    }
+            for number, selection in enumerate(selected, 1):
+                clip_start, clip_end = selection['start'], selection['end']
+                clip_transcript = transcript
+                if mode == 'visual':
+                    clip_transcript = []
+                    if has_audio:
+                        timer.start('Audio extraction')
+                        progress(f'Preparing captions for clip {number}/{len(selected)}...')
+                        audio = work / f'selected_{number}.wav'
+                        run(['ffmpeg', '-v', 'error', '-y', '-ss', str(clip_start), '-i', str(source), '-t',
+                             str(clip_end - clip_start), '-vn', '-ac', '1', '-ar', '16000', str(audio)], 120)
+                        timer.start('Whisper transcription')
+                        segments, _ = whisper_model.transcribe(str(audio), beam_size=1, vad_filter=True)
+                        clip_transcript = [{'start': s.start + clip_start, 'end': s.end + clip_start, 'text': s.text.strip()}
+                                           for s in segments if s.text.strip()]
+                timer.start('Caption preparation')
+                subtitle_lines, vtt_lines = [], ['WEBVTT\n']
+                for part in clip_transcript:
+                    start, end = max(part['start'], clip_start), min(part['end'], clip_end)
+                    if end <= start:
+                        continue
+                    local_start, local_end = srt_time(start - clip_start), srt_time(end - clip_start)
+                    subtitle_lines.append(f"{len(subtitle_lines) + 1}\n{local_start} --> {local_end}\n{part['text']}\n")
+                    vtt_lines.append(f"{local_start.replace(',', '.')} --> {local_end.replace(',', '.')}\n{part['text']}\n")
+                subtitle_name = f'captions_{number}.srt'
+                if subtitle_lines:
+                    (work / subtitle_name).write_text('\n'.join(subtitle_lines), encoding='utf-8')
+                filename = uuid4().hex + '.mp4'
+                output = OUTPUTS / filename
+                created.append(output)
+                command = ['ffmpeg', '-v', 'error', '-y', '-ss', str(clip_start), '-i', str(source),
+                           '-t', str(clip_end - clip_start), '-map', '0:v:0', '-map', '0:a:0?']
+                filters = ['scale=trunc(iw/2)*2:trunc(ih/2)*2']
+                if subtitle_lines:
+                    filters.append('subtitles=filename=' + subtitle_name)
+                command += ['-vf', ','.join(filters), '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+                            '-c:a', 'aac', '-movflags', '+faststart', str(output)]
+                timer.start('Video rendering')
+                progress(f'Rendering clip {number}/{len(selected)} with audio and captions...')
+                subprocess.run(command, cwd=work, check=True, capture_output=True, text=True,
+                               timeout=float(os.getenv('CASCADE_FFMPEG_TIMEOUT', '300')))
+                outputs.append({'clip_url': f'/api/search/clips/{filename}', 'start': clip_start, 'end': clip_end,
+                                'match': selection['match'], 'mode': mode, 'captions_vtt': '\n'.join(vtt_lines)})
+        timings = timer.finish()
+        note = ''
+        if len(outputs) < 4:
+            note = f'Found {len(outputs)} distinct clip(s). The source duration or spacing of searchable moments does not allow four separate clips, even with shorter windows.'
+        elif selected and selected[0]['end'] - selected[0]['start'] < clip_length - .01:
+            seconds = selected[0]['end'] - selected[0]['start']
+            note = f'Used {seconds:g}-second clips instead of the {clip_length}-second target to keep four distinct matches without overlap.'
+        # Keep the first-clip fields for older standalone clients.
+        return {**(outputs[0] if outputs else {}), 'clips': outputs, 'timings': timings, 'selection_note': note}
+    except BaseException:
+        for output in created:
+            output.unlink(missing_ok=True)
+        raise
