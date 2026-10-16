@@ -1169,19 +1169,11 @@ def upload_video(
     mode: str = Form("both"),
     clip_length: int = Form(30),
     project_id: str = Form(...),
-    engine: str = Form("agent"),
 ):
     integration.require_project(project_id, request.state.user_id)
     validate_clip_storage()
-    if engine not in ("agent", "speech", "visual"):
-        raise HTTPException(400, "Invalid search engine.")
     # a missing key fails now, with a clear message, not mid-job
-    if engine == 'agent':
-        problem = requirements_error()
-    elif not os.environ.get('DEEPGRAM_API_KEY', '').strip():
-        problem = 'DEEPGRAM_API_KEY is not set. Add it to .env and restart the server.'
-    else:
-        problem = None
+    problem = requirements_error()
     if problem:
         raise HTTPException(503, problem)
     search = search.strip()
@@ -1288,11 +1280,11 @@ def upload_video(
         }
 
     worker.submit(
-        process_upload if engine == 'agent' else integration.process_search,
+        process_upload,
         job_id,
         video_path,
         search,
-        mode if engine == 'agent' else engine,
+        mode,
         clip_length,
     )
 

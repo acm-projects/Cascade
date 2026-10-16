@@ -11,7 +11,7 @@ The updated `_C.html` pages, shared CSS, and existing `flow_C.js` remain the act
 - Existing Clerk sign-in, verified sessions, account name, and sign-out are retained. Profile opens Clerk's actual profile interface.
 - Projects are created through the authenticated backend, appear as tiles, and reopen by ID. Names, upload history, prompts, source videos, generated clips, research results, and saved clip references persist on the server.
 - Every new upload is attached to a verified user and project. Opening a project restores a saved source video and allows another prompt without selecting the file again.
-- The **AI agent** is the default clip-selection engine: it reads the whole video through a Deepgram transcript and a search index, compares moments across it and returns up to four ranked, spread-out clips (see *AI agent selection* below). Local speech and visual search remain selectable alternatives. The OpenAI scene-analysis engine and the Ollama/Qwen engine were removed.
+- The **AI agent** is the only clip-selection engine, with no search-method choice on the page (a request about what is said makes it work from the transcript): it reads the whole video through a Deepgram transcript and a search index, compares moments across it and returns up to four ranked, spread-out clips (see *AI agent selection* below). The OpenAI scene-analysis engine and the Ollama/Qwen engine were removed.
 - The canvas displays actual generated videos and lets you select which clip opens in the editor. The editor can switch between available clips.
 - Clip generation uses real job status and errors. Interrupted jobs explicitly fail after a server restart; completed jobs and saved research remain readable.
 - Existing S3 upload and protected clip/caption delivery remain in use. Caption style and search results use the same ownership and storage contract.
@@ -56,7 +56,7 @@ ANTHROPIC_API_KEY=your_key_here
 DEEPGRAM_API_KEY=your_key_here
 ```
 
-Choose **AI agent — best moments across the whole video · up to 4 clips** and enter a request such as
+Enter a request such as
 "Find four funny moments; include each setup and punchline." The agent:
 
 1. transcribes the video with Deepgram (speaker labels included) and builds a search index: frame embeddings

@@ -8,8 +8,7 @@ The **AI agent** is the default way to find clips. It transcribes the video with
 reads and compares moments across the whole video and returns up to four ranked clips spread through it. Set
 `DEEPGRAM_API_KEY` and `LLM_PROVIDER` (`anthropic` by default, or `openai`) with the matching API key in your
 `.env`; the models are fixed in code. A "What the agent is doing" panel shows each step while it works, and
-there is no default time limit. Local visual/speech search are optional alternatives and transcribe with
-Deepgram too (there is no local Whisper). The OpenAI scene-analysis and Ollama engines were removed.
+there is no default time limit. There is no search-method dropdown; the agent handles every request (there is no local Whisper). The OpenAI scene-analysis and Ollama engines were removed.
 
 Local visual and speech search also return up to four non-overlapping clips.
 They rank image/transcript matches once per job, preserve audio, and generate

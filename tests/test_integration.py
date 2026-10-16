@@ -53,13 +53,13 @@ class IntegrationTests(unittest.TestCase):
 
     def upload(self):
         with patch.object(app1, 'resolve_storage_folder', return_value={'folder': 'users', 'source': 'test'}), patch.object(app1.worker, 'submit') as submit:
-            result = self.client.post('/upload', headers=self.headers, data={'project_id': self.project['id'], 'search': 'waterfalls', 'engine': 'speech'}, files={'video': ('source.mp4', b'example-source', 'video/mp4')})
+            result = self.client.post('/upload', headers=self.headers, data={'project_id': self.project['id'], 'search': 'waterfalls'}, files={'video': ('source.mp4', b'example-source', 'video/mp4')})
         self.assertEqual(result.status_code, 202)
-        self.assertIs(submit.call_args.args[0], integration.process_search)
+        self.assertIs(submit.call_args.args[0], app1.process_upload)
         return result.json()['job_id']
 
     def test_agent_upload_checks_keys_and_dispatches(self):
-        data = {'project_id': self.project['id'], 'search': 'four funny moments', 'engine': 'agent'}
+        data = {'project_id': self.project['id'], 'search': 'four funny moments'}
         files = lambda: {'video': ('a.mp4', b'video')}
         with patch.object(app1.worker, 'submit') as submit:
             # a missing key fails at upload with a clear message, not minutes into a job
@@ -78,23 +78,6 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(response.status_code, 202)
             self.assertIs(submit.call_args.args[0], app1.process_upload)
 
-            # the agent is the default engine
-            del data['engine']
-            response = self.client.post('/upload', headers=self.headers, data=data, files=files())
-            self.assertEqual(response.status_code, 202)
-            self.assertIs(submit.call_args.args[0], app1.process_upload)
-
-            # speech and visual search transcribe with Deepgram too, so they check that key at upload
-            for engine in ('speech', 'visual'):
-                with patch.dict(os.environ, {'DEEPGRAM_API_KEY': ''}):
-                    response = self.client.post('/upload', headers=self.headers, data={**data, 'engine': engine}, files=files())
-                self.assertEqual(response.status_code, 503, engine)
-                self.assertIn('DEEPGRAM_API_KEY', response.json()['detail'])
-
-            # the engines the agent replaced are gone
-            for engine in ('openai', 'qwen'):
-                response = self.client.post('/upload', headers=self.headers, data={**data, 'engine': engine}, files=files())
-                self.assertEqual(response.status_code, 400, engine)
 
     def test_upload_project_association_history_and_source(self):
         job_id = self.upload()

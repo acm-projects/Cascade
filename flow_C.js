@@ -605,7 +605,6 @@
         const formData = new FormData();
 
         formData.append("project_id", project.id);
-        formData.append("engine", $("search-engine").value);
         formData.append(
           "video",
           file
