@@ -48,14 +48,14 @@ def requirements_error() -> str | None:
     return None
 
 
-def _selection_note(result: dict[str, Any], count: int) -> str:
+def _selection_note(result: dict[str, Any], count: int, requested_count: int = TARGET_CLIPS) -> str:
     notes = []
     if count == 0:
         notes.append("The agent did not find any moments that match your request.")
-    elif count < TARGET_CLIPS:
+    elif count < requested_count:
         notes.append(
             f"Found {count} distinct strong moment{'s' if count != 1 else ''}; no weaker clips were "
-            "added just to fill four slots."
+            f"added just to fill {'four' if requested_count==4 else requested_count} slots."
         )
     if count and not result.get("ranked_by_agent"):
         notes.append("The agent ran out of steps before ranking, so clips are ordered by its own confidence scores.")
@@ -71,6 +71,7 @@ def select_with_agent(
     target: float,
     progress: Callable[[str], None],
     stage: Callable[[str], Any],
+    requested_count: int = TARGET_CLIPS,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Run the agent on a video. Returns (clips, transcript, metadata).
 
@@ -93,7 +94,7 @@ def select_with_agent(
     ensure_summaries(index, progress=progress)
 
     stage("AI agent selection")
-    toolbox = ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len)
+    toolbox = ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len, target_clips=requested_count)
     result = run_agent(toolbox, search, progress=progress, target_seconds=target)
 
     clips = []
@@ -113,7 +114,7 @@ def select_with_agent(
     metadata = {
         "provider": selected_provider(),
         "model": selected_model(),
-        "selection_note": _selection_note(result, len(clips)),
+        "selection_note": _selection_note(result, len(clips), requested_count),
         "usage": result["usage"],
         "candidates_considered": result["candidates_considered"],
         "agent_iterations": result["iterations"],

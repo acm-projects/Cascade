@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
-import integration
+from backend import integration
 
 
 class IntegrationTests(unittest.TestCase):
@@ -158,7 +158,7 @@ class IntegrationTests(unittest.TestCase):
         fake.OUTPUTS = Path(self.temp.name)
         output = fake.OUTPUTS / 'generated.mp4'
         output.write_bytes(b'fixture')
-        def search(*args, progress, timing):
+        def search(*args, progress, timing, **options):
             timing({}, 'Image embeddings')
             values = {'Image embeddings': 2.5, 'Whisper transcription': 1.0}
             timing(values, None)

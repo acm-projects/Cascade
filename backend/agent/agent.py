@@ -77,10 +77,14 @@ def run_agent(
     the wire format; everything below - tool guard, pacing, forced final turn - is provider-neutral."""
     emit = progress or (lambda msg: None)
 
+    target_clips=getattr(toolbox,"target_clips",TARGET_SUGGESTIONS)
+    system=SYSTEM_PROMPT
+    if target_clips!=TARGET_SUGGESTIONS:
+        system=system.replace(f"{2*TARGET_SUGGESTIONS}-{3*TARGET_SUGGESTIONS}",f"{2*target_clips}-{3*target_clips}").replace(f"{TARGET_SUGGESTIONS} best",f"{target_clips} best").replace(f"top {TARGET_SUGGESTIONS}",f"top {target_clips}").replace("not four moments","not several moments")
     conv = conversation or make_conversation(client)
     model = selected_model()
     first_message = (
-        f"Find the {TARGET_SUGGESTIONS} best '{category}' moments of this whole video, spread out "
+        f"Find the {target_clips} best '{category}' moments of this whole video, spread out "
         f"through it (duration {toolbox.index.duration:.1f}s)."
     )
     if toolbox.min_clip_seconds != MIN_CLIP_SECONDS or toolbox.max_clip_seconds != MAX_CLIP_SECONDS or target_seconds:
@@ -122,8 +126,10 @@ def run_agent(
         The instructions are identical on every turn (so prompt caching keeps working); per-turn
         reminders travel as `note`, appended to the end of the conversation instead."""
         nonlocal final_text
+        if target_clips!=TARGET_SUGGESTIONS:
+            tools=[{**tool,'description':tool['description'].replace(f'{TARGET_SUGGESTIONS} clips',f'{target_clips} clips')} for tool in tools]
         emit(label)
-        turn = conv.take_turn(system=SYSTEM_PROMPT, tools=tools, tool_choice=tool_choice, note=note)
+        turn = conv.take_turn(system=system, tools=tools, tool_choice=tool_choice, note=note)
         emit(f"{label} done{record_usage(turn)}")
         if turn.text:
             final_text = turn.text

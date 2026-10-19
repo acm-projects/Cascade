@@ -45,7 +45,8 @@ from fastapi.responses import (
 )
 
 from starlette.concurrency import run_in_threadpool
-from pipeline_timing import StageTimer
+from backend.pipeline_timing import StageTimer
+from backend.openai_scene import SceneAnalysisError
 
 from backend.agent.website import SelectionError, requirements_error, select_with_agent
 from backend.cascade_llm import LLMConfigError
@@ -77,6 +78,7 @@ def start_model_warmup():
         threading.Thread(target=warm_models, name="model-warmup", daemon=True).start()
 
 PROJECT_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = PROJECT_DIR / "web"
 
 load_dotenv(PROJECT_DIR / ".env", override=True)
 # Accept existing local names without rewriting the user's secrets file.
@@ -102,7 +104,11 @@ PROTECTED_EXACT_PATHS = (
     "/api/settings",
 )
 
+from backend import frontend
+
 FRONTEND_FILES = {
+    "index.html",
+    "canvas_branches.js",
     "index_C.html",
     "login_C.html",
     "projects_C.html",
@@ -112,6 +118,11 @@ FRONTEND_FILES = {
     "settings_C.html",
     "styles_C.css",
     "flow_C.js",
+    "editor_C.js",
+    "editor_captions.js",
+    "editor_timeline.js",
+    "editor_state.js",
+    "editor_C.css",
 }
 
 PRIVATE_CLIP_FIELDS = {
@@ -457,14 +468,14 @@ def clerk_configuration():
         "",
     ).strip()
 
-    # Preserve the original working login.html fallback.
+    # Preserve the legacy publishable-key fallback in the consolidated template.
     if not key:
-        login_path = PROJECT_DIR / "login.html"
+        login_path = FRONTEND_DIR / "index.html"
 
         if login_path.is_file():
             match = re.search(
                 (
-                    r"const\s+CLERK_PUBLISHABLE_KEY"
+                    r"legacy_clerk_publishable_key"
                     r"\s*=\s*[\"']"
                     r"(pk_(?:test|live)_[^\"']+)"
                     r"[\"']"
@@ -516,8 +527,8 @@ def clerk_configuration():
             503,
             (
                 "Set CLERK_PUBLISHABLE_KEY in .env "
-                "or keep your original login.html "
-                "with its publishable key."
+                "or restore the original publishable-key "
+                "fallback in the website template."
             ),
         )
 
@@ -692,12 +703,16 @@ def serve_new_page(filename):
             "Page not found.",
         )
 
-    path = PROJECT_DIR / filename
+    if filename in frontend.PAGES:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(frontend.render_page(filename, FRONTEND_DIR), headers={'Cache-Control':'no-store'})
+
+    path = FRONTEND_DIR / filename
 
     if not path.is_file():
         raise HTTPException(
             404,
-            f"Put {filename} beside app1.py.",
+            f"Frontend file {filename} is missing.",
         )
 
     return FileResponse(
@@ -796,7 +811,7 @@ def require_job_owner(job_id, user_id):
         )
     )
 
-    if owner.get("user_id") != user_id:
+    if owner.get("user_id") != user_id or owner.get("project_deleted"):
         raise HTTPException(
             404,
             "Job not found.",
@@ -984,7 +999,7 @@ def write_captions(
         text = html.escape(
             " ".join(
                 segment["text"].split()
-            )
+            ), quote=False
         )
 
         lines.extend([
@@ -1043,6 +1058,10 @@ def process_upload(
     target,
 ):
     folder = JOBS_DIR / job_id
+    from backend.generation import options, contextual_prompt, followup_windows
+    requested_count, parent_context = options(folder)
+    original_search = search
+    search = contextual_prompt(search, parent_context)
     started = time.monotonic()
     stage = 'starting analysis'
     steps = []
@@ -1077,7 +1096,12 @@ def process_upload(
         # The agent: Deepgram transcript, search index, and a multi-step selection of the best
         # moments across the whole video. Cutting, captions and storage below are unchanged.
         selected, transcript, metadata = select_with_agent(
-            video_path, duration, search, target, progress, timer.start)
+            video_path, duration, search, target, progress, timer.start,
+            **({'requested_count':requested_count} if requested_count!=4 else {}))
+        selected = followup_windows(selected, parent_context, original_search, duration, target, requested_count)
+        metadata['requested_clip_count']=requested_count
+        if len(selected)<requested_count:
+            metadata['selection_note']=f'Found {len(selected)} of {requested_count} requested suitable clips. '+metadata.get('selection_note','')
 
         save_json(
             folder / "selected_clips.json",
@@ -1116,6 +1140,7 @@ def process_upload(
                     storage = upload_clip_files(folder, job_id, filename, captions_filename)
                     results[number] = {
                         **selection,
+                        "clip_id": f"{job_id}:{number-1}",
                         **storage,
                         "clip_url": f"/clips/{job_id}/{filename}",
                         "captions_url": f"/clips/{job_id}/{captions_filename}",
@@ -1168,126 +1193,172 @@ def upload_video(
     mode: str = Form("both"),
     clip_length: int = Form(30),
     project_id: str = Form(...),
+    engine: str = Form("agent"),
+    clip_count: int = Form(4, ge=1, le=12),
+    source_job: str | None = Form(None),
+    parent_job: str | None = Form(None),
+    parent_clip_index: int | None = Form(None, ge=0),
 ):
-    integration.require_project(project_id, request.state.user_id)
-    validate_clip_storage()
-    # a missing key fails now, with a clear message, not mid-job
-    problem = requirements_error()
-    if problem:
-        raise HTTPException(503, problem)
-    search = search.strip()
+    with integration.lock:
+        integration.require_project(project_id, request.state.user_id)
+        from backend.generation import MAX_CLIPS
+        if not 1 <= clip_count <= MAX_CLIPS:
+            raise HTTPException(400, 'Choose 1–12 clips.')
+        parent_context = None
+        if parent_job:
+            if parent_clip_index is None:
+                raise HTTPException(400, 'Choose a parent clip.')
+            parent_owner, parent = integration.selected_clip(project_id, integration.ClipInput(job_id=parent_job, clip_index=parent_clip_index), request.state.user_id)
+            original = integration.original_source(project_id, parent_job, request.state.user_id)
+            source_job = original.parent.name
+            parent_context = {'clip_id': f'{parent_job}:{parent_clip_index}', 'job_id': parent_job, 'clip_index': parent_clip_index,
+                              'start': parent['start'], 'end': parent['end'], 'title': parent.get('title', ''),
+                              'prompt': parent_owner.get('prompt', ''), 'description': parent.get('explanation', '')}
+            captions_path = JOBS_DIR / parent_job / f'clip_{parent_clip_index+1}.vtt'
+            if captions_path.is_file():
+                parent_context['captions'] = captions_path.read_text(encoding='utf-8-sig')[:12000]
+        elif parent_clip_index is not None:
+            raise HTTPException(400, 'Choose a parent generation.')
+        if source_job:
+            original = integration.original_source(project_id, source_job, request.state.user_id)
+            source_job = original.parent.name
+        source_name = Path(video.filename or 'video').name
+        if source_job:
+            source_owner = json.loads((JOBS_DIR / source_job / 'owner.json').read_text())
+            source_name = source_owner.get('source_name', source_name)
+        validate_clip_storage()
+        # Old saved editor requests may name the retired engines; keep their source context
+        # but run selection through main's configured agent, never restore Ollama/Whisper.
+        if engine in ('openai','qwen'):
+            engine='agent'
+        if engine not in ('agent','speech','visual'):
+            raise HTTPException(400, 'Invalid search engine.')
+        configuration_error = requirements_error() if engine=='agent' else (
+            None if os.getenv('DEEPGRAM_API_KEY','').strip() else 'DEEPGRAM_API_KEY is not set. Add it to .env and restart the server.')
+        if configuration_error:
+            raise HTTPException(503, configuration_error)
+        search = search.strip()
 
-    if not search or len(search) > 2000:
-        raise HTTPException(
-            400,
-            "Enter a prompt of 1–2000 characters.",
-        )
-
-    if mode not in (
-        "speech",
-        "visual",
-        "both",
-    ):
-        raise HTTPException(
-            400,
-            "Invalid search mode.",
-        )
-
-    if clip_length not in (15, 30, 60):
-        raise HTTPException(
-            400,
-            "Invalid clip length.",
-        )
-
-    if (
-        shutil.which("ffmpeg") is None
-        or shutil.which("ffprobe") is None
-    ):
-        raise HTTPException(
-            503,
-            "FFmpeg and ffprobe must be installed.",
-        )
-
-    storage_information = ({'folder': DEFAULT_FOLDER, 'source': 'local'} if uses_local_storage()
-                           else resolve_storage_folder(request.state.user_id))
-
-    job_id = uuid4().hex
-
-    folder = JOBS_DIR / job_id
-    folder.mkdir()
-
-    video_path = folder / "source.video"
-
-    try:
-        fingerprint = hashlib.sha256()
-        with video_path.open("wb") as destination:
-            while chunk := video.file.read(1024 * 1024):
-                fingerprint.update(chunk)
-                destination.write(chunk)
-
-        if video_path.stat().st_size == 0:
+        if not search or len(search) > 2000:
             raise HTTPException(
                 400,
-                "The uploaded file is empty.",
+                "Enter a prompt of 1–2000 characters.",
             )
 
-        save_json(
-            folder / "owner.json",
-            {
-                "user_id": request.state.user_id,
-                "project_id": project_id,
-                "prompt": search,
-                "source_name": Path(video.filename or "video").name,
-                "video_sha256": fingerprint.hexdigest(),
+        if mode not in (
+            "speech",
+            "visual",
+            "both",
+        ):
+            raise HTTPException(
+                400,
+                "Invalid search mode.",
+            )
 
-                "user_folder": (
-                    storage_information["folder"]
-                ),
+        if clip_length not in (15, 30, 60):
+            raise HTTPException(
+                400,
+                "Invalid clip length.",
+            )
 
-                "folder_source": (
-                    storage_information["source"]
-                ),
-            },
-        )
-        # Reuse only analysis from the same verified account and project.
-        for previous in JOBS_DIR.glob('*/owner.json'):
-            if previous.parent == folder:
-                continue
-            try:
-                owner = json.loads(previous.read_text(encoding='utf-8'))
-            except (OSError, ValueError):
-                continue
-            if (owner.get('user_id') == request.state.user_id and owner.get('project_id') == project_id
-                    and owner.get('video_sha256') == fingerprint.hexdigest()):
-                for name in ('transcript.json', 'video_descriptions.json', 'visual_analysis_settings.json', 'openai_selection.json'):
-                    cached = previous.parent / name
-                    if cached.is_file() and not (folder / name).exists():
-                        shutil.copyfile(cached, folder / name)
+        if (
+            shutil.which("ffmpeg") is None
+            or shutil.which("ffprobe") is None
+        ):
+            raise HTTPException(
+                503,
+                "FFmpeg and ffprobe must be installed.",
+            )
 
-    except Exception:
-        shutil.rmtree(folder)
-        raise
+        storage_information = ({'folder': DEFAULT_FOLDER, 'source': 'local'} if uses_local_storage()
+                               else resolve_storage_folder(request.state.user_id))
 
-    finally:
-        video.file.close()
+        job_id = uuid4().hex
 
-    with jobs_lock:
-        jobs[job_id] = {
-            "state": "queued",
-            "message": "Waiting to process...",
-            "clips": [],
-        }
+        folder = JOBS_DIR / job_id
+        folder.mkdir()
 
-    worker.submit(
-        process_upload,
-        job_id,
-        video_path,
-        search,
-        mode,
-        clip_length,
-    )
+        video_path = folder / "source.video"
 
-    return {"job_id": job_id}
+        try:
+            fingerprint = hashlib.sha256()
+            if source_job:
+                video.file.close()
+                video.file = original.open('rb')
+            with video_path.open("wb") as destination:
+                while chunk := video.file.read(1024 * 1024):
+                    fingerprint.update(chunk)
+                    destination.write(chunk)
+
+            if video_path.stat().st_size == 0:
+                raise HTTPException(
+                    400,
+                    "The uploaded file is empty.",
+                )
+
+            save_json(
+                folder / "owner.json",
+                {
+                    "user_id": request.state.user_id,
+                    "project_id": project_id,
+                    "prompt": search,
+                    "source_name": source_name,
+                    "video_sha256": fingerprint.hexdigest(),
+                    "engine": engine,
+                    "mode": mode if engine=="agent" else engine,
+                    "clip_length": clip_length,
+                    "requested_clip_count": clip_count,
+                    "history_id": job_id,
+                    "creation_order": 1 + max((j.get("creation_order") or i+1 for i,j in enumerate(reversed(integration.project_jobs(project_id, request.state.user_id))) if j["kind"] == "generation"), default=0),
+                    "created_at": time.time(),
+                    "source_job": source_job or job_id,
+                    "parent_clip": parent_context,
+
+                    "user_folder": (
+                        storage_information["folder"]
+                    ),
+
+                    "folder_source": (
+                        storage_information["source"]
+                    ),
+                },
+            )
+            # Reuse only analysis from the same verified account and project.
+            for previous in JOBS_DIR.glob('*/owner.json'):
+                if previous.parent == folder:
+                    continue
+                try:
+                    owner = json.loads(previous.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    continue
+                if (owner.get('user_id') == request.state.user_id and owner.get('project_id') == project_id
+                        and owner.get('video_sha256') == fingerprint.hexdigest()):
+                    for name in ('transcript.json', 'video_descriptions.json', 'visual_analysis_settings.json', 'openai_selection.json'):
+                        cached = previous.parent / name
+                        if cached.is_file() and not (folder / name).exists():
+                            shutil.copyfile(cached, folder / name)
+
+        except Exception:
+            shutil.rmtree(folder)
+            raise
+
+        finally:
+            video.file.close()
+
+        with jobs_lock:
+            jobs[job_id] = {
+                "state": "queued",
+                "message": "Waiting to process...",
+                "clips": [],
+            }
+
+        save_json(folder / 'progress.json', dict(jobs[job_id]))
+        try:
+            worker.submit(process_upload if engine=='agent' else integration.process_search,
+                          job_id, video_path, search, mode if engine=='agent' else engine, clip_length)
+        except Exception:
+            integration.fail_feature(job_id, 'Could not queue generation. Retry this request.')
+        return {"job_id": job_id}
 
 
 # --------------------------------------------------
@@ -1368,7 +1439,7 @@ def get_clip(
 
     # Keep compatibility with previously saved jobs.
     if not re.fullmatch(
-        r"clip_[1-4]\.(mp4|vtt)",
+        r"clip_[1-9][0-9]*\.(mp4|vtt)",
         filename,
     ):
         raise HTTPException(
@@ -1559,7 +1630,7 @@ def get_my_clips(request: Request):
 
             if (
                 owner.get("user_id")
-                != request.state.user_id
+                != request.state.user_id or owner.get("project_deleted")
             ):
                 continue
 
@@ -1589,7 +1660,7 @@ def get_my_clips(request: Request):
                 match = re.fullmatch(
                     (
                         rf"/clips/{folder.name}/"
-                        r"(clip_[1-4]\.mp4)"
+                        r"(clip_[1-9][0-9]*\.mp4)"
                     ),
                     clip_url,
                 )
@@ -1627,5 +1698,12 @@ def get_my_clips(request: Request):
 
 # Integrate remote backend features under the existing authenticated app.
 import sys
-import integration
+from backend import integration
 integration.register(app, sys.modules[__name__])
+
+# Editor-only routes use the existing ownership and JSON persistence adapters.
+from backend import editor_backend
+editor_backend.register(app, integration)
+
+from backend import project_actions
+project_actions.register(app, sys.modules[__name__], integration)

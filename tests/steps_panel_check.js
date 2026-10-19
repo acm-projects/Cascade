@@ -2,7 +2,7 @@
 // Run by tests/test_steps_panel.py, or directly: node tests/steps_panel_check.js
 const fs = require("fs");
 const path = require("path");
-const src = fs.readFileSync(path.join(__dirname, "..", "flow_C.js"), "utf8");
+const src = fs.readFileSync(path.join(__dirname, "..", "web", "flow_C.js"), "utf8");
 const a = src.indexOf("  function showAgentSteps(job, jobId) {");
 const b = src.indexOf("  async function pollJob(jobId) {");
 if (a < 0 || b < 0) throw new Error("could not locate showAgentSteps in flow_C.js");

@@ -180,7 +180,11 @@ class ToolBox:
         frame_grabber: Callable[[Path, float], bytes] = grab_frame_jpeg,
         min_clip_seconds: float = MIN_CLIP_SECONDS,
         max_clip_seconds: float = MAX_CLIP_SECONDS,
+        target_clips: int = TARGET_CLIPS,
     ):
+        if isinstance(target_clips,bool) or not isinstance(target_clips,int) or not 1<=target_clips<=12:
+            raise ValueError("Choose 1–12 clips.")
+        self.target_clips=target_clips
         self.index = index
         self.video_path = video_path
         self.frame_grabber = frame_grabber
@@ -376,7 +380,7 @@ class ToolBox:
 
     def _coverage_text(self) -> str:
         """Candidates per equal slice of the video, so gaps are visible to the agent."""
-        regions = TARGET_CLIPS
+        regions = self.target_clips
         counts = [0] * regions
         for c in self.candidates:
             mid = (c["start"] + c["end"]) / 2
@@ -425,7 +429,7 @@ class ToolBox:
         def mid(cid: int) -> float:
             return (by_id[cid]["start"] + by_id[cid]["end"]) / 2
 
-        base_gap = self.index.duration / (2 * TARGET_CLIPS)
+        base_gap = self.index.duration / (2 * self.target_clips)
         chosen: list[int] = []
         strict_count = 0
         for step, factor in enumerate(SPACING_RELAX_STEPS):
@@ -434,11 +438,11 @@ class ToolBox:
             for cid in order:
                 if all(abs(mid(cid) - mid(other)) >= gap for other in chosen):
                     chosen.append(cid)
-                if len(chosen) == TARGET_CLIPS:
+                if len(chosen) == self.target_clips:
                     break
             if step == 0:
                 strict_count = len(chosen)
-            if len(chosen) == TARGET_CLIPS:
+            if len(chosen) == self.target_clips:
                 break
         # "Relaxed" only if loosening the gap actually let more picks in.
         self.spacing_relaxed = len(chosen) > strict_count
