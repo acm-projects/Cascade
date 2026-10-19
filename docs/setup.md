@@ -22,10 +22,12 @@ Clip generation preserves main’s agent pipeline: `DEEPGRAM_API_KEY` supplies t
 
 Editor chat independently uses the server-side OpenAI Responses API and `OPENAI_API_KEY`, with `OPENAI_EDITOR_MODEL` → `OPENAI_SCENE_MODEL` → `gpt-5.4-mini` selection. It does not switch to Anthropic with `LLM_PROVIDER`. The older scene helper remains for editor configuration/compatibility tests, not as the website’s generation engine. Historical `openai`/`qwen` generation requests are routed through the current agent. Direct speech/visual workers retain main’s Deepgram transcription and gain requested-count/follow-up handling. Research also needs `YOUTUBE_API_KEY`.
 
-Generation groups, requested counts (1–12), source reuse, parent-context expansion, retries and deletion remain owner-scoped. The agent retains its default four-clip behavior, with per-request limits for other counts. No duplicate clips are created to fill unavailable results. The Pexels B-roll branch is not part of this integration; its editor tab remains a disabled placeholder.
+Generation groups, requested counts (1–12), source reuse, parent-context expansion, retries and deletion remain owner-scoped. The agent retains its default four-clip behavior, with per-request limits for other counts. No duplicate clips are created to fill unavailable results. Pexels B-roll is available in the editor through its B-roll tab and validated chat actions; it does not change the generation pipeline.
 
 `CASCADE_FFMPEG` and `CASCADE_EDITOR_FFMPEG` can select compatible FFmpeg binaries. Editor downloads render locally on demand using saved trim, composition and captions. The editor preview performs ordinary edits locally without generating an MP4. Keep both `backend/clips/render_subtitles.py` and `backend/video_tools.py`: they provide distinct active caption/export capabilities.
 
 ## Checks
 
 See the root README for offline tests and `editor.md` for isolated Chrome playback/export checks. `tests/manual/` contains explicit opt-in smoke scripts; `live_openai_smoke.py` can incur provider charges and is not an automated regression check. Browser fixtures use temporary storage and mocked identity/providers, while playback and media encoding are real. Live authentication, cloud delivery and paid generation require separately configured integration checks.
+
+Pexels stock footage uses the server-only `PEXELS_API_KEY` from the root `.env`. Restart the API after changing it. See [B-roll setup and workflow](broll.md).

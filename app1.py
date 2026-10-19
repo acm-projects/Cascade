@@ -119,6 +119,7 @@ FRONTEND_FILES = {
     "styles_C.css",
     "flow_C.js",
     "editor_C.js",
+    "editor_broll.js",
     "editor_captions.js",
     "editor_timeline.js",
     "editor_state.js",

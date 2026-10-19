@@ -62,7 +62,7 @@ class MainEditorIntegrationTests(unittest.TestCase):
                 self.assertTrue(any(s['codec_type']=='audio' for s in probe['streams']))
                 self.assertEqual((root/jid/'clip_5.mp4').read_bytes(),original)
                 self.assertEqual(client.get(url,headers={'Authorization':'Bearer another-user'}).status_code,404)
-                self.assertNotIn('broll',state)
+                self.assertEqual(state['broll'],[])  # Existing clips gain an empty stock track.
             app1.jobs.clear()
 
     def test_agent_count_is_per_request_and_defaults_stay_four(self):

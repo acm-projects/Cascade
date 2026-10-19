@@ -229,7 +229,7 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(result.composition,state.composition)
 
     def test_static_assets_and_unchanged_canvas(self):
-        for name in ['editor_C.js','editor_C.css','editor_state.js','editor_captions.js','editor_timeline.js','editor_C.html']:
+        for name in ['editor_broll.js','editor_C.js','editor_C.css','editor_state.js','editor_captions.js','editor_timeline.js','editor_C.html']:
             self.assertEqual(self.client.get('/'+name).status_code,200)
         self.assertNotIn('editor_C.js',self.client.get('/canvas_C.html').text)
 

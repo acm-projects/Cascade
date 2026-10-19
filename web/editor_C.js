@@ -13,8 +13,13 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     onBeginTrim: () => { useEdited(); video.pause(); beginGesture(); },
     onTrim: (name, seconds) => previewTrim(name,seconds),
     onEndTrim: () => endGesture(),
+    onBroll: id => broll?.select(id),
     onCue: index => { selectedCue=index; renderCaptionText(); }
   });
+  const broll=window.CascadeBroll ? new window.CascadeBroll({
+    get:()=>({state:history?.state,info,current,comparison}), commit,apiJSON,apiFetch,
+    lock:setLocked,openTab:()=>document.querySelector('[data-tab="broll"]')?.click()
+  }) : null;
   function geometry() { return compositionGeometry(info.width,info.height,comparison==='original'?defaultComposition:history.state.composition); }
   function renderFraming() {
     const f=history.state.composition;
@@ -110,6 +115,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
       .forEach(el => el.disabled = value);
     document.querySelectorAll('#editor-sessions button').forEach(el => el.disabled = busy);
     timeline.setDisabled(value);
+    broll?.setLocked(value);
     $('undo').disabled = value || !history?.undoStack.length;
     $('redo').disabled = value || !history?.redoStack.length;
     if(history) { renderCaptionText(); renderFraming(); }
@@ -124,6 +130,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     if (!history) return;
     const state = history.state;
     renderFraming();
+    broll?.render();
     $('preview-label').textContent=comparison==='edited'?'Edited preview':'Original preview';
     $('preview-description').textContent=comparison==='edited'?'Live trim and captions · original media preserved':'Full generated clip · your edits are preserved';
     $('preview-original').setAttribute('aria-pressed',String(comparison==='original'));
@@ -153,6 +160,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     $('preview-play').setAttribute('aria-pressed',String(!video.paused));
     $('play-toggle').textContent = video.paused ? 'Play' : 'Pause';
     timeline.update(state,video.currentTime,!video.paused);
+    broll?.sync();
     const text=comparison==='edited'?cueAt(info.cues,video.currentTime,state):'';
     const g=geometry();
     const signature=JSON.stringify([text,state.captions,g.width,g.height]);
@@ -296,9 +304,9 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     const prior = clone(chat); chat.push({role:'user',text:message}); chat = chat.slice(-199); changed(); renderChat();
     setLocked(true); $('chat-status').textContent = 'Thinking…'; $('chat-input').value = '';
     try {
-      const result = await apiJSON(current.url+'/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state:history.state, chat:prior.slice(-20), message})});
+      const result = await apiJSON(current.url+'/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state:history.state, chat:prior.slice(-20), message,...(broll?.context()||{})})});
       // One validated AI response is one undoable transaction.
-      commit(result.state); comparison='edited'; focusCaption(); render(); chat.push({role:'assistant',text:result.message}); changed(); renderChat();
+      const previousBroll=history.state.broll; commit(result.state); broll?.afterChat(previousBroll,history.state); if(result.broll_search)broll?.showSearch(result.broll_search); comparison='edited'; focusCaption(); render(); chat.push({role:'assistant',text:result.message}); changed(); renderChat();
       $('chat-status').textContent = '';
     } catch (error) { $('chat-status').textContent = error.message; chat.push({role:'assistant',text:'No edit applied: '+error.message}); changed(); renderChat(); }
     finally { setLocked(false); render(); }
@@ -336,6 +344,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
       const response = await apiFetch(item.url+'/media');
       const blobURL = URL.createObjectURL(await response.blob());
       if (mediaURL) URL.revokeObjectURL(mediaURL); mediaURL = blobURL;
+      broll?.reset();
       current = item; info = nextInfo; chat = Array.isArray(draft.chat) ? draft.chat.slice(-200) : []; updated = draft.updated_at;
       history = histories.get(item.key) || new History(normalize(draft.state, info.duration));
       histories.set(item.key, history); revision = 0; savedRevision = -1;
@@ -360,7 +369,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
   window.addEventListener('beforeunload', event => { endGesture(); recover(); if (history && savedRevision !== revision) { event.preventDefault(); event.returnValue=''; } });
   document.addEventListener('click', async event => {
     const link = event.target.closest('a[href]');
-    if (!link || !history || event.metaKey || event.ctrlKey || link.target === '_blank') return;
+    if (!link || !history || event.metaKey || event.ctrlKey || link.target === '_blank' || (link && new URL(link.href,location.href).origin!==location.origin)) return;
     event.preventDefault();
     if (busy) { setStatus('Wait for the current editor operation to finish before leaving.'); return; }
     endGesture();

@@ -35,4 +35,4 @@ Some media tests require FFmpeg with the `subtitles` filter (libass). On Homebre
 
 Keep `.env`, `video_jobs/`, `outputs/`, and other saved media private. They are not disposable build output. All seven page views live in `web/index.html`; existing page URLs remain valid. The legacy publishable-key fallback was migrated there without changing authentication. See [frontend routing and verification](docs/frontend.md). Root JSON records and `sample.mp4` are retained because their ownership/provenance is uncertain.
 
-Main’s separate Flask/database service and legacy backend modules remain available; their historical setup is retained in `README_C.md` and `INTEGRATION.md`. The website itself serves the consolidated views under `web/`. Pexels B-roll is not included in this integration.
+Main’s separate Flask/database service and legacy backend modules remain available; their historical setup is retained in `README_C.md` and `INTEGRATION.md`. The website itself serves the consolidated views under `web/`. Pexels B-roll is available in the editor; see [B-roll setup and workflow](docs/broll.md).
