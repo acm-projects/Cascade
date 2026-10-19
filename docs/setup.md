@@ -27,3 +27,5 @@ Local visual generation uses Ollama (`CASCADE_MODEL`, default `qwen3-vl:4b-instr
 ## Checks
 
 See the root README for offline tests and `editor.md` for isolated Chrome playback/export checks. `tests/manual/` contains explicit opt-in smoke scripts; `live_openai_smoke.py` can incur provider charges and is not an automated regression check. Browser fixtures use temporary storage and mocked identity/providers, while playback and media encoding are real. Live authentication, cloud delivery and paid generation require separately configured integration checks.
+
+Pexels stock footage uses the server-only `PEXELS_API_KEY` from the root `.env`. Restart the API after changing it. See [B-roll setup and workflow](broll.md).

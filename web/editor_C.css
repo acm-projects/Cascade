@@ -115,3 +115,21 @@
 #ratio-presets [data-ratio="16:9"] .ratio-icon::after {content:"";position:absolute;top:100%;left:35%;width:30%;height:4px;background:currentColor}
 @media (prefers-reduced-motion:reduce) {#device-shell,#device-screen {transition:none}}
 @media (max-height:800px) {#preview-wrap {height:clamp(230px,38vh,340px)}}
+/* Stock footage occupies the output frame below caption pixels. */
+#composition-frame #broll-live {position:absolute;inset:0;width:100%;height:100%;max-width:none;margin:0;border-radius:0;z-index:1;pointer-events:none}
+#broll-live[hidden],#broll-loading[hidden] {display:none!important}
+#broll-loading {position:absolute;inset:0;background:#06110d;display:grid;place-items:center;z-index:1;color:#c1d0c6;font-size:12px}
+#broll-results {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.broll-result,.broll-segment {padding:10px;border:1px solid var(--line);border-radius:8px;min-width:0}
+.broll-result img {width:100%;height:90px;object-fit:cover;border-radius:5px}
+.broll-result p,.broll-segment p {font-size:12px;margin:6px 0}
+.broll-result a,.broll-segment a {display:block;font-size:11px;overflow-wrap:anywhere;margin:6px 0}
+#broll-result-preview {width:100%;max-height:200px;margin-top:12px}
+#broll-segments {display:grid;gap:10px;margin-top:14px}
+#broll-timing-form {display:grid;gap:7px}
+#broll-status {font-size:12px;overflow-wrap:anywhere}
+#timeline-content {height:198px}
+.track-labels {grid-template-rows:34px 74px 46px 44px}
+#timeline-broll {position:absolute;top:157px;height:32px;width:100%;border-bottom:1px solid var(--line)}
+.broll-track-segment {position:absolute;height:29px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #b19b63;background:#514829;color:#fff2c9;padding:3px 6px;font-size:10px;text-align:left}
+.broll-track-segment.outside-trim {opacity:.4}

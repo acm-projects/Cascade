@@ -983,12 +983,12 @@
             </div>
           </div>
           <div class="timeline-tracks">
-            <div class="track-labels" aria-hidden="true"><span>Time</span><span>Video</span><span>Captions</span></div>
+            <div class="track-labels" aria-hidden="true"><span>Time</span><span>Video</span><span>Captions</span><span>B-roll</span></div>
             <div id="timeline-scroll" tabindex="0" aria-label="Scrollable timeline">
               <div id="timeline-content">
                 <div id="timeline-ruler"></div>
                 <div id="timeline-video"><div id="thumbnail-strip"></div><div class="trim-shade trim-before"></div><div class="trim-shade trim-after"></div></div>
-                <div id="timeline-captions"></div><span id="timeline-caption-empty">No timed captions</span>
+                <div id="timeline-broll" aria-label="B-roll track"></div><div id="timeline-captions"></div><span id="timeline-caption-empty">No timed captions</span>
                 <div id="trim-selection" aria-hidden="true"></div>
                 <button id="handle-start" type="button" data-trim="start" role="slider" aria-label="Trim start" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">❙</button>
                 <button id="handle-end" type="button" data-trim="end" role="slider" aria-label="Trim end" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">❙</button>
@@ -1140,26 +1140,24 @@
         >
           <h3>B-roll</h3>
 
-          <fieldset class="placeholder-controls" disabled>
-            <label for="broll-upload">
-              Upload image or video
-            </label>
+          <p><a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer">Videos provided by Pexels</a></p>
+          <form id="broll-search-form"><label for="broll-query">Search stock footage</label><input id="broll-query" maxlength="160" required placeholder="Mountain hiking"><button id="broll-search" type="submit">Search Pexels</button></form>
+          <p id="broll-status" role="status" aria-live="polite"></p>
+          <div id="broll-results"></div><button id="broll-more" type="button" hidden>Load more</button>
+          <video id="broll-result-preview" controls muted playsinline hidden aria-label="Stock footage preview"></video>
+          <p id="broll-result-credit"></p>
+          <button id="broll-add" type="button" disabled>Add to clip</button>
+          <button id="broll-replace" type="button" disabled>Replace selected segment with this result</button>
+          <p class="muted">Times below are seconds on the full generated clip, before trimming. Trimming hides segments without deleting them. Stock audio is muted; speaker audio continues.</p>
+          <form id="broll-timing-form">
+            <label for="broll-start">Placement start (generated clip seconds)</label><input id="broll-start" type="number" min="0" step="0.01" value="0" required>
+            <label for="broll-duration">Duration (seconds)</label><input id="broll-duration" type="number" min="0.05" step="0.01" value="3" required>
+            <label for="broll-offset">Stock source offset (seconds)</label><input id="broll-offset" type="number" min="0" step="0.01" value="0" required>
+            <label for="broll-mode">Stock framing</label><select id="broll-mode"><option value="fill">Fill — center crop</option><option value="fit">Fit — entire stock frame</option></select>
+            <button id="broll-update" type="submit" disabled>Update selected segment</button>
+          </form>
+          <div id="broll-segments" aria-label="Inserted B-roll segments"></div>
 
-            <input
-              id="broll-upload"
-              type="file"
-              accept="image/*,video/*"
-            >
-
-            <label for="broll-prompt">
-              AI generation prompt
-            </label>
-
-            <textarea
-              id="broll-prompt"
-              placeholder="Describe the B-roll you want…"
-            ></textarea>
-          </fieldset>
         </section>
         <section class="card">
           <h3>Research current trends</h3>
@@ -1178,6 +1176,7 @@
   <script src="editor_state.js"></script>
   <script src="editor_captions.js"></script>
   <script src="editor_timeline.js"></script>
+  <script src="editor_broll.js"></script>
   <script src="editor_C.js"></script>
   <script src="flow_C.js"></script>
 </body>

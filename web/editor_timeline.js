@@ -1,7 +1,7 @@
 /* Editor-only timeline. All coordinates are generated-media seconds. */
 window.CascadeTimeline = class {
-  constructor({onSeek, onBeginTrim, onTrim, onEndTrim, onCue}) {
-    this.onSeek=onSeek; this.onBeginTrim=onBeginTrim; this.onTrim=onTrim; this.onEndTrim=onEndTrim; this.onCue=onCue;
+  constructor({onSeek, onBeginTrim, onTrim, onEndTrim, onCue, onBroll}) {
+    this.onSeek=onSeek; this.onBeginTrim=onBeginTrim; this.onTrim=onTrim; this.onEndTrim=onEndTrim; this.onCue=onCue; this.onBroll=onBroll;
     this.view=document.getElementById('timeline-scroll'); this.content=document.getElementById('timeline-content');
     this.ruler=document.getElementById('timeline-ruler'); this.strip=document.getElementById('thumbnail-strip');
     this.captions=document.getElementById('timeline-captions'); this.playhead=document.getElementById('timeline-playhead');
@@ -62,6 +62,17 @@ window.CascadeTimeline = class {
     if(this.texts!==JSON.stringify(state.texts||{}) || this.captionEnabled!==state.captions.enabled) {
       this.texts=JSON.stringify(state.texts||{}); this.captionEnabled=state.captions.enabled; this.renderCues();
     }
+    const stockSignature=JSON.stringify([state.broll,this.pps,state.start,state.end]);
+    if(stockSignature!==this.stockSignature) {
+      this.stockSignature=stockSignature;const track=document.getElementById('timeline-broll');track.replaceChildren();
+      for(const s of state.broll||[]) {
+        const button=document.createElement('button');button.type='button';button.className='broll-track-segment';button.dataset.broll=s.id;
+        button.style.left=s.start*this.pps+'px';button.style.width=Math.max(2,s.duration*this.pps)+'px';
+        button.textContent=s.asset.creator;button.title=`B-roll ${s.start.toFixed(2)}–${(s.start+s.duration).toFixed(2)} seconds · ${s.asset.creator}`;
+        button.classList.toggle('outside-trim',s.start+s.duration<=state.start||s.start>=state.end);
+        button.onclick=e=>{if(e.detail===0&&!this.disabled)this.onBroll?.(s.id);};track.append(button);
+      }
+    }
     this.captions.classList.toggle('captions-muted',!state.captions.enabled);
     for(const el of this.captions.children) el.classList.toggle('outside-trim',Number(el.dataset.end)<=state.start || Number(el.dataset.start)>=state.end);
   }
@@ -95,6 +106,7 @@ window.CascadeTimeline = class {
   begin(event) {
     if(this.disabled || event.button!==0 || !this.duration) return;
     event.preventDefault();
+    const stock=event.target.closest('[data-broll]');if(stock){this.onBroll?.(stock.dataset.broll);this.onSeek(this.state.broll.find(s=>s.id===stock.dataset.broll).start+.001);return;}
     const handle=event.target.closest('[data-trim]'), cue=event.target.closest('[data-cue]');
     this.drag={kind:handle?.dataset.trim||'seek',x:event.clientX};
     if(handle) this.onBeginTrim(); else if(cue) this.onCue(Number(cue.dataset.cue));

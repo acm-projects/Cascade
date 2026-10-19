@@ -36,7 +36,7 @@ Browser-initiated edited downloads send the exact locally rendered transparent c
 
 Chat uses the existing server-side OpenAI key/model configuration, with optional `OPENAI_EDITOR_MODEL` override. The Responses API uses strict structured output, followed by Pydantic and media-boundary validation. Supported actions: remove initial trim seconds, keep initial trim seconds, reset trim, captions on/off, text color, bold, top/middle/bottom position and text for an identified caption segment. Multiple actions in one response form one undo transaction. No generated commands are executed. Provider calls are mocked in tests. Request format follows [official OpenAI documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
 
-Burned-in-caption detection relies on existing clip metadata/job kind. Those pixels remain in both comparison modes and exports; additional captions cannot erase them. B-roll remains disabled and unchanged.
+Burned-in-caption detection relies on existing clip metadata/job kind. Those pixels remain in both comparison modes and exports; additional captions cannot erase them. Pexels B-roll now replaces main video pixels during inserted segments, so original burned-in captions can be covered by stock footage. The additional caption layer remains above B-roll. See [B-roll setup and workflow](broll.md).
 
 ## Validation
 

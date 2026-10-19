@@ -8,6 +8,8 @@
     if (!Number.isFinite(duration) || duration < .05) throw Error('Media duration is unavailable.');
     s.start = Math.max(0, Math.min(Number(s.start) || 0, duration - .05));
     s.end = Math.min(duration, Math.max(s.start + .05, Math.min(Number(s.end) || duration, duration)));
+    s.broll = s.broll || [];
+    validateBroll(s.broll,duration);
     s.texts = s.texts || {};
     if (typeof s.texts !== 'object' || Array.isArray(s.texts) || Object.entries(s.texts).some(([key,text]) => !/^\d+$/.test(key) || typeof text !== 'string' || text.length>2000)) throw Error('Saved caption text is invalid.');
     s.composition = {...defaultComposition, ...s.composition};
@@ -23,6 +25,19 @@
         !Number.isFinite(c.opacity) || c.opacity < 0 || c.opacity > 1)
       throw Error('Saved caption settings are invalid.');
     return s;
+  }
+  function validateBroll(segments,duration) {
+    if(!Array.isArray(segments) || segments.length>30) throw Error('Use at most 30 B-roll segments.');
+    const ids=new Set(); let end=0;
+    for(const s of [...segments].sort((a,b)=>a.start-b.start)) {
+      if(!/^[a-f0-9]{32}$/.test(s.id) || ids.has(s.id) || !/^px-[0-9]+-[0-9]+$/.test(s.asset?.id) ||
+         ![s.start,s.duration,s.offset,s.asset.duration].every(Number.isFinite) || s.start<0 || s.duration<.05 || s.offset<0 ||
+         s.start+s.duration>duration+1e-6 || s.offset+s.duration>s.asset.duration+1e-6 || !['fit','fill'].includes(s.mode))
+        throw Error('B-roll timing must fit the generated clip and stock footage. Check duration and source offset.');
+      if(s.start<end-1e-6) throw Error('B-roll segments cannot overlap. Move or shorten a segment first.');
+      ids.add(s.id); end=s.start+s.duration;
+    }
+    return segments;
   }
   class History {
     constructor(state) { this.state = clone(state); this.undoStack = []; this.redoStack = []; }
@@ -58,7 +73,7 @@
     }
     return {width,height,scaledWidth,scaledHeight,x,y};
   }
-  const api = {defaultComposition, compositionGeometry,clone, normalize, History, cueAt, formatTime};
+  const api = {validateBroll,defaultComposition, compositionGeometry,clone, normalize, History, cueAt, formatTime};
   if (typeof module !== 'undefined') module.exports = api;
   else root.CascadeEditorState = api;
 })(typeof window === 'undefined' ? globalThis : window);

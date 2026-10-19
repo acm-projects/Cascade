@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 import app1
 from backend import integration
 from backend import editor_backend as editor
+from backend import broll
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='cascade-browser-') as directory:
@@ -39,8 +40,27 @@ if __name__ == '__main__':
                 (folder/f'clip_{i+1}.vtt').write_text('WEBVTT\n\n00:00.500 --> 00:02.400\nLet&#x27;s say that one more time.\n\n00:03.000 --> 00:04.500\nAnother spoken moment\n\n00:06.000 --> 00:07.500\nFinal caption\n')
                 clips.append({'start':100,'end':108,'clip_url':f'/clips/{j}/clip_{i+1}.mp4','captions_url':f'/clips/{j}/clip_{i+1}.vtt'})
             app1.save_json(folder/'results.json',{'clips':clips})
+        stock_source=Path(directory)/'stock.mp4'
+        subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=green:size=320x180:rate=24:duration=8','-c:v','libx264','-pix_fmt','yuv420p',str(stock_source)],check=True)
+        def stock_search(store,query,page=1):
+            import shutil
+            asset=broll.Asset(id='px-12-25',provider_id=12,creator='Browser stock fixture',creator_url='https://www.pexels.com/@fixture/',source_url='https://www.pexels.com/video/12/',duration=8,width=320,height=180)
+            broll.write_json(store.folder/'assets.json',{asset.id:{'asset':asset.model_dump(),'video':'https://videos.pexels.com/fixture.mp4','image':'https://images.pexels.com/fixture.jpg'}})
+            shutil.copyfile(stock_source,store.folder/(asset.id+'.mp4'))
+            from PIL import Image
+            Image.new('RGB',(160,90),'green').save(store.folder/(asset.id+'.jpg'))
+            return {'results':[asset.model_dump()],'page':page,'query':query,'has_more':page<2}
+        broll.Store.search=stock_search
         def ai(payload):
+            text=payload['request'].lower()
+            if 'find stock' in text:
+                return editor.Proposal(message='Search',actions=[editor.Action(type='broll_search',query='mountains')])
+            if 'add stock' in text:
+                return editor.Proposal(message='Insert',actions=[editor.Action(type='broll_insert',asset_id=payload['broll_results'][0]['id'],start=4,duration=2)])
+            if 'remove stock' in text:
+                return editor.Proposal(message='Remove',actions=[editor.Action(type='broll_remove',segment_id=payload['selected_broll_segment'])])
             if 'failure' in payload['request']:
+
                 raise HTTPException(502,'Fixture provider unavailable. No edits applied.')
             return editor.Proposal(message='Edited',actions=[editor.Action(type='trim_first',seconds=2),editor.Action(type='caption_color',color='#ffff00'),editor.Action(type='caption_position',position='top'),editor.Action(type='caption_bold',enabled=True)])
         editor.request_edit=ai

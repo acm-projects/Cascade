@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const {History, normalize, cueAt, defaultComposition, compositionGeometry} = require('../web/editor_state.js');
-const initial = {start:0,end:12,composition:{...defaultComposition},texts:{},captions:{enabled:true,color:'#ffffff',bold:false,font:'Arial',size:32,position:'bottom',stroke:'#000000',thickness:2,background:'#000000',opacity:0}};
+const initial = {broll:[],start:0,end:12,composition:{...defaultComposition},texts:{},captions:{enabled:true,color:'#ffffff',bold:false,font:'Arial',size:32,position:'bottom',stroke:'#000000',thickness:2,background:'#000000',opacity:0}};
 const a = new History(initial), b = new History(initial);
 a.commit({...initial,start:2});
 assert.equal(a.undoStack.length,1); assert.equal(b.state.start,0);
@@ -37,3 +37,13 @@ assert.ok(fit.scaledWidth<=fit.width && fit.scaledHeight<fit.height && fit.y>0);
 const fill=compositionGeometry(640,360,{...defaultComposition,ratio:'9:16',mode:'fill',x:1});
 assert.ok(fill.scaledWidth>fill.width && fill.x===fill.scaledWidth-fill.width);
 assert.throws(()=>normalize({...initial,composition:{...defaultComposition,x:2}},12));
+
+// Older drafts gain an empty stock track. B-roll transactions undo and redo together.
+const legacy={...initial};delete legacy.broll;assert.deepEqual(normalize(legacy,12).broll,[]);
+const stock={id:'e'.repeat(32),asset:{id:'px-12-25',duration:8},start:4,duration:3,offset:1,mode:'fill'};
+const stockHistory=new History(normalize(initial,12));stockHistory.commit({...stockHistory.state,broll:[stock]});
+stockHistory.undo();assert.equal(stockHistory.state.broll.length,0);stockHistory.redo();assert.equal(stockHistory.state.broll[0].start,4);
+assert.throws(()=>normalize({...initial,broll:[stock,{...stock,id:'f'.repeat(32),start:5}]},12),/overlap/);
+assert.throws(()=>normalize({...initial,broll:[{...stock,offset:7}]},12),/timing/);
+assert.equal(normalize({...initial,start:9,end:12,broll:[stock]},12).broll.length,1);
+console.log('B-roll legacy, timing, overlap, hidden trim and undo/redo checks passed');
