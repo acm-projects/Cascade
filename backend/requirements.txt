@@ -4,11 +4,10 @@ uvicorn[standard]
 python-dotenv
 python-multipart
 pydantic
-jinja2
+jinja2>=3.1,<4
 
 # trends feature
 google-api-python-client
-openai-whisper
 anthropic
 yt-dlp
 
@@ -16,10 +15,10 @@ yt-dlp
 moviepy>=2,<3
 imageio_ffmpeg
 
-# video_search feature
-faster-whisper
-# Pinned: faster-whisper 1.2.1 calls av.open(..., metadata_errors=...), which
-# av>=19 removed. Unpin only after confirming faster-whisper has caught up.
-av==18.1.0
+# video_search feature (CLIP / MiniLM embeddings; speech-to-text is Deepgram)
 sentence-transformers
 pillow
+
+# speech-to-text (Deepgram) and the OpenAI provider option
+httpx
+openai

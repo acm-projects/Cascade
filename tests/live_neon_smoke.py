@@ -29,11 +29,25 @@ def run():
         try:
             with TestClient(app1.app) as client:
                 assert client.get('/api/health').json()['metadata_storage'] == 'neon'
+                assert client.get('/api/session').status_code == 401
+                for _ in range(2):
+                    assert client.get('/api/session', headers=headers).json() == {'user_id': user}
+                with store.connection() as conn, conn.cursor() as cur:
+                    cur.execute('SELECT count(*), min(created_at) FROM cascade_app.users WHERE clerk_user_id = %s', (user,))
+                    count, created_at = cur.fetchone()
+                    assert count == 1 and created_at is not None
                 response = client.post('/api/projects', headers=headers, json={'name': 'Synthetic Neon persistence test'})
                 assert response.status_code == 201, response.status_code
                 pid = response.json()['id']
                 project_path = integration.project_dir(user) / (pid + '.json')
                 keys.append(store.key(project_path))
+                original_created = response.json()['created_at']
+                assert response.json()['thumbnail_key'] is None
+                renamed = client.patch(f'/api/projects/{pid}', headers=headers, json={'name': 'Renamed Neon test'})
+                assert renamed.status_code == 200
+                assert renamed.json()['created_at'] == original_created
+                assert client.patch(f'/api/projects/{pid}', headers=other, json={'name': 'Forbidden'}).status_code == 404
+                assert len(client.get('/api/projects?q=RENAMED', headers=headers).json()['projects']) == 1
                 settings_path = integration.project_dir(user) / 'settings' / 'preferences.json'
                 keys.append(store.key(settings_path))
                 assert client.post('/api/settings', headers=headers, json={'tone': 'funny'}).status_code == 200
@@ -52,6 +66,8 @@ def run():
                 result = client.get(f'/api/projects/{pid}', headers=headers)
                 assert result.status_code == 200
                 assert len(result.json()['saved_clips']) == 1
+                assert result.json()['name'] == 'Renamed Neon test'
+                assert result.json()['updated_at'] >= original_created
                 assert result.json()['jobs'][0]['job_id'] == jid
                 assert len(client.get('/api/projects', headers=headers).json()['projects']) == 1
                 assert client.get('/api/settings', headers=headers).json()['tone'] == 'funny'
@@ -63,11 +79,16 @@ def run():
                 with store.connection() as conn, conn.cursor() as cur:
                     cur.execute('SELECT count(*) FROM cascade_app.clips WHERE job_id = %s', (jid,))
                     assert cur.fetchone()[0] == 1
-                print('PASS: Neon project/settings/history/clips survive missing local metadata; ownership enforced.')
+                    cur.execute('SELECT created_at, updated_at, thumbnail_key FROM cascade_app.projects WHERE id = %s', (pid,))
+                    created, updated, thumbnail = cur.fetchone()
+                    assert created is not None and updated >= created and thumbnail is None
+                print('PASS: Neon users/projects/history/clips persist; project rename/search/timestamps and ownership verified.')
         finally:
             if keys:
                 with store.connection() as conn, conn.cursor() as cur:
                     cur.execute('DELETE FROM cascade_app.records WHERE key = ANY(%s)', (keys,))
+            with store.connection() as conn, conn.cursor() as cur:
+                cur.execute('DELETE FROM cascade_app.users WHERE clerk_user_id = %s', (user,))
             print('Synthetic test records cleaned up.')
 
 

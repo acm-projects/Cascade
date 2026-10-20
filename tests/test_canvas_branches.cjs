@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const {layout}=require('../web/canvas_branches.js');
+const groups=[{job_id:'root'}, {job_id:'child',parent_clip:{job_id:'root',clip_id:'root:0'}}, {job_id:'grand',parent_clip:{job_id:'child',clip_id:'child:0'}}, {job_id:'sibling',parent_clip:{job_id:'root',clip_id:'root:0'}}, {job_id:'other',parent_clip:{job_id:'root',clip_id:'root:1'}}, {job_id:'full'}];
+const p=layout(groups);
+assert.equal(p.root.depth,0);assert.equal(p.child.depth,1);assert.equal(p.grand.depth,2);
+assert.equal(p.sibling.depth,1);assert.equal(p.other.depth,1);
+assert(p.sibling.column>p.grand.column);assert(p.other.column>p.sibling.column);
+assert.equal(p.full.depth,0);assert(p.full.column>p.other.column);
+assert(Object.values(p).every(v=>v.row===0));
+assert.equal(new Set(Object.values(p).map(v=>v.column)).size,groups.length);
+assert.deepEqual(layout(JSON.parse(JSON.stringify(groups))),p);
+assert.equal(new Set(Object.values(p).map(v=>v.column+':'+v.row)).size,groups.length);
+const legacy=layout([{job_id:'orphan',parent_clip:{job_id:'missing'}},{job_id:'a',parent_clip:{job_id:'b'}},{job_id:'b',parent_clip:{job_id:'a'}}]);
+assert.equal(Object.keys(legacy).length,3);
+console.log('Branch layout passed: depth, single-row columns, same-parent siblings, multiple roots, stable reload, missing parents and cycles.');

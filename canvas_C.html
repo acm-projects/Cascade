@@ -257,8 +257,6 @@
             placeholder="Find funny moments…"
           ></textarea>
 
-          <label for="search-engine">Search method</label>
-          <select id="search-engine"><option value="openai">AI scene analysis — OpenAI · up to 4 clips</option><option value="visual">Local visual search — up to 4 clips</option><option value="speech">Local speech search — up to 4 clips</option><option value="qwen">Local Ollama analysis — slower</option></select>
           <button
             id="generate-clip"
             class="primary"
@@ -271,7 +269,7 @@
             Generate clips
           </button>
           <button id="stop-generation" type="button" hidden>Stop processing</button>
-          <p class="muted">AI scene analysis sends sampled images and transcript text to OpenAI to find up to four distinct moments. API usage is billed to your configured key. Video cutting stays local; Ollama is optional.</p>
+          <p class="muted">The AI agent transcribes the video, then searches, reads and compares moments across the whole video before ranking up to four clips. Longer videos take a few minutes; the steps it takes appear below as it works. Transcription (Deepgram) and the AI model are billed to your configured keys. Video cutting stays local.</p>
           <details class="research-section">
             <summary>Research current trends</summary>
             <p class="muted">Analyze the selected upload or this generation’s original video. Research does not require a matching clip.</p>

@@ -1,6 +1,6 @@
 """Trend-analysis feature: compare an uploaded video against trending YouTube videos.
 
-Mounted by backend/app.py under the /api/trends prefix. Endpoints:
+Mounted by app1.py under the /api/trends prefix. Endpoints:
   POST /api/trends/analyze                  - upload a video + topic, starts a background job
   GET  /api/trends/analyze/{job_id}/status  - poll job progress / result
 """
@@ -17,6 +17,8 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+
+from backend.cascade_llm import selected_model
 
 from . import pipeline
 from . import youtube_trends
@@ -111,7 +113,11 @@ async def analyze(
 
 def _result_cache_key(topic: str, video_hash: str) -> str:
     normalized_topic = topic.strip().lower()
-    return hashlib.sha256(f"{normalized_topic}|{video_hash}".encode("utf-8")).hexdigest()
+    # The model is part of the key, so switching provider re-analyzes instead of serving a
+    # result produced by the other one.
+    return hashlib.sha256(
+        f"{selected_model()}|{normalized_topic}|{video_hash}".encode("utf-8")
+    ).hexdigest()
 
 
 @router.get("/analyze/{job_id}/status")

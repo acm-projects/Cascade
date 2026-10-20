@@ -25,3 +25,8 @@ venv/
 *.mp4
 **/**/*.mp4
 backend/clips/*.mp4
+
+# Disposable test tooling caches
+.pytest_cache/
+.coverage
+htmlcov/

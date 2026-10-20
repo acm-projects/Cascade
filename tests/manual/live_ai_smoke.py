@@ -1,5 +1,5 @@
 """Opt-in live local Ollama test; synthetic silent video, no paid APIs or S3.
-Run: python tests/live_ai_smoke.py
+Run: python tests/manual/live_ai_smoke.py
 """
 import json
 import os
@@ -11,7 +11,7 @@ import shutil
 import time
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import app1
 original = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
 

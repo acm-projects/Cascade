@@ -1,7 +1,7 @@
 """Hosted scene selection: small timestamped images + transcript, never the full video."""
 import base64
 import hashlib
-import itertools
+import bisect
 import json
 import os
 from pathlib import Path
@@ -41,33 +41,80 @@ def model_name():
     return os.getenv('OPENAI_SCENE_MODEL', 'gpt-5.4-mini').strip()
 
 
-def choose_clips(proposal, duration, target):
-    """Prefer four distinct qualifying moments; never duplicate or merge them."""
+def choose_clips(proposal, duration, target, limit=4):
+    return select_with_diagnostics(proposal, duration, target, limit)[0]
+
+
+def select_with_diagnostics(proposal, duration, target, limit=4):
+    """Keep supported short moments by adding context, never by duplicating evidence.
+
+    The provider sometimes returns complete moments shorter than the requested
+    minimum. Dropping those silently discarded otherwise strong, separate matches.
+    Each expansion contains the entire proposed moment and stays inside the source.
+    Try leading/centered/trailing context so padding does not unnecessarily collide.
+    """
+    import math
+    stats = {'proposed': len(proposal.candidates), 'invalid_bounds': 0, 'too_long': 0,
+             'low_score': 0, 'duplicates': 0, 'context_candidates': 0, 'eligible': 0,
+             'selected': 0, 'selected_with_context': 0}
+    if not math.isfinite(duration) or duration <= 0 or not math.isfinite(target) or target <= 0:
+        return [], stats
     minimum = min(8.0, duration)
     maximum = min(duration, target * 1.5)
-    valid = []
-    seen = set()
-    for item in proposal.candidates:
-        length = item.end - item.start
-        if item.end > duration + .05 or length < minimum - .05 or length > maximum + .05:
+    valid, seen = [], set()
+    for index, item in enumerate(proposal.candidates):
+        end = min(item.end, duration)
+        length = end - item.start
+        if item.end > duration + .05 or item.start < 0 or length <= 0:
+            stats['invalid_bounds'] += 1
             continue
-        bounds = (round(item.start, 3), round(min(item.end, duration), 3))
-        if item.score < 5 or bounds in seen:
+        if length > maximum + .05:
+            stats['too_long'] += 1
+            continue
+        if item.score < 5:
+            stats['low_score'] += 1
+            continue
+        bounds = (round(item.start, 3), round(end, 3))
+        if bounds in seen:
+            stats['duplicates'] += 1
             continue
         seen.add(bounds)
-        valid.append({**item.model_dump(), 'start': bounds[0], 'end': bounds[1]})
-    best = []
-    best_score = -1
-    for count in range(1, min(4, len(valid)) + 1):
-        for group in itertools.combinations(valid, count):
-            ordered = sorted(group, key=lambda c: c['start'])
-            if any(left['end'] > right['start'] for left, right in zip(ordered, ordered[1:])):
+        stats['eligible'] += 1
+        expand = length < minimum - .001
+        if expand:
+            stats['context_candidates'] += 1
+        starts = [item.start]
+        if expand:
+            extra = minimum - length
+            starts = [item.start - extra / 2, item.start - extra, item.start]
+        variants = set()
+        for start in starts:
+            start = max(0., min(start, duration - minimum)) if expand else start
+            finish = start + minimum if expand else end
+            variant = (round(start, 3), min(round(finish, 3), duration))
+            if variant in variants:
                 continue
-            score = sum(c['score'] for c in group)
-            if count > len(best) or (count == len(best) and score > best_score):
-                best, best_score = list(group), score
-    return [{'start': c['start'], 'end': c['end'], 'title': c['title'], 'explanation': c['explanation']}
-            for c in sorted(best, key=lambda c: c['score'], reverse=True)]
+            variants.add(variant)
+            valid.append({**item.model_dump(), 'start': variant[0], 'end': variant[1],
+                          '_candidate': index, '_context': expand})
+    # Weighted interval scheduling, bounded by requested count. Padding variants
+    # contain the same original moment, so they cannot both enter a disjoint set.
+    valid.sort(key=lambda c: c['end'])
+    ends = [c['end'] for c in valid]
+    table = [[[] for _ in range(len(valid)+1)] for _ in range(limit+1)]
+    def rank(group): return (len(group), sum(c['score'] for c in group))
+    for count in range(1, limit+1):
+        for i, candidate in enumerate(valid, 1):
+            previous = bisect.bisect_right(ends, candidate['start'], 0, i-1)
+            take = table[count-1][previous] + [candidate]
+            skip = table[count][i-1]
+            table[count][i] = take if rank(take) > rank(skip) else skip
+    best = table[limit][-1]
+    stats['selected'] = len(best)
+    stats['selected_with_context'] = sum(c['_context'] for c in best)
+    clips = [{'start': c['start'], 'end': c['end'], 'title': c['title'], 'explanation': c['explanation']}
+             for c in sorted(best, key=lambda c: c['score'], reverse=True)]
+    return clips, stats
 
 
 def request_proposal(body, progress):
@@ -115,7 +162,7 @@ def request_proposal(body, progress):
                 raise SceneAnalysisError('OpenAI returned an unusable clip selection. No invalid timestamps will be rendered; retry the request.') from error
 
 
-def select_scenes(video_path, folder, duration, transcript, search, target, progress, stage, run_command, save_json):
+def select_scenes(video_path, folder, duration, transcript, search, target, progress, stage, run_command, save_json, requested_count=4):
     require_api_key()
     duration, target = float(duration), int(target)
     stage('OpenAI frame extraction')
@@ -135,7 +182,7 @@ def select_scenes(video_path, folder, duration, transcript, search, target, prog
         raise SceneAnalysisError('Could not extract video previews for OpenAI.')
     stage('OpenAI request preparation')
     context = {'request': search, 'duration_seconds': duration, 'target_clip_seconds': target,
-               'requested_clip_count': 4, 'transcript': transcript}
+               'requested_clip_count': requested_count, 'transcript': transcript}
     content = [{'type': 'input_text', 'text': json.dumps(context, ensure_ascii=False)}]
     image_bytes = 0
     for index, path in enumerate(paths):
@@ -145,17 +192,17 @@ def select_scenes(video_path, folder, duration, transcript, search, target, prog
         content.append({'type': 'input_text', 'text': f'Preview frame {index + 1}, approximate timestamp {timestamp:.3f} seconds:'})
         content.append({'type': 'input_image', 'image_url': 'data:image/jpeg;base64,' + base64.b64encode(image).decode(), 'detail': 'low'})
     instructions = (
-        'You are a skilled short-form video editor. Find FOUR DISTINCT, NON-OVERLAPPING moments matching '
+        f'You are a skilled short-form video editor. Find {requested_count} DISTINCT, NON-OVERLAPPING moments matching '
         'the user request, using the timestamped transcript and video frames together. Humor requires '
         'a joke, incongruity, mishap, reaction, or a clear setup and payoff, not simply a smiling face. '
         'Preserve enough setup to understand the moment and include its punchline/reaction. '
         'Choose natural speech/scene boundaries. Images are sparse samples, not continuous video; '
         'do not invent unseen actions, dialogue, or precise events between frames. '
-        'Provide 8–12 ranked candidate windows when justified, with alternatives that allow four '
-        'separate clips. Make the first four candidates mutually non-overlapping whenever four '
+        'Provide up to 12 ranked candidate windows when justified, with alternatives that allow the requested '
+        'separate clips. Make the highest ranked candidates mutually non-overlapping whenever enough '
         'supported moments exist. Aim near the requested target length, but allow 8 seconds up to 1.5 times '
         'the target to preserve complete moments. For a source shorter than 8 seconds, its full length '
-        'is allowed. Scores are 0–10; 5 or above means a supported match. Do not fill four slots with '
+        'is allowed. Scores are 0–10; 5 or above means a supported match. Do not fill requested slots with '
         'unrelated footage or duplicate the same moment. If fewer distinct matches exist, return fewer '
         'and explain in insufficient_material_reason; otherwise that field must be empty. '
         'All timestamps are seconds in the original video, 0 <= start < end <= duration. '
@@ -187,9 +234,12 @@ def select_scenes(video_path, folder, duration, transcript, search, target, prog
         save_json(cache, {'fingerprint': fingerprint, 'proposal': proposal.model_dump(), 'metadata': metadata})
     stage('Clip boundary validation')
     progress('Validating distinct clip boundaries...')
-    clips = choose_clips(proposal, duration, target)
-    note = proposal.insufficient_material_reason if len(clips) < 4 else ''
-    if len(clips) < 4 and not note:
-        note = f'Found {len(clips)} distinct supported matches after validating duration and overlap; no clips were duplicated to fill four slots.'
-    return clips, {'provider': 'openai', **metadata, 'selection_note': note, 'preview_image_bytes': image_bytes,
+    clips, diagnostics = select_with_diagnostics(proposal, duration, target, requested_count)
+    note = proposal.insufficient_material_reason if len(clips) < requested_count else ''
+    if len(clips) < requested_count and not note:
+        note = f'Found {len(clips)} distinct supported matches after validating duration and overlap; no clips were duplicated to fill requested slots.'
+    if diagnostics['selected_with_context']:
+        context_note = f"Added surrounding context to {diagnostics['selected_with_context']} supported short moment(s) to meet the {min(8.0, duration):g}-second minimum."
+        note = (note + ' ' + context_note).strip()
+    return clips, {'selection_diagnostics': diagnostics, 'provider': 'openai', **metadata, 'selection_note': note, 'preview_image_bytes': image_bytes,
                    'preview_frame_count': len(paths), 'selection_cached': cached is not None}

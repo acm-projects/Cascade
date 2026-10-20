@@ -18,6 +18,16 @@ class MetadataTests(unittest.TestCase):
         self.store = MetadataStore(self.root)
         self.project = self.root / 'projects' / ('a' * 64) / ('b' * 32 + '.json')
 
+    def test_app_user_only_stores_clerk_id_and_first_seen_date(self):
+        self.store.ensure_user('user_verified')
+        path = next((self.root / 'users').glob('*.json'))
+        original = self.store.read(path)
+        self.store.ensure_user('user_verified')
+        self.assertEqual(self.store.read(path), original)
+        self.assertEqual(set(original), {'clerk_user_id', 'created_at'})
+        with self.assertRaises(ValueError):
+            self.store.ensure_user('')
+
     def test_local_storage_is_explicit_and_roundtrips(self):
         with patch.dict(os.environ, {'CASCADE_METADATA_STORE': 'local', 'DATABASE_URL': 'must-not-connect'}):
             self.assertIsNone(get_store(self.root).database_url)
@@ -35,6 +45,16 @@ class MetadataTests(unittest.TestCase):
         store.pool = pool
         pool.getconn.return_value.cursor.return_value.__enter__.return_value.fetchone.return_value = None
         self.assertFalse(store.exists(self.project))
+
+    def test_project_rename_preserves_saved_clips_and_checks_owner(self):
+        clip = {'job_id': 'c' * 32, 'clip_index': 0}
+        self.store.write(self.project, {'name': 'Before', 'user_id': 'u', 'saved_clips': [clip], 'created_at': 10})
+        renamed = self.store.update_project(self.project, 'u', {'name': 'After'})
+        self.assertEqual(renamed['saved_clips'], [clip])
+        self.assertEqual(renamed['created_at'], 10)
+        with self.assertRaises(HTTPException):
+            self.store.update_project(self.project, 'someone-else', {'name': 'Wrong'})
+        self.assertEqual(self.store.read(self.project)['name'], 'After')
 
     def test_neon_mode_requires_configuration(self):
         with patch.dict(os.environ, {'CASCADE_METADATA_STORE': 'neon', 'DATABASE_URL': ''}):

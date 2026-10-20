@@ -11,7 +11,10 @@ CREATE INDEX IF NOT EXISTS records_project_id ON cascade_app.records ((payload->
 
 CREATE OR REPLACE VIEW cascade_app.projects AS
 SELECT payload->>'id' AS id, payload->>'user_id' AS user_id,
-       payload->>'name' AS name, payload, updated_at
+       payload->>'name' AS name, payload,
+       COALESCE(to_timestamp((payload->>'updated_at')::double precision), updated_at) AS updated_at,
+       to_timestamp((payload->>'created_at')::double precision) AS created_at,
+       payload->>'thumbnail_key' AS thumbnail_key
 FROM cascade_app.records WHERE key ~ '^projects/[0-9a-f]{64}/[0-9a-f]{32}\.json$';
 
 CREATE OR REPLACE VIEW cascade_app.settings AS

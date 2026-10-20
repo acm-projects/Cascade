@@ -1,8 +1,11 @@
 """Neon-backed JSON metadata; media and model caches remain on disk/S3."""
 import json
+import hashlib
 import os
 import re
+import time
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
@@ -10,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-SCHEMA = Path(__file__).parent / 'migrations' / '001_metadata.sql'
+MIGRATIONS = Path(__file__).parent / 'migrations'
 JOB_FILES = {'owner.json', 'results.json', 'progress.json', 'failure.json'}
 
 
@@ -67,13 +70,31 @@ class MetadataStore:
                 try:
                     with conn, conn.cursor() as cur:
                         cur.execute("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '5s'")
-                        cur.execute(SCHEMA.read_text(encoding='utf-8'))
+                        for migration in sorted(MIGRATIONS.glob('*.sql')):
+                            cur.execute(migration.read_text(encoding='utf-8'))
                 finally:
                     pool.putconn(conn)
             except Exception:
                 pool.closeall()
                 raise
             self.pool = pool
+
+    @staticmethod
+    def insert_user(cur, user_id):
+        cur.execute('INSERT INTO cascade_app.users (clerk_user_id) VALUES (%s) '
+                    'ON CONFLICT (clerk_user_id) DO NOTHING', (user_id,))
+
+    def ensure_user(self, user_id):
+        """Called with a verified Clerk subject, never email/password from a form."""
+        if not isinstance(user_id, str) or not user_id.strip():
+            raise ValueError('A verified user ID is required')
+        if self.database_url:
+            with self.connection() as conn, conn.cursor() as cur:
+                self.insert_user(cur, user_id)
+        else:
+            path = self.root / 'users' / (hashlib.sha256(user_id.encode()).hexdigest() + '.json')
+            if not path.is_file():
+                self.local_write(path, {'clerk_user_id': user_id, 'created_at': datetime.now(timezone.utc).isoformat()})
 
     def read(self, path):
         key = self.key(path)
@@ -102,9 +123,20 @@ class MetadataStore:
         if self.database_url and key:
             conflict = 'DO NOTHING' if import_only else 'DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()'
             with self.connection() as conn, conn.cursor() as cur:
+                if isinstance(data, dict) and data.get('user_id'):
+                    self.insert_user(cur, data['user_id'])
                 cur.execute('INSERT INTO cascade_app.records (key, payload) VALUES (%s, %s) ON CONFLICT (key) '
                             + conflict, (key, Json(data)))
                 changed = cur.rowcount
+                if not import_only and key.split('/')[-1] in {'owner.json', 'results.json'}:
+                    cur.execute("""UPDATE cascade_app.records p SET
+                        payload = jsonb_set(p.payload, '{updated_at}', to_jsonb(%s::double precision)),
+                        updated_at = now()
+                        FROM cascade_app.records o
+                        WHERE o.key = %s AND p.key ~ '^projects/[0-9a-f]{64}/[0-9a-f]{32}\\.json$'
+                          AND p.payload->>'id' = o.payload->>'project_id'
+                          AND p.payload->>'user_id' = o.payload->>'user_id'""",
+                        (time.time(), key.split('/')[0] + '/owner.json'))
             # Neon is authoritative. A failed local cache must not undo a committed save.
             if not import_only:
                 try:
@@ -113,7 +145,57 @@ class MetadataStore:
                     pass
             return changed
         self.local_write(path, data)
+        if key and key.split('/')[-1] in {'owner.json', 'results.json'}:
+            owner_path = path.parent / 'owner.json'
+            if owner_path.is_file():
+                owner = self.read(owner_path)
+                if owner.get('user_id') and re.fullmatch('[0-9a-f]{32}', owner.get('project_id') or ''):
+                    user_hash = hashlib.sha256(owner['user_id'].encode()).hexdigest()
+                    project_path = self.root / 'projects' / user_hash / (owner['project_id'] + '.json')
+                    if project_path.is_file():
+                        self.update_project(project_path, owner['user_id'], {})
         return 1
+
+    def update_project(self, path, user_id, changes):
+        """Atomic JSON merge preserves saved clips when a project is renamed."""
+        patch = {**changes, 'updated_at': time.time()}
+        if self.database_url:
+            from psycopg2.extras import Json
+            with self.connection() as conn, conn.cursor() as cur:
+                cur.execute("""UPDATE cascade_app.records SET payload = payload || %s::jsonb, updated_at = now()
+                    WHERE key = %s AND payload->>'user_id' = %s RETURNING payload""",
+                    (Json(patch), self.key(path), user_id))
+                row = cur.fetchone()
+            if row is None:
+                raise HTTPException(404, 'Project not found.')
+            return row[0]
+        data = self.read(path)
+        if data.get('user_id') != user_id:
+            raise HTTPException(404, 'Project not found.')
+        data.update(patch)
+        self.local_write(Path(path), data)
+        return data
+
+    def delete(self, path):
+        key = self.key(path)
+        if self.database_url and key:
+            with self.connection() as conn, conn.cursor() as cur:
+                cur.execute('DELETE FROM cascade_app.records WHERE key = %s', (key,))
+        Path(path).unlink(missing_ok=True)
+
+    def delete_project_metadata(self, path, user_id, job_ids, referenced):
+        if not self.database_url:
+            return
+        from psycopg2.extras import Json
+        with self.connection() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM cascade_app.records WHERE key = %s AND payload->>'user_id' = %s",
+                        (self.key(path), user_id))
+            for job_id in job_ids:
+                if job_id in referenced:
+                    cur.execute('UPDATE cascade_app.records SET payload = payload || %s::jsonb WHERE key = %s',
+                                (Json({'project_deleted': True}), job_id + '/owner.json'))
+                else:
+                    cur.execute('DELETE FROM cascade_app.records WHERE key LIKE %s', (job_id + '/%',))
 
     @staticmethod
     def local_write(path, data):
@@ -149,16 +231,18 @@ class MetadataStore:
             data = self.read(path)
             if entry not in data['saved_clips']:
                 data['saved_clips'].append(entry)
+                data['updated_at'] = time.time()
                 self.write(path, data)
             return
         from psycopg2.extras import Json
         with self.connection() as conn, conn.cursor() as cur:
             cur.execute("""UPDATE cascade_app.records
-                SET payload = jsonb_set(payload, '{saved_clips}',
-                    COALESCE(payload->'saved_clips', '[]'::jsonb) || %s::jsonb), updated_at = now()
+                SET payload = jsonb_set(jsonb_set(payload, '{saved_clips}',
+                    COALESCE(payload->'saved_clips', '[]'::jsonb) || %s::jsonb),
+                    '{updated_at}', %s::jsonb), updated_at = now()
                 WHERE key = %s AND payload->>'user_id' = %s
                   AND NOT COALESCE(payload->'saved_clips', '[]'::jsonb) @> %s::jsonb""",
-                (Json([entry]), self.key(path), user_id, Json([entry])))
+                (Json([entry]), Json(time.time()), self.key(path), user_id, Json([entry])))
 
 
 @lru_cache(maxsize=8)

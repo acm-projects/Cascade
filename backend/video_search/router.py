@@ -5,13 +5,14 @@ import json
 import shutil
 import subprocess
 import os
+import threading
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from faster_whisper import WhisperModel
 from PIL import Image
 from sentence_transformers import SentenceTransformer
-from pipeline_timing import StageTimer
+from backend.pipeline_timing import StageTimer
+from backend.cascade_stt import TranscriptionError, transcribe_media
 
 router = APIRouter()
 
@@ -19,24 +20,33 @@ PROJECT_DIR = Path(__file__).resolve().parent
 OUTPUTS = PROJECT_DIR / "outputs"
 OUTPUTS.mkdir(exist_ok=True)
 
-whisper_model = search_model = visual_model = None
+search_model = visual_model = None
+_model_lock = threading.Lock()
+
 
 def load_models(mode, progress=lambda message: None):
-    global whisper_model, search_model, visual_model
-    if mode in ('speech', 'captions') and whisper_model is None:
-        progress('Loading speech model (first use may download model files)...')
-        whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
-    if mode == "speech" and search_model is None:
-        progress('Loading speech search model (first use may download model files)...')
-        search_model = SentenceTransformer("all-MiniLM-L6-v2")
-    if mode == "visual" and visual_model is None:
-        progress('Loading visual search model (first use may download model files)...')
-        visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
+    global search_model, visual_model
+    # One lock: the startup warm-up and an early upload never load the same model twice.
+    with _model_lock:
+        if mode == "speech" and search_model is None:
+            progress('Loading speech search model (first use may download model files)...')
+            search_model = SentenceTransformer("all-MiniLM-L6-v2")
+        if mode == "visual" and visual_model is None:
+            progress('Loading visual search model (first use may download model files)...')
+            visual_model = SentenceTransformer("sentence-transformers/clip-ViT-B-32")
 
 
 # Note: the standalone "/" page is now served via StaticFiles at /search-ui
-# (see backend/app.py) instead of a dedicated route here, since this router
+# (see app1.py) instead of a dedicated route here, since this router
 # is mounted under /api/search alongside the other features' APIs.
+
+
+def transcribe(path, work, progress):
+    """Deepgram transcript segments; a transcription failure becomes a clear 503 for the caller."""
+    try:
+        return transcribe_media(path, work, progress)
+    except TranscriptionError as error:
+        raise HTTPException(503, str(error)) from error
 
 
 @router.get("/clips/{filename}")
@@ -85,7 +95,7 @@ async def upload_video(
     return await run_in_threadpool(search_video, video, search, mode, clip_length)
 
 
-def search_video(video, search, mode, clip_length, progress=lambda message: None, timing=lambda timings, active: None):
+def search_video(video, search, mode, clip_length, progress=lambda message: None, timing=lambda timings, active: None, requested_count=4, parent_context=None, followup_prompt=None):
     from backend.video_search.selection import select_matches
     import numpy as np
     timer = StageTimer(timing)
@@ -116,15 +126,12 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                 raise HTTPException(400, 'Could not read a valid video duration.')
             transcript = []
             if mode == 'speech':
-                timer.start('Whisper transcription')
+                timer.start('Deepgram transcription')
                 progress('Transcribing video for speech search...')
-                segments, _ = whisper_model.transcribe(str(source), vad_filter=True)
-                for segment in segments:
-                    if segment.text.strip():
-                        transcript.append({'start': float(segment.start), 'end': float(segment.end), 'text': segment.text.strip()})
-                    progress(f'Transcribing speech: reached {segment.end:.0f} seconds...')
+                transcript = [{'start': s['start'], 'end': s['end'], 'text': s['text']}
+                              for s in transcribe(source, work, progress)]
                 if not transcript:
-                    raise HTTPException(400, 'Whisper could not find speech in this video.')
+                    raise HTTPException(400, 'No speech was found in this video.')
                 timer.start('Text embeddings')
                 progress('Comparing your prompt with transcript segments...')
                 embeddings = search_model.encode([part['text'] for part in transcript])
@@ -167,17 +174,16 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                            for index, score in enumerate(scores)]
 
             timer.start('Match selection')
-            progress('Selecting up to four distinct non-overlapping matches...')
-            selected = select_matches(anchors, duration, clip_length, 3 if mode == 'speech' else 5)
+            progress(f'Selecting up to {requested_count} distinct non-overlapping matches...')
+            selected = select_matches(anchors, duration, clip_length, 3 if mode == 'speech' else 5, limit=requested_count)
+            from backend.generation import followup_windows
+            selected = followup_windows(selected, parent_context, followup_prompt or search, duration, clip_length, requested_count)
             has_audio = False
             if mode == 'visual' and selected:
                 timer.start('Audio inspection')
                 probe = run(['ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=index',
                              '-of', 'csv=p=0', str(source)], 30)
                 has_audio = bool(probe.stdout.strip())
-                if has_audio:
-                    timer.start('Whisper model loading')
-                    load_models('captions', progress)
 
             for number, selection in enumerate(selected, 1):
                 clip_start, clip_end = selection['start'], selection['end']
@@ -190,10 +196,9 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                         audio = work / f'selected_{number}.wav'
                         run(['ffmpeg', '-v', 'error', '-y', '-ss', str(clip_start), '-i', str(source), '-t',
                              str(clip_end - clip_start), '-vn', '-ac', '1', '-ar', '16000', str(audio)], 120)
-                        timer.start('Whisper transcription')
-                        segments, _ = whisper_model.transcribe(str(audio), beam_size=1, vad_filter=True)
-                        clip_transcript = [{'start': s.start + clip_start, 'end': s.end + clip_start, 'text': s.text.strip()}
-                                           for s in segments if s.text.strip()]
+                        timer.start('Deepgram transcription')
+                        clip_transcript = [{'start': s['start'] + clip_start, 'end': s['end'] + clip_start, 'text': s['text']}
+                                           for s in transcribe(audio, work, progress)]
                 timer.start('Caption preparation')
                 subtitle_lines, vtt_lines = [], ['WEBVTT\n']
                 for part in clip_transcript:
@@ -213,6 +218,8 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                            '-t', str(clip_end - clip_start), '-map', '0:v:0', '-map', '0:a:0?']
                 filters = ['scale=trunc(iw/2)*2:trunc(ih/2)*2']
                 if subtitle_lines:
+                    from backend.video_tools import subtitle_ffmpeg
+                    command[0] = subtitle_ffmpeg()
                     filters.append('subtitles=filename=' + subtitle_name)
                 command += ['-vf', ','.join(filters), '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
                             '-c:a', 'aac', '-movflags', '+faststart', str(output)]
@@ -224,11 +231,11 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
                                 'match': selection['match'], 'mode': mode, 'captions_vtt': '\n'.join(vtt_lines)})
         timings = timer.finish()
         note = ''
-        if len(outputs) < 4:
-            note = f'Found {len(outputs)} distinct clip(s). The source duration or spacing of searchable moments does not allow four separate clips, even with shorter windows.'
+        if len(outputs) < requested_count:
+            note = f'Found {len(outputs)} distinct clip(s). The source duration or spacing of searchable moments does not allow the requested separate clips, even with shorter windows.'
         elif selected and selected[0]['end'] - selected[0]['start'] < clip_length - .01:
             seconds = selected[0]['end'] - selected[0]['start']
-            note = f'Used {seconds:g}-second clips instead of the {clip_length}-second target to keep four distinct matches without overlap.'
+            note = f'Used {seconds:g}-second clips instead of the {clip_length}-second target to keep distinct matches without overlap.'
         # Keep the first-clip fields for older standalone clients.
         return {**(outputs[0] if outputs else {}), 'clips': outputs, 'timings': timings, 'selection_note': note}
     except BaseException:
