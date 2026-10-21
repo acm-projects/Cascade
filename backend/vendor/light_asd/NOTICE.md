@@ -1,0 +1,1 @@
+Inference architecture from Junhua-Liao/Light-ASD, commit ed38c232de5efe0261dbd68627c0ade7cdfe14eb (MIT). Only imports and line endings were adapted. Training/demo scripts are not executed. CPU inference and video processing are implemented by Cascade.

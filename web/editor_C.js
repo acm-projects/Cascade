@@ -1,12 +1,13 @@
 /* Loaded only on editor_C.html. Authentication remains in flow_C.js. */
-window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, setStatus, initializeResearch}) {
+window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, setStatus, initializeResearch, initializePreferences}) {
   const $ = id => document.getElementById(id);
   const {clone, normalize, History, cueAt, defaultComposition, compositionGeometry} = window.CascadeEditorState;
   const base = '/api/projects/' + encodeURIComponent(project.id) + '/editor';
   const video = $('editor-video'), overlay = $('caption-overlay');
   let current = null, info = null, history = null, chat = [], updated = 0;
   let timer, textTimer, mediaURL, pending = Promise.resolve(), revision = 0, savedRevision = -1;
-  let busy = false, loading = false, gesture = null;
+  let busy = false, loading = false, gesture = null, authEnded = false;
+  let navigation = null;
   let comparison = 'edited', editedTime = 0, selectedCue = 0, previewSignature = '';
   const timeline = new window.CascadeTimeline({
     onSeek: seconds => seek(seconds),
@@ -14,22 +15,50 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     onTrim: (name, seconds) => previewTrim(name,seconds),
     onEndTrim: () => endGesture(),
     onBroll: id => broll?.select(id),
+    onDropBroll: (id,time) => broll?.drop(id,time),
+    onBeginBroll: () => {useEdited();video.pause();beginGesture();},
+    onMoveBroll: (id,patch) => {const next=clone(history.state);Object.assign(next.broll.find(s=>s.id===id),patch);history.state=normalize(next,info.duration);render();},
+    onEndBroll: () => endGesture(),
     onCue: index => { selectedCue=index; renderCaptionText(); }
   });
   const broll=window.CascadeBroll ? new window.CascadeBroll({
-    get:()=>({state:history?.state,info,current,comparison}), commit,apiJSON,apiFetch,
+    get:()=>({state:history?.state,info,current,comparison}), commit,seek,apiJSON,apiFetch,
     lock:setLocked,openTab:()=>document.querySelector('[data-tab="broll"]')?.click()
   }) : null;
-  function geometry() { return compositionGeometry(info.width,info.height,comparison==='original'?defaultComposition:history.state.composition); }
+  const reframe=window.CascadeReframe?new window.CascadeReframe({get:()=>({state:history?.state,info,current}),apiJSON,commit,lock:setLocked,render}):null;
+  // Selection takes place on the full source, independent of the current crop/device shell.
+  const picker=document.createElement('div');picker.id='subject-picker';picker.hidden=true;
+  const selectionBox=document.createElement('div');selectionBox.className='subject-selection-box';picker.append(selectionBox);$('composition-frame').append(picker);
+  let pickStart=null;
+  $('subject-pick').onclick=()=>{if(busy||!history)return;video.pause();compare('original');selectionBox.style.width='0';selectionBox.style.height='0';picker.hidden=false;$('subject-help').textContent='Click a subject or draw a box around it. Escape cancels.';};
+  const sourcePoint=event=>{const r=video.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(event.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(event.clientY-r.top)/r.height))};};
+  picker.addEventListener('pointerdown',event=>{event.preventDefault();event.stopPropagation();pickStart=sourcePoint(event);picker.setPointerCapture(event.pointerId);});
+  picker.addEventListener('pointermove',event=>{if(!pickStart)return;const p=sourcePoint(event),r=video.getBoundingClientRect(),f=picker.getBoundingClientRect();Object.assign(selectionBox.style,{left:r.left-f.left+Math.min(p.x,pickStart.x)*r.width+'px',top:r.top-f.top+Math.min(p.y,pickStart.y)*r.height+'px',width:Math.abs(p.x-pickStart.x)*r.width+'px',height:Math.abs(p.y-pickStart.y)*r.height+'px'});});
+  picker.addEventListener('pointerup',async event=>{
+    if(!pickStart)return;const p=sourcePoint(event),a=pickStart,pickedClip=current,selectionTime=Math.min(info.duration-.04,video.currentTime);pickStart=null;picker.hidden=true;
+    let box=[Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(p.x-a.x),Math.abs(p.y-a.y)];
+    try{
+      if(box[2]<.015||box[3]<.015){
+        const id=history.state.reframe.analysis_id;
+        const detections=id?await apiJSON(current.url+'/reframe/'+id+'/subjects?t='+video.currentTime):{subjects:[]};
+        const hits=detections.subjects.filter(o=>{const [x,y,w,h]=o.box;return p.x>=x&&p.x<=x+w&&p.y>=y&&p.y<=y+h;});
+        box=hits.length?hits.sort((a,b)=>a.box[2]*a.box[3]-b.box[2]*b.box[3])[0].box:[Math.max(0,Math.min(.8,p.x-.1)),Math.max(0,Math.min(.8,p.y-.1)),.2,.2];
+      }
+      if(current!==pickedClip)return;compare('edited');seek(selectionTime);const applied=await reframe.selectRegion({t:selectionTime,box});
+      if(!applied)return;
+      $('subject-help').textContent='Selected subject saved for this clip. Use Undo or Use Auto to change it.';
+    }catch(error){$('subject-help').textContent=error.message;compare('edited');}
+  });
+  picker.addEventListener('pointercancel',()=>{pickStart=null;picker.hidden=true;compare('edited');});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!picker.hidden){picker.hidden=true;pickStart=null;compare('edited');}});
+  function geometry() { const g=compositionGeometry(info.width,info.height,comparison==='original'?defaultComposition:history.state.composition);return comparison==='edited'&&reframe?reframe.geometry(history.state,video.currentTime,g):g; }
   function renderFraming() {
     const f=history.state.composition;
     document.querySelectorAll('[data-ratio]').forEach(button=>{ button.setAttribute('aria-pressed',String(button.dataset.ratio===f.ratio)); if(button.dataset.ratio==='original') button.firstElementChild?.style.setProperty('--ratio',info.width+'/'+info.height); });
     $('framing').value=f.mode; $('frame-background').value=f.background;
-    $('fit-options').hidden=f.mode!=='fit'; $('crop-options').hidden=f.mode!=='fill';
-    $('crop-x').value=f.x; $('crop-y').value=f.y;
-    $('crop-x-label').textContent=Math.round(f.x*100)+'%'; $('crop-y-label').textContent=Math.round(f.y*100)+'%';
+    $('fit-options').hidden=f.mode!=='fit';
     const g=compositionGeometry(info.width,info.height,f);
-    $('crop-x').disabled=busy || g.scaledWidth<=g.width; $('crop-y').disabled=busy || g.scaledHeight<=g.height;
+    reframe?.sync(history.state,busy);
     $('composition-summary').textContent=(f.ratio==='original'?'Original ratio':f.ratio)+' · '+f.mode+' · export '+g.width+' × '+g.height;
   }
   function range() { return comparison==='original' ? {start:0,end:info.duration} : history.state; }
@@ -110,10 +139,11 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     render();
   }
   function setLocked(value) {
+    value = value || authEnded;
     busy = value && (loading || !!history);
-    document.querySelectorAll('#timeline-controls input, #timeline-controls button, #caption-controls input, #caption-controls select, #caption-controls textarea, #preview-original, #preview-edited, #preview-play, #ratio-controls input, #ratio-controls select, #ratio-controls button, #caption-preset, #chat-send, #export-edit, #save-clip')
+    document.querySelectorAll('#timeline-controls input, #timeline-controls button, #caption-controls input, #caption-controls select, #caption-controls textarea, #preview-original, #preview-edited, #preview-play, #ratio-controls input, #ratio-controls select, #ratio-controls button, #effects-controls input, #effects-controls button, #caption-preset, #chat-send, #save-clip')
       .forEach(el => el.disabled = value);
-    document.querySelectorAll('#editor-sessions button').forEach(el => el.disabled = busy);
+    document.querySelectorAll('#editor-sessions button,#editor-sessions input').forEach(el => el.disabled = busy);
     timeline.setDisabled(value);
     broll?.setLocked(value);
     $('undo').disabled = value || !history?.undoStack.length;
@@ -130,6 +160,11 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     if (!history) return;
     const state = history.state;
     renderFraming();
+    for(const name of ['brightness','contrast','saturation','grayscale']) {
+      const el=$('effect-'+name), value=state.effects[name];
+      if(name==='grayscale') el.checked=value;
+      else {el.value=value; $('effect-'+name+'-value').textContent=Math.round(value*100)+'%';}
+    }
     broll?.render();
     $('preview-label').textContent=comparison==='edited'?'Edited preview':'Original preview';
     $('preview-description').textContent=comparison==='edited'?'Live trim and captions · original media preserved':'Full generated clip · your edits are preserved';
@@ -161,6 +196,11 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     $('play-toggle').textContent = video.paused ? 'Play' : 'Pause';
     timeline.update(state,video.currentTime,!video.paused);
     broll?.sync();
+    const e=state.effects;
+    const filter=comparison==='original'?'none':`brightness(${e.brightness}) contrast(${e.contrast}) saturate(${e.saturation}) grayscale(${e.grayscale?1:0})`;
+    const footage=$('footage-layer');
+    footage.style.filter=filter;
+    footage.style.background=comparison==='original'?defaultComposition.background:state.composition.background;
     const text=comparison==='edited'?cueAt(info.cues,video.currentTime,state):'';
     const g=geometry();
     const signature=JSON.stringify([text,state.captions,g.width,g.height]);
@@ -200,7 +240,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
   for (const event of ['pause','timeupdate','seeked','seeking','loadedmetadata']) video.addEventListener(event, tick);
   new ResizeObserver(tick).observe($('preview-wrap'));
   $('play-toggle').onclick = async () => {
-    if (!history || busy) return;
+    if (!history || (busy && !reframe?.preparing)) return;
     if (!video.paused) { video.pause(); tick(); return; }
     try {
       if(video.readyState<2) $('playback-status').textContent='Loading video…';
@@ -215,8 +255,8 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
   };
   for(const event of ['waiting','loadstart']) video.addEventListener(event,()=>{ $('playback-status').textContent='Loading video…'; });
   for(const event of ['canplay','playing','seeked']) video.addEventListener(event,()=>{ $('playback-status').textContent=''; });
-  $('preview-play').onclick=()=>{ if(!busy && history) $('play-toggle').click(); };
-  video.addEventListener('click',()=>{ if(!busy && history) $('play-toggle').click(); });
+  $('preview-play').onclick=()=>{ if(history && (!busy||reframe?.preparing)) $('play-toggle').click(); };
+  video.addEventListener('click',()=>{ if(history && (!busy||reframe?.preparing)) $('play-toggle').click(); });
   $('seek').oninput = event => seek(Number(event.target.value));
   function beginGesture() { if (history && !gesture) gesture = clone(history.state); }
   function endGesture() {
@@ -232,25 +272,27 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     });
     el.addEventListener('change', endGesture); el.addEventListener('pointercancel', endGesture); el.addEventListener('blur', endGesture);
   }
-  document.querySelectorAll('[data-ratio]').forEach(button=>button.onclick=()=>{
-    if(!history || busy) return; endGesture(); useEdited();
-    const next=clone(history.state); next.composition.ratio=button.dataset.ratio; commit(next);
-  });
-  $('preview-device').onchange=()=>tick();
-  $('framing').onchange=event=>{
-    if(!history || busy) return; const value=event.target.value; endGesture(); useEdited();
-    const next=clone(history.state); next.composition.mode=value; commit(next);
-  };
-  for(const [id,field] of [['frame-background','background'],['crop-x','x'],['crop-y','y']]) {
-    const input=$(id);
-    input.addEventListener('input',()=>{
-      if(!history || busy) return; const value=field==='background'?input.value:Number(input.value); useEdited(); beginGesture();
-      const next=clone(history.state); next.composition[field]=value;
-      history.state=normalize(next,info.duration); render();
-    });
-    for(const event of ['change','blur','pointercancel']) input.addEventListener(event,endGesture);
+  async function changeFraming(patch) {
+    if(!history||busy)return;endGesture();useEdited();
+    const next=clone(history.state);Object.assign(next.composition,patch);setLocked(true);
+    try{await reframe?.prepare(next);commit(next);}catch(error){reframe?.failure(error);}
+    finally{setLocked(false);render();}
   }
-  $('crop-center').onclick=()=>{ if(!history || busy) return; endGesture(); const next=clone(history.state); next.composition.x=.5; next.composition.y=.5; commit(next); };
+  document.querySelectorAll('[data-ratio]').forEach(button=>button.onclick=()=>changeFraming({ratio:button.dataset.ratio}));
+  $('preview-device').onchange=()=>tick();
+  $('framing').onchange=event=>changeFraming({mode:event.target.value});
+  $('frame-background').addEventListener('input',()=>{if(history&&!busy)commit({...history.state,composition:{...history.state.composition,background:$('frame-background').value}});});
+  for(const name of ['brightness','contrast','saturation','grayscale']) {
+    const el=$('effect-'+name);
+    el.addEventListener('input',()=>{
+      if(!history||busy)return;
+      useEdited();beginGesture();
+      const next=clone(history.state);next.effects[name]=name==='grayscale'?el.checked:Number(el.value);
+      history.state=normalize(next,info.duration);render();
+    });
+    for(const event of ['change','blur','pointercancel'])el.addEventListener(event,endGesture);
+  }
+  $('effects-reset').onclick=()=>{if(!history||busy)return;endGesture();commit({...history.state,effects:{brightness:1,contrast:1,saturation:1,grayscale:false}});};
   $('reset-trim').onclick = () => commit({...history.state, start:0, end:info.duration});
   for (const field of fields) {
     const el = $('cap-'+field);
@@ -285,7 +327,7 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     render();
   });
   $('cap-text').addEventListener('change',endGesture); $('cap-text').addEventListener('blur',endGesture);
-  function travel(direction) { if (history && !busy) { endGesture(); if (history[direction]()) { comparison='edited'; previewSignature=''; changed(); } render(); } }
+  async function travel(direction) { if (history && !busy) { endGesture(); if (history[direction]()) { comparison='edited'; previewSignature='';setLocked(true);try{const next=clone(history.state);if(reframe&&!reframe.ready(next))await reframe.prepare(next);history.state=next;}catch(error){reframe?.failure(error);}finally{setLocked(false);} changed(); } render(); } }
   $('undo').onclick = () => travel('undo'); $('redo').onclick = () => travel('redo');
   document.addEventListener('keydown', event => {
     const typing = event.target.closest('textarea,select,[contenteditable="true"]') || (event.target.tagName === 'INPUT' && !['range','checkbox','radio','button','color'].includes(event.target.type));
@@ -306,36 +348,23 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
     try {
       const result = await apiJSON(current.url+'/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state:history.state, chat:prior.slice(-20), message,...(broll?.context()||{})})});
       // One validated AI response is one undoable transaction.
+      await reframe?.prepare(result.state);
       const previousBroll=history.state.broll; commit(result.state); broll?.afterChat(previousBroll,history.state); if(result.broll_search)broll?.showSearch(result.broll_search); comparison='edited'; focusCaption(); render(); chat.push({role:'assistant',text:result.message}); changed(); renderChat();
       $('chat-status').textContent = '';
     } catch (error) { $('chat-status').textContent = error.message; chat.push({role:'assistant',text:'No edit applied: '+error.message}); changed(); renderChat(); }
     finally { setLocked(false); render(); }
-  };
-  async function download(response) {
-    const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href=url; a.download='cascade-edited.mp4'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-  $('export-edit').onclick = async () => {
-    if (!history || busy) return;
-    endGesture(); setLocked(true); setStatus('Rendering edited download…');
-    try { await save();
-      await document.fonts.ready;
-      const output=compositionGeometry(info.width,info.height,history.state.composition);
-      const overlays=window.CascadeCaptions.exportFrames(info.cues,history.state,output.width,output.height);
-      await download(await apiFetch(current.url+'/export', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...history.state,overlays})})); setStatus('Edited download ready. Original clip preserved.'); }
-    catch (error) { setStatus(error.message); }
-    finally { setLocked(false); }
   };
   $('save-clip').onclick = async () => {
     if (!current) return;
     try {
       await save();
       await apiJSON(current.url+'/save-clip', {method:'POST'});
-      setStatus('Editing settings saved. Use Download edited MP4 to render these edits.');
+      setStatus('Editing settings saved. Go to Exports to review and download your clips.');
     } catch(error) { setStatus(error.message); }
   };
   async function select(item) {
     if (loading || busy) return;
-    loading = true; endGesture(); video.pause(); setLocked(true); setStatus('Loading '+item.label+'…');
+    picker.hidden=true;pickStart=null;loading = true; endGesture(); video.pause(); setLocked(true); setStatus('Loading '+item.label+'…');
     try {
       if (current && history) { histories.set(current.key, history); await save(); }
       const nextInfo = await apiJSON(item.url);
@@ -348,6 +377,9 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
       current = item; info = nextInfo; chat = Array.isArray(draft.chat) ? draft.chat.slice(-200) : []; updated = draft.updated_at;
       history = histories.get(item.key) || new History(normalize(draft.state, info.duration));
       histories.set(item.key, history); revision = 0; savedRevision = -1;
+      reframe?.reset();
+      const framed=clone(history.state);
+      try{await reframe?.prepare(framed);history.state=framed;}catch(error){reframe?.failure(error);}
       comparison='edited'; editedTime=history.state.start; selectedCue=0; previewSignature='';
       $('caption-cue').replaceChildren(); info.cues.forEach((cue,index)=>{ const option=document.createElement('option'); option.value=index; option.textContent=time(cue.start)+' · '+cue.text.slice(0,45); $('caption-cue').append(option); });
       timeline.setClip(mediaURL,info,history.state);
@@ -358,15 +390,25 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
       $('caption-warning').textContent = info.warning || (info.cues.length ? '' : 'No timed captions are available for this clip.');
       for (const id of ['seek','trim-start','trim-end']) $(id).max = info.duration;
       document.querySelectorAll('#editor-sessions button').forEach(button => { const active = button.dataset.key === item.key; button.classList.toggle('active',active); button.setAttribute('aria-pressed',String(active)); });
+      navigation?.active(item.key);
       const url = new URL(location.href); url.searchParams.set('job',item.job); url.searchParams.set('clip',item.index); window.history.replaceState(null,'',url);
-      document.querySelectorAll('a[href^="exports_C.html"], a[href^="canvas_C.html"]').forEach(link => { const dest = new URL(link.href); dest.searchParams.set('job',item.job); dest.searchParams.set('clip',item.index); link.href=dest; });
+      document.querySelectorAll('a[href^="canvas_C.html"]').forEach(link => { const dest = new URL(link.href); dest.searchParams.set('job',item.job); dest.searchParams.set('clip',item.index); link.href=dest; });
       renderChat(); render(); changed(); setStatus('');
     } catch(error) { setStatus(error.message + ' Select a clip to retry. Pending edits are kept locally.'); }
     finally { loading = false; setLocked(!history); }
   }
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { endGesture(); recover(); if (history) save().catch(() => {}); } });
+  window.addEventListener('cascade:before-signout', event => {
+    endGesture(); recover(); setLocked(true);
+    if (history) event.detail.waitUntil(save());
+  });
+  window.addEventListener('cascade:session-ended', () => {
+    authEnded=true; endGesture(); recover(); clearTimeout(timer); clearTimeout(textTimer);
+    video.pause(); setLocked(true);
+  });
+  window.addEventListener('cascade:session-restored', () => {authEnded=false; setLocked(false); render();});
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { endGesture(); recover(); if (history && !authEnded) save().catch(() => {}); } });
   window.addEventListener('pagehide', recover);
-  window.addEventListener('beforeunload', event => { endGesture(); recover(); if (history && savedRevision !== revision) { event.preventDefault(); event.returnValue=''; } });
+  window.addEventListener('beforeunload', event => { endGesture(); recover(); if (!authEnded && history && savedRevision !== revision) { event.preventDefault(); event.returnValue=''; } });
   document.addEventListener('click', async event => {
     const link = event.target.closest('a[href]');
     if (!link || !history || event.metaKey || event.ctrlKey || link.target === '_blank' || (link && new URL(link.href,location.href).origin!==location.origin)) return;
@@ -378,14 +420,18 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
   $('project-title').textContent = project.name;
   setLocked(true);
   const listing = await apiJSON(base), available = [];
-  listing.sessions.forEach((session, s) => {
-    const section = document.createElement('section'), heading = document.createElement('h4'); heading.textContent='Session '+(s+1); section.append(heading);
-    session.clips.forEach((clip,index) => {
-      const job = clip.job_id || session.job_id, clipIndex = clip.clip_index ?? index;
-      const item = {job,index:clipIndex,key:job+':'+clipIndex,url:base+'/'+job+'/'+clipIndex,label:'Session '+(s+1)+' · Clip '+(index+1)};
-      available.push(item); const button = document.createElement('button'); button.type='button'; button.className='mini-clip'; button.textContent='Clip '+(index+1); button.dataset.key=item.key; button.onclick=()=>select(item); section.append(button);
-    }); $('editor-sessions').append(section);
-  });
+  for(const [s,wave]of listing.sessions.entries())for(const [index,clip]of wave.clips.entries()) {
+    const job=clip.job_id||wave.job_id,clipIndex=clip.clip_index??index;
+    available.push({job,index:clipIndex,key:job+':'+clipIndex,url:base+'/'+job+'/'+clipIndex,wave,clip,number:index+1,label:'Session '+(wave.session_number||1)+' · Wave '+(wave.wave_number||s+1)+' · Clip '+(index+1)});
+  }
+  const updateExports=(keys,persist=true)=>{
+    const entries=keys.map(key=>available.find(item=>item.key===key)).filter(Boolean).map(item=>({job_id:item.job,clip_index:item.index}));
+    if(persist){try{window.CascadeExportSelection.write(userId,project.id,entries);}catch{setStatus('Export selection could not be saved. Check browser storage and retry.');return false;}}
+    const link=$('open-exports');link.textContent='Go to Exports'+(entries.length?' ('+entries.length+')':'')+' →';link.href='exports_C.html?project='+encodeURIComponent(project.id)+'&selection=1';link.setAttribute('aria-disabled','false');
+  };
+  const selected=window.CascadeExportSelection.read(userId,project.id).map(e=>e.job_id+':'+e.clip_index).filter(key=>available.some(i=>i.key===key));
+  navigation=new window.CascadeClipNavigation({container:$('editor-sessions'),items:available,selected,selectable:true,onOpen:select,onSelection:updateExports});
+  updateExports(selected,false);
   if (!available.length) { setStatus('No generated clips are available in this project. Return to the canvas to generate a clip.'); return; }
   const query = new URLSearchParams(location.search);
   let selection = listing.selection;
@@ -395,6 +441,8 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
   const index = explicit ? Number(query.get('clip') || 0) : selection?.clip_index;
   const chosen = available.find(item => item.job === job && item.index === index);
   initializeResearch(() => current?.job).catch(error => setStatus(error.message));
+  initializePreferences?.().catch(error=>{$('preferences-status').textContent=error.message;});
+  if(new URLSearchParams(location.search).get('tab')==='research')$('research-tab').click();
   if (explicit && !chosen) { setStatus('Selected clip is missing. Choose an available clip from the sidebar.'); setLocked(true); return; }
   setLocked(false); await select(chosen || available[0]);
 }};

@@ -1,0 +1,219 @@
+{
+  "method": "One cold cycle plus two warm cycles; medians of the warm cycles; sequential runs with cProfile enabled on both versions.",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "hardware": "Apple M4 Pro, 14 CPU cores, 24 GiB unified memory; CPU FP32",
+  "fixtures": [
+    {
+      "name": "person",
+      "duration": 5.0,
+      "sha256": "96c1aef7bbe2d570484ec7bc84b1da014b197a12aee54c5f0975f0ab8fe3816c",
+      "before_runs": [
+        4.673179084027652,
+        3.650097374978941,
+        3.697578333027195
+      ],
+      "after_runs": [
+        2.325152583012823,
+        2.199973125010729,
+        2.1994212500285357
+      ],
+      "before": 3.673837854003068,
+      "after": 2.1996971875196323,
+      "speedup": 1.6701561809721954,
+      "stages": {
+        "video_preparation": {
+          "before": 0.06565231250715442,
+          "after": 0.06504299999999999
+        },
+        "audio_preparation": {
+          "before": 0.029940729000372812,
+          "after": 0.0
+        },
+        "object_detection": {
+          "before": 1.1601069394999999,
+          "after": 1.2022325
+        },
+        "face_detection": {
+          "before": 0.6283530615,
+          "after": 0.6198755
+        },
+        "active_speaker": {
+          "before": 0.0008728325,
+          "after": 0.0
+        },
+        "tracking": {
+          "before": 1.738263339,
+          "after": 0.2864785000000001
+        },
+        "planning": {
+          "before": 0.0005096665117889643,
+          "after": 0.0005747500108554959
+        }
+      },
+      "trajectory": {
+        "max_x_difference": 0.0,
+        "max_step_before": 0.046673000000000076,
+        "max_step_after": 0.046673000000000076
+      }
+    },
+    {
+      "name": "dog",
+      "duration": 4.833008,
+      "sha256": "a51484dd2cdcebba75369f23870377458286800f09b61a515a2f1f09f466c043",
+      "before_runs": [
+        3.271372624032665,
+        3.2552597090252675,
+        3.2852928749634884
+      ],
+      "after_runs": [
+        1.6653537919628434,
+        1.6668797499733046,
+        1.6346724579925649
+      ],
+      "before": 3.270276291994378,
+      "after": 1.6507761039829347,
+      "speedup": 1.9810538110552787,
+      "stages": {
+        "video_preparation": {
+          "before": 0.055545208480907604,
+          "after": 0.054322999999999996
+        },
+        "audio_preparation": {
+          "before": 0.02824933349620551,
+          "after": 0.0
+        },
+        "object_detection": {
+          "before": 1.156149958,
+          "after": 1.1937105
+        },
+        "face_detection": {
+          "before": 0.530050812,
+          "after": 0.0
+        },
+        "active_speaker": {
+          "before": 0.0008996665000000001,
+          "after": 0.0
+        },
+        "tracking": {
+          "before": 1.4505361665,
+          "after": 0.37994950000000005
+        },
+        "planning": {
+          "before": 0.0005532710056286305,
+          "after": 0.0005628960207104683
+        }
+      },
+      "trajectory": {
+        "max_x_difference": 0.0,
+        "max_step_before": 0.01748800000000006,
+        "max_step_after": 0.01748800000000006
+      }
+    },
+    {
+      "name": "object",
+      "duration": 1.2,
+      "sha256": "f9ddfc2dcadd8b0885a53f22070f9e0a394e8b78ce21b7c07bab4c68753c9261",
+      "before_runs": [
+        2.488827291992493,
+        2.4910354589810595,
+        2.505467416951433
+      ],
+      "after_runs": [
+        2.092412375030108,
+        2.0692094580153935,
+        2.0767669169581495
+      ],
+      "before": 2.498251437966246,
+      "after": 2.0729881874867715,
+      "speedup": 1.2051450428162116,
+      "stages": {
+        "video_preparation": {
+          "before": 0.036409270454896614,
+          "after": 0.038125000000000006
+        },
+        "audio_preparation": {
+          "before": 0.025971521012252197,
+          "after": 0.0
+        },
+        "object_detection": {
+          "before": 0.2743841255,
+          "after": 0.0
+        },
+        "face_detection": {
+          "before": 0.107490105,
+          "after": 0.0
+        },
+        "active_speaker": {
+          "before": 0.000275229,
+          "after": 0.0
+        },
+        "tracking": {
+          "before": 2.0188368940000005,
+          "after": 2.0230474999999997
+        },
+        "planning": {
+          "before": 0.00026077096117660403,
+          "after": 0.000279416999546811
+        }
+      },
+      "trajectory": {
+        "max_x_difference": 0.013963999999999976,
+        "max_step_before": 0.02457799999999999,
+        "max_step_after": 0.029635999999999996
+      }
+    },
+    {
+      "name": "conversation",
+      "duration": 12.04,
+      "sha256": "437673d6f2aa97c99495254a5f16708c30502f6fe01623eaf181efc7278ce74c",
+      "before_runs": [
+        7.920891167013906,
+        7.916013500012923,
+        8.129329458985012
+      ],
+      "after_runs": [
+        7.4146465009544045,
+        6.566176542022731,
+        6.657046292035375
+      ],
+      "before": 8.022671479498968,
+      "after": 6.611611417029053,
+      "speedup": 1.213421505510071,
+      "stages": {
+        "video_preparation": {
+          "before": 0.09712104199570604,
+          "after": 0.0998885
+        },
+        "audio_preparation": {
+          "before": 0.03580899999360554,
+          "after": 0.0356635
+        },
+        "object_detection": {
+          "before": 2.845735562,
+          "after": 2.880565
+        },
+        "face_detection": {
+          "before": 1.3333059835,
+          "after": 1.3286289999999998
+        },
+        "active_speaker": {
+          "before": 1.1949447085,
+          "after": 1.1631255
+        },
+        "tracking": {
+          "before": 2.3218373325,
+          "after": 1.0418029999999998
+        },
+        "planning": {
+          "before": 0.0013735629909206182,
+          "after": 0.0014031670289114118
+        }
+      },
+      "trajectory": {
+        "max_x_difference": 0.0,
+        "max_step_before": 0.12617899999999999,
+        "max_step_after": 0.12617899999999999
+      }
+    }
+  ]
+}

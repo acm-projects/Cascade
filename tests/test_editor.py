@@ -61,6 +61,55 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(result.status_code,200,result.text[:500])
         return result.json()
 
+    def test_effects_persist_validate_and_change_real_export(self):
+        draft=self.get()['draft']
+        draft['state']['captions']['enabled']=False
+        original=self.client.post(self.url+'/export',headers=self.headers,json=draft['state'])
+        self.assertEqual(original.status_code,200)
+        draft['state']['effects']={'brightness':1.1,'contrast':1.2,'saturation':0,'grayscale':True}
+        self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,200)
+        self.assertEqual(self.get()['draft']['state']['effects'],draft['state']['effects'])
+        result=self.client.post(self.url+'/export',headers=self.headers,json=draft['state'])
+        self.assertEqual(result.status_code,200,result.text[:100] if result.status_code!=200 else '')
+        colors=[]
+        for number,data in enumerate([original.content,result.content]):
+            path=Path(self.temp.name)/f'effect-{number}.mp4';path.write_bytes(data)
+            rgb=subprocess.check_output(['ffmpeg','-v','error','-i',str(path),'-frames:v','1','-vf','scale=1:1','-pix_fmt','rgb24','-f','rawvideo','-'])
+            colors.append(list(rgb))
+        self.assertGreater(max(colors[0])-min(colors[0]),100)
+        self.assertLess(max(colors[1])-min(colors[1]),5)
+        draft['state']['effects']['brightness']=2
+        self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,422)
+
+    def test_selected_zip_renders_exact_selection_and_rejects_duplicates(self):
+        import zipfile
+        self.job(2,'b'*32)
+        edit=self.get()['draft']['state'];edit.update(start=.5,end=1.5)
+        edit['captions']['enabled']=False
+        entries=[{'job_id':self.jid,'clip_index':0,'edit':edit},{'job_id':'b'*32,'clip_index':1,'edit':edit}]
+        result=self.client.post(self.base+'/export-selected',headers=self.headers,json={'clips':entries})
+        self.assertEqual(result.status_code,200,result.text[:200] if result.status_code!=200 else '')
+        with zipfile.ZipFile(io.BytesIO(result.content)) as archive:
+            self.assertEqual(len(archive.namelist()),2)
+            self.assertIn('clip-2-bbbbbbbb',archive.namelist()[1])
+            for name in archive.namelist():
+                path=Path(self.temp.name)/name;path.write_bytes(archive.read(name))
+                duration=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(path)]))
+                self.assertAlmostEqual(duration,1,delta=.12)
+        duplicate=self.client.post(self.base+'/export-selected',headers=self.headers,json={'clips':[entries[0],entries[0]]})
+        self.assertEqual(duplicate.status_code,422)
+        denied=self.client.post(self.base+'/export-selected',headers={'Authorization':'Bearer other'},json={'clips':entries})
+        self.assertEqual(denied.status_code,404)
+
+    def test_detailed_caption_chat_action_keeps_effects_and_history(self):
+        state=editor.Edit(start=0,end=3,effects=editor.Effects(contrast=1.2))
+        style=state.captions.model_copy(update={'font':'Georgia','size':60,'opacity':.5})
+        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
+            result=self.client.post(self.url+'/chat',headers=self.headers,json={'message':'Make the text larger with Georgia and a background','state':state.model_dump()})
+        self.assertEqual(result.status_code,200)
+        self.assertEqual(result.json()['state']['captions']['size'],60)
+        self.assertEqual(result.json()['state']['effects']['contrast'],1.2)
+
     def test_one_and_variable_sessions_and_derived_styles(self):
         listing=self.get(self.base)
         self.assertEqual([len(s['clips']) for s in listing['sessions']],[1])

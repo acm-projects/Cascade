@@ -1,0 +1,5 @@
+# Optional local audio-visual Auto Reframe processing
+-r requirements.txt
+opencv-python-headless>=4.10,<6
+python_speech_features==0.6
+# torch, numpy and scipy are already required through sentence-transformers.

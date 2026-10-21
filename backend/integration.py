@@ -69,6 +69,7 @@ def project_jobs(project_id, user_id):
                            'source_name': owner.get('source_name', ''),
                            'kind': owner.get('kind', 'generation'), 'has_source': (path.parent / 'source.video').is_file(),
                            'created_at': owner.get('created_at', path.stat().st_mtime),
+                           'session_id': owner.get('session_id'), 'wave_id': owner.get('wave_id'),
                            'history_id': owner.get('history_id', path.parent.name), 'creation_order': owner.get('creation_order'),
                            'retry_attempts': owner.get('retry_attempts', []),
                            'requested_clip_count': owner.get('requested_clip_count', 4),

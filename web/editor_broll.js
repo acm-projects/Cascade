@@ -1,9 +1,9 @@
 /* Pexels UI and synchronized, muted stock preview. All network requests use authenticated Cascade APIs. */
 window.CascadeBroll = class {
-  constructor({get, commit, apiJSON, apiFetch, lock, openTab}) {
-    Object.assign(this,{get,commit,apiJSON,apiFetch,lock,openTab});
+  constructor({get, commit, apiJSON, apiFetch, lock, openTab, seek}) {
+    Object.assign(this,{get,commit,apiJSON,apiFetch,lock,openTab,seek});
     this.$=id=>document.getElementById(id); this.results=[]; this.selected=null; this.result=null; this.urls=new Map(); this.generation=0;
-    this.main=this.$('editor-video'); this.frame=this.$('composition-frame');
+    this.main=this.$('editor-video'); this.frame=this.$('footage-layer');
     this.video=document.createElement('video'); this.video.id='broll-live'; this.video.muted=true; this.video.playsInline=true; this.video.preload='auto'; this.video.hidden=true;
     this.cover=document.createElement('div'); this.cover.id='broll-loading'; this.cover.hidden=true; this.frame.append(this.video,this.cover);
     this.video.addEventListener('loadeddata',()=>this.sync()); this.video.addEventListener('seeked',()=>this.sync());
@@ -28,7 +28,7 @@ window.CascadeBroll = class {
     this.urls.clear(); this.results=[]; this.result=null; this.selected=null; this.failed=null; this.signature=''; this.activeAsset=null;
     this.video.pause(); this.video.removeAttribute('src'); this.video.load(); this.video.hidden=true; this.cover.hidden=true;
     const preview=this.$('broll-result-preview'); preview.pause(); preview.removeAttribute('src'); preview.load(); preview.hidden=true;
-    this.$('broll-results').replaceChildren(); this.$('broll-more').hidden=true; this.$('broll-result-credit').replaceChildren(); this.status('');
+    this.$('broll-results').textContent='Search to find footage for your video.';this.$('broll-preview-empty').hidden=false; this.$('broll-more').hidden=true; this.$('broll-result-credit').replaceChildren(); this.status('');
   }
   media(id,thumbnail=false) {
     const {current}=this.get(); const key=(thumbnail?'image:':'video:')+id;
@@ -49,13 +49,16 @@ window.CascadeBroll = class {
   }
   showSearch(data,append=false) {
     this.query=data.query; this.page=data.page; this.$('broll-query').value=data.query;
-    if(!append) {this.results=[];this.result=null;this.$('broll-results').replaceChildren();this.$('broll-result-preview').pause();this.$('broll-result-preview').hidden=true;this.$('broll-result-credit').replaceChildren();}
+    if(!append) {this.results=[];this.result=null;this.$('broll-results').replaceChildren();this.$('broll-result-preview').pause();this.$('broll-result-preview').hidden=true;this.$('broll-preview-empty').hidden=false;this.$('broll-result-credit').replaceChildren();}
     const generation=this.generation;
     for(const asset of data.results) {
       if(this.results.some(a=>a.id===asset.id) || this.results.length>=120) continue;
       this.results.push(asset); const card=document.createElement('article'); card.className='broll-result';
       const image=document.createElement('img');image.alt='Stock video thumbnail';image.loading='lazy';
       this.media(asset.id,true).then(url=>{if(generation===this.generation)image.src=url;}).catch(()=>{image.alt='Thumbnail unavailable';});
+      card.draggable=true;card.dataset.dragAsset=asset.id;
+      card.addEventListener('dragstart',event=>{if(this.locked){event.preventDefault();return;}event.dataTransfer.setData('application/x-cascade-broll',asset.id);event.dataTransfer.effectAllowed='copy';window.CascadeBrollDrag={asset};card.classList.add('dragging');});
+      card.addEventListener('dragend',()=>{window.CascadeBrollDrag=null;card.classList.remove('dragging');});
       const label=document.createElement('p');label.textContent='Result '+this.results.length+' · '+asset.duration+'s · '+asset.creator;
       const credit=this.credit(asset); const preview=document.createElement('button');preview.type='button';preview.textContent='Select / preview';preview.dataset.asset=asset.id;
       preview.onclick=()=>this.choose(asset);card.append(image,label,credit,preview);this.$('broll-results').append(card);
@@ -71,7 +74,7 @@ window.CascadeBroll = class {
     if(this.locked) return; const generation=this.generation;this.lock(true);this.status('Loading stock preview…');
     try {const url=await this.media(asset.id);if(generation!==this.generation)return;
       this.result=asset;const preview=this.$('broll-result-preview');preview.src=url;preview.hidden=false;preview.muted=true;
-      this.$('broll-result-credit').replaceChildren(this.credit(asset));
+      this.$('broll-result-credit').replaceChildren(this.credit(asset));this.$('broll-preview-empty').hidden=true;
       if(!this.selected) {const {state}=this.get();this.$('broll-start').value=state.start;this.$('broll-duration').value=Math.min(3,asset.duration,state.end-state.start);this.$('broll-offset').value=0;}
       this.status('Footage selected. Set timing and click Add to clip.');
     }catch(error){this.status(error.message);}finally{this.lock(false);}
@@ -84,8 +87,20 @@ window.CascadeBroll = class {
       if(replace) {const segment=next.broll.find(s=>s.id===id);if(!segment)throw Error('Select a segment to replace.');Object.assign(segment,values,{asset:this.result});}
       else {id=crypto.randomUUID().replaceAll('-','');next.broll.push({id,asset:this.result,...values});}
       window.CascadeEditorState.validateBroll(next.broll,this.get().info.duration);
-      this.commit(next);this.select(id);this.status(replace?'B-roll replaced.':'B-roll added. Speaker audio preserved.');
+      this.commit(next);this.select(id);this.seek?.(Math.max(next.start,values.start)+.001);this.status(replace?'B-roll replaced.':'B-roll added. Speaker audio preserved.');
     }catch(error){this.status(error.message);}
+  }
+  async drop(assetId,start) {
+    if(this.locked)return;const asset=this.results.find(a=>a.id===assetId);if(!asset){this.status('Search for this footage again before dragging it into this clip.');return;}
+    const {state}=this.get();if(state.broll.some(s=>s.start<=start&&start<s.start+s.duration))return;
+    const next=Math.min(state.end,...state.broll.filter(s=>s.start>start).map(s=>s.start));
+    const duration=Math.min(3,asset.duration,next-start);if(duration<.05)return;
+    const generation=this.generation;this.lock(true);this.status('Preparing B-roll…');
+    try{await this.media(asset.id);if(generation!==this.generation)return;
+      const edit=window.CascadeEditorState.clone(this.get().state),id=crypto.randomUUID().replaceAll('-','');
+      edit.broll.push({id,asset,start,duration,offset:0,mode:'fill'});window.CascadeEditorState.validateBroll(edit.broll,this.get().info.duration);
+      this.commit(edit);this.select(id);this.seek?.(start+.001);this.status('B-roll added at '+start.toFixed(2)+'s. Drag its edges to trim.');
+    }catch(error){this.status(error.message);}finally{this.lock(false);}
   }
   update() {
     if(this.locked||!this.selected)return;
@@ -110,13 +125,13 @@ window.CascadeBroll = class {
       for(const s of state.broll) {
         const row=document.createElement('article');row.className='broll-segment';const title=document.createElement('p');
         const visible=Math.max(0,Math.min(state.end,s.start+s.duration)-Math.max(state.start,s.start));
-        title.textContent=s.start.toFixed(2)+'–'+(s.start+s.duration).toFixed(2)+'s · '+s.asset.creator+(visible===0?' · Hidden by trim':visible<s.duration?' · Partially hidden by trim':'');
-        const select=document.createElement('button');select.type='button';select.textContent=s.id===this.selected?'Selected':'Select / edit';select.onclick=()=>{if(!this.locked)this.select(s.id);};
+        title.textContent='At '+s.start.toFixed(2)+'s · '+s.duration.toFixed(2)+'s long · '+s.asset.creator+(visible===0?' · Hidden by trim':visible<s.duration?' · Partially hidden by trim':'');
+        const select=document.createElement('button');select.type='button';select.textContent=s.id===this.selected?'Editing timing above':'Edit timing / replace';select.onclick=()=>{if(!this.locked)this.select(s.id);};
         const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=()=>{if(this.locked)return;const next=window.CascadeEditorState.clone(this.get().state);next.broll=next.broll.filter(b=>b.id!==s.id);this.commit(next);};
         row.append(title,this.credit(s.asset),select,remove);list.append(row);
         this.media(s.asset.id).catch(error=>this.status(error.message));
       }
-      if(!state.broll.length)list.textContent='No B-roll inserted.';
+      if(!state.broll.length)list.textContent='No B-roll added yet. Find footage above, then use Add or drag it onto the timeline.';
       this.setLocked(this.locked);
     }
     this.$('broll-start').max=info.duration;

@@ -44,7 +44,8 @@ def register(app, host, integration):
                 clips = [{**host.public_clip(clip), 'clip_id': f"{job['job_id']}:{index}", 'clip_index': index}
                          for index, clip in enumerate(status.get('clips', []))]
                 rows.append({**job, **{k:v for k,v in status.items() if k!='clips'}, 'clips': clips, 'order': job.get('creation_order') or number, 'search_type': 'follow-up' if job.get('parent_clip') else 'full-video'})
-            return {'groups': rows}
+            from backend.editor_navigation import label_waves
+            return {'groups': label_waves(rows)}
 
     @app.post('/api/projects/{project_id}/generations', status_code=202)
     def generate(project_id: str, body: GenerationInput, request: Request):

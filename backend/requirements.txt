@@ -22,3 +22,7 @@ pillow
 # speech-to-text (Deepgram) and the OpenAI provider option
 httpx
 openai
+
+# Local face tracks and audio-visual active speaker inference (Auto Reframe)
+opencv-python-headless>=4.10,<6
+python_speech_features==0.6

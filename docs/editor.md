@@ -1,12 +1,14 @@
+Current UI behavior and verification are described in [Editor and Exports delivery update](editor-delivery.md). The implementation history below includes earlier controls that have since been replaced.
+
 All HTML view markup now lives in `web/index.html`; names such as `editor_C.html` below refer to preserved public routes. CSS and JavaScript files remain separate.
 
 Frontend filenames below live under `web/`; backend service filenames live under `backend/`. Public URLs are unchanged. Run test commands from the repository root.
 
 # Editor implementation
 
-The editor uses existing Clerk authentication, project IDs, generation job IDs and zero-based clip indexes. Only `initializeEditor()` changed in shared `flow_C.js`. `app1.py` registers editor routes and allows editor assets. Canvas, clip-count selection, generation, scene selection and generation prompts are unchanged.
+The editor uses existing Clerk authentication, project IDs, generation job IDs and zero-based clip indexes. Shared `flow_C.js` initializes the authenticated editor, canvas, and Exports controllers. `app1.py` registers editor routes and allows editor assets. Existing generation, scene selection and clip-count behavior remains connected.
 
-One generation job defines a session; derived caption-style jobs stay under their parent generation session. Actual available results determine the clip list, with no four-clip bound. Existing `?project=…&job=…&clip=…` links take precedence over saved selection. Missing explicit selections leave the sidebar available.
+The navigation hierarchy is source video → Session → Waves → Clips. A full-video prompt starts a Session; follow-up jobs sharing its parent ancestry are Waves in that Session. Each generation job is one Wave; derived caption-style jobs stay in their parent Wave. `backend/editor_navigation.py` derives stable labels from existing ordered jobs and parent IDs without migrating or rewriting history. Actual available results determine the clip list, with no four-clip bound. Existing `?project=…&job=…&clip=…` links take precedence over saved selection. Missing explicit selections leave the sidebar available.
 
 Drafts use existing atomic JSON writes under `video_jobs/projects/<user hash>/editor/<project>/<job>-<index>.json`. Last selection lives on the existing project record. There is no database migration; old drafts default the new per-segment `texts` map to empty. Browser recovery records are scoped to user, project and clip. Debounced saves flush before switching or internal navigation; failed saves keep recovery data and expose retry. Undo/redo is per clip for the current visit; saved edits and chat survive reloads, but undo stacks do not.
 
@@ -67,3 +69,25 @@ python3 tests/test_editor_aspect_browser.py
 ```
 
 This checks all six preset compositions, Fit background, Fill crop repositioning, real pointer crop gestures, the main Play/Pause control and timeline timing, caption bounds, comparison, independent clip state and reload, plus missing-media error visibility and recovery. It downloads actual Fit and Fill MP4s through the export button, probes dimensions/duration, and compares encoded frames with the corresponding live composition. Artifacts are in `/tmp/cascade-aspect-artifacts`. The source fixture is landscape; other browsers and portrait source media are not covered by that browser run.
+
+
+## Effects, simple captions, and selected exports
+
+Editor tabs are Chat · Captions · Aspect ratio · B-roll · Effects. The visible Captions panel offers enable/disable, Classic/Bold/Yellow styles, and color. Detailed style/text settings remain in the state and chat protocol (`caption_settings` accepts a complete validated style; `caption_text` targets a timed segment). Hidden compatibility controls retain existing bindings; they are not presented as manual settings. The numeric In/Out section and redundant duration/frame status are hidden. Timeline trim handles, keyboard trimming, reset, captions, B-roll and playback remain available.
+
+`effects` defaults older drafts to brightness/contrast/saturation 1 and grayscale false. Controls join per-clip history and autosave. CSS filters affect both original footage and B-roll in Edited preview, while Original comparison bypasses effects. FFmpeg applies RGB brightness/contrast and a saturation matrix after B-roll and before caption compositing. Values are bounded and finite on both client and server. Encoder color conversions can cause small pixel differences from browser preview; the caption raster remains shared.
+
+The canvas retains its original clip cards without export checkboxes or an export-selection toolbar. Export selection now lives in the editor's far-left nested Session → Wave → Clips sidebar. Native collapsible groups expand independently; the active clip's parents open automatically. Separate checkboxes select clips, whole waves or sessions, with native indeterminate states for partial selection. Selection is account/project scoped under `cascade-export-selection:v1:<user>:<project>` and survives clip switching and refresh. **Open exports (N)** opens exactly the selection. Exports has a matching sidebar containing only selected clips; selecting a clip there and swiping the carousel keep the same active clip highlighted. Unavailable selected clips are omitted with a warning. With no selection, Exports directs the user back to the editor.
+
+Repeated generation requests with the same source and normalized prompt share a Session and form distinct Waves. Follow-up ancestry remains authoritative; explicit session/wave IDs are respected. Caption-style variants stay under their generation Wave. Distinct real generation runs are retained, never silently collapsed or deleted. Legacy `history_id` is a generation request ID, not a Session identity. All clips retain their original job/index keys and drafts.
+
+`web/exports_C.js` loads each draft, preferring a newer local recovery snapshot when present, normalizes it, rasterizes its captions, and calls the existing authenticated editor `/export` endpoint. Thus each playable preview and active Download uses an actual edited MP4 with trim, framing, effects, captions, original audio, and B-roll. No original-media fallback is passed off as an edited preview. The front rounded video card has playback controls; adjacent cards partially show behind it. Arrows, horizontal swipe, and left/right keys change the active card and pause its predecessor. Aspect ratios are preserved with contain framing.
+
+Previews render on demand, with immediate neighbours prepared in the background. Each card deduplicates render requests and retains its rendered Blob for this page visit. Export All submits the same state/raster payloads to owner-checked `POST /api/projects/{pid}/editor/export-selected`, which renders entries sequentially into a ZIP (up to 100 clips per ZIP). Temporary files are cleaned up. Errors are displayed, retry is available, and action locks prevent repeat submissions while processing. Export is a snapshot of edits loaded for that page visit; return from the editor or refresh Exports to load later edits. No new paid AI calls are made by export.
+
+YouTube trend research is not an upload integration. The YouTube action honestly explains that account connection and upload backend work are required, and links to YouTube Studio for manually uploading a downloaded file.
+
+Additional verification: run `python3 -m tests.test_exports_browser` with `tests/editor_browser_server.py` and isolated headless Chrome on DevTools port 9333. This covers simplified controls, effects/history/restore, editor selection across groups and refresh, exactly selected stacked video previews, pause on navigation, arrows/keyboard/swipe, real MP4 and ZIP downloads, output framing/duration/audio, grayscale B-roll below colored captions, duplicate ZIP prevention, and honest YouTube setup. All fixture data lives in temporary directories and provider calls are mocked.
+
+
+Follow Speaker now integrates with Fill to Frame, saved drafts, Chat, comparison, and every edited export. See [Auto Reframe processing, setup, limitations and verification](auto-reframe.md).

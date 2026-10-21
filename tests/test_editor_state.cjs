@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const {History, normalize, cueAt, defaultComposition, compositionGeometry} = require('../web/editor_state.js');
-const initial = {broll:[],start:0,end:12,composition:{...defaultComposition},texts:{},captions:{enabled:true,color:'#ffffff',bold:false,font:'Arial',size:32,position:'bottom',stroke:'#000000',thickness:2,background:'#000000',opacity:0}};
+const initial = {reframe:{enabled:false,focus:'speaker',analysis_id:null,selection:null},effects:{brightness:1,contrast:1,saturation:1,grayscale:false},broll:[],start:0,end:12,composition:{...defaultComposition},texts:{},captions:{enabled:true,color:'#ffffff',bold:false,font:'Arial',size:32,position:'bottom',stroke:'#000000',thickness:2,background:'#000000',opacity:0}};
 const a = new History(initial), b = new History(initial);
 a.commit({...initial,start:2});
 assert.equal(a.undoStack.length,1); assert.equal(b.state.start,0);
@@ -47,3 +47,7 @@ assert.throws(()=>normalize({...initial,broll:[stock,{...stock,id:'f'.repeat(32)
 assert.throws(()=>normalize({...initial,broll:[{...stock,offset:7}]},12),/timing/);
 assert.equal(normalize({...initial,start:9,end:12,broll:[stock]},12).broll.length,1);
 console.log('B-roll legacy, timing, overlap, hidden trim and undo/redo checks passed');
+
+const oldEffects={...initial};delete oldEffects.effects;assert.deepEqual(normalize(oldEffects,12).effects,initial.effects);
+assert.throws(()=>normalize({...initial,effects:{brightness:Infinity}},12),/effects/);
+const effectHistory=new History(initial);effectHistory.commit({...initial,effects:{...initial.effects,grayscale:true}});effectHistory.undo();assert.equal(effectHistory.state.effects.grayscale,false);effectHistory.redo();assert.equal(effectHistory.state.effects.grayscale,true);

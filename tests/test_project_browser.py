@@ -59,6 +59,7 @@ async def main():
         # Reload restores all groups and the parent relationship.
         await visit('canvas','?project='+pid)
         assert await c.js("document.querySelectorAll('.generation-group').length")==5
+        assert await c.js("[...document.querySelectorAll('.generation-group>h3')].map(e=>e.textContent)")==['Session 1 · Wave 1','Session 2 · Wave 1','Session 3 · Wave 1','Session 2 · Wave 2','Session 2 · Wave 3']
         assert 'Builds on' in await c.js("document.querySelector('.generation-group:nth-last-child(1 of .generation-group)').textContent")
         for selector in ['.generation-group:nth-child(2 of .generation-group) .clip-placeholder:nth-child(5) a','.generation-group:nth-last-child(1 of .generation-group) .clip-placeholder a']:
             href=await c.js('document.querySelector('+json.dumps(selector)+').getAttribute("href")')

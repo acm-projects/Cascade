@@ -120,9 +120,15 @@ FRONTEND_FILES = {
     "flow_C.js",
     "editor_C.js",
     "editor_broll.js",
+    "editor_reframe.js",
     "editor_captions.js",
     "editor_timeline.js",
     "editor_state.js",
+    "export_selection.js",
+    "clip_navigation.js",
+    "clip_navigation.css",
+    "exports_C.js",
+    "exports_C.css",
     "editor_C.css",
 }
 
@@ -748,6 +754,20 @@ def frontend_auth_config():
             "Cache-Control": "no-store",
         },
     )
+
+
+@app.post('/api/logout')
+def frontend_logout(request: Request):
+    # Idempotent even after Clerk revokes the session. No tokens, project files or drafts
+    # are read/deleted here; Clerk owns provider revocation, this clears our cookie fallback.
+    origin = request.headers.get('origin')
+    if origin and origin not in authorized_parties():
+        raise HTTPException(403, 'Origin not allowed.')
+    if request.headers.get('sec-fetch-site') == 'cross-site':
+        raise HTTPException(403, 'Origin not allowed.')
+    response = JSONResponse({'signed_out': True}, headers={'Cache-Control':'no-store'})
+    response.delete_cookie('__session', path='/')
+    return response
 
 
 @app.get("/api/session")

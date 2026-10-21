@@ -1,6 +1,6 @@
 # Projects, generation groups and follow-ups
 
-Projects still use the existing owner-scoped JSON store under `video_jobs/projects/`. Generation groups are generation jobs, not editing visits or caption-style variants. No migration or new storage provider is required. Old owners default to four requested clips and no parent context; old clip identifiers are derived from job ID plus zero-based result index.
+Projects still use the existing owner-scoped JSON store under `video_jobs/projects/`. The visible hierarchy is source video → Session → Waves → Clips. Each new source/prompt exploration starts a Session; repeated same-source/same-prompt generations and subsequent follow-up jobs form additional Waves. Generation groups are generation jobs (Waves), not editing visits or caption-style variants. Both the canvas and editor derive Session/Wave labels from `backend/editor_navigation.py`, retaining source and parent clip IDs. No migration or new storage provider is required. Old owners default to four requested clips and no parent context; old clip identifiers are derived from job ID plus zero-based result index.
 
 ## Interface
 

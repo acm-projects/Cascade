@@ -184,10 +184,10 @@ async def main():
         print(f'Export comparison: duration {duration:.3f}s, mean pixel error {mae:.2f}/255, caption area {caption_mae:.2f}/255 (lossy H.264).')
         # Independent clips and restored visible state.
         await c.js("document.querySelectorAll('#editor-sessions button')[3].click()")
-        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 2 · Clip 3'")
+        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 2 · Wave 1 · Clip 3'")
         assert float(await c.js("document.querySelector('#trim-start').value"))==0
         await c.js("document.querySelectorAll('#editor-sessions button')[0].click()")
-        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 1 · Clip 1'")
+        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 1 · Wave 1 · Clip 1'")
         assert float(await c.js("document.querySelector('#trim-start').value"))==2
         await c.until("document.querySelector('#save-status').textContent==='Saved'")
         origin=await c.js('performance.timeOrigin')

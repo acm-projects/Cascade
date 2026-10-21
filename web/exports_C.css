@@ -1,0 +1,105 @@
+/* Exports-only review surface. Wave stacks use the existing Cascade palette. */
+.exports-page {max-width:1500px;margin:auto;padding:32px 24px}
+.exports-workspace {display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px;align-items:start}
+.exports-navigation {position:sticky;top:20px;background:#101b16;border:1px solid var(--line);border-radius:16px;padding:16px;max-height:80vh;overflow:auto}
+.exports-navigation h2 {font-size:16px;margin:0 0 12px}
+.exports-navigation p {font-size:12px;line-height:1.6}
+.export-studio {min-width:0;width:100%;text-align:left}
+#export-title {margin:0 0 8px;font-size:22px}
+#export-meta {margin:0;color:var(--muted);font-size:13px}
+#export-progress {min-height:1.6em;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#10251f;color:var(--teal);font-size:13px;overflow-wrap:anywhere}
+.export-actions,.export-navigation {display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:20px 0}
+.export-actions button {font-size:13px}
+#export-all {background:var(--accent);color:#13291b;font-weight:650;border-color:var(--accent)}
+#export-position {min-width:70px;color:var(--muted);font-size:13px}
+#export-youtube {display:inline-flex;align-items:center;gap:8px}
+#youtube-setup {padding:18px;border:1px solid var(--line);border-radius:12px;font-size:13px}
+#export-deck {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start;outline-offset:8px;touch-action:pan-y}
+.wave-album {min-width:0;background:linear-gradient(145deg,#153029,#0e221c);border:1px solid var(--line);border-radius:26px;padding:20px;overflow:hidden;box-shadow:0 10px 28px #0002}
+.wave-album-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.wave-album-heading h3 {font-size:13px;color:var(--muted);font-weight:500;margin:0 0 10px;line-height:1.6}
+.wave-item-count {display:flex;align-items:center;gap:10px;margin:0;color:var(--accent);font-size:22px;font-weight:650;letter-spacing:-.4px}
+.album-grid-icon {display:grid;grid-template-columns:repeat(2,9px);gap:3px;flex:none}
+.album-grid-icon i {width:9px;height:9px;background:currentColor;border-radius:2px}
+.wave-toggle {flex:none;font-size:12px;padding:8px 10px;background:#17392e;border-color:#36594a;color:var(--teal)}
+.wave-stack-wrap {display:grid;grid-template-rows:1fr;opacity:1;transition:grid-template-rows .38s ease,opacity .25s ease}
+.wave-stack-inner {min-height:0;overflow:hidden;padding:0 2px}
+.wave-stack {display:block;width:100%;border:0;padding:26px 0 12px;background:transparent;cursor:pointer;border-radius:18px}
+.wave-stack:hover {background:#ffffff03;border-color:transparent}
+.stack-pile {display:block;position:relative;width:78%;aspect-ratio:3/4;margin:0 auto 40px;isolation:isolate}
+.stack-layer {position:absolute;inset:0;display:block;overflow:hidden;border:0;border-radius:clamp(18px,2.2vw,28px);background:linear-gradient(150deg,#34594a,#0b1b15);box-shadow:0 10px 24px #0006;transform:translate(var(--card-x),var(--card-y)) rotate(var(--card-rotation)) scale(var(--card-scale));transform-origin:50% 50%;opacity:var(--card-opacity);transition:transform .35s ease,opacity .25s ease}
+.stack-layer img {width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .3s ease}
+.stack-layer.ready img {opacity:1}
+.stack-layer[data-depth="0"] {box-shadow:0 16px 34px #0006}
+.stack-layer:not([data-depth="0"])::after {content:'';position:absolute;inset:0;background:#06150d22;pointer-events:none}
+.stack-placeholder {position:absolute;inset:0;display:grid;place-items:center;color:#b8d4c3;font-size:16px;font-weight:500}
+.stack-layer.ready .stack-placeholder {display:none}
+.stack-open-hint {display:block;color:var(--teal);font-size:13px;font-weight:600;padding:2px 0 8px}
+.wave-stack:hover .stack-layer[data-depth="0"] {transform:translateY(-4px)}
+.wave-gallery {display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .38s ease,opacity .3s ease}
+.wave-gallery-body {min-height:0;overflow:hidden}
+.wave-album[data-expanded=true] .wave-stack-wrap {grid-template-rows:0fr;opacity:0}
+.wave-album[data-expanded=true] .wave-gallery {grid-template-rows:1fr;opacity:1}
+.wave-clips {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding-top:22px}
+.export-media-card {min-width:0;display:flex;flex-direction:column;align-items:stretch;border:1px solid var(--line);border-radius:18px;background:#0b1c17;overflow:hidden;transition:border-color .25s,box-shadow .25s}
+.export-media-card.selected {background:#153029}
+.export-media-card[data-active=true] {order:-1;grid-column:1/-1;border-color:var(--teal);box-shadow:0 0 0 1px #6bccba66,0 8px 20px #0002}
+.export-media-card video {display:block;width:100%;height:200px;aspect-ratio:auto!important;object-fit:contain;background:#06110d;transition:height .35s ease}
+.export-media-card[data-active=true] video {height:clamp(300px,46vh,520px)}
+.export-card-header {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px}
+.export-card-header label {display:flex;align-items:center;gap:8px;color:var(--text);font-size:13px;font-weight:650;margin:0}
+.export-card-header input {width:16px;height:16px;accent-color:var(--accent)}
+.export-card-header button,.export-card-download {font-size:12px;padding:8px 12px}
+.export-card-meta {padding:12px 12px 0;margin:0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.export-card-download {align-self:flex-start;margin:12px}
+.card-render-status {font-size:12px;color:var(--muted);padding:10px 12px;margin:0;overflow-wrap:anywhere}
+.card-render-status:empty {display:none}
+.export-preview-retry {align-self:flex-start;margin:10px 12px 0;font-size:12px;padding:8px 12px;border-color:var(--gold)}
+.wave-downloads {padding-top:16px;display:flex;justify-content:flex-end}
+.wave-download {font-size:13px;padding:10px 14px}
+.exports-footer {display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:28px}
+@media(max-width:1200px){#export-deck{grid-template-columns:1fr}.wave-album{padding:20px}.stack-pile{max-width:360px}}
+@media(max-width:760px){.exports-workspace{grid-template-columns:1fr;gap:20px}.exports-navigation{position:static;max-height:260px}.exports-page{padding:24px 16px}#export-deck{gap:18px}.wave-album{padding:16px;border-radius:22px}.wave-item-count{font-size:21px}.wave-clips{grid-template-columns:1fr}.export-media-card[data-active=true] video{height:clamp(280px,42vh,420px)}}
+@media(max-width:380px){.wave-album-heading{flex-wrap:wrap}.wave-toggle{margin-left:auto}.stack-pile{width:76%}}
+@media(prefers-reduced-motion:reduce){.wave-stack-wrap,.wave-gallery,.stack-layer,.stack-layer img,.export-media-card,.export-media-card video{transition:none}}
+@media(max-width:760px){.stack-layer{transform:translate(calc(var(--card-x) * .7),var(--card-y)) rotate(var(--card-rotation)) scale(var(--card-scale))}}
+.wave-album:only-child {grid-column:1/-1;max-width:640px;width:100%;justify-self:center}
+/* Expanded waves spread into a full-width, native horizontal filmstrip. */
+.wave-album[data-expanded=true],.wave-album:only-child[data-expanded=true] {grid-column:1/-1;max-width:100%;width:100%;justify-self:stretch;scroll-margin-top:20px}
+.wave-rail-toolbar {display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 4px 12px;flex-wrap:wrap}
+.wave-rail-toolbar p {margin:0;font-size:12px;color:var(--muted)}
+.wave-rail-controls {display:flex;align-items:center;gap:10px}
+.wave-rail-controls button {width:40px;height:38px;padding:6px;font-size:18px}
+.wave-rail-position {min-width:56px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.wave-clips {--clip-width:clamp(320px,46%,520px);--rail-gap:20px;display:flex;position:relative;gap:var(--rail-gap);padding:4px 4px 18px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-inline-start:4px;scroll-behavior:smooth;overscroll-behavior-x:contain;touch-action:pan-x pan-y;scrollbar-width:thin;scrollbar-color:#52896e #0b211a;cursor:grab;-webkit-overflow-scrolling:touch}
+.wave-clips::after {content:'';flex:0 0 max(0px,calc(100% - var(--clip-width) - var(--rail-gap)))}
+.wave-clips:focus-visible {outline-offset:-2px}
+.wave-clips .export-media-card {flex:0 0 var(--clip-width);order:0;scroll-snap-align:start;scroll-snap-stop:normal;opacity:0;transform:translateX(var(--fold-x,0px)) translateY(14px) scale(.94);transition:transform .46s cubic-bezier(.2,.75,.25,1),opacity .26s ease,border-color .2s,box-shadow .2s;transition-delay:var(--rail-delay,0ms);user-select:none}
+.wave-album[data-expanded=true] .export-media-card {opacity:1;transform:translateX(0) translateY(0) scale(1)}
+.wave-clips .export-media-card[data-active=true] {order:0}
+.wave-clips .export-media-card video,.wave-clips .export-media-card[data-active=true] video {height:clamp(280px,38vh,430px);transition:none}
+.wave-clips.is-dragging {scroll-snap-type:none;scroll-behavior:auto;cursor:grabbing}
+.wave-clips.is-dragging * {cursor:grabbing!important}
+@media(max-width:760px){.wave-clips{--clip-width:88%;--rail-gap:14px}.wave-clips .export-media-card video,.wave-clips .export-media-card[data-active=true] video{height:clamp(250px,35vh,360px)}.wave-rail-toolbar{gap:10px}.wave-rail-toolbar p{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.wave-clips{scroll-behavior:auto}.wave-clips .export-media-card{transition:none;transition-delay:0s}}
+#export-deck {touch-action:auto}
+.wave-clips.is-spreading {scroll-snap-type:none;scroll-behavior:auto}
+.finish-spread .export-media-card {transition:none!important}
+
+/* Wide review surface: the container supplies the landscape shape, never the video. */
+#export-deck {grid-template-columns:minmax(0,1fr)}
+.wave-album,.wave-album:only-child {grid-column:1/-1;max-width:100%;width:100%;justify-self:stretch}
+.stack-pile {width:min(70%,660px);max-width:none;height:clamp(210px,30vh,320px);aspect-ratio:auto;margin:0 auto 30px}
+.stack-layer img {object-fit:contain}
+.wave-stack {padding-top:20px}
+.wave-clips {--clip-width:clamp(250px,31%,380px);--rail-gap:16px}
+.wave-clips .export-media-card video,.wave-clips .export-media-card[data-active=true] video {height:clamp(200px,27vh,300px)}
+@media(max-width:760px){.stack-pile{width:76%;height:240px}.wave-clips{--clip-width:88%;--rail-gap:14px}.wave-clips .export-media-card video,.wave-clips .export-media-card[data-active=true] video{height:250px}}
+
+/* Keep clips first and the shared download actions below the viewing area. */
+.exports-page > h1 {margin-bottom:24px}
+#export-progress:empty {display:none}
+.export-actions {margin:16px 0 0}
+
+.export-actions {margin:0 0 18px}
+.wave-album-heading h3[hidden],.exports-navigation h2[hidden] {display:none}
