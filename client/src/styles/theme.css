@@ -4,8 +4,9 @@
    ============================================================ */
 :root {
   /* --u = "1 Figma pixel". calc(48 * var(--u)) means "48px in Figma".
-     It scales with the window width (1728px wide = exactly 1px), and never gets tinier than 0.55px. */
-  --u: max(0.55px, calc(100vw / 1728));
+     It scales with the window width, times --scale (so the UI is a bit smaller than the Figma frame). */
+  --scale: 0.8;   /* shrink the whole UI a bit: 1 = exact Figma size, 0.8 = 20% smaller */
+  --u: max(0.5px, calc(100vw / 1728 * var(--scale)));
 
   /* Colors (from the Figma wireframes) */
   --color-page: #ffffff;
@@ -20,6 +21,17 @@
   --color-wood-dark: #413414;      /* wooden button outlines */
   --color-wood-text: #423717;      /* brown headings */
   --color-cream: #e3d5b1;          /* logo text on the green bar */
+  --color-vine: #3e7b4f;           /* the vines connecting clips on the AI Studio canvas */
+
+  /* ---------- Textures ----------
+     Every box uses --panel-bg + --panel-border, every main button uses --wood-green.
+     To restyle all of them at once, change these lines. */
+  --wood-cream: url("../assets/figma/wood-cream.jpg");
+  --wood-green: url("../assets/figma/wood-green.jpg");
+  --leaf-bg: url("../assets/figma/projects-bg.jpg");
+  --panel-bg: #f1e6c8 var(--wood-cream) center / cover;
+  --panel-border: max(2px, calc(6 * var(--u))) solid var(--color-wood-dark);
+  --panel-radius: calc(22 * var(--u));
 
   /* Shapes */
   --radius-sm: 8px;
@@ -49,54 +61,64 @@ body {
 }
 
 /* ---------- Buttons used across the app ----------
-   White fill, thick black outline, rounded corners (from the wireframes).
-   Sizes use "em", so a bigger font-size makes the whole button scale with it. */
+   Cream wood with a dark brown outline. Sizes use "em", so changing font-size scales the whole button. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4em;
-  padding: 0.1em 0.45em;
-  border: var(--border-strong);
-  border-radius: 0.65em;
-  background: white;
-  color: var(--color-text);
+  padding: 0.25em 0.7em;
+  border: max(2px, 0.2em) solid var(--color-wood-dark);
+  border-radius: 0.45em;
+  background: #f1e6c8 var(--wood-cream) center / cover;
+  color: var(--color-wood-dark);
   font-family: var(--font-display);
-  font-size: clamp(1.1rem, 2.3vw, 2.5rem);    /* 40px on the Figma frame */
-  line-height: 1.25;
+  font-size: calc(40 * var(--u));
+  line-height: 1.2;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
   transition: scale 0.15s, filter 0.15s, opacity 0.15s;
 }
 
 .btn:hover {
   scale: 1.04;
-  filter: brightness(0.95);
+  filter: brightness(1.05);
 }
 
-/* Filled green button for the main action on a page */
+/* Green wood for the main action on a page */
 .btn-primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-text);
+  background: #3fae4a var(--wood-green) center / 100% 100%;
+  color: var(--color-wood-dark);
 }
 
 /* Taller, roomier button (like "Get Started") */
 .btn-large {
-  padding: 0.4em 0.6em;
+  padding: 0.35em 1em;
 }
 
 /* Smaller button for toolbars and panels */
 .btn-small {
   font-size: calc(22 * var(--u));
-  border-width: max(2px, calc(4 * var(--u)));
 }
 
 /* A button that can't be used yet */
 .btn:disabled,
 .btn.disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
   scale: 1;
-  filter: none;
+  filter: grayscale(0.6);
+}
+
+/* ---------- Boxes ---------- */
+.wood-panel {
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
+}
+
+/* Pages that sit on the leafy background (AI Studio, Editor, Export) */
+.leaf-page {
+  background: #eef6ee var(--leaf-bg) center / cover no-repeat;
 }

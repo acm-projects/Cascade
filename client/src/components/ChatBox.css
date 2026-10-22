@@ -5,11 +5,37 @@
   min-height: 0;
 }
 
+/* Header: leaf, title + subtitle, New Chat */
+.chatbox-header {
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  padding-bottom: calc(16 * var(--u));
+  margin-bottom: calc(14 * var(--u));
+  border-bottom: 1px solid rgba(65, 52, 20, 0.2);
+}
+
+.chatbox-leaf {
+  width: calc(40 * var(--u));
+  height: auto;
+}
+
+.chatbox-heading {
+  flex: 1;
+  min-width: 0;
+}
+
 .chatbox-title {
+  color: var(--color-wood-dark);
   font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: calc(48 * var(--u));
-  margin-bottom: calc(12 * var(--u));
+  font-weight: 600;
+  font-size: calc(34 * var(--u));
+  line-height: 1.1;
+}
+
+.chatbox-subtitle {
+  color: rgba(65, 52, 20, 0.7);
+  font-size: calc(18 * var(--u));
 }
 
 /* Messages scroll inside the panel */
@@ -24,29 +50,31 @@
 }
 
 .chatbox-empty {
-  color: var(--color-text-muted);
+  color: rgba(65, 52, 20, 0.6);
   font-size: calc(20 * var(--u));
 }
 
 .chatbox-message {
   max-width: 85%;
-  padding: calc(10 * var(--u)) calc(14 * var(--u));
-  border-radius: calc(14 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border: 1px solid rgba(65, 52, 20, 0.2);
+  border-radius: calc(16 * var(--u));
   font-size: calc(20 * var(--u));
+  line-height: 1.35;
   word-wrap: break-word;
 }
 
-/* Your messages: right side */
+/* Your messages: right side, light */
 .chatbox-message.user {
   align-self: flex-end;
-  background: white;
+  background: rgba(255, 252, 240, 0.9);
 }
 
-/* Cascade's replies: left side */
+/* Cascade's replies: left side, green */
 .chatbox-message.assistant {
   align-self: flex-start;
-  background: var(--color-accent);
-  color: var(--color-accent-text);
+  background: #2f6b3a;
+  color: #fffbea;
 }
 
 /* The "attached video" tag above the text box */
@@ -58,8 +86,9 @@
   max-width: 100%;
   margin-top: calc(10 * var(--u));
   padding: calc(4 * var(--u)) calc(12 * var(--u));
+  border: 1px solid rgba(65, 52, 20, 0.3);
   border-radius: var(--radius-pill);
-  background: white;
+  background: rgba(255, 252, 240, 0.9);
   font-size: calc(18 * var(--u));
 }
 
@@ -75,16 +104,17 @@
   cursor: pointer;
 }
 
-/* Text box: 403 x 65 with a thin outline, like the wireframe */
+/* Text box + send button */
 .chatbox-input-row {
   display: flex;
   align-items: center;
+  gap: calc(10 * var(--u));
   height: calc(65 * var(--u));
   margin-top: calc(14 * var(--u));
-  padding: 0 calc(8 * var(--u)) 0 calc(16 * var(--u));
-  border: 1px solid var(--color-text);
+  padding: 0 calc(8 * var(--u)) 0 calc(18 * var(--u));
+  border: max(2px, calc(3 * var(--u))) solid rgba(65, 52, 20, 0.5);
   border-radius: calc(16 * var(--u));
-  background: white;
+  background: rgba(255, 252, 240, 0.85);
 }
 
 .chatbox-input {
@@ -98,11 +128,11 @@
 }
 
 .chatbox-send {
-  width: calc(44 * var(--u));
-  height: calc(44 * var(--u));
+  width: calc(48 * var(--u));
+  height: calc(48 * var(--u));
   border: none;
-  border-radius: 50%;
-  background: var(--color-accent);
+  border-radius: calc(12 * var(--u));
+  background: #2f6b3a;
   color: white;
   font-size: calc(22 * var(--u));
   cursor: pointer;
@@ -111,4 +141,16 @@
 .chatbox-send:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Quick buttons under the text box */
+.chatbox-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(10 * var(--u));
+  margin-top: calc(14 * var(--u));
+}
+
+.chatbox-quick-btn {
+  font-size: calc(18 * var(--u));
 }

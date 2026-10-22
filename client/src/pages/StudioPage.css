@@ -5,144 +5,133 @@
   height: 100vh;
 }
 
+/* Chat (442 wide) + canvas */
 .studio-body {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
-  gap: calc(34 * var(--u));
-  padding: calc(34 * var(--u)) calc(80 * var(--u)) calc(60 * var(--u)) calc(68 * var(--u));
-}
-
-/* ---------- Collapsible bar: 1580 x 64 ---------- */
-.studio-bar {
-  display: flex;
-  align-items: center;
-  gap: calc(20 * var(--u));
-  height: calc(64 * var(--u));
-  padding: 0 calc(16 * var(--u)) 0 calc(30 * var(--u));
-  border-radius: calc(16 * var(--u));
-  background: var(--color-panel);
-  flex-shrink: 0;
-}
-
-.studio-toggle {
-  border: none;
-  background: none;
-  font-size: calc(28 * var(--u));
-  cursor: pointer;
-  transition: rotate 0.2s;
-}
-
-.studio-toggle.collapsed {
-  rotate: -90deg;               /* ▶ when collapsed */
-}
-
-.studio-bar-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: calc(24 * var(--u));
-}
-
-.studio-bar-count {
-  color: var(--color-text-muted);
-  font-size: calc(20 * var(--u));
-}
-
-/* ---------- Chat (442 wide) + canvas ---------- */
-.studio-panels {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: calc(34 * var(--u));
+  gap: calc(30 * var(--u));
+  padding: calc(28 * var(--u)) calc(24 * var(--u)) calc(28 * var(--u));
 }
 
 .studio-chat {
-  width: calc(442 * var(--u));
-  padding: calc(8 * var(--u)) calc(17 * var(--u)) calc(21 * var(--u));
-  border-radius: calc(16 * var(--u));
-  background: var(--color-panel);
+  width: calc(470 * var(--u));
+  padding: calc(22 * var(--u));
   flex-shrink: 0;
+  box-shadow: 0 calc(6 * var(--u)) calc(18 * var(--u)) rgba(30, 50, 30, 0.25);
 }
 
-/* The dotted canvas: dots every 40 Figma px */
 .studio-canvas {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(24 * var(--u));
-  padding: calc(40 * var(--u));
-  overflow-y: auto;             /* scroll bar when there are more clips than fit */
-  border-radius: calc(16 * var(--u));
-  background-color: var(--color-panel);
-  background-image: radial-gradient(circle, #9a9a9a 1.5px, transparent 1.7px);
-  background-size: calc(40 * var(--u)) calc(40 * var(--u));
-  transition: box-shadow 0.15s;
+  box-shadow: 0 calc(6 * var(--u)) calc(18 * var(--u)) rgba(30, 50, 30, 0.25);
+  border-radius: var(--panel-radius);
 }
 
-.studio-canvas.dragging {
-  box-shadow: inset 0 0 0 calc(6 * var(--u)) var(--color-accent);
+.studio-count {
+  color: var(--color-wood-dark);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: calc(18 * var(--u));
+  white-space: nowrap;
 }
 
-/* Empty state: the drop zone */
-.studio-dropzone {
-  margin: auto;
+/* ---------- Inside the video node (plain px: the canvas zoom scales them) ---------- */
+.studio-drop {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(8 * var(--u));
-  padding: calc(60 * var(--u)) calc(90 * var(--u));
-  border: max(2px, calc(4 * var(--u))) dashed var(--color-text);
-  border-radius: calc(20 * var(--u));
-  background: rgba(255, 255, 255, 0.7);
+  justify-content: center;
+  gap: 6px;
+  border: 3px dashed rgba(65, 52, 20, 0.45);
+  border-radius: 14px;
+  color: var(--color-wood-dark);
+  text-align: center;
   cursor: pointer;
 }
 
-.studio-dropzone-title {
-  font-family: var(--font-display);
-  font-size: calc(40 * var(--u));
-}
-
-.studio-dropzone-hint {
-  color: var(--color-text-muted);
-  font-size: calc(22 * var(--u));
-}
-
-/* The dropped video */
-.studio-source {
+.studio-drop-icon {
   display: flex;
+  align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  width: 70px;
+  height: 56px;
+  border-radius: 10px;
+  background: rgba(65, 52, 20, 0.35);
+  color: white;
+  font-size: 26px;
+}
+
+.studio-drop-title {
+  margin-top: 8px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 24px;
+}
+
+.studio-drop-hint {
+  font-size: 17px;
+  opacity: 0.8;
+}
+
+.studio-drop-btn {
+  margin-top: 12px;
+  font-size: 20px;
 }
 
 .studio-source-video {
-  max-width: 100%;
-  max-height: calc(360 * var(--u));
-  border-radius: calc(14 * var(--u));
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-radius: 12px;
   background: black;
+  object-fit: cover;
 }
 
-.studio-loading {
-  align-self: center;
+.studio-source-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--color-wood-dark);
   font-family: var(--font-heading);
-  font-size: calc(28 * var(--u));
-  animation: studio-pulse 1.2s ease-in-out infinite;
+  font-weight: 600;
+  font-size: 18px;
 }
 
-@keyframes studio-pulse {
-  0%, 100% { opacity: 0.35; }
-  50%      { opacity: 1; }
+.studio-source-name span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* Generated clips: 4 per row, then it scrolls */
-.studio-clips {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: calc(24 * var(--u));
+.studio-source-name button {
+  border: none;
+  background: none;
+  color: var(--color-wood-dark);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* Small ✕ on each clip, shown on hover */
+.studio-clip-remove {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 250, 235, 0.9);
+  color: var(--color-wood-dark);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.bc-clip:hover .studio-clip-remove {
+  opacity: 1;
 }

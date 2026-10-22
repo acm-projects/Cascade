@@ -11,10 +11,11 @@
   align-items: center;
   gap: calc(14 * var(--u));
   height: calc(87 * var(--u));
-  padding: 0 calc(33 * var(--u));
-  border-top: 1px solid var(--color-text);
-  border-bottom: 1px solid var(--color-text);
-  background: var(--color-panel);
+  margin: calc(20 * var(--u)) calc(24 * var(--u)) 0;
+  padding: 0 calc(24 * var(--u));
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
   flex-shrink: 0;
 }
 
@@ -28,6 +29,8 @@
   min-height: 0;
   display: grid;
   grid-template-columns: calc(241 * var(--u)) 1fr calc(349 * var(--u));
+  gap: calc(24 * var(--u));
+  padding: calc(20 * var(--u)) calc(24 * var(--u)) calc(24 * var(--u));
 }
 
 /* Left sidebar */
@@ -37,8 +40,9 @@
   gap: calc(8 * var(--u));
   min-height: 0;
   padding: calc(16 * var(--u));
-  border-right: 1px solid var(--color-text);
-  background: var(--color-panel);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
 }
 
 .editor-sidebar-tab {
@@ -54,7 +58,7 @@
 }
 
 .editor-sidebar-tab.active {
-  background: white;
+  background: rgba(62, 123, 79, 0.22);
 }
 
 .editor-sidebar-content {
@@ -76,7 +80,7 @@
   padding: calc(8 * var(--u)) calc(12 * var(--u));
   border: 2px solid transparent;
   border-radius: calc(10 * var(--u));
-  background: white;
+  background: rgba(255, 252, 240, 0.85);
   font-family: var(--font-heading);
   font-size: calc(20 * var(--u));
   cursor: pointer;
@@ -103,16 +107,15 @@
   flex-direction: column;
   gap: calc(24 * var(--u));
   min-height: 0;
-  padding: calc(33 * var(--u));
 }
 
 .editor-preview {
   position: relative;
   flex: 1;
   min-height: 0;
-  border: 1px solid var(--color-text);
-  border-radius: calc(10 * var(--u));
-  background: var(--color-panel);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
   overflow: hidden;
 }
 
@@ -135,8 +138,9 @@
   gap: calc(12 * var(--u));
   height: calc(224 * var(--u));
   padding: calc(16 * var(--u));
-  border-radius: calc(10 * var(--u));
-  background: var(--color-panel);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
   flex-shrink: 0;
 }
 
@@ -149,18 +153,17 @@
 
 .editor-block {
   flex-basis: 0;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--color-wood-dark);
   border-radius: calc(8 * var(--u));
-  background: white;
+  background: rgba(255, 252, 240, 0.9);
   font-family: var(--font-display);
   font-size: calc(22 * var(--u));
   cursor: pointer;
 }
 
 .editor-block.active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: white;
+  background: #3fae4a var(--wood-green) center / 100% 100%;
+  color: var(--color-wood-dark);
 }
 
 /* Fake waveform: repeating thin bars */
@@ -171,7 +174,7 @@
   background:
     repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0 2px, transparent 2px 6px)
     center / 100% 60% no-repeat,
-    white;
+    rgba(255, 252, 240, 0.85);
 }
 
 /* Right panel: Chat / Captions / Aspect Ratio */
@@ -179,15 +182,17 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid var(--color-text);
-  background: var(--color-panel);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
+  overflow: hidden;
 }
 
 .editor-panel-tabs {
   display: flex;
   gap: calc(12 * var(--u));
   padding: calc(17 * var(--u)) calc(18 * var(--u)) 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(65, 52, 20, 0.25);
 }
 
 .editor-panel-tab {
@@ -203,7 +208,7 @@
 }
 
 .editor-panel-tab.active {
-  border-bottom-color: var(--color-text);
+  border-bottom-color: var(--color-wood-dark);
 }
 
 .editor-panel-content {
@@ -227,16 +232,15 @@
 
 .editor-ratio {
   padding: calc(12 * var(--u));
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--color-wood-dark);
   border-radius: calc(10 * var(--u));
-  background: white;
+  background: rgba(255, 252, 240, 0.85);
+  color: var(--color-wood-dark);
   font-family: var(--font-heading);
   font-size: calc(22 * var(--u));
   cursor: pointer;
 }
 
 .editor-ratio.active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: white;
+  background: #3fae4a var(--wood-green) center / 100% 100%;
 }

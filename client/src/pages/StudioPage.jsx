@@ -4,46 +4,52 @@ import "./StudioPage.css";
 import TopBar from "../components/TopBar";
 import ChatBox from "../components/ChatBox";
 import ClipCard from "../components/ClipCard";
+import BranchCanvas from "../components/BranchCanvas";
 import { useProject } from "../context/ProjectContext";
+import { layoutBatch, arrangeClips } from "../utils/canvasLayout";
+
+// Buttons under the chat box that send a ready-made prompt
+const quickActions = [
+  { label: "✦ Generate Clips", prompt: "Find the best moments for short clips" },
+  { label: "CC Add Captions", prompt: "Add captions to my clips" },
+];
 
 // FAKE results for now: pick a few random moments from the video.
 // Later, the backend will send back real { start, end } times for the prompt.
 function makeFakeClips(duration) {
   const length = Number.isFinite(duration) && duration > 0 ? duration : 30;
-  const count = 3 + Math.floor(Math.random() * 4);            // 3 to 6 clips
+  const count = 3 + Math.floor(Math.random() * 2);            // 3 or 4 clips
   const clips = [];
   for (let i = 0; i < count; i++) {
     const clipLength = Math.min(2 + Math.random() * 4, length);
     const start = Math.random() * (length - clipLength);
-    clips.push({ id: i, start, end: start + clipLength });
+    clips.push({ start, end: start + clipLength });
   }
   return clips.sort((a, b) => a.start - b.start);
 }
 
-// Built from the Figma "AI Studio Page" wireframe (node 546:2168)
+// AI Studio: chat on the left, the branch canvas on the right
 function StudioPage() {
   const navigate = useNavigate();
   const {
     project, sourceVideo, setSourceVideo, messages, setMessages,
-    clips, setClips, selectedIds, setSelectedIds, stepsUnlocked,
+    clips, setClips, selectedIds, setSelectedIds, stepsUnlocked, sourcePos, setSourcePos,
   } = useProject();
-
-  const [showSource, setShowSource] = useState(true);      // the ▼ on the top bar
-  const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // --- Dropping a clip ---
+  const batchCount = new Set(clips.map((clip) => clip.batch)).size;
+  // Placeholder nodes where the next clips will appear, while the AI "thinks"
+  const ghosts = isGenerating ? layoutBatch(sourcePos, batchCount, 3) : [];
+
+  // --- The video ---
   function loadVideo(file) {
     if (!file || !file.type.startsWith("video/")) return;
     if (sourceVideo) URL.revokeObjectURL(sourceVideo.url);
     setSourceVideo({ name: file.name, url: URL.createObjectURL(file), duration: 0 });
     setClips([]);
     setSelectedIds([]);
-    setShowSource(true);
-    setMessages((current) => [
-      ...current,
-      { role: "assistant", text: `Got ${file.name}! What kind of clips should I find?` },
-    ]);
+    setMessages((current) => [...current,
+      { role: "assistant", text: `Got ${file.name}! What kind of clips should I find?` }]);
   }
 
   function removeVideo() {
@@ -53,139 +59,157 @@ function StudioPage() {
     setSelectedIds([]);
   }
 
-  function handleDrop(e) {
-    e.preventDefault();
-    setIsDragging(false);
-    loadVideo(e.dataTransfer.files[0]);
-  }
-
-  // --- Prompting the chat bot ---
+  // --- Prompting ---
   function handleSend(text) {
     const userMessage = { role: "user", text };
 
     if (!sourceVideo) {
       setMessages([...messages, userMessage,
-        { role: "assistant", text: "Drop a clip on the canvas first, then tell me what to find!" }]);
+        { role: "assistant", text: "Drop a video on the canvas first, then tell me what to find!" }]);
+      return;
+    }
+    if (/caption/i.test(text)) {
+      setMessages([...messages, userMessage,
+        { role: "assistant", text: "Captions are added in the Editor. Pick your clips, then head there!" }]);
       return;
     }
 
     setMessages([...messages, userMessage,
       { role: "assistant", text: `Looking through ${sourceVideo.name} for: "${text}"...` }]);
-    setClips([]);
-    setSelectedIds([]);
     setIsGenerating(true);
 
-    // Pretend the AI takes 2 seconds (the backend will replace this)
+    // Pretend the AI takes 2 seconds (the backend will replace this).
+    // Each prompt grows a new branch: a new column of clips.
     setTimeout(() => {
-      const results = makeFakeClips(sourceVideo.duration);
-      setClips(results);
+      const found = makeFakeClips(sourceVideo.duration);
+      const spots = layoutBatch(sourcePos, batchCount, found.length);
+      const newClips = found.map((clip, i) => ({
+        ...clip, id: `${batchCount}-${i}`, batch: batchCount, ...spots[i],
+      }));
+      setClips((current) => [...current, ...newClips]);
       setIsGenerating(false);
       setMessages((current) => [...current,
-        { role: "assistant", text: `Found ${results.length} clips! Select the ones you want.` }]);
+        { role: "assistant", text: `Found ${found.length} clips! Click the ones you want, then go to the Editor.` }]);
     }, 2000);
   }
 
-  // --- Selecting clips ---
+  // --- Clips on the canvas ---
   function toggleClip(id) {
     setSelectedIds(selectedIds.includes(id)
       ? selectedIds.filter((selectedId) => selectedId !== id)
       : [...selectedIds, id]);
   }
 
+  function moveClip(id, pos) {
+    setClips((current) => current.map((clip) => (clip.id === id ? { ...clip, ...pos } : clip)));
+  }
+
+  function removeClip(id) {
+    setClips((current) => current.filter((clip) => clip.id !== id));
+    setSelectedIds((current) => current.filter((selectedId) => selectedId !== id));
+  }
+
+  // What goes inside the video node
+  function renderSource() {
+    if (!sourceVideo) {
+      return (
+        <label className="studio-drop" data-no-drag>
+          <input type="file" accept="video/*" hidden onChange={(e) => loadVideo(e.target.files[0])} />
+          <span className="studio-drop-icon">▶</span>
+          <span className="studio-drop-title">Drop a video here</span>
+          <span className="studio-drop-hint">or click to upload</span>
+          <span className="btn btn-primary studio-drop-btn">⬆ Upload Video</span>
+        </label>
+      );
+    }
+    return (
+      <>
+        <video
+          className="studio-source-video"
+          src={sourceVideo.url}
+          controls
+          muted
+          playsInline
+          data-no-drag
+          onLoadedMetadata={(e) => {
+            const duration = e.target.duration;
+            setSourceVideo((current) => ({ ...current, duration }));
+          }}
+        />
+        <div className="studio-source-name">
+          <span>{sourceVideo.name}</span>
+          <button type="button" data-no-drag onClick={removeVideo} title="Remove video">✕</button>
+        </div>
+      </>
+    );
+  }
+
+  // What goes inside each clip node
+  function renderClip(clip) {
+    return (
+      <>
+        <ClipCard
+          sourceUrl={sourceVideo?.url}
+          start={clip.start}
+          end={clip.end}
+          isSelected={selectedIds.includes(clip.id)}
+          onToggle={() => toggleClip(clip.id)}
+        />
+        <button type="button" className="studio-clip-remove" data-no-drag onClick={() => removeClip(clip.id)} title="Remove clip">
+          ✕
+        </button>
+      </>
+    );
+  }
+
   return (
-    <div className="studio">
+    <div className="studio leaf-page">
       <TopBar title={project?.name} activeStep="studio" stepsUnlocked={stepsUnlocked} />
 
       <div className="studio-body">
-        {/* Collapsible bar: show/hide the source video, and the Go to Editor button */}
-        <div className="studio-bar">
-          <button
-            type="button"
-            className={`studio-toggle${showSource ? "" : " collapsed"}`}
-            onClick={() => setShowSource(!showSource)}
-            title={showSource ? "Hide source video" : "Show source video"}
-          >
-            ▼
-          </button>
-          <span className="studio-bar-label">
-            {sourceVideo ? `Source video: ${sourceVideo.name}` : "No clip yet: drop one on the canvas"}
-          </span>
-          <span className="studio-bar-count">
-            {clips.length > 0 && `${selectedIds.length} of ${clips.length} clips selected`}
-          </span>
-          <button
-            type="button"
-            className={`btn btn-small ${stepsUnlocked ? "btn-primary" : "disabled"}`}
-            disabled={!stepsUnlocked}
-            onClick={() => navigate("/editor")}
-          >
-            Go to Editor →
-          </button>
-        </div>
+        <section className="studio-chat wood-panel">
+          <ChatBox
+            title="AI Assistant"
+            subtitle="Turn your ideas into videos."
+            onNewChat={() => setMessages([])}
+            messages={messages}
+            onSend={handleSend}
+            disabled={isGenerating}
+            placeholder={sourceVideo ? "Describe the clips you want..." : "Drop a video first..."}
+            tag={sourceVideo?.name}
+            onRemoveTag={removeVideo}
+            quickActions={quickActions}
+          />
+        </section>
 
-        <div className="studio-panels">
-          {/* Left: chat bot */}
-          <section className="studio-chat">
-            <ChatBox
-              title="Chat bot"
-              messages={messages}
-              onSend={handleSend}
-              disabled={isGenerating}
-              placeholder={sourceVideo ? "Describe the clips you want..." : "Drop a clip first..."}
-              tag={sourceVideo?.name}
-              onRemoveTag={removeVideo}
-            />
-          </section>
-
-          {/* Right: dotted canvas. Drop a clip here; generated clips appear here */}
-          <section
-            className={`studio-canvas${isDragging ? " dragging" : ""}`}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-          >
-            {!sourceVideo && (
-              <label className="studio-dropzone">
-                <input type="file" accept="video/*" hidden onChange={(e) => loadVideo(e.target.files[0])} />
-                <span className="studio-dropzone-title">Drop a clip here</span>
-                <span className="studio-dropzone-hint">or click to browse</span>
-              </label>
-            )}
-
-            {sourceVideo && showSource && (
-              <div className="studio-source">
-                <video
-                  className="studio-source-video"
-                  src={sourceVideo.url}
-                  controls
-                  muted
-                  playsInline
-                  onLoadedMetadata={(e) => {
-                    const duration = e.target.duration;
-                    setSourceVideo((current) => ({ ...current, duration }));
-                  }}
-                />
-              </div>
-            )}
-
-            {isGenerating && <p className="studio-loading">🌿 Finding your clips...</p>}
-
-            {clips.length > 0 && (
-              <div className="studio-clips">
-                {clips.map((clip) => (
-                  <ClipCard
-                    key={clip.id}
-                    sourceUrl={sourceVideo.url}
-                    start={clip.start}
-                    end={clip.end}
-                    isSelected={selectedIds.includes(clip.id)}
-                    onToggle={() => toggleClip(clip.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
+        <section className="studio-canvas">
+          <BranchCanvas
+            sourcePos={sourcePos}
+            onMoveSource={setSourcePos}
+            renderSource={renderSource}
+            clips={clips}
+            onMoveClip={moveClip}
+            renderClip={renderClip}
+            ghosts={ghosts}
+            onDropFile={loadVideo}
+            onArrange={() => setClips(arrangeClips(clips, sourcePos))}
+            extra={
+              <>
+                {clips.length > 0 && (
+                  <span className="studio-count">{selectedIds.length} of {clips.length} selected</span>
+                )}
+                <button
+                  type="button"
+                  className={`btn btn-small ${stepsUnlocked ? "btn-primary" : "disabled"}`}
+                  disabled={!stepsUnlocked}
+                  onClick={() => navigate("/editor")}
+                >
+                  Go to Editor →
+                </button>
+              </>
+            }
+          />
+        </section>
       </div>
     </div>
   );

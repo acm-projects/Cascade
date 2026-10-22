@@ -23,7 +23,7 @@ function ExportPage() {
   }
 
   return (
-    <div className="export">
+    <div className="export leaf-page">
       <TopBar title={project?.name} activeStep="export" stepsUnlocked={stepsUnlocked} />
 
       <div className="export-body">

@@ -180,7 +180,7 @@
   min-height: 0;
   overflow-y: auto;                      /* scroll when there are lots of projects */
   display: grid;
-  grid-template-columns: repeat(3, calc(382 * var(--u)));
+  grid-template-columns: repeat(auto-fill, calc(382 * var(--u)));   /* as many 382-wide cards as fit */
   column-gap: calc(43 * var(--u));
   row-gap: calc(42 * var(--u));
   align-content: start;

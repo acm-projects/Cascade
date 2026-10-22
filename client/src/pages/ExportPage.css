@@ -21,8 +21,9 @@
 .export-settings,
 .export-social {
   min-height: 0;
+  border: var(--panel-border);
   border-radius: calc(30 * var(--u));
-  background: var(--color-panel);
+  background: var(--panel-bg);
 }
 
 .export-preview {
@@ -39,6 +40,7 @@
 }
 
 .export-title {
+  color: var(--color-wood-dark);
   font-family: var(--font-heading);
   font-weight: 500;
   font-size: calc(48 * var(--u));
@@ -55,9 +57,9 @@
 
 .export-field select {
   padding: calc(10 * var(--u)) calc(12 * var(--u));
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--color-wood-dark);
   border-radius: calc(10 * var(--u));
-  background: white;
+  background: rgba(255, 252, 240, 0.9);
   font-family: var(--font-body);
   font-size: calc(20 * var(--u));
 }
@@ -92,6 +94,7 @@
 }
 
 .export-social-title {
+  color: var(--color-wood-dark);
   font-family: var(--font-heading);
   font-weight: 500;
   font-size: calc(32 * var(--u));

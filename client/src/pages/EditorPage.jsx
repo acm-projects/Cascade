@@ -34,7 +34,7 @@ function EditorPage() {
   }
 
   return (
-    <div className="editor">
+    <div className="editor leaf-page">
       <TopBar title={project?.name} activeStep="editor" stepsUnlocked={stepsUnlocked} />
 
       {/* Tool strip: 87 tall */}
