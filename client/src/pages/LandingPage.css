@@ -1,0 +1,64 @@
+/* Sizes are scaled from the 1728 x 1117 Figma frame:
+   1728px wide = 100vw, so e.g. 40px = 2.3vw, 683px = 39.5vw */
+
+.landing-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: clamp(16px, 1.9vw, 33px) clamp(16px, 4vw, 69px) 0 clamp(16px, 2.3vw, 40px);
+  /* White like the wireframe. When the jungle/waterfall art is ready, swap in e.g.
+     background: url("../assets/landing-bg.png") center / cover; */
+  background: white;
+}
+
+/* ---------- Top bar ---------- */
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;   /* logo left, buttons right */
+}
+
+/* The outlined "Cascade" pill: 683 x 96 in Figma */
+.landing-logo {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.7vw, 30px);
+  width: clamp(240px, 39.5vw, 683px);
+  height: clamp(52px, 5.56vw, 96px);
+  padding: 0 clamp(12px, 1.56vw, 27px);
+  border: var(--border-strong);
+  border-radius: clamp(14px, 1.5vw, 26px);
+  background: white;
+}
+
+.landing-logo-icon {
+  width: clamp(28px, 2.95vw, 51px);   /* 51 x 43 leaf in Figma */
+  height: auto;
+}
+
+.landing-logo-name {
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 2.78vw, 3rem);   /* 48px in Figma */
+}
+
+.landing-nav-buttons {
+  display: flex;
+  gap: clamp(12px, 1.45vw, 25px);
+}
+
+/* ---------- Main area ---------- */
+.landing-hero {
+  flex: 1;                          /* fill the rest of the screen */
+  display: flex;
+  align-items: flex-end;            /* drop the button to the bottom... */
+  padding: 0 0 18.6vh 12.5vw;       /* ...then lift it up and in, matching Figma (256px from left) */
+}
+
+.landing-start {
+  gap: 0.6em;                       /* space between "Get Started" and the arrow */
+}
+
+.landing-start-arrow {
+  width: 1.4em;                     /* 55px arrow at 40px text, in Figma */
+  height: auto;
+}

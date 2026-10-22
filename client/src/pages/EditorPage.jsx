@@ -1,60 +1,169 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "./EditorPage.css";
-import editorBg from "../assets/VideoEditorPg.png";
+import TopBar from "../components/TopBar";
+import ChatBox from "../components/ChatBox";
+import SequencePlayer from "../components/SequencePlayer";
+import { useProject } from "../context/ProjectContext";
+import { formatTime } from "../utils/time";
 
+const sidebarTabs = ["Media", "B-roll", "Brand Assets", "Stickers"];
+const panelTabs = ["Chat", "Captions", "Aspect Ratio"];
+const ratios = [
+  { id: "16:9", label: "16:9 Horizontal" },
+  { id: "9:16", label: "9:16 Vertical" },
+  { id: "1:1", label: "1:1 Square" },
+];
+
+// Built from the Figma "Editor" wireframe (node 560:2716)
 function EditorPage() {
-  const [messages, setMessages] = useState([]); // chat history
-  const [text, setText] = useState("");          // what's typed in the chat box
+  const navigate = useNavigate();
+  const { project, sourceVideo, selectedClips, stepsUnlocked, aspectRatio, setAspectRatio } = useProject();
 
-  function handleSend(e) {
-    e.preventDefault();
-    if (text.trim() === "") return;
-    setMessages([...messages, text]);
-    setText("");
-  }
+  const [currentIndex, setCurrentIndex] = useState(0);     // which clip the preview shows
+  const [sidebarTab, setSidebarTab] = useState("Media");
+  const [panelTab, setPanelTab] = useState("Chat");
+  const [chat, setChat] = useState([]);                    // the editor's own chat
+  const [captionsOn, setCaptionsOn] = useState(false);
 
-  function handleAttach(e) {
-    const file = e.target.files[0];
-    if (file) setMessages([...messages, `📎 ${file.name}`]);
+  const sourceUrl = sourceVideo?.url ?? null;
+
+  function handleChat(text) {
+    setChat([...chat, { role: "user", text },
+      { role: "assistant", text: "Got it! Editing by chat is coming soon." }]);
   }
 
   return (
     <div className="editor">
-      <form
-        className="editor-stage"
-        style={{ backgroundImage: `url(${editorBg})` }}
-        onSubmit={handleSend}
-      >
-        {/* Top bar: tools (placeholder) */}
-        <div className="editor-toolbar">Effects · SFX · Captions</div>
+      <TopBar title={project?.name} activeStep="editor" stepsUnlocked={stepsUnlocked} />
 
-        {/* Big panel: video preview (placeholder) */}
-        <div className="editor-preview">Video preview</div>
+      {/* Tool strip: 87 tall */}
+      <div className="editor-tools">
+        <button type="button" className="btn btn-small" disabled>↶ Undo</button>
+        <button type="button" className="btn btn-small" disabled>↷ Redo</button>
+        <button type="button" className="btn btn-small" disabled>✂ Split</button>
+        <button type="button" className="btn btn-small" disabled>🗑 Delete</button>
+        <button
+          type="button"
+          className={`btn btn-small editor-export ${stepsUnlocked ? "btn-primary" : "disabled"}`}
+          disabled={!stepsUnlocked}
+          onClick={() => navigate("/export")}
+        >
+          Go to Export →
+        </button>
+      </div>
 
-        {/* Right plank: Export */}
-        <Link to="/export" className="editor-export">Export</Link>
-
-        {/* Right panel: AI chat */}
-        <div className="editor-chat-messages">
-          {messages.map((message, index) => (
-            <p key={index} className="editor-chat-message">{message}</p>
+      <div className="editor-body">
+        {/* Left sidebar: Media, B-roll, Brand Assets, Stickers */}
+        <aside className="editor-sidebar">
+          {sidebarTabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`editor-sidebar-tab${tab === sidebarTab ? " active" : ""}`}
+              onClick={() => setSidebarTab(tab)}
+            >
+              {tab}
+            </button>
           ))}
-        </div>
 
-        <input
-          className="editor-chat-input"
-          placeholder="Ask for an edit..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
+          <div className="editor-sidebar-content">
+            {sidebarTab === "Media" ? (
+              selectedClips.map((clip, index) => (
+                <button
+                  key={clip.id}
+                  type="button"
+                  className={`editor-media-item${index === currentIndex ? " active" : ""}`}
+                  onClick={() => setCurrentIndex(index)}
+                >
+                  Clip {index + 1}
+                  <span>{formatTime(clip.start)} – {formatTime(clip.end)}</span>
+                </button>
+              ))
+            ) : (
+              <p className="editor-coming-soon">{sidebarTab} coming soon</p>
+            )}
+          </div>
+        </aside>
 
-        <label className="editor-chat-attach" title="Attach a file">
-          <input type="file" hidden onChange={handleAttach} />
-        </label>
+        {/* Center: preview + timeline */}
+        <main className="editor-center">
+          <section className="editor-preview">
+            <SequencePlayer
+              sourceUrl={sourceUrl}
+              clips={selectedClips}
+              currentIndex={currentIndex}
+              onIndexChange={setCurrentIndex}
+              aspectRatio={aspectRatio}
+            />
+            {captionsOn && <p className="editor-caption">Captions will appear here</p>}
+          </section>
 
-        <button type="submit" className="editor-chat-send" title="Send" />
-      </form>
+          <section className="editor-timeline">
+            <div className="editor-track">
+              {selectedClips.map((clip, index) => (
+                <button
+                  key={clip.id}
+                  type="button"
+                  className={`editor-block${index === currentIndex ? " active" : ""}`}
+                  style={{ flexGrow: clip.end - clip.start }}
+                  onClick={() => setCurrentIndex(index)}
+                  title={`${formatTime(clip.start)} – ${formatTime(clip.end)}`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+              {selectedClips.length === 0 && <p className="editor-coming-soon">No clips yet. Pick some in AI Studio.</p>}
+            </div>
+            {/* Audio waveform placeholder */}
+            <div className="editor-waveform" />
+          </section>
+        </main>
+
+        {/* Right panel: Chat / Captions / Aspect Ratio */}
+        <aside className="editor-panel">
+          <div className="editor-panel-tabs">
+            {panelTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`editor-panel-tab${tab === panelTab ? " active" : ""}`}
+                onClick={() => setPanelTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="editor-panel-content">
+            {panelTab === "Chat" && (
+              <ChatBox messages={chat} onSend={handleChat} placeholder="Ask for an edit..." />
+            )}
+
+            {panelTab === "Captions" && (
+              <label className="editor-option">
+                <input type="checkbox" checked={captionsOn} onChange={(e) => setCaptionsOn(e.target.checked)} />
+                Show captions
+              </label>
+            )}
+
+            {panelTab === "Aspect Ratio" && (
+              <div className="editor-ratios">
+                {ratios.map((ratio) => (
+                  <button
+                    key={ratio.id}
+                    type="button"
+                    className={`editor-ratio${ratio.id === aspectRatio ? " active" : ""}`}
+                    onClick={() => setAspectRatio(ratio.id)}
+                  >
+                    {ratio.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

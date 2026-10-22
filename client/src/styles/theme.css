@@ -1,0 +1,102 @@
+/* ============================================================
+   THEME: change these values to restyle the whole app.
+   Every page is built from the Figma frames, which are 1728 x 1117.
+   ============================================================ */
+:root {
+  /* --u = "1 Figma pixel". calc(48 * var(--u)) means "48px in Figma".
+     It scales with the window width (1728px wide = exactly 1px), and never gets tinier than 0.55px. */
+  --u: max(0.55px, calc(100vw / 1728));
+
+  /* Colors (from the Figma wireframes) */
+  --color-page: #ffffff;
+  --color-panel: #d9d9d9;          /* gray boxes and bars */
+  --color-step-active: #c3c3c3;    /* the step you're on, in the top bar */
+  --color-text: #000000;
+  --color-text-muted: rgba(0, 0, 0, 0.5);
+  --color-accent: #2f6b3a;         /* jungle green: main buttons */
+  --color-accent-text: #ffffff;
+
+  /* Jungle / wood colors (from the fleshed-out Projects page) */
+  --color-wood-dark: #413414;      /* wooden button outlines */
+  --color-wood-text: #423717;      /* brown headings */
+  --color-cream: #e3d5b1;          /* logo text on the green bar */
+
+  /* Shapes */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --border-width: clamp(4px, 0.52vw, 9px);   /* 9px on the 1728px-wide Figma frame */
+  --border-strong: var(--border-width) solid var(--color-text);
+
+  /* Spacing */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+
+  /* Fonts (Figma note: "Main fonts: Fredoka One, Fredoka, Nunito Sans, Nunito") */
+  --font-display: "Fredoka One", sans-serif;   /* logo, buttons, step tabs */
+  --font-heading: "Fredoka", sans-serif;       /* page and panel titles */
+  --font-body: "Nunito", sans-serif;           /* regular text */
+  --font-ui: "Nunito Sans", sans-serif;        /* small labels, inputs */
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+/* ---------- Buttons used across the app ----------
+   White fill, thick black outline, rounded corners (from the wireframes).
+   Sizes use "em", so a bigger font-size makes the whole button scale with it. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  padding: 0.1em 0.45em;
+  border: var(--border-strong);
+  border-radius: 0.65em;
+  background: white;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.3vw, 2.5rem);    /* 40px on the Figma frame */
+  line-height: 1.25;
+  text-decoration: none;
+  cursor: pointer;
+  transition: scale 0.15s, filter 0.15s, opacity 0.15s;
+}
+
+.btn:hover {
+  scale: 1.04;
+  filter: brightness(0.95);
+}
+
+/* Filled green button for the main action on a page */
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+/* Taller, roomier button (like "Get Started") */
+.btn-large {
+  padding: 0.4em 0.6em;
+}
+
+/* Smaller button for toolbars and panels */
+.btn-small {
+  font-size: calc(22 * var(--u));
+  border-width: max(2px, calc(4 * var(--u)));
+}
+
+/* A button that can't be used yet */
+.btn:disabled,
+.btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  scale: 1;
+  filter: none;
+}

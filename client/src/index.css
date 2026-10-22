@@ -1,67 +1,14 @@
+/* Reset: remove the browser's default spacing so the designs control everything */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-.page-button {
-  display: inline-block;
-  margin-top: 24px;
-  padding: 12px 28px;
-  border-radius: 999px;
-  background: white;
-  color: #1a3d2b;
-  font-size: 1.1rem;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.page-button:hover {
-  background: #e0e0e0;
-}
-
-/* Wooden button used across the app: the image is the background, the text sits on top */
-.wood-button {
-  display: flex;
-  align-items: center;       /* text centered top-to-bottom */
-  justify-content: center;   /* text centered left-to-right */
-  width: min(40vw, 332px);
-  aspect-ratio: 664 / 158;   /* same shape as the image */
-  margin-top: 24px;
-  background-image: url("./assets/newprojectbutton.png");
-  background-size: 100% 100%;
-  color: #f3e2c0;            /* light wood color, readable on the dark brown */
-  font-size: clamp(1rem, 2vw, 1.4rem);
-  text-decoration: none;
-  cursor: pointer;
-  transition: scale 0.15s, filter 0.15s;
-}
-
-.wood-button:hover {
-  scale: 1.05;               /* separate from transform, so it won't undo any positioning */
-  filter: brightness(1.15);  /* the wood lights up a little on hover */
-}
-
-/* Load the Crayon Libre font from our project files */
-@font-face {
-  font-family: "Crayon Libre";
-  src: url("./assets/fonts/CrayonLibre.ttf") format("truetype");
-  font-display: swap;
-}
-
-/* Use it for the whole app */
-body {
-  font-family: "Crayon Libre", sans-serif;
-}
-
 /* Buttons and inputs don't copy the page font by default, so tell them to */
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
-}
-
-/* Base text size for the whole app (the browser default is 100%, which is 16px) */
-html {
-  font-size: 125%;
 }

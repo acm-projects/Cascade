@@ -1,135 +1,242 @@
-/* White page, matching the white around the painting */
+/* Sizes are Figma pixels: calc(N * var(--u)) */
 .editor {
+  display: flex;
+  flex-direction: column;
   height: 100vh;
-  background: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
 }
 
-/* Image-shaped box, as big as fits on screen (white margins blend in) */
-.editor-stage {
-  position: relative;
+/* ---------- Tool strip: 87 tall ---------- */
+.editor-tools {
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  height: calc(87 * var(--u));
+  padding: 0 calc(33 * var(--u));
+  border-top: 1px solid var(--color-text);
+  border-bottom: 1px solid var(--color-text);
+  background: var(--color-panel);
   flex-shrink: 0;
-  width: min(100vw, 140.6vh);   /* 140.6 = 1440 / 1024 x 100 */
-  aspect-ratio: 1440 / 1024;
-  background-size: 100% 100%;
-  color: #f3e2c0;
 }
 
-/* Placeholder text style for panels that aren't built yet */
-.editor-toolbar,
-.editor-preview {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(1rem, 2vw, 1.6rem);
-  opacity: 0.8;
-}
-
-.editor-toolbar {
-  left: 3.5%;
-  top: 11%;
-  width: 60.3%;
-  height: 14.5%;
-}
-
-.editor-preview {
-  left: 3.5%;
-  top: 36.5%;
-  width: 60.3%;
-  height: 52.5%;
-}
-
-/* Export: the small plank in the top-right */
 .editor-export {
-  position: absolute;
-  left: 69.3%;
-  top: 6%;
-  width: 29.3%;
-  height: 11.1%;
+  margin-left: auto;                     /* push to the right */
+}
+
+/* ---------- Three columns: sidebar 241 | center | panel 349 ---------- */
+.editor-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: calc(241 * var(--u)) 1fr calc(349 * var(--u));
+}
+
+/* Left sidebar */
+.editor-sidebar {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #f3e2c0;
-  font-size: clamp(1rem, 2vw, 1.6rem);
-  text-decoration: none;
-  transition: scale 0.15s, filter 0.15s;
+  flex-direction: column;
+  gap: calc(8 * var(--u));
+  min-height: 0;
+  padding: calc(16 * var(--u));
+  border-right: 1px solid var(--color-text);
+  background: var(--color-panel);
 }
 
-.editor-export:hover {
-  scale: 1.05;
-  filter: brightness(1.2);
+.editor-sidebar-tab {
+  padding: calc(8 * var(--u)) calc(12 * var(--u));
+  border: none;
+  border-radius: calc(10 * var(--u));
+  background: transparent;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: calc(22 * var(--u));
+  text-align: left;
+  cursor: pointer;
 }
 
-/* ---------- Chat (lined up with the painted chat panel) ---------- */
-.editor-chat-messages {
-  position: absolute;
-  left: 71%;
-  top: 22%;
-  width: 26%;
-  height: 55%;
+.editor-sidebar-tab.active {
+  background: white;
+}
+
+.editor-sidebar-content {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8 * var(--u));
+  margin-top: calc(12 * var(--u));
+  padding-top: calc(12 * var(--u));
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
 }
 
-.editor-chat-message {
-  align-self: flex-end;
-  max-width: 85%;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: rgba(255, 240, 210, 0.85);
-  color: #3b2a1a;
-  word-wrap: break-word;
-}
-
-.editor-chat-input {
-  position: absolute;
-  left: 71.5%;
-  top: 81.5%;
-  width: 21%;
-  height: 5%;
-  padding: 0 8px;
-  border: none;
-  background: transparent;
-  color: #f3e2c0;
-  font-size: 1rem;
-  outline: none;
-}
-
-.editor-chat-input::placeholder {
-  color: rgba(243, 226, 192, 0.6);
-}
-
-/* Invisible click areas over the painted icons */
-.editor-chat-attach,
-.editor-chat-send {
-  position: absolute;
-  border: none;
-  background: transparent;
+.editor-media-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: calc(8 * var(--u)) calc(12 * var(--u));
+  border: 2px solid transparent;
+  border-radius: calc(10 * var(--u));
+  background: white;
+  font-family: var(--font-heading);
+  font-size: calc(20 * var(--u));
   cursor: pointer;
-  border-radius: 6px;
 }
 
-.editor-chat-attach {
-  left: 71.7%;
-  top: 88.5%;
-  width: 2%;
-  height: 2.6%;
+.editor-media-item span {
+  color: var(--color-text-muted);
+  font-family: var(--font-body);
+  font-size: calc(16 * var(--u));
 }
 
-.editor-chat-send {
-  left: 93.3%;
-  top: 86.2%;
-  width: 3.3%;
-  height: 4.4%;
+.editor-media-item.active {
+  border-color: var(--color-accent);
 }
 
-.editor-chat-attach:hover,
-.editor-chat-send:hover {
-  background: rgba(255, 255, 255, 0.15);
+.editor-coming-soon {
+  color: var(--color-text-muted);
+  font-size: calc(18 * var(--u));
+}
+
+/* Center column: preview (597 tall) and timeline (224 tall) */
+.editor-center {
+  display: flex;
+  flex-direction: column;
+  gap: calc(24 * var(--u));
+  min-height: 0;
+  padding: calc(33 * var(--u));
+}
+
+.editor-preview {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--color-text);
+  border-radius: calc(10 * var(--u));
+  background: var(--color-panel);
+  overflow: hidden;
+}
+
+.editor-caption {
+  position: absolute;
+  left: 50%;
+  bottom: calc(110 * var(--u));
+  translate: -50% 0;
+  padding: calc(6 * var(--u)) calc(16 * var(--u));
+  border-radius: calc(8 * var(--u));
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-family: var(--font-display);
+  font-size: calc(24 * var(--u));
+}
+
+.editor-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12 * var(--u));
+  height: calc(224 * var(--u));
+  padding: calc(16 * var(--u));
+  border-radius: calc(10 * var(--u));
+  background: var(--color-panel);
+  flex-shrink: 0;
+}
+
+/* Clip blocks: width matches each clip's length */
+.editor-track {
+  display: flex;
+  gap: calc(6 * var(--u));
+  flex: 1;
+}
+
+.editor-block {
+  flex-basis: 0;
+  border: 2px solid var(--color-text);
+  border-radius: calc(8 * var(--u));
+  background: white;
+  font-family: var(--font-display);
+  font-size: calc(22 * var(--u));
+  cursor: pointer;
+}
+
+.editor-block.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+/* Fake waveform: repeating thin bars */
+.editor-waveform {
+  height: calc(50 * var(--u));
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: calc(8 * var(--u));
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0 2px, transparent 2px 6px)
+    center / 100% 60% no-repeat,
+    white;
+}
+
+/* Right panel: Chat / Captions / Aspect Ratio */
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--color-text);
+  background: var(--color-panel);
+}
+
+.editor-panel-tabs {
+  display: flex;
+  gap: calc(12 * var(--u));
+  padding: calc(17 * var(--u)) calc(18 * var(--u)) 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.editor-panel-tab {
+  padding-bottom: calc(8 * var(--u));
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: none;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: calc(24 * var(--u));
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.editor-panel-tab.active {
+  border-bottom-color: var(--color-text);
+}
+
+.editor-panel-content {
+  flex: 1;
+  min-height: 0;
+  padding: calc(18 * var(--u));
+}
+
+.editor-option {
+  display: flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  font-size: calc(22 * var(--u));
+}
+
+.editor-ratios {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+}
+
+.editor-ratio {
+  padding: calc(12 * var(--u));
+  border: 2px solid var(--color-text);
+  border-radius: calc(10 * var(--u));
+  background: white;
+  font-family: var(--font-heading);
+  font-size: calc(22 * var(--u));
+  cursor: pointer;
+}
+
+.editor-ratio.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
 }

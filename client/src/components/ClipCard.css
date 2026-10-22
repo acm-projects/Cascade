@@ -1,0 +1,65 @@
+.clipcard {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: max(2px, calc(4 * var(--u))) solid var(--color-text);
+  border-radius: calc(14 * var(--u));
+  background: #222;
+  cursor: pointer;
+  transition: scale 0.15s, box-shadow 0.15s;
+  animation: clipcard-pop 0.35s ease-out both;
+}
+
+.clipcard:hover {
+  scale: 1.03;
+}
+
+.clipcard.selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 calc(4 * var(--u)) rgba(47, 107, 58, 0.45);
+}
+
+.clipcard-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* Select circle in the top-right corner */
+.clipcard-check {
+  position: absolute;
+  top: calc(8 * var(--u));
+  right: calc(8 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(30 * var(--u));
+  height: calc(30 * var(--u));
+  border: max(2px, calc(3 * var(--u))) solid white;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: white;
+  font-size: calc(18 * var(--u));
+}
+
+.clipcard.selected .clipcard-check {
+  background: var(--color-accent);
+}
+
+.clipcard-time {
+  position: absolute;
+  left: calc(8 * var(--u));
+  bottom: calc(8 * var(--u));
+  padding: 2px calc(8 * var(--u));
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.85);
+  font-size: calc(16 * var(--u));
+}
+
+@keyframes clipcard-pop {
+  from { opacity: 0; scale: 0.6; }
+  to   { opacity: 1; scale: 1; }
+}

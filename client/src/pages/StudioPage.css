@@ -1,0 +1,148 @@
+/* Sizes are Figma pixels: calc(N * var(--u)) */
+.studio {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.studio-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(34 * var(--u));
+  padding: calc(34 * var(--u)) calc(80 * var(--u)) calc(60 * var(--u)) calc(68 * var(--u));
+}
+
+/* ---------- Collapsible bar: 1580 x 64 ---------- */
+.studio-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(20 * var(--u));
+  height: calc(64 * var(--u));
+  padding: 0 calc(16 * var(--u)) 0 calc(30 * var(--u));
+  border-radius: calc(16 * var(--u));
+  background: var(--color-panel);
+  flex-shrink: 0;
+}
+
+.studio-toggle {
+  border: none;
+  background: none;
+  font-size: calc(28 * var(--u));
+  cursor: pointer;
+  transition: rotate 0.2s;
+}
+
+.studio-toggle.collapsed {
+  rotate: -90deg;               /* ▶ when collapsed */
+}
+
+.studio-bar-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: calc(24 * var(--u));
+}
+
+.studio-bar-count {
+  color: var(--color-text-muted);
+  font-size: calc(20 * var(--u));
+}
+
+/* ---------- Chat (442 wide) + canvas ---------- */
+.studio-panels {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: calc(34 * var(--u));
+}
+
+.studio-chat {
+  width: calc(442 * var(--u));
+  padding: calc(8 * var(--u)) calc(17 * var(--u)) calc(21 * var(--u));
+  border-radius: calc(16 * var(--u));
+  background: var(--color-panel);
+  flex-shrink: 0;
+}
+
+/* The dotted canvas: dots every 40 Figma px */
+.studio-canvas {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(24 * var(--u));
+  padding: calc(40 * var(--u));
+  overflow-y: auto;             /* scroll bar when there are more clips than fit */
+  border-radius: calc(16 * var(--u));
+  background-color: var(--color-panel);
+  background-image: radial-gradient(circle, #9a9a9a 1.5px, transparent 1.7px);
+  background-size: calc(40 * var(--u)) calc(40 * var(--u));
+  transition: box-shadow 0.15s;
+}
+
+.studio-canvas.dragging {
+  box-shadow: inset 0 0 0 calc(6 * var(--u)) var(--color-accent);
+}
+
+/* Empty state: the drop zone */
+.studio-dropzone {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  padding: calc(60 * var(--u)) calc(90 * var(--u));
+  border: max(2px, calc(4 * var(--u))) dashed var(--color-text);
+  border-radius: calc(20 * var(--u));
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.studio-dropzone-title {
+  font-family: var(--font-display);
+  font-size: calc(40 * var(--u));
+}
+
+.studio-dropzone-hint {
+  color: var(--color-text-muted);
+  font-size: calc(22 * var(--u));
+}
+
+/* The dropped video */
+.studio-source {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.studio-source-video {
+  max-width: 100%;
+  max-height: calc(360 * var(--u));
+  border-radius: calc(14 * var(--u));
+  background: black;
+}
+
+.studio-loading {
+  align-self: center;
+  font-family: var(--font-heading);
+  font-size: calc(28 * var(--u));
+  animation: studio-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes studio-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+/* Generated clips: 4 per row, then it scrolls */
+.studio-clips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: calc(24 * var(--u));
+}
