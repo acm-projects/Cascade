@@ -1,0 +1,110 @@
+/* Sizes are Figma pixels: calc(N * var(--u)) */
+/* A floating wooden bar, inset from the screen edges so the leaves show around it */
+.topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: calc(119 * var(--u));
+  margin: calc(20 * var(--u)) calc(24 * var(--u)) 0;
+  padding: 0 calc(28 * var(--u)) 0 calc(36 * var(--u));
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
+  box-shadow: 0 calc(6 * var(--u)) calc(18 * var(--u)) rgba(30, 50, 30, 0.25);
+  flex-shrink: 0;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: calc(26 * var(--u));
+  color: var(--color-wood-dark);
+  text-decoration: none;
+}
+
+.topbar-leaf {
+  width: calc(51 * var(--u));
+  height: calc(43 * var(--u));
+}
+
+.topbar-name {
+  font-family: var(--font-display);
+  font-size: calc(48 * var(--u));
+}
+
+.topbar-divider {
+  width: max(2px, calc(4 * var(--u)));
+  height: calc(57 * var(--u));
+  margin: 0 calc(22 * var(--u)) 0 calc(29 * var(--u));
+  background: var(--color-wood-dark);
+}
+
+.topbar-title {
+  max-width: calc(220 * var(--u));      /* stops long names running into the steps */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(65, 52, 20, 0.6);
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: calc(36 * var(--u));
+}
+
+/* The ① ② ③ tabs: placed where they are in Figma (607px from the left) */
+.topbar-steps {
+  position: absolute;
+  left: calc(607 * var(--u));
+  display: flex;
+  gap: calc(42 * var(--u));
+}
+
+.topbar-step {
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  width: calc(222 * var(--u));
+  height: calc(76 * var(--u));
+  padding-left: calc(10 * var(--u));
+  border: max(2px, calc(6 * var(--u))) solid var(--color-wood-dark);
+  border-radius: calc(20 * var(--u));
+  background: #f1e6c8 var(--wood-cream) center / cover;
+  color: var(--color-wood-dark);
+  font-family: var(--font-display);
+  font-size: calc(32 * var(--u));
+  text-decoration: none;
+  transition: scale 0.15s;
+}
+
+.topbar-step:not(.locked):hover {
+  scale: 1.04;
+}
+
+.topbar-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(38 * var(--u));
+  height: calc(38 * var(--u));
+  border: max(1.5px, calc(3 * var(--u))) solid currentColor;
+  border-radius: 50%;
+  font-size: calc(26 * var(--u));
+}
+
+/* The page you're on */
+.topbar-step.active {
+  background: #3fae4a var(--wood-green) center / 100% 100%;
+}
+
+/* Not available yet */
+.topbar-step.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.topbar-avatar {
+  width: calc(76 * var(--u));
+  height: calc(75 * var(--u));
+  margin-left: auto;                    /* pushes the avatar to the far right */
+  border-radius: 50%;
+  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
+}

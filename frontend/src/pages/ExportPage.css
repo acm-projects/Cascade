@@ -1,0 +1,119 @@
+/* Sizes are Figma pixels: calc(N * var(--u)) */
+.export {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Grid: preview 1068 | settings 551, then the social row (232 tall) across both */
+.export-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1068fr 551fr;
+  grid-template-rows: 1fr calc(232 * var(--u));
+  column-gap: calc(42 * var(--u));
+  row-gap: calc(36 * var(--u));
+  padding: calc(23 * var(--u)) calc(42 * var(--u)) calc(48 * var(--u)) calc(25 * var(--u));
+}
+
+.export-preview,
+.export-settings,
+.export-social {
+  min-height: 0;
+  border: var(--panel-border);
+  border-radius: calc(30 * var(--u));
+  background: var(--panel-bg);
+}
+
+.export-preview {
+  overflow: hidden;
+}
+
+/* Export settings */
+.export-settings {
+  display: flex;
+  flex-direction: column;
+  gap: calc(18 * var(--u));
+  padding: calc(16 * var(--u)) calc(32 * var(--u)) calc(28 * var(--u));
+  overflow-y: auto;
+}
+
+.export-title {
+  color: var(--color-wood-dark);
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: calc(48 * var(--u));
+}
+
+.export-field {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: calc(22 * var(--u));
+}
+
+.export-field select {
+  padding: calc(10 * var(--u)) calc(12 * var(--u));
+  border: 2px solid var(--color-wood-dark);
+  border-radius: calc(10 * var(--u));
+  background: rgba(255, 252, 240, 0.9);
+  font-family: var(--font-body);
+  font-size: calc(20 * var(--u));
+}
+
+.export-check {
+  display: flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  font-size: calc(22 * var(--u));
+}
+
+.export-button {
+  margin-top: auto;                 /* sits at the bottom of the panel */
+  padding: calc(10 * var(--u));
+  font-size: calc(28 * var(--u));
+}
+
+.export-done {
+  color: var(--color-accent);
+  font-weight: 700;
+  font-size: calc(22 * var(--u));
+  text-align: center;
+}
+
+/* Social posting row (spans both columns) */
+.export-social {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+  padding: calc(24 * var(--u)) calc(32 * var(--u));
+}
+
+.export-social-title {
+  color: var(--color-wood-dark);
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: calc(32 * var(--u));
+}
+
+.export-social-list {
+  display: flex;
+  gap: calc(40 * var(--u));
+}
+
+.export-social-item {
+  display: flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  font-size: calc(24 * var(--u));
+  opacity: 0.6;
+}
+
+.export-social-note {
+  color: var(--color-text-muted);
+  font-size: calc(20 * var(--u));
+}

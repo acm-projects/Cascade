@@ -1,0 +1,79 @@
+/* Sizes are in vw, measured from the 1728px-wide Figma frame (1px = 100/1728 vw) */
+.lp {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #fff;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  font-family: "Fredoka", "Nunito", "Arial Rounded MT Bold", sans-serif;
+  font-weight: 700;
+  color: #000;
+}
+
+.lp-nav {
+  position: absolute;
+  top: 1.9vw;
+  left: 2.3vw;
+  right: 4vw;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.lp-pill {
+  display: inline-flex;
+  align-items: center;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  border: 0.5vw solid #000;
+  border-radius: 2.2vw;
+  font-size: 2.3vw;
+  line-height: 1;
+  transition: scale 0.15s;
+}
+
+.lp-pill:hover {
+  scale: 1.04;
+}
+
+.lp-brand {
+  width: 39.5vw;
+  height: 5.6vw;
+  padding-left: 2vw;
+  gap: 2.2vw;
+}
+
+.lp-leaf {
+  width: 2.8vw;
+  height: 2.8vw;
+}
+
+.lp-auth {
+  display: flex;
+  gap: 1.4vw;
+  margin-top: 0.6vw;
+}
+
+.lp-auth-btn {
+  height: 4.4vw;
+  padding: 0 1.4vw;
+  font-size: 2.1vw;
+  border-radius: 1.8vw;
+}
+
+.lp-start {
+  position: absolute;
+  left: 14.8vw;
+  top: 72.2%;   /* 807 / 1117 of the Figma frame; vw would push it off short windows */
+  height: 5.9vw;
+  padding: 0 1.4vw;
+  gap: 1.8vw;
+}
+
+.lp-arrow {
+  width: 3.4vw;
+  height: 0.7vw;
+}
