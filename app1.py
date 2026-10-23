@@ -1506,6 +1506,14 @@ def get_clip(
         else "text/vtt"
     )
 
+    path = folder / filename
+    if path.is_file():
+        return FileResponse(
+            path,
+            media_type=media_type,
+            headers={"Cache-Control": "no-store"},
+        )
+
     if storage and storage.get(key_field):
         parameters = {
             "Bucket": storage["s3_bucket"],
