@@ -21,7 +21,7 @@ from typing import Literal
 
 import httpx
 from fastapi import HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from starlette.background import BackgroundTask
 from backend import broll as stocklib
@@ -737,6 +737,30 @@ def register(app, integration):
                 project['saved_clips'].append(entry)
                 host.save_json(integration.project_dir(request.state.user_id) / (pid + '.json'), project)
         return {'saved': True}
+
+    @lru_cache(maxsize=128)
+    def thumbnail(jid, serialized, revision):
+        clip = json.loads(serialized)
+        with media(jid, clip) as source:
+            try:
+                result = subprocess.run(
+                    [export_binary(False), '-v', 'error', '-i', str(source),
+                     '-frames:v', '1', '-vf', 'scale=640:-2',
+                     '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'],
+                    capture_output=True, check=True, timeout=30)
+            except (OSError, subprocess.SubprocessError):
+                raise HTTPException(503, 'Could not generate clip thumbnail. Retry.')
+        if not result.stdout:
+            raise HTTPException(503, 'Clip thumbnail is unavailable. Retry.')
+        return result.stdout
+
+    @app.get('/api/projects/{pid}/editor/{jid}/{index}/thumbnail')
+    def get_thumbnail(pid: str, jid: str, index: int, request: Request):
+        clip = selected(pid, jid, index, request.state.user_id)
+        source = host.JOBS_DIR / jid / Path(clip.get('clip_url', '')).name
+        revision = (source.stat().st_mtime_ns, source.stat().st_size) if source.is_file() else None
+        return Response(thumbnail(jid, json.dumps(clip, sort_keys=True), revision),
+                        media_type='image/jpeg', headers={'Cache-Control': 'private, no-cache'})
 
     @app.get('/api/projects/{pid}/editor/{jid}/{index}/media')
     def get_media(pid: str, jid: str, index: int, request: Request):

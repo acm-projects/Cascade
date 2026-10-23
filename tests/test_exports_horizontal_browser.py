@@ -16,6 +16,7 @@ async def main():
   await c.call('Emulation.setDeviceMetricsOverride',{'width':1440,'height':1000,'deviceScaleFactor':1,'mobile':False})
   await c.call('Page.navigate',{'url':'about:blank'});await c.until("location.href==='about:blank'")
   await c.call('Storage.clearDataForOrigin',{'origin':BASE,'storageTypes':'local_storage'})
+  await c.call('Page.addScriptToEvaluateOnNewDocument',{'source':"localStorage.setItem('cascade-export-selection:v1:editor-browser-user:"+'9'*32+"',JSON.stringify([0,1,2,3].map(clip_index=>({job_id:'c'.repeat(32),clip_index}))));"})
   await c.call('Page.navigate',{'url':BASE+'/__exports_test/exports?project='+'9'*32})
   await c.until('!!window.siteReady');await c.js('window.siteReady')
   await c.until("document.querySelectorAll('.stack-layer.ready').length===4",90)

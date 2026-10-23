@@ -60,6 +60,7 @@ async def main():
         await c.click('#open-exports');await c.until("document.body.dataset.page==='exports'&&!!window.siteReady");await c.js('window.siteReady')
         assert await c.js("document.querySelectorAll('#exports-tree .mini-clip').length")==3
         assert await c.js("document.querySelectorAll('.export-media-card').length")==3
+        assert await c.js("document.querySelectorAll('.wave-album').length")==1
         assert await c.js("[...document.querySelectorAll('.wave-album')].every(e=>e.dataset.expanded==='false')")
         await c.click('.wave-stack')
         await c.until("document.querySelector('.export-media-card[data-active=true] video').readyState>=2",60)
@@ -70,8 +71,8 @@ async def main():
         await c.until("document.querySelector('.export-media-card[data-active=true] video').readyState>=2",60)
         await c.call('Input.dispatchKeyEvent',{'type':'keyDown','key':'ArrowRight','code':'ArrowRight'});await c.call('Input.dispatchKeyEvent',{'type':'keyUp','key':'ArrowRight','code':'ArrowRight'})
         await c.until("document.querySelector('#export-position').textContent==='3 of 3'")
-        # Per-wave arrows navigate and snap the horizontal row.
-        await c.click('.wave-album:nth-child(2) .wave-rail-prev')
+        # Tile arrows navigate and snap the horizontal row.
+        await c.click('.wave-album .wave-rail-prev')
         await c.until("document.querySelector('#export-position').textContent==='2 of 3'")
         await c.click('#export-prev');await c.until("document.querySelector('#export-position').textContent==='1 of 3'&&!document.querySelector('#download-active').disabled")
         await c.click('#export-youtube');assert await c.js("!document.querySelector('#youtube-setup').hidden&&document.querySelector('#youtube-setup').textContent.includes('not connected')")

@@ -6,17 +6,22 @@ Research Agent, Settings, B-roll, tracking and project history are not modified.
 The implementation is the existing HTML/CSS/vanilla JavaScript frontend, with no
 new framework or dependency.
 
-Each wave in the review set is grouped by its actual session ID and wave ID
-(falling back to its existing job ID). A collapsed wave displays its dynamic clip
-count and a portrait 3:4 front thumbnail, with up to three smaller, dimmed cards
-behind it. Alternating offsets, rotations and soft shadows create the fan.
-Single-clip waves show one card. The thumbnails come from a frame of each actual
-edited export, not stock images or CSS placeholders. Thumbnail cropping does not
+All selected clips share one tile, including selections from different saves,
+waves, or sessions. Only selected clips are included, in selection order; an
+empty selection shows guidance to select clips in the editor. Unavailable
+selections are omitted. The collapsed tile displays the selected clip count and
+up to four overlapping thumbnails. Each selected clip immediately requests its
+owner-checked `/editor/{job_id}/{clip_index}/thumbnail` endpoint, which extracts
+a JPEG from the clip's local or cloud-backed media and caches it in server memory.
+The browser fetches these images with authentication and creates fresh object URLs
+on each page load. Posters load independently of tracking and edited rendering;
+the finished edited frame replaces the initial source frame. Failed thumbnail
+requests expose a retry action. Thumbnail cropping does not
 change the encoded clip or the full-aspect playable preview.
 
-Click the stack or Expand wave to reveal every clip in that review group. The
+Click the stack or Expand clips to reveal every clip in that review group. The
 expanded wave uses the available desktop width and shows large cards side by
-side in original clip order, rather than moving the active clip to the front. Collapse wave pauses
+side in original clip order, rather than moving the active clip to the front. Collapse clips pauses
 its videos and makes the hidden gallery inert for keyboard/screen-reader access.
 Escape collapses a wave when focus is within it, restoring focus to its toggle.
 Reduced-motion preferences disable transitions. A horizontal rail supports native trackpad/touch scrolling, mouse dragging outside
@@ -25,10 +30,9 @@ in the sidebar scrolls it into view. The spread/fold transitions are isolated fr
 native snapping so an in-progress animation cannot change the chosen clip.
 Collapsing restores the compact overlapping stack and retains the selected clip.
 
-The Session → Wave → Clips sidebar opens the appropriate wave and highlights the
+The Session → Wave → Clips sidebar opens the shared tile and highlights the
 clip. Checkboxes remain synchronized with Download selected. Each clip retains its
-individual download and retry action; Download wave downloads the whole review
-wave. Controls are outside thumbnails. Existing selection semantics, edited video
+individual download and retry action; Download clips downloads the whole selected review set. Controls are outside thumbnails. Existing selection semantics, edited video
 renderer, ZIP endpoint, progress/error messages and account checks are retained.
 
 `CascadeExports.initialize` accepts optional `stackOptions` with `backCards`
@@ -46,9 +50,9 @@ python3 -m tests.test_exports_browser
 ```
 
 The stack test checks actual rendered-poster loading and overlap geometry,
-per-wave counts, portrait front-card proportions, expansion/collapse, larger
+one shared tile and selected clip count, portrait front-card proportions, expansion/collapse, larger
 playback, pause on collapse, sidebar synchronization, selection, a real three-clip
-wave ZIP, keyboard dismissal, reduced motion, and no overflow at desktop, 1024,
+cross-save ZIP, keyboard dismissal, reduced motion, and no overflow at desktop, 1024,
 768 and 390px. It compares the project record before/after to confirm history is
 unchanged. Screenshots are in `/tmp/cascade-wave-stack-artifacts`.
 
@@ -78,3 +82,11 @@ input to native scrolling. Fit resets zoom and scroll to show the full timeline.
 `tests/test_timeline_pinch_browser.py` checks Chromium input, cursor anchoring,
 percentage/slider synchronization, horizontal scrolling, and Fit. Physical macOS
 trackpad and Safari gesture hardware still require manual verification.
+
+`node tests/test_exports_selection.cjs` checks cross-session selection grouping,
+selected-only inclusion and order, empty/unavailable selections, and direct clip links.
+
+`python3 -m tests.test_exports_thumbnails_browser` verifies real JPEGs from two
+saves inside one tile while edited exports are held pending, thumbnail request
+failure/retry, image visibility, and refresh. Its screenshot is saved to
+`/tmp/cascade-exports-thumbnails.png`.

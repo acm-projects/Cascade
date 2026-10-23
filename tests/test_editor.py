@@ -61,6 +61,32 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(result.status_code,200,result.text[:500])
         return result.json()
 
+    def test_thumbnail_is_owner_checked_and_independent_of_exports(self):
+        result=self.client.get(self.url+'/thumbnail',headers=self.headers)
+        self.assertEqual(result.status_code,200,result.text[:200] if result.status_code!=200 else '')
+        self.assertEqual(result.headers['content-type'],'image/jpeg')
+        from PIL import Image
+        image=Image.open(io.BytesIO(result.content))
+        self.assertEqual(image.size,(640,360))
+        self.assertGreater(image.getpixel((320,180))[2],200)
+        self.assertEqual(self.client.get(self.url+'/thumbnail',headers=self.headers).content,result.content)
+        other=self.job(1,'b'*32)
+        other_url=self.base+'/'+other+'/0/thumbnail'
+        other_source=app1.JOBS_DIR/other/'clip_1.mp4'
+        subprocess.run(['ffmpeg','-v','error','-y','-f','lavfi','-i',
+                        'color=c=red:s=320x180:d=1','-c:v','libx264',str(other_source)],check=True)
+        other_result=self.client.get(other_url,headers=self.headers)
+        self.assertEqual(other_result.status_code,200)
+        self.assertGreater(Image.open(io.BytesIO(other_result.content)).getpixel((320,180))[0],200)
+        self.assertNotEqual(result.content,other_result.content)
+        # Replacing media must invalidate the cached frame for the same clip ID.
+        shutil.copyfile(self.fixture,other_source)
+        self.assertEqual(self.client.get(other_url,headers=self.headers).content,result.content)
+        self.assertIn(self.client.get(other_url,headers={'Authorization':'Bearer another-user'}).status_code,(403,404))
+        self.assertEqual(self.client.get(self.base+'/'+other+'/99/thumbnail',headers=self.headers).status_code,404)
+        (app1.JOBS_DIR/other/'clip_1.mp4').unlink()
+        self.assertEqual(self.client.get(other_url,headers=self.headers).status_code,404)
+
     def test_effects_persist_validate_and_change_real_export(self):
         draft=self.get()['draft']
         draft['state']['captions']['enabled']=False

@@ -9,7 +9,6 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
   }
   let selected=window.CascadeExportSelection.read(userId,project.id);
   if(query.has('job')&&!query.has('selection'))selected=[{job_id:query.get('job'),clip_index:Number(query.get('clip')||0)}];
-  if(!selected.length)selected=[...available.values()].map(({job_id,clip_index})=>({job_id,clip_index}));
   const rows=selected.map(e=>available.get(e.job_id+':'+e.clip_index)).filter(Boolean);
   let chosen=new Set(rows.map(row=>row.job_id+':'+row.clip_index));
   const missing=selected.length-rows.length;
@@ -21,18 +20,16 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
   stackConfig.offset=Math.max(0,Math.min(56,Number(stackConfig.offset)||0));
   stackConfig.rotation=Math.max(0,Math.min(6,Number(stackConfig.rotation)||0));
   stackConfig.scale=Math.max(.8,Math.min(1,Number(stackConfig.scale)||.95));
-  const waves=new Map();
-  for(const row of rows){
-    const key=JSON.stringify([row.wave.session_id||row.wave.session_number||1,row.wave.wave_id||row.wave.job_id]);
-    if(!waves.has(key))waves.set(key,{rows:[],label:'Session '+(row.wave.session_number||1)+' · Wave '+(row.wave.wave_number||1)});
-    row.group=waves.get(key);row.group.rows.push(row);
-  }
+  // The export selection is one collection, regardless of source save/session.
+  const selectionGroup={rows,label:'Selected clips'};
+  const waves=new Map([['selection',selectionGroup]]);
+  for(const row of rows)row.group=selectionGroup;
   function expandWave(group,expanded){
     const wasExpanded=group.expanded;
     if(wasExpanded!==expanded&&group.cards){clearTimeout(group.spreadTimer);group.animating=!reducedMotion();group.cards.classList.toggle('is-spreading',group.animating);if(group.animating)group.spreadTimer=setTimeout(()=>finishSpread(group),660);}
     group.expanded=expanded;group.element.dataset.expanded=String(expanded);
     for(const control of [group.stack,group.toggle])control.setAttribute('aria-expanded',String(expanded));
-    group.toggle.textContent=expanded?'Collapse wave ↑':'Expand wave ↓';
+    group.toggle.textContent=expanded?'Collapse clips ↑':'Expand clips ↓';
     group.gallery.inert=!expanded;group.gallery.setAttribute('aria-hidden',String(!expanded));
     group.stackWrap.inert=expanded;
     if(!expanded){group.rows.forEach(row=>row.video?.pause());if(group.cards)group.cards.scrollLeft=0;}
@@ -105,6 +102,31 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     rail.addEventListener('dragstart',event=>event.preventDefault());
     railReadout(group,0);
   }
+  function applyPoster(row,blob,{edited=false}={}){
+    if(ended||(!edited&&row.editedPoster))return;
+    const previous=row.posterURL;
+    row.posterURL=URL.createObjectURL(blob);row.video.poster=row.posterURL;
+    row.editedPoster=edited;row.thumbnailRetry.hidden=true;
+    for(const image of row.stackImages){
+      image.onload=()=>{image.parentElement.classList.add('ready');image.parentElement.classList.remove('unavailable');};
+      image.onerror=()=>{image.parentElement.classList.add('unavailable');row.thumbnailRetry.hidden=false;};
+      image.src=row.posterURL;
+    }
+    if(previous)URL.revokeObjectURL(previous);
+  }
+  async function loadThumbnail(row){
+    row.thumbnailRetry.hidden=true;
+    try{
+      const response=await apiFetch(url(row)+'/thumbnail');
+      applyPoster(row,await response.blob());
+    }catch(error){
+      if(!ended&&!row.posterURL){
+        row.thumbnailRetry.hidden=false;
+        row.thumbnailRetry.title=error.message;
+        for(const image of row.stackImages)image.parentElement.classList.add('unavailable');
+      }
+    }
+  }
   async function makePoster(row){
     if(row.posterTask)return row.posterTask;
     row.posterTask=(async()=>{
@@ -122,10 +144,9 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
         const ctx=canvas.getContext('2d'),scale=Math.max(canvas.width/decoder.videoWidth,canvas.height/decoder.videoHeight);
         ctx.drawImage(decoder,(canvas.width-decoder.videoWidth*scale)/2,(canvas.height-decoder.videoHeight*scale)/2,decoder.videoWidth*scale,decoder.videoHeight*scale);
         const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.88));if(!blob||ended)return;
-        row.posterURL=URL.createObjectURL(blob);row.video.poster=row.posterURL;
-        for(const image of row.stackImages){image.onload=()=>image.parentElement.classList.add('ready');image.src=row.posterURL;}
+        applyPoster(row,blob,{edited:true});
       }finally{decoder.removeAttribute('src');decoder.load();}
-    })().catch(()=>{for(const image of row.stackImages)image.parentElement.classList.add('unavailable');});
+    })().catch(()=>{row.posterTask=null;if(!row.posterURL)row.thumbnailRetry.hidden=false;});
     return row.posterTask;
   }
   for(const [index,group]of [...waves.values()].entries()){
@@ -167,7 +188,7 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     const cards=document.createElement('div');cards.className='wave-clips';cards.tabIndex=0;cards.setAttribute('role','region');cards.setAttribute('aria-label',group.label+' clips. Scroll horizontally or use arrow keys.');group.cards=cards;body.append(cards);
     const footer=document.createElement('div');footer.className='wave-downloads';
     group.download=document.createElement('button');group.download.type='button';group.download.className='wave-download';
-    group.download.textContent=group.rows.length===1?'Download clip':'Download wave ('+group.rows.length+')';
+    group.download.textContent=group.rows.length===1?'Download clip':'Download clips ('+group.rows.length+')';
     group.download.onclick=()=>group.rows.length===1?downloadRow(group.rows[0]):downloadSet(group.rows);
     footer.append(group.download);body.append(footer);section.append(heading,stackWrap,gallery);deck.append(section);
     section.addEventListener('keydown',event=>{if(event.key==='Escape'&&group.expanded){event.preventDefault();expandWave(group,false);group.toggle.focus();}});
@@ -239,7 +260,8 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     const single=document.createElement('button');single.type='button';single.className='export-card-download';single.textContent='Download clip';single.onclick=()=>downloadRow(row);
     row.retry=document.createElement('button');row.retry.type='button';row.retry.className='export-preview-retry';row.retry.textContent='Retry preview';row.retry.hidden=true;row.retry.onclick=()=>show(i);
     row.status=document.createElement('p');row.status.className='card-render-status';row.status.textContent='Edited preview';
-    row.card.append(header,row.video,meta,row.status,row.retry,single);row.group.cards.append(row.card);
+    row.thumbnailRetry=document.createElement('button');row.thumbnailRetry.type='button';row.thumbnailRetry.className='export-thumbnail-retry';row.thumbnailRetry.textContent='Thumbnail unavailable · Retry';row.thumbnailRetry.hidden=true;row.thumbnailRetry.onclick=()=>loadThumbnail(row);
+    row.card.append(header,row.video,meta,row.status,row.thumbnailRetry,row.retry,single);row.group.cards.append(row.card);
   });
   for(const group of waves.values()){
     wireRail(group);
@@ -270,6 +292,11 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
   window.addEventListener('cascade:session-ended',cleanup);
   window.addEventListener('cascade:session-restored',()=>location.reload());
   window.addEventListener('pagehide',cleanup,{once:true});
+  // Posters must not wait for edited exports, tracking, captions, or other clips.
+  let thumbnailIndex=0;
+  for(let worker=0;worker<Math.min(4,rows.length);worker++)(async()=>{
+    while(!ended&&thumbnailIndex<rows.length)await loadThumbnail(rows[thumbnailIndex++]);
+  })();
   setStatus('');await show(0,{expand:false});
   (async()=>{for(const row of rows){if(ended)return;await render(row).catch(()=>{});}})();
 }};
