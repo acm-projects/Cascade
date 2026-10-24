@@ -1,0 +1,118 @@
+/* Column layout: header, messages (scroll), prompt box (pinned at the bottom) */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;            /* lets the message list shrink and scroll inside the grid */
+  padding: 16px;
+  color: var(--color-wood-text);
+}
+
+.chat-panel-header h2 {
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 22px;
+}
+
+.chat-panel-header p {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.chat-panel-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 4px;
+}
+
+.chat-panel-hint {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* Bubbles: yours on the right in green, the assistant's on the left in cream */
+.chat-bubble {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-wrap;    /* keep Shift+Enter line breaks */
+  overflow-wrap: anywhere;
+}
+
+.chat-bubble-user {
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+
+.chat-bubble-assistant {
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  background: color-mix(in srgb, var(--color-cream-card) 70%, white);
+  border: 1px solid color-mix(in srgb, var(--color-wood-dark) 25%, transparent);
+}
+
+/* ---------- Prompt box ---------- */
+.chat-panel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-panel-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
+  color: var(--color-wood-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  resize: none;
+}
+
+.chat-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-panel-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.chat-panel-count input {
+  width: 56px;
+  padding: 4px 6px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-weight: 700;
+}
+
+.chat-panel-send {
+  font-size: 16px;
+}
+
+.chat-panel-send img {
+  width: 16px;
+  height: 16px;
+}

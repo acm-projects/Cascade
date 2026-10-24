@@ -1,0 +1,57 @@
+/* Full-width strip under the TopNav, lined up with its edges */
+.session-bar {
+  display: flex;
+  align-items: center;
+  margin: 10px calc(24 * var(--u)) 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 80%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+.session-bar-picker {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-wood-text);
+  cursor: pointer;
+}
+
+.session-bar-picker:hover {
+  background: color-mix(in srgb, var(--color-wood-dark) 10%, transparent);
+}
+
+.session-bar-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+}
+
+.session-bar-name {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 18px;
+}
+
+/* Right side: "2 of 6 picked" + Go to Editor */
+.session-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--color-wood-text);
+}
+
+.session-bar-actions .btn {
+  font-size: 16px;
+}
