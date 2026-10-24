@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { AuthContext } from "./AuthContext";
+import { getAuthConfig } from "../api/auth";
 import "./AuthGate.css";
 
 const devAuth = { mode: "dev", getToken: async () => null };
@@ -17,8 +18,7 @@ function AuthGate({ children }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth-config")
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`server said ${res.status}`))))
+    getAuthConfig()
       .then((data) => !cancelled && setConfig(data))
       .catch((err) => !cancelled && setConfig({ error: err.message }));
     return () => {
