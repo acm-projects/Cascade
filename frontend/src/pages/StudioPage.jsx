@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopBar from "../components/TopBar";
 import ChatBox from "../components/ChatBox";
@@ -31,6 +31,7 @@ function makeFakeClips(duration) {
 // AI Studio: chat on the left, the branch canvas on the right
 function StudioPage() {
   const navigate = useNavigate();
+  const { projectId } = useParams();
   const {
     project, sourceVideo, setSourceVideo, messages, setMessages,
     clips, setClips, selectedIds, setSelectedIds, stepsUnlocked, sourcePos, setSourcePos,
@@ -202,7 +203,7 @@ function StudioPage() {
                   type="button"
                   className={`btn btn-small ${stepsUnlocked ? "btn-primary" : "disabled"}`}
                   disabled={!stepsUnlocked}
-                  onClick={() => navigate("/editor")}
+                  onClick={() => navigate(`/projects/${projectId}/editor`)}
                 >
                   Go to Editor →
                 </button>

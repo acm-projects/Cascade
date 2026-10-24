@@ -50,6 +50,22 @@
   font-size: calc(36 * var(--u));
 }
 
+/* Dev-only chip with the URL ids, just left of the avatar */
+.topbar-route {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-jungle-deep) 12%, transparent);
+  color: var(--color-text-green);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.topbar-route + .topbar-avatar {
+  margin-left: calc(16 * var(--u));
+}
+
 /* The ① ② ③ tabs: placed where they are in Figma (607px from the left) */
 .topbar-steps {
   position: absolute;
