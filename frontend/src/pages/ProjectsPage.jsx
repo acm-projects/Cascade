@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ProjectsPage.css";
 import bg from "../assets/figma/projects-bg.jpg";
@@ -10,6 +10,7 @@ import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
 import fakeProjects from "../data/fakeProjects";
 import { useProject } from "../context/ProjectContext";
+import useApi from "../api/useApi";
 
 // Sidebar filters: each one decides which projects to show
 const filters = [
@@ -26,6 +27,15 @@ function ProjectsPage() {
   const { startNewProject, openProject } = useProject();
   const [filterId, setFilterId] = useState("all");
   const [search, setSearch] = useState("");
+  const api = useApi();
+
+  // First real backend call. Only logged for now: the grid still shows fakeProjects until ticket 2.5.
+  useEffect(() => {
+    api
+      .listProjects()
+      .then((result) => console.log("[api] listProjects:", result))
+      .catch((err) => console.warn(`[api] listProjects failed (${err.status}):`, err.message));
+  }, [api]);
 
   const filter = filters.find((f) => f.id === filterId);
   const shown = fakeProjects.filter(
