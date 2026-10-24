@@ -1,0 +1,61 @@
+/* React Flow reads these --xy-* variables, so the canvas uses the jungle palette from theme.css */
+.studio-canvas {
+  /* React Flow draws nothing unless its box has a real height */
+  width: 100%;
+  height: 100%;
+
+  --xy-background-color: color-mix(in srgb, var(--color-cream-card) 45%, var(--color-leaf-mist));
+  --xy-background-pattern-color: color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
+
+  /* Boxes: cream with a wood outline (ticket 3.2 replaces these with custom designs) */
+  --xy-node-background-color: var(--color-cream-card);
+  --xy-node-color: var(--color-wood-text);
+  --xy-node-border: 2px solid var(--color-wood-dark);
+  --xy-node-border-radius: 12px;
+  --xy-node-boxshadow-selected: 0 0 0 3px var(--color-leaf);
+  --xy-handle-background-color: var(--color-wood-dark);
+  --xy-handle-border-color: var(--color-cream-card);
+
+  /* Lines: green vines */
+  --xy-edge-stroke: var(--color-vine);
+  --xy-edge-stroke-width: 3;
+  --xy-edge-stroke-selected: var(--color-leaf);
+
+  /* Drag-to-select rectangle */
+  --xy-selection-background-color: color-mix(in srgb, var(--color-leaf) 12%, transparent);
+  --xy-selection-border: 1px dashed var(--color-leaf);
+
+  /* Zoom buttons and minimap */
+  --xy-controls-button-background-color: var(--color-cream-card);
+  --xy-controls-button-background-color-hover: color-mix(in srgb, var(--color-cream-card) 80%, var(--color-wood-dark));
+  --xy-controls-button-color: var(--color-wood-dark);
+  --xy-controls-button-border-color: color-mix(in srgb, var(--color-wood-dark) 30%, transparent);
+  --xy-controls-box-shadow: var(--shadow-soft);
+  --xy-minimap-background-color: var(--color-cream-card);
+  --xy-minimap-node-background-color: color-mix(in srgb, var(--color-vine) 55%, transparent);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--color-jungle-deep) 12%, transparent);
+}
+
+/* Default boxes: a little bigger and rounder than React Flow's */
+.studio-canvas .react-flow__node-default,
+.studio-canvas .react-flow__node-input,
+.studio-canvas .react-flow__node-output {
+  width: auto;
+  min-width: 170px;
+  padding: 12px 16px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.studio-canvas .react-flow__minimap {
+  overflow: hidden;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: 10px;
+}
+
+.studio-canvas .react-flow__controls {
+  overflow: hidden;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: 10px;
+}

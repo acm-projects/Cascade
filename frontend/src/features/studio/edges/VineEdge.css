@@ -1,0 +1,34 @@
+/* Leafy vines between canvas boxes. Colors come from theme.css. */
+.vine-outline {
+  fill: none;
+  stroke: var(--color-jungle-deep);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+/* BaseEdge's path: the green middle of the stem */
+.react-flow__edge-path.vine-stem {
+  stroke: var(--color-vine);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* Leaves don't block clicks on the canvas */
+.vine-leaves {
+  pointer-events: none;
+}
+
+.vine-leaf {
+  fill: var(--color-leaf);
+  stroke: var(--color-jungle-deep);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.vine-leaf-vein {
+  fill: none;
+  stroke: var(--color-jungle-deep);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
