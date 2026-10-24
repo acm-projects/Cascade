@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
-import TopBar from "../components/TopBar";
+import TopNav from "../components/TopNav";
 import ChatBox from "../components/ChatBox";
 import ClipCard from "../components/ClipCard";
 import BranchCanvas from "../components/BranchCanvas";
@@ -165,7 +165,12 @@ function StudioPage() {
 
   return (
     <div className="studio leaf-page">
-      <TopBar title={project?.name} activeStep="studio" stepsUnlocked={stepsUnlocked} />
+      <TopNav
+        projectTitle={project?.name}
+        active="studio"
+        canOpenEditor={stepsUnlocked}
+        canOpenExport={stepsUnlocked}
+      />
 
       <div className="studio-body">
         <section className="studio-chat wood-panel">

@@ -135,3 +135,10 @@ body {
 .leaf-page {
   background: var(--color-leaf-mist) var(--leaf-bg) center / cover no-repeat;
 }
+
+/* Keyboard focus: a clear leaf-green ring on anything you reach with Tab
+   (:focus-visible = only when using the keyboard, not on mouse clicks) */
+:focus-visible {
+  outline: 3px solid var(--color-leaf);
+  outline-offset: 2px;
+}
