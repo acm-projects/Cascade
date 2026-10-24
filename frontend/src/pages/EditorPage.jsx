@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
-import TopBar from "../components/TopBar";
+import TopNav from "../components/TopNav";
 import ChatBox from "../components/ChatBox";
 import SequencePlayer from "../components/SequencePlayer";
 import { useProject } from "../context/ProjectContext";
@@ -36,7 +36,12 @@ function EditorPage() {
 
   return (
     <div className="editor leaf-page">
-      <TopBar title={project?.name} activeStep="editor" stepsUnlocked={stepsUnlocked} />
+      <TopNav
+        projectTitle={project?.name}
+        active="editor"
+        canOpenEditor={stepsUnlocked}
+        canOpenExport={stepsUnlocked}
+      />
 
       {/* Tool strip: 87 tall */}
       <div className="editor-tools">
