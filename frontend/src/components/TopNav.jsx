@@ -1,6 +1,5 @@
 import { Link, NavLink, useParams } from "react-router-dom";
-import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
-import { useAuthMode } from "../auth/AuthContext";
+import UserAvatar from "./UserAvatar";
 import "./TopNav.css";
 import leafIcon from "../assets/icons/leaf.svg";
 
@@ -68,32 +67,8 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
         </span>
       )}
 
-      <Avatar />
+      <UserAvatar className="topnav-avatar" />
     </header>
-  );
-}
-
-// Clerk mode: Clerk's account button (sign out, manage account), or a sign-in link when signed out.
-// Dev mode: a green "D" circle.
-function Avatar() {
-  const mode = useAuthMode();
-
-  if (mode === "clerk") {
-    return (
-      <>
-        <SignedIn>
-          <span className="topnav-avatar">
-            <UserButton appearance={{ elements: { avatarBox: { width: "100%", height: "100%" } } }} />
-          </span>
-        </SignedIn>
-        <SignedOut>
-          <Link to="/sign-in" className="topnav-avatar topnav-avatar-dev" title="Sign in">?</Link>
-        </SignedOut>
-      </>
-    );
-  }
-  return (
-    <span className="topnav-avatar topnav-avatar-dev" title="Dev mode: not signed in">D</span>
   );
 }
 

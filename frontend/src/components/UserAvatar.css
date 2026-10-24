@@ -1,0 +1,31 @@
+/* Round account button: 76 x 76 in Figma */
+.user-avatar {
+  display: grid;
+  place-items: center;
+  width: calc(76 * var(--u));
+  height: calc(76 * var(--u));
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
+  overflow: hidden;
+}
+
+/* Clerk's button fills the circle */
+.user-avatar > * {
+  width: 100%;
+  height: 100%;
+}
+
+/* "D" (dev mode) or "?" (signed out) */
+.user-avatar-letter {
+  background: var(--color-leaf);
+  color: var(--color-cream);
+  font-family: var(--font-display);
+  font-size: calc(36 * var(--u));
+  text-decoration: none;
+  cursor: default;
+}
+
+a.user-avatar-letter {
+  cursor: pointer;
+}

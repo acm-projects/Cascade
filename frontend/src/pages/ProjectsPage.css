@@ -33,12 +33,6 @@
   height: calc(43 * var(--u));
 }
 
-.projects-avatar {
-  width: calc(76 * var(--u));
-  height: calc(75 * var(--u));
-  border-radius: 50%;
-}
-
 /* ---------- Sidebar + main area ---------- */
 .projects-body {
   flex: 1;
@@ -150,7 +144,7 @@
 }
 
 .projects-search input::placeholder {
-  color: rgba(0, 0, 0, 0.75);
+  color: color-mix(in srgb, var(--color-wood-dark) 85%, transparent);
 }
 
 /* "+ New Project": green wood, 195 x 76 */
@@ -174,68 +168,68 @@
   filter: brightness(1.1);
 }
 
-/* ---------- Project cards: 3 per row, 382 x 292, gaps 43 / 42 ---------- */
-.projects-grid {
+/* ---------- Main area below the header: scrolls on its own ---------- */
+.projects-content {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;                      /* scroll when there are lots of projects */
+  overflow-y: auto;
+  margin-top: calc(94 * var(--u));
+  padding-bottom: calc(40 * var(--u));
+}
+
+/* Project cards: 3 per row on the Figma frame (382 x 292, gaps 43 / 42). The cards live in ProjectCard.css */
+.projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, calc(382 * var(--u)));   /* as many 382-wide cards as fit */
   column-gap: calc(43 * var(--u));
   row-gap: calc(42 * var(--u));
   align-content: start;
-  margin-top: calc(94 * var(--u));
-  padding-bottom: calc(40 * var(--u));
+  padding: calc(8 * var(--u));          /* room for the hover grow */
 }
 
-.projects-card {
+/* Narrow windows: always 2 columns */
+@media (max-width: 900px) {
+  .projects-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Loading / error ---------- */
+.projects-state {
+  display: grid;
+  place-items: center;
+  min-height: calc(300 * var(--u));
+}
+
+.projects-error {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  height: calc(292 * var(--u));
-  padding: calc(26 * var(--u)) calc(28 * var(--u));
-  border: none;
-  background-color: transparent;
-  background-size: 100% 100%;
-  text-align: left;
-  cursor: pointer;
-  transition: scale 0.15s;
-}
-
-.projects-card:hover {
-  scale: 1.03;
-}
-
-/* Thumbnail placeholder until projects have real thumbnails */
-.projects-thumb {
-  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: calc(150 * var(--u));
-  border-radius: calc(10 * var(--u));
-  background: rgba(65, 52, 20, 0.25);
-  color: rgba(65, 52, 20, 0.6);
-  font-size: calc(40 * var(--u));
+  gap: var(--space-1);
+  max-width: 420px;
+  padding: var(--space-3);
+  color: var(--color-wood-text);
+  text-align: center;
 }
 
-.projects-card-name {
-  margin-top: calc(14 * var(--u));
-  color: var(--color-wood-text);
+.projects-error h2 {
   font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: calc(30 * var(--u));
+  font-size: 1.3rem;
 }
 
-.projects-card-meta {
-  color: rgba(66, 55, 23, 0.75);
+.projects-error p {
   font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: calc(18 * var(--u));
+  opacity: 0.8;
 }
 
-.projects-empty {
-  grid-column: 1 / -1;
-  color: var(--color-wood-text);
-  font-size: calc(28 * var(--u));
+/* ---------- Delete pop-up ---------- */
+.projects-delete-text {
+  font-family: var(--font-body);
+}
+
+.projects-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
 }

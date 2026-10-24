@@ -1,6 +1,8 @@
 // The ONE place in the app that calls fetch(). Every other api/ file goes through apiFetch().
 // Backend paths (/api, /upload, /jobs, /clips) are forwarded to FastAPI by the Vite proxy.
 
+const SERVER_DOWN = "Can't reach the server. Is the backend running?";
+
 // Thrown when the backend says no. Check error.status (401 = not signed in, 404 = not found, ...)
 // and show error.message to the user (it's the backend's "detail" text).
 export class ApiError extends Error {
@@ -35,14 +37,16 @@ export async function apiFetch(path, { token, method = "GET", body, form } = {})
     });
   } catch {
     // fetch only throws when it can't reach the server at all
-    throw new ApiError(0, "Can't reach the server. Is the backend running?");
+    throw new ApiError(0, SERVER_DOWN);
   }
 
   const isJson = res.headers.get("content-type")?.includes("json");
   const data = isJson ? await res.json() : await res.blob();
 
   if (!res.ok) {
-    throw new ApiError(res.status, (isJson && data?.detail) || res.statusText);
+    // 502-504 with no message from FastAPI = the Vite proxy couldn't reach the backend
+    const proxyFailed = !isJson && res.status >= 502 && res.status <= 504;
+    throw new ApiError(res.status, (isJson && data?.detail) || (proxyFailed ? SERVER_DOWN : res.statusText));
   }
   return data;
 }
