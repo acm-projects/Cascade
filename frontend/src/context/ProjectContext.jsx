@@ -32,12 +32,14 @@ export function ProjectProvider({ children }) {
     return id;
   }
 
-  // Clicking an existing project: it goes straight to the editor with its saved clips
+  // Clicking an existing project. Real projects from the backend don't carry clips yet (loading them is
+  // ticket 3.4), so clips are optional.
   function openProject(saved) {
     resetWork();
     setProject({ id: saved.id, name: saved.name, isExisting: true });
-    setClips(saved.clips);
-    setSelectedIds(saved.clips.map((clip) => clip.id));
+    const savedClips = saved.clips ?? [];
+    setClips(savedClips);
+    setSelectedIds(savedClips.map((clip) => clip.id));
   }
 
   // Selected clips, in the order the user picked them (that's their order in the editor)
