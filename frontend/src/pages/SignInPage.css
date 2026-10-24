@@ -1,0 +1,8 @@
+.sign-in {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--space-3);
+  background-size: cover;
+  background-position: center;
+}

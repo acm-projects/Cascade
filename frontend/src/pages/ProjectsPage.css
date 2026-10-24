@@ -5,7 +5,7 @@
   height: 100vh;
   background-size: cover;
   background-position: center;
-  background-color: #eef6ee;
+  background-color: var(--color-leaf-mist);
 }
 
 /* ---------- Green top bar (Figma: 119 tall, dark green gradient) ---------- */
@@ -15,7 +15,7 @@
   justify-content: space-between;
   height: calc(119 * var(--u));
   padding: 0 calc(42 * var(--u)) 0 calc(40 * var(--u));
-  background: linear-gradient(90deg, rgba(14, 60, 28, 0.93) 7%, rgba(17, 85, 37, 0.93) 100%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-jungle-deep) 93%, transparent) 7%, color-mix(in srgb, var(--color-jungle) 93%, transparent) 100%);
   flex-shrink: 0;
 }
 

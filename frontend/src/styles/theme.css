@@ -23,13 +23,26 @@
   --color-cream: #e3d5b1;          /* logo text on the green bar */
   --color-vine: #3e7b4f;           /* the vines connecting clips on the AI Studio canvas */
 
+  /* ---------- Jungle palette ----------
+     The shared colors every new component should use (picked from the vibe image + Figma). */
+  --color-jungle-deep: #0e3c1c;    /* darkest green: top bars, badges */
+  --color-jungle: #115525;         /* the lighter end of the top-bar gradient */
+  --color-leaf: #3fae4a;           /* bright leaf green: main buttons, highlights */
+  --color-leaf-mist: #eef6ee;      /* pale green behind the leafy backgrounds */
+  --color-cream-card: #f1e6c8;     /* card / panel background */
+  --color-plank: #8a5a2b;          /* plank brown accent */
+  --color-text-green: #1f3d22;     /* dark green text */
+  --color-lake-ink: #2c3e4f;       /* blue-gray outline on the landing "CASCADE" */
+  --radius-card: 16px;
+  --shadow-soft: 0 6px 18px rgba(14, 60, 28, 0.18);
+
   /* ---------- Textures ----------
      Every box uses --panel-bg + --panel-border, every main button uses --wood-green.
      To restyle all of them at once, change these lines. */
   --wood-cream: url("../assets/figma/wood-cream.jpg");
   --wood-green: url("../assets/figma/wood-green.jpg");
   --leaf-bg: url("../assets/figma/projects-bg.jpg");
-  --panel-bg: #f1e6c8 var(--wood-cream) center / cover;
+  --panel-bg: var(--color-cream-card) var(--wood-cream) center / cover;
   --panel-border: max(2px, calc(6 * var(--u))) solid var(--color-wood-dark);
   --panel-radius: calc(22 * var(--u));
 
@@ -70,7 +83,7 @@ body {
   padding: 0.25em 0.7em;
   border: max(2px, 0.2em) solid var(--color-wood-dark);
   border-radius: 0.45em;
-  background: #f1e6c8 var(--wood-cream) center / cover;
+  background: var(--color-cream-card) var(--wood-cream) center / cover;
   color: var(--color-wood-dark);
   font-family: var(--font-display);
   font-size: calc(40 * var(--u));
@@ -88,7 +101,7 @@ body {
 
 /* Green wood for the main action on a page */
 .btn-primary {
-  background: #3fae4a var(--wood-green) center / 100% 100%;
+  background: var(--color-leaf) var(--wood-green) center / 100% 100%;
   color: var(--color-wood-dark);
 }
 
@@ -120,5 +133,5 @@ body {
 
 /* Pages that sit on the leafy background (AI Studio, Editor, Export) */
 .leaf-page {
-  background: #eef6ee var(--leaf-bg) center / cover no-repeat;
+  background: var(--color-leaf-mist) var(--leaf-bg) center / cover no-repeat;
 }

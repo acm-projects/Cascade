@@ -1,0 +1,33 @@
+/* Full-screen message while AuthGate is talking to the backend */
+.auth-screen {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  padding: var(--space-4);
+  background: var(--color-leaf-mist);
+  color: var(--color-text-green);
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+/* Little tag in the corner so you never forget sign-in is switched off */
+.auth-dev-badge {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-jungle-deep);
+  color: var(--color-cream);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  box-shadow: var(--shadow-soft);
+  pointer-events: auto;
+  cursor: help;
+}
+
+.auth-dev-badge-warn {
+  background: var(--color-plank);
+}

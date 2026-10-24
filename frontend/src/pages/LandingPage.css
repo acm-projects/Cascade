@@ -19,7 +19,7 @@
   font-size: min(14.8vw, 23vh);           /* 256px on the 1728 x 1117 Figma frame */
   letter-spacing: 0.02em;
   white-space: nowrap;
-  -webkit-text-stroke: min(0.55vw, 0.85vh) #2c3e4f;
+  -webkit-text-stroke: min(0.55vw, 0.85vh) var(--color-lake-ink);
   paint-order: stroke fill;               /* draw the outline behind the white */
   text-shadow: 0 0.6vh 1.4vh rgba(20, 40, 50, 0.35);
 }

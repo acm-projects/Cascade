@@ -23,10 +23,13 @@ export function ProjectProvider({ children }) {
     setSourcePos({ x: 80, y: 260 });
   }
 
-  // "+ New Project" on the Projects page
+  // "+ New Project" on the Projects page. Returns the new id so the page can go to /projects/<id>/studio.
+  // FAKE id until the backend creates real projects (ticket 1.6).
   function startNewProject() {
     resetWork();
-    setProject({ id: "new", name: "Untitled project", isExisting: false });
+    const id = `draft-${Date.now().toString(36)}`;
+    setProject({ id, name: "Untitled project", isExisting: false });
+    return id;
   }
 
   // Clicking an existing project: it goes straight to the editor with its saved clips

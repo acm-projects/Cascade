@@ -34,14 +34,14 @@ function ProjectsPage() {
 
   // New project -> AI Studio
   function handleNewProject() {
-    startNewProject();
-    navigate("/studio");
+    const id = startNewProject();
+    navigate(`/projects/${id}/studio`);
   }
 
   // Existing project -> straight to its editor
   function handleOpen(project) {
     openProject(project);
-    navigate("/editor");
+    navigate(`/projects/${project.id}/editor`);
   }
 
   return (
