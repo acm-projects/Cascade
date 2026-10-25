@@ -1,6 +1,6 @@
 # Projects, generation groups and follow-ups
 
-Projects still use the existing owner-scoped JSON store under `video_jobs/projects/`. The visible hierarchy is source video → Session → Waves → Clips. Each new source/prompt exploration starts a Session; repeated same-source/same-prompt generations and subsequent follow-up jobs form additional Waves. Generation groups are generation jobs (Waves), not editing visits or caption-style variants. Both the canvas and editor derive Session/Wave labels from `backend/editor_navigation.py`, retaining source and parent clip IDs. No migration or new storage provider is required. Old owners default to four requested clips and no parent context; old clip identifiers are derived from job ID plus zero-based result index.
+Projects use the existing owner-scoped JSON store under `video_jobs/projects/`. The hierarchy is source video → Session → Waves → Clips. Sessions are named, stored project objects; every new generation records its session ID before work is queued. Projects without stored sessions acquire a persistent Session 1 on read, and legacy generations without a session ID appear there without rewriting their job folders. Missing session IDs on new requests default to the first current session. Old owners default to four requested clips and no parent context; clip identifiers are derived from job ID plus zero-based result index.
 
 ## Interface
 
@@ -14,7 +14,7 @@ Saved groups appear with creation order, prompt, status, requested/actual counts
 
 - `/upload` accepts a new source and a validated `clip_count`, and records request metadata before queuing work.
 - `GET /api/projects/{id}/generations` reconstructs all generation groups from owned jobs/results/failures, including legacy records. In-flight status uses the existing job registry; interrupted jobs become explicit failures after restart.
-- `POST /api/projects/{id}/generations` accepts `prompt`, `clip_count`, `source_job`, `engine`, a submission `request_id`, and optional `parent_job`/`parent_clip_index`. Reusing the same request ID within a project does not enqueue a second generation. A fresh submission creates a fresh job rather than overwriting earlier results.
+- `POST /api/projects/{id}/generations` accepts `prompt`, `clip_count`, `source_job`, `engine`, a submission `request_id`, and optional `parent_job`/`parent_clip_index`. Reusing the same request ID within a session does not enqueue a second generation. A fresh submission creates a fresh job rather than overwriting earlier results.
 - A parent is identified internally as `<job UUID>:<zero-based clip index>`. The server resolves it through ownership-checked saved results, not browser-provided titles or timestamps. Parent context includes its original timestamps, previous prompt, description and available captions.
 - Follow-ups resolve the canonical original source, including when the parent is itself a child. New jobs receive the complete source, preserving existing worker/export contracts and source-relative timestamps. Ordinary requests use the project's original upload. Identical-source analysis reuse remains owner/project scoped.
 - Explicit expansion requests include the full parent plus available surrounding source footage, then retain only additional non-overlapping matches. If the parent already spans the source, no surrounding expansion is fabricated. Other instructions use semantic selection over the original with parent context. Natural-language selection quality still depends on the configured provider/model.
@@ -63,3 +63,51 @@ python3 tests/test_horizontal_browser.py
 ```
 
 The horizontal browser check verifies unique rightward columns for roots, children and siblings, no wrapping, connectors, pending-column identity, scrolling without moving the page, horizontal wheel and synthesized touch gestures, history jump/highlight, reuse, missing-parent metadata and blocked-media handling, retry without duplicate groups/history, reload, 480px page width, per-column scrolling, editor playback, and deletion while preserving another project's saved history. It uses mocked selection/identity with real local HTTP persistence and real video cutting. Synthesized Chrome touch is not physical-device or Safari/Firefox verification. A real fixture screenshot is written to `/tmp/cascade-horizontal-branches.png`.
+
+
+## Stored sessions, selections and multiple references (CAS-20/21/22)
+
+The session API supports GET/POST `/api/projects/{pid}/sessions` and PATCH/DELETE
+`/api/projects/{pid}/sessions/{sid}`. Names are trimmed and limited to 1–60 characters.
+Deleting the last session or a session with an active worker returns 409. Session
+removal marks its jobs inaccessible without deleting media. GET generations accepts
+`?session_id=...`; labels follow the stored session order in both generation history
+and the editor.
+
+GET/POST `/api/projects/{pid}/sessions/{sid}/selections` lists/adds examples;
+DELETE `.../selections/{number}` removes one. GET `/api/projects/{pid}/selections`
+joins all sessions' selections with clip data and session names. Project detail
+includes `selection_count`. A session's selection counter only increases: removing
+Selected 2 never assigns that number to a different clip. Re-selecting an existing
+clip returns its current entry with 200 rather than assigning another number.
+Selection updates run under the existing project lock, including concurrent requests.
+
+Generation requests accept `session_id` and up to six positive integer
+`reference_numbers`, for example `[2, 4]`. When that list is absent or empty, the
+backend parses explicit markers in the prompt: `clip 2 and 4`, `selected 1, 2 & 5`,
+or `#3`. Ordinary counts such as `give me 2 funny clips` are not references.
+Unknown selections return 400; references must belong to the owned project,
+chosen session, and same original upload. Without an explicit `source_job`, references
+identify the source; an ordinary request uses the session's earliest available upload.
+
+Each job records `reference_clips` before queuing. This immutable snapshot contains
+selection numbers, job IDs, clip indices, original timestamps, titles, previous
+prompts, descriptions and up to 4,000 caption characters. The first reference is
+also stored as `parent_clip` for older clients. Legacy parent requests still work.
+Generation history returns all reference edges; retries preserve the original snapshot.
+Multi-example prompts ask the agent to find new moments sharing the examples'
+characteristics. Agent and local search discard candidates overlapping more than
+half of the shorter interval (candidate or example). An explicit single-example
+expansion remains supported and deliberately includes the parent with surrounding
+footage; multiple examples never trigger automatic expansion.
+
+The current repository keeps generation routes in `backend/project_actions.py`,
+project persistence in `backend/integration.py`, and upload processing in `app1.py`.
+These existing locations are extended rather than requiring the planned router refactor.
+No frontend selection UI or multi-edge rendering is introduced by this backend change.
+
+Focused verification:
+
+```sh
+python -m unittest tests.test_references tests.test_generation_groups tests.test_editor_navigation tests.test_main_editor_integration tests.test_logout -q
+```

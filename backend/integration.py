@@ -51,28 +51,34 @@ def project_dir(user_id):
 def require_project(project_id, user_id):
     if not re.fullmatch(r'[0-9a-f]{32}', project_id):
         raise HTTPException(404, 'Project not found.')
-    path = project_dir(user_id) / (project_id + '.json')
-    if not path.is_file():
-        raise HTTPException(404, 'Project not found.')
-    data = json.loads(path.read_text())
-    if data['user_id'] != user_id:
-        raise HTTPException(404, 'Project not found.')
-    return data
+    with lock:
+        path = project_dir(user_id) / (project_id + '.json')
+        if not path.is_file():
+            raise HTTPException(404, 'Project not found.')
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if data['user_id'] != user_id:
+            raise HTTPException(404, 'Project not found.')
+        from backend.services.sessions import list_sessions
+        list_sessions(data)
+        return data
 
 
 def project_jobs(project_id, user_id):
+    from backend.services.sessions import job_session
+    project = require_project(project_id, user_id)
     result = []
     for path in host.JOBS_DIR.glob('*/owner.json'):
         owner = json.loads(path.read_text())
-        if owner.get('user_id') == user_id and owner.get('project_id') == project_id and not owner.get('project_deleted'):
+        if owner.get('user_id') == user_id and owner.get('project_id') == project_id and not owner.get('project_deleted') and not owner.get('session_deleted'):
             result.append({'job_id': path.parent.name, 'prompt': owner.get('prompt', ''),
                            'source_name': owner.get('source_name', ''),
                            'kind': owner.get('kind', 'generation'), 'has_source': (path.parent / 'source.video').is_file(),
                            'created_at': owner.get('created_at', path.stat().st_mtime),
-                           'session_id': owner.get('session_id'), 'wave_id': owner.get('wave_id'),
+                           'session_id': job_session(project, owner), 'wave_id': owner.get('wave_id'),
                            'history_id': owner.get('history_id', path.parent.name), 'creation_order': owner.get('creation_order'),
                            'retry_attempts': owner.get('retry_attempts', []),
                            'requested_clip_count': owner.get('requested_clip_count', 4),
+                           'reference_clips': owner.get('reference_clips', [owner['parent_clip']] if owner.get('parent_clip') else []),
                            'source_job': owner.get('source_job', path.parent.name), 'parent_clip': owner.get('parent_clip')})
     return sorted(result, key=lambda item: item['created_at'], reverse=True)
 
@@ -81,7 +87,7 @@ def owner_for_job(project_id, job_id, user_id):
     require_project(project_id, user_id)
     host.require_job_owner(job_id, user_id)
     owner = json.loads((host.JOBS_DIR / job_id / 'owner.json').read_text())
-    if owner.get('project_id') != project_id:
+    if owner.get('project_id') != project_id or owner.get('session_deleted'):
         raise HTTPException(404, 'Job not found in this project.')
     return owner
 
@@ -92,7 +98,7 @@ def selected_clip(project_id, body, user_id):
     if not path.is_file():
         raise HTTPException(409, 'Clip is not ready.')
     clips = json.loads(path.read_text()).get('clips', [])
-    if body.clip_index >= len(clips):
+    if body.clip_index < 0 or body.clip_index >= len(clips):
         raise HTTPException(404, 'Clip not found.')
     return owner, clips[body.clip_index]
 
@@ -100,8 +106,21 @@ def selected_clip(project_id, body, user_id):
 def original_source(project_id, job_id, user_id):
     visited = set()
     while job_id and job_id not in visited:
+        if not visited:
+            owner = owner_for_job(project_id, job_id, user_id)
+        else:
+            # An accessible job can retain its private source through a removed session.
+            # This exception applies only to ancestry traversal, never direct clip access.
+            if not re.fullmatch(r'[0-9a-f]{32}', job_id):
+                raise HTTPException(404, 'Source job not found.')
+            path = host.JOBS_DIR / job_id / 'owner.json'
+            if not path.is_file():
+                raise HTTPException(409, 'Original source is unavailable.')
+            owner = json.loads(path.read_text(encoding='utf-8'))
+            if (owner.get('user_id') != user_id or owner.get('project_id') != project_id
+                    or owner.get('project_deleted')):
+                raise HTTPException(404, 'Source job not found.')
         visited.add(job_id)
-        owner = owner_for_job(project_id, job_id, user_id)
         if owner.get('parent_job'):
             job_id = owner.get('parent_job')
             continue
@@ -316,7 +335,9 @@ def register(app, backend):
     def get_project(project_id: str, request: Request):
         with lock:
             project = require_project(project_id, request.state.user_id)
-            return {**project, 'jobs': project_jobs(project_id, request.state.user_id)}
+            from backend.services.sessions import list_selections
+            return {**project, 'jobs': project_jobs(project_id, request.state.user_id),
+                    'selection_count': len(list_selections(project))}
 
     @app.get('/api/projects/{project_id}/source/{job_id}')
     def source_video(project_id: str, job_id: str, request: Request):

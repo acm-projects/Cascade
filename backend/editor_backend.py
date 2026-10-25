@@ -591,7 +591,7 @@ def register(app, integration):
                 clips = json.loads(path.read_text()).get('clips', [])
                 group['clips'].extend({**host.public_clip(c), 'job_id': job['job_id'], 'clip_index': i} for i, c in enumerate(clips))
         from backend.editor_navigation import label_waves
-        sessions = label_waves(list(groups.values()))
+        sessions = label_waves(list(groups.values()), project.get('sessions'))
         sessions = [group for group in sessions if group['clips']]
         return {'sessions': sessions, 'selection': project.get('editor_selection')}
 

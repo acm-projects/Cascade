@@ -834,7 +834,7 @@ def require_job_owner(job_id, user_id):
         )
     )
 
-    if owner.get("user_id") != user_id or owner.get("project_deleted"):
+    if owner.get("user_id") != user_id or owner.get("project_deleted") or owner.get("session_deleted"):
         raise HTTPException(
             404,
             "Job not found.",
@@ -1081,7 +1081,7 @@ def process_upload(
     target,
 ):
     folder = JOBS_DIR / job_id
-    from backend.generation import options, contextual_prompt, followup_windows
+    from backend.generation import options, contextual_prompt, finalize_selections
     requested_count, parent_context = options(folder)
     original_search = search
     search = contextual_prompt(search, parent_context)
@@ -1121,7 +1121,7 @@ def process_upload(
         selected, transcript, metadata = select_with_agent(
             video_path, duration, search, target, progress, timer.start,
             **({'requested_count':requested_count} if requested_count!=4 else {}))
-        selected = followup_windows(selected, parent_context, original_search, duration, target, requested_count)
+        selected = finalize_selections(selected, parent_context, original_search, duration, target, requested_count)
         metadata['requested_clip_count']=requested_count
         if len(selected)<requested_count:
             metadata['selection_note']=f'Found {len(selected)} of {requested_count} requested suitable clips. '+metadata.get('selection_note','')
@@ -1234,15 +1234,17 @@ def upload_video(
             parent_owner, parent = integration.selected_clip(project_id, integration.ClipInput(job_id=parent_job, clip_index=parent_clip_index), request.state.user_id)
             original = integration.original_source(project_id, parent_job, request.state.user_id)
             source_job = original.parent.name
-            parent_context = {'clip_id': f'{parent_job}:{parent_clip_index}', 'job_id': parent_job, 'clip_index': parent_clip_index,
-                              'start': parent['start'], 'end': parent['end'], 'title': parent.get('title', ''),
-                              'prompt': parent_owner.get('prompt', ''), 'description': parent.get('explanation', '')}
-            captions_path = JOBS_DIR / parent_job / f'clip_{parent_clip_index+1}.vtt'
-            if captions_path.is_file():
-                parent_context['captions'] = captions_path.read_text(encoding='utf-8-sig')[:12000]
+            from backend.services.references import build_clip_context
+            parent_context = build_clip_context(parent_job, parent_clip_index)
         elif parent_clip_index is not None:
             raise HTTPException(400, 'Choose a parent generation.')
-        if source_job:
+        from backend.services.sessions import require_session
+        project = integration.require_project(project_id, request.state.user_id)
+        session_id = getattr(request.state, 'generation_session_id', None)
+        session = require_session(project, session_id)
+        reference_clips = getattr(request.state, 'generation_references', [parent_context] if parent_context else [])
+        parent_context = reference_clips[0] if reference_clips else None
+        if source_job and not parent_job:
             original = integration.original_source(project_id, source_job, request.state.user_id)
             source_job = original.parent.name
         source_name = Path(video.filename or 'video').name
@@ -1336,6 +1338,8 @@ def upload_video(
                     "created_at": time.time(),
                     "source_job": source_job or job_id,
                     "parent_clip": parent_context,
+                    "reference_clips": reference_clips,
+                    "session_id": session["id"],
 
                     "user_folder": (
                         storage_information["folder"]
@@ -1661,7 +1665,7 @@ def get_my_clips(request: Request):
 
             if (
                 owner.get("user_id")
-                != request.state.user_id or owner.get("project_deleted")
+                != request.state.user_id or owner.get("project_deleted") or owner.get("session_deleted")
             ):
                 continue
 
@@ -1738,3 +1742,7 @@ editor_backend.register(app, integration)
 
 from backend import project_actions
 project_actions.register(app, sys.modules[__name__], integration)
+
+
+from backend.routers.sessions import router as sessions_router
+app.include_router(sessions_router)

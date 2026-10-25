@@ -6,14 +6,18 @@ import time
 from uuid import uuid4
 
 from fastapi import HTTPException, Request, UploadFile
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, StrictInt
+from typing import Annotated
+from backend.services import sessions, references
 
 
 class GenerationInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(min_length=1, max_length=2000)
     clip_count: int = Field(default=4, strict=True, ge=1, le=12)
-    source_job: str
+    session_id: str | None = None
+    reference_numbers: list[Annotated[StrictInt, Field(ge=1)]] = Field(default_factory=list, max_length=6)
+    source_job: str | None = None
     parent_job: str | None = None
     parent_clip_index: int | None = Field(default=None, strict=True, ge=0)
     engine: str = 'agent'
@@ -27,11 +31,15 @@ class RetryInput(BaseModel):
 
 def register(app, host, integration):
     @app.get('/api/projects/{project_id}/generations')
-    def groups(project_id: str, request: Request):
+    def groups(project_id: str, request: Request, session_id: str | None = None):
         with integration.lock:
-            integration.require_project(project_id, request.state.user_id)
+            project = integration.require_project(project_id, request.state.user_id)
+            if session_id is not None:
+                sessions.require_session(project, session_id)
             rows = []
             for number, job in enumerate((j for j in reversed(integration.project_jobs(project_id, request.state.user_id)) if j['kind']=='generation'), 1):
+                if session_id is not None and job['session_id'] != session_id:
+                    continue
                 folder = host.JOBS_DIR / job['job_id']
                 if (folder/'results.json').is_file():
                     result = json.loads((folder/'results.json').read_text())
@@ -45,29 +53,54 @@ def register(app, host, integration):
                          for index, clip in enumerate(status.get('clips', []))]
                 rows.append({**job, **{k:v for k,v in status.items() if k!='clips'}, 'clips': clips, 'order': job.get('creation_order') or number, 'search_type': 'follow-up' if job.get('parent_clip') else 'full-video'})
             from backend.editor_navigation import label_waves
-            return {'groups': label_waves(rows)}
+            return {'groups': label_waves(rows, sessions.list_sessions(project))}
 
     @app.post('/api/projects/{project_id}/generations', status_code=202)
     def generate(project_id: str, body: GenerationInput, request: Request):
         user = request.state.user_id
         with integration.lock:
-            integration.require_project(project_id, user)
+            project = integration.require_project(project_id, user)
+            session = sessions.require_session(project, body.session_id)
             # Retrying the same submission does not enqueue another paid request.
             for job in integration.project_jobs(project_id, user):
                 if job['kind'] != 'generation':
                     continue
                 owner = json.loads((host.JOBS_DIR/job['job_id']/'owner.json').read_text())
-                if owner.get('request_id') == body.request_id:
+                if owner.get('request_id') == body.request_id and sessions.job_session(project, owner) == session['id']:
                     return {'job_id': job['job_id']}
-            source = integration.original_source(project_id, body.source_job, user)
+            numbers = body.reference_numbers or references.parse_reference_numbers(body.prompt)
+            contexts = references.resolve_references(project, session['id'], numbers)
+            source_job = body.source_job or body.parent_job or (contexts[0]['job_id'] if contexts else None)
+            if source_job is None:
+                candidates = [j for j in integration.project_jobs(project_id, user)
+                              if j['session_id'] == session['id'] and j['kind'] == 'generation' and j['has_source']]
+                if not candidates:
+                    raise HTTPException(400, 'Choose an original upload for this session.')
+                source_job = candidates[-1]['job_id']
+            source = integration.original_source(project_id, source_job, user)
             if body.parent_job:
                 parent_source = integration.original_source(project_id, body.parent_job, user)
                 if source.resolve() != parent_source.resolve():
                     raise HTTPException(400, 'Parent clip and source must belong to the same original upload.')
+            if body.parent_job and contexts:
+                raise HTTPException(400, 'Choose numbered references or a legacy parent, not both.')
+            if body.parent_job:
+                if body.parent_clip_index is None:
+                    raise HTTPException(400, 'Choose a parent clip.')
+                parent_owner, _ = integration.selected_clip(project_id, integration.ClipInput(
+                    job_id=body.parent_job, clip_index=body.parent_clip_index), user)
+                if sessions.job_session(project, parent_owner) != session['id']:
+                    raise HTTPException(400, 'Parent clip must belong to this session.')
+                contexts = [references.build_clip_context(body.parent_job, body.parent_clip_index)]
+            for context in contexts:
+                if integration.original_source(project_id, context['job_id'], user).resolve() != source.resolve():
+                    raise HTTPException(400, 'Reference clips and source must belong to the same original upload.')
+            request.state.generation_references = contexts
+            request.state.generation_session_id = session['id']
             with source.open('rb') as file:
                 result = host.upload_video(request=request, video=UploadFile(file=file, filename='saved-source.video'),
                     search=body.prompt, mode='both', clip_length=30, project_id=project_id, engine=body.engine,
-                    clip_count=body.clip_count, source_job=source.parent.name,
+                    clip_count=body.clip_count, source_job=source_job,
                     parent_job=body.parent_job, parent_clip_index=body.parent_clip_index)
             owner_path = host.JOBS_DIR/result['job_id']/'owner.json'
             owner = json.loads(owner_path.read_text())
@@ -91,8 +124,7 @@ def register(app, host, integration):
             if (folder/'results.json').is_file():
                 raise HTTPException(409, 'This generation is complete. Reuse its prompt to create a new request.')
             source = integration.original_source(project_id, job_id, request.state.user_id)
-            parent = owner.get('parent_clip')
-            if parent:
+            for parent in owner.get('reference_clips', [owner['parent_clip']] if owner.get('parent_clip') else []):
                 integration.selected_clip(project_id, integration.ClipInput(job_id=parent['job_id'], clip_index=parent['clip_index']), request.state.user_id)
             engine = owner.get('engine', 'agent')
             if engine in ('openai','qwen'): engine='agent'

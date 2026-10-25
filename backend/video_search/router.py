@@ -176,8 +176,8 @@ def search_video(video, search, mode, clip_length, progress=lambda message: None
             timer.start('Match selection')
             progress(f'Selecting up to {requested_count} distinct non-overlapping matches...')
             selected = select_matches(anchors, duration, clip_length, 3 if mode == 'speech' else 5, limit=requested_count)
-            from backend.generation import followup_windows
-            selected = followup_windows(selected, parent_context, followup_prompt or search, duration, clip_length, requested_count)
+            from backend.generation import finalize_selections
+            selected = finalize_selections(selected, parent_context, followup_prompt or search, duration, clip_length, requested_count)
             has_audio = False
             if mode == 'visual' and selected:
                 timer.start('Audio inspection')

@@ -1,7 +1,8 @@
 """Derived labels; existing job ancestry remains the source of truth."""
-def label_waves(rows):
+def label_waves(rows, stored_sessions=None):
     by_id = {row['job_id']: row for row in rows}
     sessions, counts, explorations, waves = {}, {}, {}, {}
+    sessions.update({session['id']: index for index, session in enumerate(stored_sessions or [], 1)})
     for row in rows:
         root = row
         seen = set()
@@ -16,7 +17,7 @@ def label_waves(rows):
         source=root.get('source_job') or root['job_id']
         prompt=' '.join(root.get('prompt','').split()).casefold()
         exploration=(source,prompt) if prompt else (source,root['job_id'])
-        sid=root.get('session_id') or explorations.setdefault(exploration,root['job_id'])
+        sid=row.get('session_id') or root.get('session_id') or explorations.setdefault(exploration,root['job_id'])
         if sid not in sessions:
             sessions[sid] = len(sessions) + 1
         wid=row.get('wave_id') or row['job_id']
