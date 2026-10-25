@@ -1198,6 +1198,9 @@ def process_upload(
             **metadata,
         )
 
+        from backend.research.jobs import maybe_auto_grade
+        maybe_auto_grade(job_id)
+
     except Exception as error:
         traceback.print_exc()
         message = processing_error(error, stage)
@@ -1735,3 +1738,6 @@ app.include_router(sessions_router)
 
 from backend.routers.projects import router as projects_router
 app.include_router(projects_router)
+
+from backend.routers.research import router as research_router
+app.include_router(research_router)

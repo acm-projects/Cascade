@@ -51,7 +51,12 @@ def register(app, host, integration):
                         status = dict(host.jobs.get(job['job_id'], {'state':'error', 'message':'Processing was interrupted. Retry this request.'}))
                 clips = [{**host.public_clip(clip), 'clip_id': f"{job['job_id']}:{index}", 'clip_index': index}
                          for index, clip in enumerate(status.get('clips', []))]
-                rows.append({**job, **{k:v for k,v in status.items() if k!='clips'}, 'clips': clips, 'order': job.get('creation_order') or number, 'search_type': 'follow-up' if job.get('parent_clip') else 'full-video'})
+                from backend.research.grader import cached_grade
+                for clip in clips:
+                    grade = cached_grade(project_id, job['job_id'], clip['clip_index'], False, request.state.user_id)
+                    clip['grade'] = {'score': grade.score, 'letter': grade.letter} if grade else None
+                best = max(range(len(clips)), key=lambda i: clips[i]['grade']['score']) if clips and all(c['grade'] is not None for c in clips) else None
+                rows.append({**job, 'best_clip_index': best, **{k:v for k,v in status.items() if k!='clips'}, 'clips': clips, 'order': job.get('creation_order') or number, 'search_type': 'follow-up' if job.get('parent_clip') else 'full-video'})
             from backend.editor_navigation import label_waves
             return {'groups': label_waves(rows, sessions.list_sessions(project))}
 

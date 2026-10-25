@@ -479,6 +479,29 @@ def analysis_record(path):
     return dict(cached_analysis_record(str(path),stat.st_mtime_ns,stat.st_size))
 
 
+@contextmanager
+def clip_media(jid, clip, captions=False):
+    from backend import integration
+    host = integration.host
+    field = 'captions_url' if captions else 'clip_url'
+    name = Path(clip.get(field, '')).name
+    if not re.fullmatch(r'clip_[1-9][0-9]*\.(mp4|vtt)', name):
+        raise HTTPException(404, 'Clip media is unavailable.')
+    path = host.JOBS_DIR / jid / name
+    if path.is_file():
+        yield path
+        return
+    key = clip.get('captions_s3_key' if captions else 'clip_s3_key')
+    if not key:
+        raise HTTPException(404, 'Clip media is missing.')
+    with tempfile.TemporaryDirectory(prefix='cascade-editor-') as directory:
+        path = Path(directory) / name
+        try:
+            host.s3_client().download_file(clip['s3_bucket'], key, str(path))
+        except Exception:
+            raise HTTPException(503, 'Could not retrieve clip media. Retry.')
+        yield path
+
 def register(app, integration):
     host = integration.host
 
@@ -488,26 +511,7 @@ def register(app, integration):
         from types import SimpleNamespace
         return integration.selected_clip(pid, SimpleNamespace(job_id=jid, clip_index=index), user)[1]
 
-    @contextmanager
-    def media(jid, clip, captions=False):
-        field = 'captions_url' if captions else 'clip_url'
-        name = Path(clip.get(field, '')).name
-        if not re.fullmatch(r'clip_[1-9][0-9]*\.(mp4|vtt)', name):
-            raise HTTPException(404, 'Clip media is unavailable.')
-        path = host.JOBS_DIR / jid / name
-        if path.is_file():
-            yield path
-            return
-        key = clip.get('captions_s3_key' if captions else 'clip_s3_key')
-        if not key:
-            raise HTTPException(404, 'Clip media is missing.')
-        with tempfile.TemporaryDirectory(prefix='cascade-editor-') as directory:
-            path = Path(directory) / name
-            try:
-                host.s3_client().download_file(clip['s3_bucket'], key, str(path))
-            except Exception:
-                raise HTTPException(503, 'Could not retrieve clip media. Retry.')
-            yield path
+    media = clip_media
 
     def details(jid, clip):
         folder = host.JOBS_DIR / jid

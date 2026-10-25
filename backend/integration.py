@@ -149,6 +149,9 @@ def finish_feature(job_id, result):
     host.save_json(host.JOBS_DIR / job_id / 'results.json', result)
     host.update_job(job_id, state='done', message='Processing complete.',
                     **{**result, 'clips': [host.public_clip(c) for c in result.get('clips', [])]})
+    from backend.research.jobs import maybe_auto_grade
+    maybe_auto_grade(job_id)
+
 
 
 def fail_feature(job_id, message=None):

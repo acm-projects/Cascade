@@ -10,7 +10,7 @@ cp .env.example .env  # Only when creating a new configuration; keep an existing
 uvicorn app1:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Install FFmpeg/FFprobe separately. See [setup and configuration](docs/setup.md), [editor behavior and browser checks](docs/editor.md), and [multi-clip investigation](docs/multi-clip-investigation.md), and [project groups and follow-ups](docs/project-generations.md).
+Install FFmpeg/FFprobe separately. See [clip and wave grading](docs/research-grading.md), [setup and configuration](docs/setup.md), [editor behavior and browser checks](docs/editor.md), and [multi-clip investigation](docs/multi-clip-investigation.md), and [project groups and follow-ups](docs/project-generations.md).
 
 ```text
 app1.py                  FastAPI entry point, authentication, upload/generation

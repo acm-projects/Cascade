@@ -31,10 +31,7 @@ def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
 
     Returns a list of dicts: {video_id, title, channel, url, view_count, published_at}
     """
-    if not YOUTUBE_API_KEY:
-        raise RuntimeError("YOUTUBE_API_KEY is not set")
-
-    youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+    youtube = youtube_client()
 
     search_response = (
         youtube.search()
@@ -83,3 +80,11 @@ def _recent_iso(days: int) -> str:
 
     dt = datetime.now(timezone.utc) - timedelta(days=days)
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def youtube_client(api_key=None):
+    """Shared YouTube transport; read runtime keys after .env has loaded."""
+    key = api_key or os.environ.get('YOUTUBE_API_KEY') or YOUTUBE_API_KEY
+    if not key:
+        raise RuntimeError('YOUTUBE_API_KEY is not set')
+    return build('youtube', 'v3', developerKey=key, cache_discovery=False)
