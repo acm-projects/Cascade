@@ -70,14 +70,19 @@ def register(app, host, integration):
                     return {'job_id': job['job_id']}
             numbers = body.reference_numbers or references.parse_reference_numbers(body.prompt)
             contexts = references.resolve_references(project, session['id'], numbers)
-            source_job = body.source_job or body.parent_job or (contexts[0]['job_id'] if contexts else None)
+            project_source = project.get('source_job')
+            if project_source and project.get('source_status') != 'ready':
+                raise HTTPException(409, 'Project source video is not ready. Wait for preparation to finish or check source_error.')
+            source_job = body.source_job or project_source or body.parent_job or (contexts[0]['job_id'] if contexts else None)
             if source_job is None:
                 candidates = [j for j in integration.project_jobs(project_id, user)
                               if j['session_id'] == session['id'] and j['kind'] == 'generation' and j['has_source']]
                 if not candidates:
-                    raise HTTPException(400, 'Choose an original upload for this session.')
+                    raise HTTPException(409, 'Upload a project source video before generating clips.')
                 source_job = candidates[-1]['job_id']
             source = integration.original_source(project_id, source_job, user)
+            if project_source and source.resolve() != integration.original_source(project_id, project_source, user).resolve():
+                raise HTTPException(400, 'Generations must use this project source video.')
             if body.parent_job:
                 parent_source = integration.original_source(project_id, body.parent_job, user)
                 if source.resolve() != parent_source.resolve():

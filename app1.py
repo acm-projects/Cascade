@@ -1301,34 +1301,20 @@ def upload_video(
         job_id = uuid4().hex
 
         folder = JOBS_DIR / job_id
-        folder.mkdir()
 
         video_path = folder / "source.video"
 
         try:
-            fingerprint = hashlib.sha256()
+            from backend.services.uploads import save_uploaded_source
             if source_job:
                 video.file.close()
                 video.file = original.open('rb')
-            with video_path.open("wb") as destination:
-                while chunk := video.file.read(1024 * 1024):
-                    fingerprint.update(chunk)
-                    destination.write(chunk)
-
-            if video_path.stat().st_size == 0:
-                raise HTTPException(
-                    400,
-                    "The uploaded file is empty.",
-                )
-
-            save_json(
-                folder / "owner.json",
+            save_uploaded_source(video,
                 {
                     "user_id": request.state.user_id,
                     "project_id": project_id,
                     "prompt": search,
                     "source_name": source_name,
-                    "video_sha256": fingerprint.hexdigest(),
                     "engine": engine,
                     "mode": mode if engine=="agent" else engine,
                     "clip_length": clip_length,
@@ -1348,8 +1334,8 @@ def upload_video(
                     "folder_source": (
                         storage_information["source"]
                     ),
-                },
-            )
+                }, job_id=job_id)
+            saved_owner = json.loads((folder / 'owner.json').read_text(encoding='utf-8'))
             # Reuse only analysis from the same verified account and project.
             for previous in JOBS_DIR.glob('*/owner.json'):
                 if previous.parent == folder:
@@ -1359,14 +1345,14 @@ def upload_video(
                 except (OSError, ValueError):
                     continue
                 if (owner.get('user_id') == request.state.user_id and owner.get('project_id') == project_id
-                        and owner.get('video_sha256') == fingerprint.hexdigest()):
+                        and owner.get('video_sha256') == saved_owner['video_sha256']):
                     for name in ('transcript.json', 'video_descriptions.json', 'visual_analysis_settings.json', 'openai_selection.json'):
                         cached = previous.parent / name
                         if cached.is_file() and not (folder / name).exists():
                             shutil.copyfile(cached, folder / name)
 
         except Exception:
-            shutil.rmtree(folder)
+            shutil.rmtree(folder, ignore_errors=True)
             raise
 
         finally:
@@ -1746,3 +1732,6 @@ project_actions.register(app, sys.modules[__name__], integration)
 
 from backend.routers.sessions import router as sessions_router
 app.include_router(sessions_router)
+
+from backend.routers.projects import router as projects_router
+app.include_router(projects_router)

@@ -295,3 +295,21 @@ class ReferenceApiTests(unittest.TestCase):
         self.assertIn('delete', paths['/api/projects/{pid}/sessions/{sid}/selections/{number}'])
         self.assertIn('get', paths['/api/projects/{pid}/selections'])
         self.assertEqual(self.client.get('/docs').status_code, 200)
+
+    def test_session_names_counts_and_crud_routes_survive_reload(self):
+        response = self.call('post', '/sessions', json={})
+        self.assertEqual(response.status_code, 201)
+        session = response.json()
+        self.assertEqual(session['name'], 'Session 2')
+        sid = session['id']
+        renamed = self.call('patch', '/sessions/' + sid, json={'name': '  Saved session  '})
+        self.assertEqual(renamed.json()['name'], 'Saved session')
+        created = self.generate(prompt='moments', source_job=self.jid, session_id=sid)
+        self.assertEqual(created.status_code, 202)
+        app1.jobs.clear()
+        rows = self.call('get', '/sessions').json()['sessions']
+        self.assertEqual([(row['name'], row['wave_count']) for row in rows],
+                         [('Session 1', 1), ('Saved session', 1)])
+        paths = self.client.get('/openapi.json').json()['paths']
+        self.assertTrue({'get', 'post'} <= paths['/api/projects/{pid}/sessions'].keys())
+        self.assertTrue({'patch', 'delete'} <= paths['/api/projects/{pid}/sessions/{sid}'].keys())

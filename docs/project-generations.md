@@ -111,3 +111,38 @@ Focused verification:
 ```sh
 python -m unittest tests.test_references tests.test_generation_groups tests.test_editor_navigation tests.test_main_editor_integration tests.test_logout -q
 ```
+
+
+## Project source upload (CAS-19)
+
+`POST /api/projects/{project_id}/source` accepts multipart `video` independently of
+any prompt. It returns 202 with `source_job` and `status: processing`. The project
+stores `source_job`, `source_status`, `source_duration`, `thumbnail_url`, and
+`source_error`. A second source upload returns 409, including after preparation
+failed; use a new project for a different source. Source records use `kind: source`
+and belong to the project rather than a session.
+
+The preparation worker probes the media, atomically writes a 640-pixel-wide JPEG
+at 10% of the duration, then calls the same `build_index` and `ensure_summaries`
+functions as the clip agent. Existing content-hash/provider/model cache keys let
+later generations reuse the frame embeddings, transcript, transcript embeddings,
+and summaries. The thumbnail is available from the owner-protected
+`GET /api/projects/{project_id}/thumbnail` while the expensive index is still
+processing. Preparation finishes as `ready` or records a safe `error` message.
+Project deletion is blocked while source preparation is active.
+
+A generation can supply only `prompt`, `clip_count`, and `request_id`; the session
+defaults to the first session and the source defaults to the project's source.
+An unprepared project source returns 409. Legacy projects with original uploads
+can continue resolving those uploads, and the combined `POST /upload` flow remains
+available. Both upload paths share streaming save, SHA-256 fingerprinting, empty-file
+validation, owner persistence, and cleanup. The old upload path has no extension
+or upload-size policy; this change preserves that policy and validates video media
+through FFprobe during preparation.
+
+Offline source checks mock transcription and AI services. A generated five-minute
+video additionally exercises real FFprobe inspection and FFmpeg JPEG rendering:
+
+```sh
+python -m unittest tests.test_project_source tests.test_references tests.test_generation_groups tests.test_editor_navigation tests.test_main_editor_integration tests.test_logout -q
+```

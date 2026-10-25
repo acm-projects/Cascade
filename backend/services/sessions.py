@@ -51,6 +51,8 @@ def rename_session(project, sid, name):
 
 
 def job_session(project, owner):
+    if owner.get('kind') == 'source':
+        return None  # Sources belong to the project, independently of any session.
     # Legacy jobs retain the original first session even if newer sessions are added.
     return owner.get('session_id') or project.get('legacy_session_id') or list_sessions(project)[0]['id']
 
