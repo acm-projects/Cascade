@@ -253,3 +253,45 @@ class ReferenceApiTests(unittest.TestCase):
         response = self.generate(prompt='more moments', source_job=jid, session_id=sid, request_id='after-delete')
         self.assertEqual(response.status_code, 202, response.text)
         self.assertEqual((self.root / response.json()['job_id'] / 'source.video').read_bytes(), b'original video')
+
+    def test_unfinished_clip_cannot_be_selected_or_consume_number(self):
+        results = self.root / self.jid / 'results.json'
+        saved = results.read_bytes()
+        results.unlink()
+        response = self.select(0)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.call('get', f'/sessions/{self.sid}/selections').json()['selections'], [])
+        results.write_bytes(saved)
+        self.assertEqual(self.select(0).json()['number'], 1)
+
+    def test_project_selection_list_joins_multiple_sessions_and_metadata(self):
+        self.select(0)
+        sid = self.call('post', '/sessions', json={'name': 'Second session'}).json()['id']
+        response = self.generate(prompt='new moments', session_id=sid, source_job=self.jid)
+        jid = response.json()['job_id']
+        app1.jobs.pop(jid, None)
+        clip = {'title': 'Second example', 'start': 42, 'end': 55,
+                'clip_url': f'/clips/{jid}/clip_1.mp4', 'thumbnail': 'preview.jpg'}
+        app1.save_json(self.root / jid / 'results.json', {'clips': [clip]})
+        response = self.select(0, sid=sid, jid=jid)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['number'], 1)
+        rows = self.call('get', '/selections').json()['selections']
+        self.assertEqual([(row['session_name'], row['number']) for row in rows],
+                         [('Session 1', 1), ('Second session', 1)])
+        for key, value in clip.items():
+            self.assertEqual(rows[1][key], value)
+        self.assertEqual(self.call('get', '').json()['selection_count'], 2)
+        self.assertEqual(self.call('get', f'/sessions/{self.sid}/selections').json()['selections'][0]['job_id'], self.jid)
+
+    def test_deleted_selection_job_is_logged_and_all_selection_routes_documented(self):
+        self.select(0)
+        (self.root / self.jid / 'owner.json').unlink()
+        with self.assertLogs('backend.services.sessions', level='WARNING') as captured:
+            self.assertEqual(self.call('get', '/selections').json()['selections'], [])
+        self.assertIn('Skipping unavailable selection', captured.output[0])
+        paths = self.client.get('/openapi.json').json()['paths']
+        self.assertTrue({'get', 'post'} <= paths['/api/projects/{pid}/sessions/{sid}/selections'].keys())
+        self.assertIn('delete', paths['/api/projects/{pid}/sessions/{sid}/selections/{number}'])
+        self.assertIn('get', paths['/api/projects/{pid}/selections'])
+        self.assertEqual(self.client.get('/docs').status_code, 200)
