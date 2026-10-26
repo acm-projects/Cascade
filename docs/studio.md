@@ -11,8 +11,9 @@ It needs no separate frontend server, CDN scripts, or browser-exposed API keys.
    processing, error and fewer-than-requested results are shown honestly.
 3. Check the single **Select clip** checkbox on one or more clips. Those same
    checked clips are the assistant context and the Editor selection. Current-session
-   selections appear above the composer. Ask for similar moments to revise those
-   slots in the existing generation, or discuss the selected clips. Different footage
+   selections appear above the composer. Ask for similar moments to add child clips connected directly to the checked
+   clips in the same session. Parents stay visible and unchanged; any child can
+   be checked to branch again. Or discuss the selected clips. Different footage
    from the uploaded source can match their humor, action, tone and pacing.
 4. **Discuss clips** asks the configured model about the selected context and saves
    the conversation without queueing generation. It does not claim to edit media.
@@ -99,3 +100,7 @@ slot receives no alternatives, it keeps the previous clip. On completion, checke
 originals are replaced in the shared selection by their visible replacement clips.
 Unchecking while a request is pending prevents it from selecting the replacements
 again. Empty and failed requests retain the previous visible results and selection.
+
+Select two or more clips to combine their creative qualities in each new result.
+For example, ask for three clips blending one reference’s humor with another’s action.
+Each child connects to all selected parents; the source video supplies the footage.

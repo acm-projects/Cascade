@@ -23,8 +23,8 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function generationStatus(group) {
   if (isRunning(group)) return group.message || "Finding your moments…";
   if (group.state === "error") return group.message || "That request failed. Use Retry on the canvas.";
-  if (group.studio_revision_of && !group.clips.length) return "No new matches. Your previous clip is kept.";
-  const found = `${group.studio_revision_of ? "Updated your picked clip with" : "Found"} ${plural(group.clips.length, "clip")}.`;
+  if (group.parent_clips?.length && !group.clips.length) return "No new matches. Your previous clip is kept.";
+  const found = `${group.parent_clips?.length ? "Added similar clips:" : "Found"} ${plural(group.clips.length, "clip")}.`;
   return `${found} Pick the ones you like, then go to the Editor.${group.selection_note ? ` (${group.selection_note})` : ""}`;
 }
 
@@ -156,7 +156,7 @@ function StudioPage() {
       if (session.source_job) {
         await api.studioGenerate(projectId, session.id, {
           prompt: text, clip_count: clipCount, references,
-          operation: references.length ? "revise" : "generate",
+          operation: references.length ? "branch" : "generate",
           request_id: submission.current.id,
         });
       } else {
@@ -243,7 +243,8 @@ function StudioPage() {
 
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
   let note;
-  if (references.length) note = `${plural(references.length, "picked clip")} will guide this prompt: it finds more like them.`;
+  if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
+  else if (references.length) note = `${plural(references.length, "picked clip")} will guide this prompt: new clips branch from them and keep the originals.`;
   else if (!session.source_job) note = pendingFile ? "Your video uploads when you send your first prompt." : "Choose a video on the canvas, then describe the clips you want.";
 
   return (

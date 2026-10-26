@@ -32,6 +32,13 @@ class SocialTests(unittest.TestCase):
         self.base = '/api/projects/p/editor/j/0/publish/youtube'
     def tearDown(self):
         self.env.stop();self.temp.cleanup()
+    def test_schedule_lock_releases_after_failure(self):
+        with self.assertRaises(RuntimeError):
+            with social.schedule_lock('same-publish-request'):
+                raise RuntimeError('interrupted')
+        with social.schedule_lock('same-publish-request'):
+            pass
+
     def test_owner_and_missing_account(self):
         self.assertEqual(self.client.get(self.base, headers={'x-user':'other'}).status_code,404)
         self.assertEqual(self.client.post(self.base,json={'title':'Title','edit':{},'submission_id':str(uuid.uuid4())}).status_code,409)

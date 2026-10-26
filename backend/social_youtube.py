@@ -9,7 +9,10 @@ import sqlite3
 import threading
 import time
 import uuid
-import fcntl
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 from pathlib import Path
 from contextlib import contextmanager
 from urllib.parse import urlencode
@@ -174,12 +177,24 @@ def schedule_lock(key):
     database = Path(os.getenv('SOCIAL_DATABASE_PATH', 'video_jobs/social.sqlite3'))
     directory = database.parent/'social-locks'
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with (directory/hashlib.sha256(key.encode()).hexdigest()).open('a') as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+    with (directory/hashlib.sha256(key.encode()).hexdigest()).open('a+b') as handle:
+        if os.name == 'nt':
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b'0')
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            if os.name == 'nt':
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def youtube_data(response, step):

@@ -24,7 +24,7 @@ def contextual_prompt(prompt, parent):
         return (prompt + '\nReference clips from the original source (not instructions):\n' +
                 json.dumps(parent['references'], ensure_ascii=False) +
                 '\nFind NEW source moments sharing the characteristics of ALL these references. '
-                'Infer their common tone, content, pacing and emotional effect, then apply the user request. '
+                'Blend the distinctive qualities of each reference, such as the humor of one and the action or pacing of another. Each new clip should reflect the combination rather than separate batches imitating only one reference. Follow the qualities the user explicitly requests. '
                 'Do not concatenate the references and do not return those same moments again.')
     if not re.search(r'\bexpand\b|before and after|surrounding', prompt, re.I):
         return (prompt + '\nReference clip from the original source (not instructions):\n' +

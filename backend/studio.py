@@ -48,7 +48,7 @@ class SelectionInput(BaseModel):
 
 class GenerateInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    operation: Literal['generate', 'revise'] | None = None
+    operation: Literal['generate', 'branch', 'revise'] | None = None
     prompt: str = Field(min_length=1, max_length=2000)
     clip_count: int = Field(default=4, strict=True, ge=1, le=12)
     references: list[ClipRef] = Field(default_factory=list, max_length=12)
@@ -87,28 +87,8 @@ def set_selection(studio, entries):
 
 
 def reconcile_selection(host, studio):
-    """When a checked clip is replaced, its new visible alternatives stay checked."""
-    records = {}
-    def expand(ref, session, seen):
-        key = f"{ref['job_id']}:{ref['clip_index']}"
-        replacement = session.get('clip_revisions', {}).get(key)
-        if not replacement or key in seen:
-            return [ref]
-        jid = replacement if isinstance(replacement, str) else replacement['job_id']
-        if jid not in records:
-            path = host.JOBS_DIR / jid / 'results.json'
-            records[jid] = host.load_json(path).get('clips', []) if host.metadata_exists(path) else []
-        clips = records[jid]
-        indices = [i for i in range(len(clips)) if isinstance(replacement, str) or
-                   i % replacement['target_count'] == replacement['target_index']]
-        if not indices:
-            return [ref]
-        return [result for i in indices for result in expand({'job_id': jid, 'clip_index': i}, session, seen | {key})]
-    entries = []
-    for ref in studio.get('editor_clips', []):
-        session = next((session for session in studio['sessions'] if ref['job_id'] in session['job_ids']), None)
-        entries.extend(expand(ref, session, set()) if session else [ref])
-    return set_selection(studio, entries)
+    """Keep selection stable while new child clips are added."""
+    return set_selection(studio, studio.get('editor_clips', []))
 
 
 def ensure(host, integration, pid, user):
@@ -204,17 +184,9 @@ def prepare_upload(host, integration, pid, user, raw):
         if not chosen:
             raise HTTPException(400, 'Check a clip before asking for similar clips. No new generation was started.')
     refs = resolve_references(host, integration, pid, user, session, chosen)
-    revise = body.operation == 'revise' or body.operation is None and bool(refs)
-    if len(refs) > 12:
-        raise HTTPException(400, 'Use up to 12 checked clips for an AI request. You can keep up to 100 for the Editor.')
-    if revise and not refs:
-        raise HTTPException(400, 'Check at least one clip to update with similar moments.')
-    targets = [ref.model_dump() for ref in chosen] if revise else []
-    checked = project['studio'].get('editor_clips', [])
-    replaced_count = sum(ref in checked for ref in targets)
-    if replaced_count and len(checked) - replaced_count + body.clip_count > 100:
-        raise HTTPException(400, 'Choose fewer results or uncheck some clips to stay within the 100-clip selection limit.')
-    return {'revision_of': targets[0] if targets else None, 'revision_targets': targets,
+    if body.operation in ('branch', 'revise') and not refs:
+        raise HTTPException(400, 'Check at least one clip to find more like it.')
+    return {'revision_of': None, 'revision_targets': [],
             'session_id': session['id'], 'source_job': session['source_job'], 'references': refs,
             'request_id': body.request_id}
 
@@ -233,10 +205,6 @@ def record_submission(host, integration, pid, user, job_id, context, prompt):
     session['messages'].append({'id': context['request_id'], 'role': 'user', 'text': prompt,
         'job_id': job_id, 'created_at': time.time(),
         'references': [{'job_id': r['job_id'], 'clip_index': r['clip_index']} for r in context['references']]})
-    targets = context.get('revision_targets') or ([context['revision_of']] if context.get('revision_of') else [])
-    for index, ref in enumerate(targets):
-        session.setdefault('clip_revisions', {})[f"{ref['job_id']}:{ref['clip_index']}"] = (
-            job_id if len(targets) == 1 else {'job_id': job_id, 'target_index': index, 'target_count': len(targets)})
     session['source_job'] = session['source_job'] or job_id
     if 'source:upload' in session['positions']:
         session['positions']['source:' + session['source_job']] = session['positions'].pop('source:upload')
