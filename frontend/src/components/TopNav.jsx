@@ -9,6 +9,12 @@ const steps = [
   { id: "export", number: 3, label: "Export" },
 ];
 
+// /projects/<id>/studio|editor|export. While you're in an AI Studio session, the AI Studio link keeps it.
+function stepPath(projectId, stepId, sessionId) {
+  const path = `/projects/${projectId}/${stepId}`;
+  return stepId === "studio" && sessionId ? `${path}/${sessionId}` : path;
+}
+
 // The wooden bar across the top of AI Studio, Editor and Export (Figma Page 7, 1728 x 119).
 //   projectTitle   - shown next to the logo
 //   projectId      - used to build the step links (defaults to the one in the URL)
@@ -52,7 +58,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
           }
 
           return (
-            <NavLink key={step.id} to={`/projects/${id}/${step.id}`} className={className}>
+            <NavLink key={step.id} to={stepPath(id, step.id, params.sessionId)} className={className}>
               {content}
             </NavLink>
           );

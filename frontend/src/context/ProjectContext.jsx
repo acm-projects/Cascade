@@ -8,6 +8,7 @@ export function ProjectProvider({ children }) {
   const [project, setProject] = useState(null);           // { id, name, isExisting }
   const [sourceVideo, setSourceVideo] = useState(null);   // the dropped video: { name, url, duration }
   const [messages, setMessages] = useState([]);           // AI Studio chat: [{ role, text }]
+  const [prompts, setPrompts] = useState([]);             // AI Studio prompts: [{ id, text, batch, x, y, loading }]
   const [clips, setClips] = useState([]);                 // generated / saved clips: [{ id, start, end, x, y, batch }]
   const [sourcePos, setSourcePos] = useState({ x: 80, y: 260 }); // where the video node sits on the AI Studio canvas
   const [selectedIds, setSelectedIds] = useState([]);     // which clips go to the editor
@@ -17,6 +18,7 @@ export function ProjectProvider({ children }) {
     if (sourceVideo) URL.revokeObjectURL(sourceVideo.url);
     setSourceVideo(null);
     setMessages([]);
+    setPrompts([]);
     setClips([]);
     setSelectedIds([]);
     setAspectRatio("16:9");
@@ -51,6 +53,7 @@ export function ProjectProvider({ children }) {
     project, setProject,
     sourceVideo, setSourceVideo,
     messages, setMessages,
+    prompts, setPrompts,
     clips, setClips,
     sourcePos, setSourcePos,
     selectedIds, setSelectedIds,

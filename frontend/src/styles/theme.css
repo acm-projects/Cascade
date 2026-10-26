@@ -142,3 +142,11 @@ body {
   outline: 3px solid var(--color-leaf);
   outline-offset: 2px;
 }
+
+/* Full-screen spinner while a page's code is downloading */
+.page-loading {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  background: var(--color-leaf-mist);
+}
