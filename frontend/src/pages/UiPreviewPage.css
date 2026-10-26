@@ -1,0 +1,75 @@
+.ui-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 100vh;
+  padding-bottom: var(--space-4);
+}
+
+/* Small caption above each TopNav demo, lined up with the bar's left edge */
+.ui-preview-label {
+  margin: var(--space-2) calc(24 * var(--u)) calc(-1 * var(--space-1));
+  color: var(--color-text-green);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.ui-preview-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-3);
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 0 var(--space-3);
+}
+
+.ui-preview-heading {
+  grid-column: 1 / -1;
+  color: var(--color-text-green);
+  font-family: var(--font-display);
+}
+
+.ui-preview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  color: var(--color-wood-text);
+}
+
+.ui-preview-card > .ui-empty {
+  align-self: stretch;
+}
+
+.ui-preview-card h2 {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+}
+
+.ui-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ui-preview-row code {
+  width: 80px;
+  font-size: 0.85rem;
+}
+
+.ui-preview-hint {
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.ui-preview-actions {
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
+.ui-preview-row.ui-preview-actions {
+  width: 100%;
+}

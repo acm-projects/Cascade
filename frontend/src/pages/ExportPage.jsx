@@ -1,6 +1,6 @@
 import { useState } from "react";
 import "./ExportPage.css";
-import TopBar from "../components/TopBar";
+import TopNav from "../components/TopNav";
 import SequencePlayer from "../components/SequencePlayer";
 import { useProject } from "../context/ProjectContext";
 
@@ -24,7 +24,12 @@ function ExportPage() {
 
   return (
     <div className="export leaf-page">
-      <TopBar title={project?.name} activeStep="export" stepsUnlocked={stepsUnlocked} />
+      <TopNav
+        projectTitle={project?.name}
+        active="export"
+        canOpenEditor={stepsUnlocked}
+        canOpenExport={stepsUnlocked}
+      />
 
       <div className="export-body">
         {/* Video preview with play bar (1068 x 659) */}

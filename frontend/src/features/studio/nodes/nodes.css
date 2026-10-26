@@ -1,0 +1,134 @@
+/* Canvas boxes. Plain px: the canvas zoom scales them. Colors come from theme.css. */
+.studio-node {
+  border: 3px solid var(--color-wood-dark);
+  border-radius: 16px;
+  background: var(--color-cream-card) var(--wood-cream) center / cover;
+  color: var(--color-wood-text);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Selected box (React Flow adds .selected to the wrapper) */
+.react-flow__node.selected > .studio-node {
+  outline: 3px solid var(--color-leaf);
+  outline-offset: 2px;
+}
+
+/* ---------- Video ---------- */
+.studio-source-node {
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  height: 290px;
+  padding: 12px;
+}
+
+.studio-drop {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 3px dashed color-mix(in srgb, var(--color-wood-dark) 45%, transparent);
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.studio-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 50px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
+  color: var(--color-cream-card);
+  font-size: 24px;
+}
+
+.studio-drop-title {
+  margin-top: 6px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 22px;
+}
+
+.studio-drop-hint {
+  font-size: 15px;
+  opacity: 0.8;
+}
+
+.studio-drop .btn {
+  margin-top: 8px;
+  font-size: 18px;
+}
+
+.studio-source-video {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-radius: 10px;
+  background: var(--color-jungle-deep);
+  object-fit: contain;
+}
+
+.studio-source-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.studio-source-name span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.studio-source-name button {
+  border: none;
+  background: none;
+  color: var(--color-wood-dark);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ---------- Prompt ---------- */
+.studio-prompt-node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 260px;
+  padding: 12px 16px;
+}
+
+.studio-prompt-text {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.studio-prompt-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+/* ---------- Clip: a wooden frame around the ClipCard (drag by the frame) ---------- */
+.studio-clip-node {
+  width: 256px;
+  padding: 7px;
+  cursor: grab;
+}
+
+.studio-clip-card {
+  height: 135px;
+}

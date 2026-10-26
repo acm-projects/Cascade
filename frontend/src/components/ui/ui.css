@@ -1,0 +1,126 @@
+/* Styles for the small UI kit in components/ui. Colors come only from theme.css. */
+
+/* ---------- Button extras (the base .btn styles live in theme.css) ---------- */
+.btn-md {
+  font-size: calc(28 * var(--u));
+}
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.btn-ghost:hover {
+  background: color-mix(in srgb, var(--color-wood-dark) 10%, transparent);
+  filter: none;
+}
+
+/* ---------- Modal ---------- */
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--color-jungle-deep) 45%, transparent);
+}
+
+.ui-modal {
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  padding: var(--space-3);
+  box-shadow: var(--shadow-soft);
+  color: var(--color-wood-text);
+}
+
+.ui-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.ui-modal-title {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+}
+
+/* ---------- Spinner ---------- */
+.ui-spinner {
+  display: inline-block;
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  border: calc(var(--spinner-size) / 8) solid color-mix(in srgb, var(--color-leaf) 25%, transparent);
+  border-top-color: var(--color-leaf);
+  border-radius: 50%;
+  animation: ui-spin 0.8s linear infinite;
+}
+
+@keyframes ui-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* ---------- Empty state ---------- */
+.ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  color: var(--color-text-green);
+  text-align: center;
+}
+
+.ui-empty-icon {
+  font-size: 2.5rem;
+}
+
+.ui-empty-title {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+}
+
+.ui-empty-text {
+  max-width: 320px;
+  color: color-mix(in srgb, var(--color-text-green) 75%, transparent);
+}
+
+/* ---------- Toasts: stacked at the bottom middle ---------- */
+.ui-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-3);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  translate: -50% 0;
+  pointer-events: none;
+}
+
+.ui-toast {
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-jungle-deep);
+  color: var(--color-cream);
+  font-family: var(--font-ui);
+  box-shadow: var(--shadow-soft);
+  animation: ui-toast-in 0.2s ease-out;
+}
+
+.ui-toast-error {
+  background: var(--color-plank);
+}
+
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}

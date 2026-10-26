@@ -1,216 +1,155 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useMemo } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
-import TopBar from "../components/TopBar";
-import ChatBox from "../components/ChatBox";
-import ClipCard from "../components/ClipCard";
-import BranchCanvas from "../components/BranchCanvas";
+import TopNav from "../components/TopNav";
+import EmptyState from "../components/ui/EmptyState";
 import { useProject } from "../context/ProjectContext";
-import { layoutBatch, arrangeClips } from "../utils/canvasLayout";
+import SessionBar from "../features/studio/SessionBar";
+import ChatPanel from "../features/studio/ChatPanel";
+import StudioCanvas from "../features/studio/StudioCanvas";
+import { nodeTypes } from "../features/studio/nodes";
+import { edgeTypes } from "../features/studio/edges";
+import { mockSession, makeFakeClips, layoutBatch, buildPretendGraph } from "../features/studio/mockData";
 
-// Buttons under the chat box that send a ready-made prompt
-const quickActions = [
-  { label: "✦ Generate Clips", prompt: "Find the best moments for short clips" },
-  { label: "CC Add Captions", prompt: "Add captions to my clips" },
-];
-
-// FAKE results for now: pick a few random moments from the video.
-// Later, the backend will send back real { start, end } times for the prompt.
-function makeFakeClips(duration) {
-  const length = Number.isFinite(duration) && duration > 0 ? duration : 30;
-  const count = 3 + Math.floor(Math.random() * 2);            // 3 or 4 clips
-  const clips = [];
-  for (let i = 0; i < count; i++) {
-    const clipLength = Math.min(2 + Math.random() * 4, length);
-    const start = Math.random() * (length - clipLength);
-    clips.push({ start, end: start + clipLength });
-  }
-  return clips.sort((a, b) => a.start - b.start);
-}
-
-// AI Studio: chat on the left, the branch canvas on the right
+// AI Studio (Figma Page 7 "AI Studio Page"): TopNav, session bar, chat on the left, big canvas on the right.
+// The flow is PRETEND for demos: upload a video -> each prompt grows a branch of fake clips ->
+// pick clips -> Go to Editor. Real data comes in 3.4, the session dropdown in 3.6.
 function StudioPage() {
   const navigate = useNavigate();
+  const { projectId, sessionId } = useParams();
   const {
     project, sourceVideo, setSourceVideo, messages, setMessages,
-    clips, setClips, selectedIds, setSelectedIds, stepsUnlocked, sourcePos, setSourcePos,
+    prompts, setPrompts, clips, setClips, selectedIds, setSelectedIds, stepsUnlocked,
   } = useProject();
-  const [isGenerating, setIsGenerating] = useState(false);
+  const isGenerating = prompts.some((prompt) => prompt.loading);
 
-  const batchCount = new Set(clips.map((clip) => clip.batch)).size;
-  // Placeholder nodes where the next clips will appear, while the AI "thinks"
-  const ghosts = isGenerating ? layoutBatch(sourcePos, batchCount, 3) : [];
-
-  // --- The video ---
-  function loadVideo(file) {
-    if (!file || !file.type.startsWith("video/")) return;
+  // --- The video (stays in your browser for now) ---
+  // useCallback: these only change when the video does, so the canvas isn't rebuilt on every render
+  const loadVideo = useCallback((file) => {
+    if (!file?.type.startsWith("video/")) return;
     if (sourceVideo) URL.revokeObjectURL(sourceVideo.url);
     setSourceVideo({ name: file.name, url: URL.createObjectURL(file), duration: 0 });
+    setPrompts([]);
     setClips([]);
     setSelectedIds([]);
     setMessages((current) => [...current,
       { role: "assistant", text: `Got ${file.name}! What kind of clips should I find?` }]);
-  }
+  }, [sourceVideo, setSourceVideo, setPrompts, setClips, setSelectedIds, setMessages]);
 
-  function removeVideo() {
+  const removeVideo = useCallback(() => {
     URL.revokeObjectURL(sourceVideo.url);
     setSourceVideo(null);
+    setPrompts([]);
     setClips([]);
     setSelectedIds([]);
-  }
+  }, [sourceVideo, setSourceVideo, setPrompts, setClips, setSelectedIds]);
 
-  // --- Prompting ---
-  function handleSend(text) {
-    const userMessage = { role: "user", text };
+  // --- Prompting: each prompt grows a new branch of clips ---
+  function handleSend(text, clipCount) {
+    const reply = (answer) =>
+      setMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: answer }]);
 
     if (!sourceVideo) {
-      setMessages([...messages, userMessage,
-        { role: "assistant", text: "Drop a video on the canvas first, then tell me what to find!" }]);
+      reply("Drop a video on the canvas first, then tell me what to find!");
       return;
     }
     if (/caption/i.test(text)) {
-      setMessages([...messages, userMessage,
-        { role: "assistant", text: "Captions are added in the Editor. Pick your clips, then head there!" }]);
+      reply("Captions are added in the Editor. Pick your clips, then head there!");
       return;
     }
 
-    setMessages([...messages, userMessage,
-      { role: "assistant", text: `Looking through ${sourceVideo.name} for: "${text}"...` }]);
-    setIsGenerating(true);
+    const batch = prompts.length;
+    const promptId = `prompt-${batch}`;
+    const { prompt: promptSpot, spots } = layoutBatch(prompts, clips, clipCount);
+    setPrompts((current) => [...current, { id: promptId, text, batch, ...promptSpot, loading: true }]);
+    reply(`Looking through ${sourceVideo.name} for: "${text}"...`);
 
-    // Pretend the AI takes 2 seconds (the backend will replace this).
-    // Each prompt grows a new branch: a new column of clips.
+    // Pretend the AI takes 2 seconds (the backend replaces this in ticket 3.4)
     setTimeout(() => {
-      const found = makeFakeClips(sourceVideo.duration);
-      const spots = layoutBatch(sourcePos, batchCount, found.length);
-      const newClips = found.map((clip, i) => ({
-        ...clip, id: `${batchCount}-${i}`, batch: batchCount, ...spots[i],
-      }));
-      setClips((current) => [...current, ...newClips]);
-      setIsGenerating(false);
+      const found = makeFakeClips(sourceVideo.duration, clipCount);
+      setClips((current) => [...current,
+        ...found.map((clip, i) => ({ ...clip, id: `${batch}-${i}`, batch, ...spots[i] }))]);
+      setPrompts((current) => current.map((p) => (p.id === promptId ? { ...p, loading: false } : p)));
       setMessages((current) => [...current,
         { role: "assistant", text: `Found ${found.length} clips! Click the ones you want, then go to the Editor.` }]);
     }, 2000);
   }
 
-  // --- Clips on the canvas ---
-  function toggleClip(id) {
-    setSelectedIds(selectedIds.includes(id)
-      ? selectedIds.filter((selectedId) => selectedId !== id)
-      : [...selectedIds, id]);
+  // Boxes and lines for the canvas. useMemo: only rebuild them when the video, prompts or clips change
+  // (picking a clip doesn't rebuild anything: the clip box reads that itself).
+  const graph = useMemo(
+    () => buildPretendGraph({
+      sourceVideo,
+      prompts,
+      clips,
+      sourceActions: {
+        onFile: loadVideo,
+        onRemove: removeVideo,
+        onDuration: (duration) => setSourceVideo((current) => current && { ...current, duration }),
+      },
+    }),
+    [sourceVideo, prompts, clips, loadVideo, removeVideo, setSourceVideo]
+  );
+
+  // TEMPORARY until ticket 3.6 remembers your last session: coming back from the Editor
+  // (whose URL has no session) with work in progress goes straight back to it
+  if (!sessionId && sourceVideo) {
+    return <Navigate to={`/projects/${projectId}/studio/${mockSession.id}`} replace />;
   }
 
-  function moveClip(id, pos) {
-    setClips((current) => current.map((clip) => (clip.id === id ? { ...clip, ...pos } : clip)));
-  }
-
-  function removeClip(id) {
-    setClips((current) => current.filter((clip) => clip.id !== id));
-    setSelectedIds((current) => current.filter((selectedId) => selectedId !== id));
-  }
-
-  // What goes inside the video node
-  function renderSource() {
-    if (!sourceVideo) {
-      return (
-        <label className="studio-drop" data-no-drag>
-          <input type="file" accept="video/*" hidden onChange={(e) => loadVideo(e.target.files[0])} />
-          <span className="studio-drop-icon">▶</span>
-          <span className="studio-drop-title">Drop a video here</span>
-          <span className="studio-drop-hint">or click to upload</span>
-          <span className="btn btn-primary studio-drop-btn">⬆ Upload Video</span>
-        </label>
-      );
-    }
-    return (
-      <>
-        <video
-          className="studio-source-video"
-          src={sourceVideo.url}
-          controls
-          muted
-          playsInline
-          data-no-drag
-          onLoadedMetadata={(e) => {
-            const duration = e.target.duration;
-            setSourceVideo((current) => ({ ...current, duration }));
-          }}
-        />
-        <div className="studio-source-name">
-          <span>{sourceVideo.name}</span>
-          <button type="button" data-no-drag onClick={removeVideo} title="Remove video">✕</button>
-        </div>
-      </>
-    );
-  }
-
-  // What goes inside each clip node
-  function renderClip(clip) {
-    return (
-      <>
-        <ClipCard
-          sourceUrl={sourceVideo?.url}
-          start={clip.start}
-          end={clip.end}
-          isSelected={selectedIds.includes(clip.id)}
-          onToggle={() => toggleClip(clip.id)}
-        />
-        <button type="button" className="studio-clip-remove" data-no-drag onClick={() => removeClip(clip.id)} title="Remove clip">
-          ✕
-        </button>
-      </>
-    );
-  }
 
   return (
-    <div className="studio leaf-page">
-      <TopBar title={project?.name} activeStep="studio" stepsUnlocked={stepsUnlocked} />
+    <div className={`studio leaf-page${sessionId ? "" : " studio-no-session"}`}>
+      <TopNav
+        projectTitle={project?.name}
+        active="studio"
+        canOpenEditor={stepsUnlocked}
+        canOpenExport={stepsUnlocked}
+      />
 
-      <div className="studio-body">
-        <section className="studio-chat wood-panel">
-          <ChatBox
-            title="AI Assistant"
-            subtitle="Turn your ideas into videos."
-            onNewChat={() => setMessages([])}
-            messages={messages}
-            onSend={handleSend}
-            disabled={isGenerating}
-            placeholder={sourceVideo ? "Describe the clips you want..." : "Drop a video first..."}
-            tag={sourceVideo?.name}
-            onRemoveTag={removeVideo}
-            quickActions={quickActions}
-          />
-        </section>
-
-        <section className="studio-canvas">
-          <BranchCanvas
-            sourcePos={sourcePos}
-            onMoveSource={setSourcePos}
-            renderSource={renderSource}
-            clips={clips}
-            onMoveClip={moveClip}
-            renderClip={renderClip}
-            ghosts={ghosts}
-            onDropFile={loadVideo}
-            onArrange={() => setClips(arrangeClips(clips, sourcePos))}
-            extra={
-              <>
-                {clips.length > 0 && (
-                  <span className="studio-count">{selectedIds.length} of {clips.length} selected</span>
-                )}
-                <button
-                  type="button"
-                  className={`btn btn-small ${stepsUnlocked ? "btn-primary" : "disabled"}`}
-                  disabled={!stepsUnlocked}
-                  onClick={() => navigate("/editor")}
-                >
-                  Go to Editor →
-                </button>
-              </>
-            }
-          />
-        </section>
-      </div>
+      {sessionId ? (
+        <>
+          <SessionBar name={mockSession.name}>
+            {clips.length > 0 && <span>{selectedIds.length} of {clips.length} picked</span>}
+            <button
+              type="button"
+              className={`btn btn-small ${stepsUnlocked ? "btn-primary" : "disabled"}`}
+              disabled={!stepsUnlocked}
+              title={stepsUnlocked ? undefined : "Pick at least one clip first"}
+              onClick={() => navigate(`/projects/${projectId}/editor`)}
+            >
+              Go to Editor →
+            </button>
+          </SessionBar>
+          <div className="studio-body">
+            <ChatPanel messages={messages} onSend={handleSend} disabled={isGenerating} />
+            <div className="studio-canvas-frame">
+              <StudioCanvas
+                nodes={graph.nodes}
+                edges={graph.edges}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onDropFile={loadVideo}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        // No session in the URL. Picking/creating real sessions is ticket 3.6.
+        <div className="studio-empty">
+          <div className="studio-empty-card wood-panel">
+            <EmptyState
+              icon="🌱"
+              title="Pick or create a session"
+              text="A session is one round of prompts and clips for this project."
+              action={{
+                label: "Start a session",
+                onClick: () => navigate(`/projects/${projectId}/studio/${mockSession.id}`),
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

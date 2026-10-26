@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
-import TopBar from "../components/TopBar";
+import TopNav from "../components/TopNav";
 import ChatBox from "../components/ChatBox";
 import SequencePlayer from "../components/SequencePlayer";
 import { useProject } from "../context/ProjectContext";
@@ -18,6 +18,7 @@ const ratios = [
 // Built from the Figma "Editor" wireframe (node 560:2716)
 function EditorPage() {
   const navigate = useNavigate();
+  const { projectId } = useParams();
   const { project, sourceVideo, selectedClips, stepsUnlocked, aspectRatio, setAspectRatio } = useProject();
 
   const [currentIndex, setCurrentIndex] = useState(0);     // which clip the preview shows
@@ -35,7 +36,12 @@ function EditorPage() {
 
   return (
     <div className="editor leaf-page">
-      <TopBar title={project?.name} activeStep="editor" stepsUnlocked={stepsUnlocked} />
+      <TopNav
+        projectTitle={project?.name}
+        active="editor"
+        canOpenEditor={stepsUnlocked}
+        canOpenExport={stepsUnlocked}
+      />
 
       {/* Tool strip: 87 tall */}
       <div className="editor-tools">
@@ -47,7 +53,7 @@ function EditorPage() {
           type="button"
           className={`btn btn-small editor-export ${stepsUnlocked ? "btn-primary" : "disabled"}`}
           disabled={!stepsUnlocked}
-          onClick={() => navigate("/export")}
+          onClick={() => navigate(`/projects/${projectId}/export`)}
         >
           Go to Export →
         </button>

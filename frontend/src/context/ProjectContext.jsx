@@ -8,6 +8,7 @@ export function ProjectProvider({ children }) {
   const [project, setProject] = useState(null);           // { id, name, isExisting }
   const [sourceVideo, setSourceVideo] = useState(null);   // the dropped video: { name, url, duration }
   const [messages, setMessages] = useState([]);           // AI Studio chat: [{ role, text }]
+  const [prompts, setPrompts] = useState([]);             // AI Studio prompts: [{ id, text, batch, x, y, loading }]
   const [clips, setClips] = useState([]);                 // generated / saved clips: [{ id, start, end, x, y, batch }]
   const [sourcePos, setSourcePos] = useState({ x: 80, y: 260 }); // where the video node sits on the AI Studio canvas
   const [selectedIds, setSelectedIds] = useState([]);     // which clips go to the editor
@@ -17,24 +18,30 @@ export function ProjectProvider({ children }) {
     if (sourceVideo) URL.revokeObjectURL(sourceVideo.url);
     setSourceVideo(null);
     setMessages([]);
+    setPrompts([]);
     setClips([]);
     setSelectedIds([]);
     setAspectRatio("16:9");
     setSourcePos({ x: 80, y: 260 });
   }
 
-  // "+ New Project" on the Projects page
+  // "+ New Project" on the Projects page. Returns the new id so the page can go to /projects/<id>/studio.
+  // FAKE id until the backend creates real projects (ticket 1.6).
   function startNewProject() {
     resetWork();
-    setProject({ id: "new", name: "Untitled project", isExisting: false });
+    const id = `draft-${Date.now().toString(36)}`;
+    setProject({ id, name: "Untitled project", isExisting: false });
+    return id;
   }
 
-  // Clicking an existing project: it goes straight to the editor with its saved clips
+  // Clicking an existing project. Real projects from the backend don't carry clips yet (loading them is
+  // ticket 3.4), so clips are optional.
   function openProject(saved) {
     resetWork();
     setProject({ id: saved.id, name: saved.name, isExisting: true });
-    setClips(saved.clips);
-    setSelectedIds(saved.clips.map((clip) => clip.id));
+    const savedClips = saved.clips ?? [];
+    setClips(savedClips);
+    setSelectedIds(savedClips.map((clip) => clip.id));
   }
 
   // Selected clips, in the order the user picked them (that's their order in the editor)
@@ -46,6 +53,7 @@ export function ProjectProvider({ children }) {
     project, setProject,
     sourceVideo, setSourceVideo,
     messages, setMessages,
+    prompts, setPrompts,
     clips, setClips,
     sourcePos, setSourcePos,
     selectedIds, setSelectedIds,

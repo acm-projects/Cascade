@@ -1,137 +1,41 @@
-/* Sizes are Figma pixels: calc(N * var(--u)) */
+/* Whole page = the window, no page scrolling.
+   Rows: TopNav, SessionBar, then chat + canvas fill the rest. */
 .studio {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100vh;
-}
-
-/* Chat (442 wide) + canvas */
-.studio-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: calc(30 * var(--u));
-  padding: calc(28 * var(--u)) calc(24 * var(--u)) calc(28 * var(--u));
-}
-
-.studio-chat {
-  width: calc(470 * var(--u));
-  padding: calc(22 * var(--u));
-  flex-shrink: 0;
-  box-shadow: 0 calc(6 * var(--u)) calc(18 * var(--u)) rgba(30, 50, 30, 0.25);
-}
-
-.studio-canvas {
-  flex: 1;
-  min-width: 0;
-  box-shadow: 0 calc(6 * var(--u)) calc(18 * var(--u)) rgba(30, 50, 30, 0.25);
-  border-radius: var(--panel-radius);
-}
-
-.studio-count {
-  color: var(--color-wood-dark);
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: calc(18 * var(--u));
-  white-space: nowrap;
-}
-
-/* ---------- Inside the video node (plain px: the canvas zoom scales them) ---------- */
-.studio-drop {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 3px dashed rgba(65, 52, 20, 0.45);
-  border-radius: 14px;
-  color: var(--color-wood-dark);
-  text-align: center;
-  cursor: pointer;
-}
-
-.studio-drop-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 70px;
-  height: 56px;
-  border-radius: 10px;
-  background: rgba(65, 52, 20, 0.35);
-  color: white;
-  font-size: 26px;
-}
-
-.studio-drop-title {
-  margin-top: 8px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 24px;
-}
-
-.studio-drop-hint {
-  font-size: 17px;
-  opacity: 0.8;
-}
-
-.studio-drop-btn {
-  margin-top: 12px;
-  font-size: 20px;
-}
-
-.studio-source-video {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  border-radius: 12px;
-  background: black;
-  object-fit: cover;
-}
-
-.studio-source-name {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 10px;
-  color: var(--color-wood-dark);
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 18px;
-}
-
-.studio-source-name span {
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
-.studio-source-name button {
-  border: none;
-  background: none;
-  color: var(--color-wood-dark);
-  font-size: 18px;
-  cursor: pointer;
+/* No session picked: just TopNav and the "pick a session" message */
+.studio.studio-no-session {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
-/* Small ✕ on each clip, shown on hover */
-.studio-clip-remove {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 250, 235, 0.9);
-  color: var(--color-wood-dark);
-  font-size: 14px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
+/* Chat column (320px) + canvas (everything else) */
+.studio-body {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+  padding: 12px calc(24 * var(--u)) calc(20 * var(--u));
 }
 
-.bc-clip:hover .studio-clip-remove {
-  opacity: 1;
+/* Wooden frame around the canvas */
+.studio-canvas-frame {
+  min-height: 0;
+  overflow: hidden;
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.studio-empty {
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+}
+
+.studio-empty-card {
+  max-width: 440px;
 }
