@@ -39,3 +39,33 @@
 .studio-empty-card {
   max-width: 440px;
 }
+
+/* "Watch it big" pop-up */
+.studio-preview-video {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: var(--radius-md);
+  background: var(--color-jungle-deep);
+}
+
+.studio-preview-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+}
+
+/* "Watch it big" pop-up */
+.studio-preview-video {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: var(--radius-md);
+  background: var(--color-jungle-deep);
+}
+
+.studio-preview-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+}

@@ -1,5 +1,9 @@
 /* Canvas boxes. Plain px: the canvas zoom scales them. Colors come from theme.css. */
 .studio-node {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
   border: 3px solid var(--color-wood-dark);
   border-radius: 16px;
   background: var(--color-cream-card) var(--wood-cream) center / cover;
@@ -13,13 +17,74 @@
   outline-offset: 2px;
 }
 
-/* ---------- Video ---------- */
-.studio-source-node {
+.studio-node-kicker {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* The big ▶ area used by the video and clip boxes */
+.studio-poster {
   display: flex;
   flex-direction: column;
-  width: 340px;
-  height: 290px;
-  padding: 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  background: var(--color-jungle-deep);
+  color: var(--color-cream);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.studio-poster:hover {
+  background: color-mix(in srgb, var(--color-jungle-deep) 85%, var(--color-leaf));
+}
+
+.studio-poster-play {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-cream) 22%, transparent);
+  font-size: 16px;
+}
+
+.studio-node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-node-actions .btn,
+.studio-clip-revision .btn {
+  font-size: 13px;
+}
+
+/* ---------- Video ---------- */
+.studio-source-node {
+  width: 300px;
+  height: 250px;
+}
+
+.studio-source-node .studio-poster {
+  flex: 1;
+}
+
+.studio-source-name {
+  overflow: hidden;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .studio-drop {
@@ -28,7 +93,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   border: 3px dashed color-mix(in srgb, var(--color-wood-dark) 45%, transparent);
   border-radius: 12px;
   text-align: center;
@@ -38,97 +103,140 @@
 .studio-drop-icon {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 50px;
+  width: 54px;
+  height: 42px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
   color: var(--color-cream-card);
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .studio-drop-title {
-  margin-top: 6px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 22px;
-}
-
-.studio-drop-hint {
-  font-size: 15px;
-  opacity: 0.8;
-}
-
-.studio-drop .btn {
-  margin-top: 8px;
-  font-size: 18px;
-}
-
-.studio-source-video {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  border-radius: 10px;
-  background: var(--color-jungle-deep);
-  object-fit: contain;
-}
-
-.studio-source-name {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.studio-source-name span {
+  max-width: 100%;
   overflow: hidden;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 18px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.studio-source-name button {
-  border: none;
-  background: none;
-  color: var(--color-wood-dark);
-  font-size: 16px;
-  cursor: pointer;
+.studio-drop-hint {
+  font-size: 13px;
+  opacity: 0.8;
 }
 
-/* ---------- Prompt ---------- */
-.studio-prompt-node {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 260px;
-  padding: 12px 16px;
+.studio-drop .btn {
+  margin-top: 6px;
+  font-size: 15px;
 }
 
-.studio-prompt-text {
+/* ---------- Prompt ("generation") ---------- */
+.studio-generation-node {
+  width: 270px;
+}
+
+.studio-generation-prompt {
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 16px;
   overflow-wrap: anywhere;
 }
 
-.studio-prompt-loading {
+.studio-generation-status {
   display: flex;
   align-items: center;
   gap: 6px;
   font-family: var(--font-ui);
   font-size: 13px;
-  opacity: 0.8;
 }
 
-/* ---------- Clip: a wooden frame around the ClipCard (drag by the frame) ---------- */
+.studio-generation-node.is-error {
+  border-color: var(--color-plank);
+}
+
+.studio-generation-node.is-error .studio-generation-status {
+  color: var(--color-plank);
+  font-weight: 700;
+}
+
+.studio-generation-note {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* ---------- Clip ---------- */
 .studio-clip-node {
   width: 256px;
-  padding: 7px;
-  cursor: grab;
 }
 
-.studio-clip-card {
-  height: 135px;
+.studio-clip-node.is-selected {
+  border-color: var(--color-leaf);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-leaf) 45%, transparent), var(--shadow-soft);
+}
+
+.studio-clip-head {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.studio-clip-node .studio-poster {
+  height: 110px;
+}
+
+.studio-clip-title {
+  overflow: hidden;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.studio-clip-why {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  opacity: 0.8;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.studio-clip-revision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-plank);
+}
+
+.studio-clip-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-wood-dark) 10%, transparent);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.studio-clip-node.is-selected .studio-clip-select {
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+
+.studio-clip-select input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-jungle-deep);
 }

@@ -1,27 +1,66 @@
-import { useToast } from "../../components/ui/ToastContext";
+import { useState } from "react";
+import Modal from "../../components/ui/Modal";
+import Button from "../../components/ui/Button";
 import "./SessionBar.css";
 
-// Thin bar under the TopNav: which AI Studio session you're in, with a ▾ to change it.
-// UI only for now: the dropdown (switch / create / rename / delete) is ticket 3.6.
-//   name     - the session's name, e.g. "Session 1"
-//   children - extra things for the right side (e.g. "Go to Editor")
-function SessionBar({ name, children }) {
-  const toast = useToast();
+// Thin bar under the TopNav: which AI Studio session you're in, switch / create / rename sessions.
+// A session is one exploration of the same video (e.g. "Funny moments" vs "Emotional").
+//   sessions        - [{ id, name }]
+//   activeId        - the session on screen
+//   onSwitch(id), onCreate(name), onRename(name) - may return promises; the pop-up waits for them
+//   children        - extra things for the right side (e.g. "Go to Editor")
+function SessionBar({ sessions, activeId, onSwitch, onCreate, onRename, children }) {
+  const [dialog, setDialog] = useState(null); // null | "create" | "rename"
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const active = sessions.find((session) => session.id === activeId);
+
+  function open(kind) {
+    setName(kind === "rename" ? active?.name ?? "" : "");
+    setDialog(kind);
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await (dialog === "create" ? onCreate(name.trim()) : onRename(name.trim()));
+      setDialog(null);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="session-bar">
-      <button
-        type="button"
-        className="session-bar-picker"
-        aria-haspopup="menu"
-        title="Change session"
-        onClick={() => toast.show("Switching sessions is coming soon")}
-      >
+      <label className="session-bar-picker">
         <span className="session-bar-label">Session</span>
-        <span className="session-bar-name">{name}</span>
-        <span aria-hidden="true">▾</span>
-      </button>
+        <select className="session-bar-select" value={activeId} onChange={(e) => onSwitch(e.target.value)}>
+          {sessions.map((session) => (
+            <option key={session.id} value={session.id}>{session.name}</option>
+          ))}
+        </select>
+      </label>
+      <button type="button" className="btn btn-ghost btn-small" onClick={() => open("rename")} aria-label="Rename session">✎</button>
+      <button type="button" className="btn btn-small" onClick={() => open("create")}>+ New session</button>
       {children && <div className="session-bar-actions">{children}</div>}
+
+      {dialog && (
+        <Modal title={dialog === "create" ? "New session" : "Rename session"} onClose={() => !saving && setDialog(null)}>
+          <form className="session-bar-form" onSubmit={submit}>
+            {dialog === "create" && <p>Explore another mood with the same video. Your other sessions stay as they are.</p>}
+            <input className="session-bar-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80}
+              placeholder="Funny moments, Emotional, Highlights…" aria-label="Session name" autoFocus />
+            <div className="session-bar-form-actions">
+              <Button variant="ghost" size="sm" onClick={() => setDialog(null)} disabled={saving}>Cancel</Button>
+              <Button variant="primary" size="sm" type="submit" disabled={saving || !name.trim()}>
+                {dialog === "create" ? "Create" : "Save"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

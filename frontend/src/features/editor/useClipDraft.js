@@ -1,0 +1,90 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import useApi from "../../api/useApi";
+
+const SAVE_DELAY_MS = 700;   // save this long after the last change
+const HISTORY_LIMIT = 50;
+
+// One clip's edits ("draft"), loaded from and auto-saved to the backend (backend/editor_backend.py).
+// Use it inside a component that has key={clipKey(clip)}, so switching clips starts fresh.
+//   info    - { duration, width, height, cues: [{ start, end, text }], burned_in, warning } (null while loading)
+//   state   - the edit: { start, end, captions, composition, effects, reframe, texts, broll }
+//   change(next) - set a new state (undoable); next can be a function of the current state
+//   patch(next)  - same, but not an undo step
+//   undo / redo / canUndo / canRedo
+//   chat, setChat - the editor chat for this clip (saved with the draft)
+//   saveStatus - "saved" | "saving" | "error"
+export default function useClipDraft(projectId, clip) {
+  const api = useApi();
+  const [info, setInfo] = useState(null);
+  const [error, setError] = useState(null);
+  const [history, setHistory] = useState({ past: [], present: null, future: [] });
+  const [chat, setChat] = useState([]);
+  const [saveStatus, setSaveStatus] = useState("saved");
+  const loaded = useRef(false);    // don't save the draft we just loaded straight back
+  const saveCount = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    api.getDraft(projectId, clip.job_id, clip.clip_index)
+      .then((result) => {
+        if (!active) return;
+        const { draft, ...details } = result;
+        setInfo(details);
+        setHistory({ past: [], present: draft.state, future: [] });
+        setChat(draft.chat ?? []);
+      })
+      .catch((err) => active && setError(err));
+    return () => {
+      active = false;
+    };
+  }, [api, projectId, clip.job_id, clip.clip_index]);
+
+  // Auto-save a moment after the last change
+  const state = history.present;
+  useEffect(() => {
+    if (!state) return;
+    if (!loaded.current) {
+      loaded.current = true;
+      return;
+    }
+    const thisSave = ++saveCount.current;
+    const timer = setTimeout(() => {
+      setSaveStatus("saving");
+      api.saveDraft(projectId, clip.job_id, clip.clip_index, { state, chat, updated_at: Math.floor(Date.now() / 1000) })
+        .then(() => thisSave === saveCount.current && setSaveStatus("saved"))
+        .catch(() => thisSave === saveCount.current && setSaveStatus("error"));
+    }, SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [state, chat, api, projectId, clip.job_id, clip.clip_index]);
+
+  const change = useCallback((next) => {
+    setHistory(({ past, present }) => {
+      const value = typeof next === "function" ? next(present) : next;
+      if (JSON.stringify(value) === JSON.stringify(present)) return { past, present, future: [] };
+      return { past: [...past, present].slice(-HISTORY_LIMIT), present: value, future: [] };
+    });
+  }, []);
+
+  // A change that isn't an undo step (e.g. the app storing a finished framing analysis)
+  const patch = useCallback((next) => {
+    setHistory(({ past, present, future }) => ({
+      past, future, present: typeof next === "function" ? next(present) : next,
+    }));
+  }, []);
+
+  const undo = useCallback(() => {
+    setHistory(({ past, present, future }) =>
+      past.length ? { past: past.slice(0, -1), present: past[past.length - 1], future: [present, ...future] } : { past, present, future });
+  }, []);
+
+  const redo = useCallback(() => {
+    setHistory(({ past, present, future }) =>
+      future.length ? { past: [...past, present], present: future[0], future: future.slice(1) } : { past, present, future });
+  }, []);
+
+  return {
+    info, error, state, change, patch, undo, redo,
+    canUndo: history.past.length > 0, canRedo: history.future.length > 0,
+    chat, setChat, saveStatus,
+  };
+}
