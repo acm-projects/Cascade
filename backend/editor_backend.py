@@ -547,6 +547,9 @@ def register(app, integration):
     def draft_path(pid, jid, index, user):
         return integration.project_dir(user) / 'editor' / pid / (jid + '-' + str(index) + '.json')
 
+    from backend import post_metadata
+    post_metadata.register(app, integration, selected, details)
+
     def stock_store(pid, jid, index, user):
         return stocklib.Store(draft_path(pid,jid,index,user).parent/'stock'/(jid+'-'+str(index)))
 
@@ -920,6 +923,9 @@ def register(app, integration):
             directory.cleanup()
             raise
 
+
+    from backend import social_youtube
+    social_youtube.register(app, integration, selected, export, ExportInput)
 
 def make_ass(cues, style, width, height):
     def color(hex_color, opacity=1):

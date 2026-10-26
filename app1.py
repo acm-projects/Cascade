@@ -23,11 +23,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 import jwt
-import boto3
 
 from botocore.exceptions import ClientError, BotoCoreError
-from botocore.config import Config
-from dotenv import load_dotenv
 
 from fastapi import (
     FastAPI,
@@ -77,156 +74,42 @@ def start_model_warmup():
     if os.getenv("CASCADE_WARM_MODELS", "1") != "0":
         threading.Thread(target=warm_models, name="model-warmup", daemon=True).start()
 
-PROJECT_DIR = Path(__file__).resolve().parent
-FRONTEND_DIR = PROJECT_DIR / "web"
-
-load_dotenv(PROJECT_DIR / ".env", override=True)
-# Accept existing local names without rewriting the user's secrets file.
-if not os.getenv('CLERK_SECRET_KEY') and os.getenv('CLERK_KEY', '').startswith('sk_'):
-    os.environ['CLERK_SECRET_KEY'] = os.environ['CLERK_KEY']
-if not os.getenv('CLERK_PUBLISHABLE_KEY') and os.getenv('CLERK_KEY', '').startswith('pk_'):
-    os.environ['CLERK_PUBLISHABLE_KEY'] = os.environ['CLERK_KEY']
-if not os.getenv('AWS_ACCESS_KEY_ID') and os.getenv('AWS_ACCESS_KEY'):
-    os.environ['AWS_ACCESS_KEY_ID'] = os.environ['AWS_ACCESS_KEY']
-
-JOBS_DIR = PROJECT_DIR / "video_jobs"
-JOBS_DIR.mkdir(exist_ok=True)
-
-PROFILE_CACHE_SECONDS = 300
-FAILURE_CACHE_SECONDS = 30
-
-DEFAULT_FOLDER = "users"
-
-PROTECTED_EXACT_PATHS = (
-    "/upload",
-    "/api/my-clips",
-    "/api/session",
-    "/api/settings",
+from backend.core.config import (
+    PROJECT_DIR,
+    FRONTEND_DIR,
+    JOBS_DIR,
+    PROFILE_CACHE_SECONDS,
+    FAILURE_CACHE_SECONDS,
+    DEFAULT_FOLDER,
+    PROTECTED_EXACT_PATHS,
+    FRONTEND_FILES,
+    PRIVATE_CLIP_FIELDS,
+    CLERK_HINTS,
 )
 
 from backend import frontend
-
-FRONTEND_FILES = {
-    "index.html",
-    "canvas_branches.js",
-    "index_C.html",
-    "login_C.html",
-    "projects_C.html",
-    "canvas_C.html",
-    "editor_C.html",
-    "exports_C.html",
-    "settings_C.html",
-    "styles_C.css",
-    "flow_C.js",
-    "editor_C.js",
-    "editor_broll.js",
-    "editor_reframe.js",
-    "editor_captions.js",
-    "editor_timeline.js",
-    "editor_state.js",
-    "export_selection.js",
-    "clip_navigation.js",
-    "clip_navigation.css",
-    "exports_C.js",
-    "exports_C.css",
-    "editor_C.css",
-}
-
-PRIVATE_CLIP_FIELDS = {
-    "s3_bucket",
-    "clip_s3_key",
-    "captions_s3_key",
-}
-
-CLERK_HINTS = {
-    401: "The secret key was rejected.",
-    403: "Clerk refused the request.",
-    404: (
-        "User not found. The key may belong "
-        "to a different Clerk application."
-    ),
-    429: "Clerk is rate limiting requests.",
-}
 
 worker = ThreadPoolExecutor(max_workers=1)
 
 jobs = {}
 jobs_lock = Lock()
 
-profile_cache = {}
-profile_cache_lock = Lock()
-
 # --------------------------------------------------
 # S3 storage
 # --------------------------------------------------
 
-def uses_local_storage():
-    mode = os.getenv('CASCADE_STORAGE', 'auto').lower()
-    if mode not in ('auto', 'local', 's3'):
-        raise HTTPException(503, 'CASCADE_STORAGE must be auto, local, or s3.')
-    return mode == 'local' or (mode == 'auto' and not os.getenv('S3_BUCKET_NAME', '').strip())
-
-
-def validate_clip_storage():
-    if uses_local_storage():
-        return
-    if not os.getenv('S3_BUCKET_NAME', '').strip():
-        raise HTTPException(503, 'S3_BUCKET_NAME is missing. Configure S3 or set CASCADE_STORAGE=local.')
-    try:
-        credentials = boto3.Session().get_credentials()
-        if credentials is None:
-            raise HTTPException(503, 'AWS credentials are missing. Configure AWS or set CASCADE_STORAGE=local.')
-        credentials.get_frozen_credentials()
-    except BotoCoreError as error:
-        raise HTTPException(503, 'AWS credentials are incomplete or unavailable. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set CASCADE_STORAGE=local.') from error
-
-@lru_cache(maxsize=1)
-def s3_client():
-    return boto3.client(
-        "s3",
-        region_name=os.environ.get(
-            "AWS_DEFAULT_REGION",
-            "us-east-2",
-        ),
-        config=Config(
-            signature_version="s3v4",
-            connect_timeout=10,
-            read_timeout=60,
-            retries={"max_attempts": 3},
-        ),
-    )
-
-
-def s3_bucket():
-    bucket = os.environ.get(
-        "S3_BUCKET_NAME",
-        "",
-    ).strip()
-
-    if not bucket:
-        raise RuntimeError(
-            "Set S3_BUCKET_NAME in your .env file."
-        )
-
-    return bucket
-
-
-def safe_folder_name(value):
-    cleaned = re.sub(
-        r"[^a-z0-9_-]+",
-        "-",
-        str(value or "").lower(),
-    )
-
-    return cleaned.strip("-_")[:60]
-
-
-def public_clip(clip):
-    return {
-        key: value
-        for key, value in clip.items()
-        if key not in PRIVATE_CLIP_FIELDS
-    }
+from backend.core.storage import (
+    profile_cache,
+    profile_cache_lock,
+    public_clip,
+    resolve_storage_folder,
+    s3_bucket,
+    s3_client,
+    safe_folder_name,
+    upload_clip_files,
+    uses_local_storage,
+    validate_clip_storage,
+)
 
 
 def clerk_profile(user_id):
@@ -333,136 +216,6 @@ def clerk_profile(user_id):
         )
 
     return profile, None
-
-
-def resolve_storage_folder(user_id):
-    with profile_cache_lock:
-        entry = profile_cache.get(user_id)
-
-        if (
-            entry
-            and entry["expires"] > time.monotonic()
-        ):
-            return dict(entry["value"])
-
-    value = {
-        "folder": DEFAULT_FOLDER,
-        "source": "fallback",
-        "detail": (
-            "This account has no username or name, "
-            "so the users folder is used."
-        ),
-    }
-
-    try:
-        profile, problem = clerk_profile(user_id)
-    except Exception:
-        traceback.print_exc()
-
-        profile = None
-        problem = "Username lookup failed unexpectedly."
-
-    if problem:
-        value["detail"] = problem
-
-    elif profile:
-        full_name = " ".join(
-            str(part)
-            for part in (
-                profile.get("first_name"),
-                profile.get("last_name"),
-            )
-            if part
-        )
-
-        for source, text in (
-            ("username", profile.get("username")),
-            ("name", full_name),
-        ):
-            name = safe_folder_name(text)
-
-            if name:
-                value = {
-                    "folder": name,
-                    "source": source,
-                    "detail": "",
-                }
-
-                break
-
-    lifetime = (
-        FAILURE_CACHE_SECONDS
-        if value["source"] == "fallback"
-        else PROFILE_CACHE_SECONDS
-    )
-
-    with profile_cache_lock:
-        profile_cache[user_id] = {
-            "expires": time.monotonic() + lifetime,
-            "value": dict(value),
-        }
-
-    return value
-
-
-def upload_clip_files(
-    folder,
-    job_id,
-    filename,
-    captions_filename,
-):
-    # Local media already uses the same ownership-checked /clips route.
-    if uses_local_storage():
-        return {"storage": "local"}
-    owner = json.loads(
-        (folder / "owner.json").read_text(
-            encoding="utf-8"
-        )
-    )
-
-    user_folder = (
-        safe_folder_name(owner.get("user_folder"))
-        or DEFAULT_FOLDER
-    )
-
-    prefix = (
-        f"{user_folder}/{owner['user_id']}"
-        f"/jobs/{job_id}"
-    )
-
-    bucket = s3_bucket()
-    client = s3_client()
-    keys = {}
-
-    for name, content_type, field in (
-        (
-            filename,
-            "video/mp4",
-            "clip_s3_key",
-        ),
-        (
-            captions_filename,
-            "text/vtt; charset=utf-8",
-            "captions_s3_key",
-        ),
-    ):
-        key = f"{prefix}/{name}"
-
-        client.upload_file(
-            str(folder / name),
-            bucket,
-            key,
-            ExtraArgs={
-                "ContentType": content_type,
-            },
-        )
-
-        keys[field] = key
-
-    return {
-        "s3_bucket": bucket,
-        **keys,
-    }
 
 
 # --------------------------------------------------

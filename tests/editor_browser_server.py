@@ -20,6 +20,7 @@ from backend import broll
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='cascade-browser-') as directory:
         app1.JOBS_DIR=Path(directory)
+        os.environ['SOCIAL_DATABASE_PATH']=str(Path(directory)/'social.sqlite3')
         def verify(token):
             if token!='editor-browser-fixture':
                 raise HTTPException(401,'Fixture token required')

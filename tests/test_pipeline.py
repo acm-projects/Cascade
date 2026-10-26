@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import app1
+import backend.core.storage
 import numpy as np
 from starlette.datastructures import UploadFile
 
@@ -18,7 +19,7 @@ class PipelineTests(unittest.TestCase):
 
 
     def test_local_storage_needs_no_aws_calls(self):
-        with patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}), patch.object(app1, 's3_client') as client:
+        with patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}), patch.object(backend.core.storage, 's3_client') as client:
             self.assertEqual(app1.upload_clip_files(Path('unused'), 'job', 'clip.mp4', 'clip.vtt'), {'storage': 'local'})
             client.assert_not_called()
 
@@ -30,7 +31,7 @@ class PipelineTests(unittest.TestCase):
         session = Mock()
         session.get_credentials.return_value = None
         with patch.dict(os.environ, {'CASCADE_STORAGE': 's3', 'S3_BUCKET_NAME': 'test'}), \
-             patch.object(app1.boto3, 'Session', return_value=session):
+             patch.object(backend.core.storage.boto3, 'Session', return_value=session):
             with self.assertRaises(app1.HTTPException) as caught:
                 app1.validate_clip_storage()
         self.assertIn('AWS credentials are missing', caught.exception.detail)

@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
+import backend.core.storage
 from backend import integration
 
 
@@ -210,7 +211,7 @@ class IntegrationTests(unittest.TestCase):
         def render(command):
             Path(command[-1]).write_bytes(b'local-video')
         with patch.dict(os.environ, {'CASCADE_STORAGE': 'auto', 'S3_BUCKET_NAME': '', 'DATABASE_URL': '', 'NEON_DATABASE_URL': ''}), \
-                patch.object(app1, 's3_client', side_effect=AssertionError('Local generation must not use S3')), \
+                patch.object(backend.core.storage, 's3_client', side_effect=AssertionError('Local generation must not use S3')), \
                 patch.object(app1, 'inspect_video', return_value=(2, True)), \
                 patch.object(app1, 'select_with_agent', return_value=([selection], transcript, {})), \
                 patch.object(app1, 'run_command', side_effect=render):
@@ -252,7 +253,7 @@ class IntegrationTests(unittest.TestCase):
     def test_configured_cloud_upload_is_preserved(self):
         job_id = self.upload()
         folder = app1.JOBS_DIR / job_id
-        with patch.dict(os.environ, {'CASCADE_STORAGE': 's3', 'S3_BUCKET_NAME': 'test-bucket'}), patch.object(app1, 's3_client') as client:
+        with patch.dict(os.environ, {'CASCADE_STORAGE': 's3', 'S3_BUCKET_NAME': 'test-bucket'}), patch.object(backend.core.storage, 's3_client') as client:
             storage = app1.upload_clip_files(folder, job_id, 'clip_1.mp4', 'clip_1.vtt')
             self.assertEqual(storage['s3_bucket'], 'test-bucket')
             self.assertEqual(client.return_value.upload_file.call_count, 2)

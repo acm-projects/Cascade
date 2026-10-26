@@ -61,6 +61,34 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(result.status_code,200,result.text[:500])
         return result.json()
 
+    def test_post_metadata_is_separate_persistent_and_owner_checked(self):
+        before = self.get()
+        body = {'name':'A better name','caption':'Post copy','hashtags':['hello','#hello','world'], 'cover_time':1.25}
+        result = self.client.put(self.url+'/post', headers=self.headers, json=body)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['hashtags'], ['#hello','#world'])
+        self.assertEqual(self.get(self.url+'/post'), result.json())
+        self.assertEqual(self.get(), before)
+        self.assertNotEqual(self.client.get(self.url+'/post', headers={'Authorization':'Bearer someone-else'}).status_code, 200)
+        self.assertEqual(self.client.put(self.url+'/post', headers=self.headers, json={**body,'cover_time':-1}).status_code, 422)
+        self.assertEqual(self.client.put(self.url+'/post', headers=self.headers, json={**body,'hashtags':['x'*101]}).status_code, 422)
+        self.assertEqual(self.client.get(self.base+'/'+self.jid+'/1/post', headers=self.headers).status_code, 404)
+
+    def test_post_metadata_does_not_leak_between_jobs(self):
+        other = self.job(1, 'b'*32)
+        body = {'name':'Only this clip', 'caption':'Private copy', 'hashtags':[], 'cover_time':None}
+        self.client.put(self.url+'/post', headers=self.headers, json=body)
+        self.assertEqual(self.get(self.base+'/'+other+'/0/post')['name'], 'Clip')
+        self.assertEqual(self.get(self.base+'/'+other+'/0/post')['caption'], '')
+
+    def test_post_ai_unavailable_preserves_manual_metadata(self):
+        body = {'name':'Manual', 'caption':'Keep this', 'hashtags':['#manual'], 'cover_time':None}
+        self.client.put(self.url+'/post', headers=self.headers, json=body)
+        with patch.dict(os.environ, {'OPENAI_API_KEY':''}):
+            response = self.client.post(self.url+'/post/generate', headers=self.headers, json={'action':'rewrite','metadata':body})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.get(self.url+'/post'), body)
+
     def test_thumbnail_is_owner_checked_and_independent_of_exports(self):
         result=self.client.get(self.url+'/thumbnail',headers=self.headers)
         self.assertEqual(result.status_code,200,result.text[:200] if result.status_code!=200 else '')

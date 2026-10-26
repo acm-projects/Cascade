@@ -1335,11 +1335,11 @@
 
     <div class="exports-workspace"><aside class="exports-navigation"><h2 hidden>Clip navigation and download selection</h2><div id="exports-tree"></div></aside>
     <section class="export-studio" aria-label="Selected clips">
-      <div class="export-actions"><button id="download-active" class="primary" type="button" disabled>Download this clip</button><button id="export-all" type="button" disabled>Download selected clips</button><button id="export-youtube" type="button" disabled aria-label="YouTube upload setup" aria-controls="youtube-setup" aria-expanded="false"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="5" fill="#ff0033"/><path d="M10 8v8l6-4z" fill="white"/></svg> YouTube</button></div>
+      <div class="export-actions"><button id="download-active" class="primary" type="button" disabled>Download this clip</button><button id="export-all" type="button" disabled>Download selected clips (0)</button></div>
       <div id="export-deck" tabindex="0" role="region" aria-label="Wave stacks. Expand a wave to browse its clips."></div>
       <div class="export-navigation"><button id="export-prev" type="button" aria-label="Previous clip">←</button><span id="export-position" aria-live="polite"></span><button id="export-next" type="button" aria-label="Next clip">→</button></div>
       <p id="export-progress" role="status" aria-live="polite"></p>
-      <p id="youtube-setup" class="muted" hidden>YouTube upload is not connected in Cascade. Account connection and an upload integration are required. You can download the active clip and upload it through <a href="https://studio.youtube.com" target="_blank" rel="noopener noreferrer">YouTube Studio</a>.</p>
+
     </section>
 
     </div>
@@ -1365,6 +1365,8 @@
   <link rel="stylesheet" href="clip_navigation.css">
   <script src="clip_navigation.js"></script>
   <script src="editor_reframe.js"></script>
+  <script src="post_schedule.js"></script>
+  <script src="export_post.js"></script>
   <script src="exports_C.js"></script>
   <script src="flow_C.js"></script>
 </body>
