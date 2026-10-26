@@ -74,7 +74,9 @@ def project_jobs(project_id, user_id):
                            'history_id': owner.get('history_id', path.parent.name), 'creation_order': owner.get('creation_order'),
                            'retry_attempts': owner.get('retry_attempts', []),
                            'requested_clip_count': owner.get('requested_clip_count', 4),
-                           'source_job': owner.get('source_job', path.parent.name), 'parent_clip': owner.get('parent_clip')})
+                           'source_job': owner.get('source_job', path.parent.name), 'parent_clip': owner.get('parent_clip'),
+                           'parent_clips': owner.get('parent_clips', []), 'studio_session_id': owner.get('studio_session_id'),
+                           'studio_revision_of': owner.get('studio_revision_of'), 'studio_revision_targets': owner.get('studio_revision_targets', [])})
     return sorted(result, key=lambda item: item['created_at'], reverse=True)
 
 

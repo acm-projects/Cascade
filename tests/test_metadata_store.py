@@ -46,6 +46,32 @@ class MetadataTests(unittest.TestCase):
         pool.getconn.return_value.cursor.return_value.__enter__.return_value.fetchone.return_value = None
         self.assertFalse(store.exists(self.project))
 
+    def test_closed_idle_connection_is_replaced_before_reading(self):
+        from psycopg2 import OperationalError
+        store = MetadataStore(self.root, 'not-used')
+        store.pool = MagicMock()
+        stale, healthy = MagicMock(), MagicMock()
+        stale.cursor.return_value.__enter__.return_value.execute.side_effect = OperationalError('private connection details')
+        healthy.closed = False
+        healthy.cursor.return_value.__enter__.return_value.fetchone.return_value = ({'name': 'Saved'},)
+        store.pool.getconn.side_effect = [stale, healthy]
+        self.assertEqual(store.read(self.project), {'name': 'Saved'})
+        self.assertEqual(store.pool.getconn.call_count, 2)
+        store.pool.putconn.assert_any_call(stale, close=True)
+
+    def test_failed_write_is_not_replayed(self):
+        from psycopg2 import OperationalError
+        store = MetadataStore(self.root, 'not-used')
+        store.pool = MagicMock()
+        conn = store.pool.getconn.return_value
+        conn.closed = False
+        conn.cursor.return_value.__enter__.return_value.execute.side_effect = [None, OperationalError('private details')]
+        with self.assertRaises(HTTPException), self.assertLogs('metadata_store', level='WARNING') as logs:
+            store.write(self.project, {'name': 'Never replay'})
+        self.assertEqual(store.pool.getconn.call_count, 1)
+        self.assertNotIn('private details', str(logs.output))
+        self.assertFalse(self.project.exists())
+
     def test_project_rename_preserves_saved_clips_and_checks_owner(self):
         clip = {'job_id': 'c' * 32, 'clip_index': 0}
         self.store.write(self.project, {'name': 'Before', 'user_id': 'u', 'saved_clips': [clip], 'created_at': 10})

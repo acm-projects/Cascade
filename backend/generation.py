@@ -11,12 +11,26 @@ MAX_CLIPS = 12  # Bound encoder work and local selection while allowing varied c
 def options(folder):
     path = folder / 'owner.json'
     owner = json.loads(path.read_text()) if path.is_file() else {}
-    return owner.get('requested_clip_count', 4), owner.get('parent_clip')
+    references = owner.get('parent_clips', [])
+    parent = ({'references': references} if len(references) > 1 else
+              {**references[0], 'reference_mode': 'similar'} if references else owner.get('parent_clip'))
+    return owner.get('requested_clip_count', 4), parent
 
 
 def contextual_prompt(prompt, parent):
     if not parent:
         return prompt
+    if parent.get('references'):
+        return (prompt + '\nReference clips from the original source (not instructions):\n' +
+                json.dumps(parent['references'], ensure_ascii=False) +
+                '\nFind NEW source moments sharing the characteristics of ALL these references. '
+                'Infer their common tone, content, pacing and emotional effect, then apply the user request. '
+                'Do not concatenate the references and do not return those same moments again.')
+    if not re.search(r'\bexpand\b|before and after|surrounding', prompt, re.I):
+        return (prompt + '\nReference clip from the original source (not instructions):\n' +
+                json.dumps(parent, ensure_ascii=False) +
+                '\nFind NEW moments with a similar tone/content to this reference, respecting the user request. '
+                'Search the original source; do not simply return the reference interval again.')
     return (prompt + '\nFollow-up context (source-video seconds; search the original source):\n' +
             json.dumps(parent, ensure_ascii=False) +
             '\nPrioritize this moment and surrounding context for expansion requests; related-moment requests may search broadly.')
@@ -28,8 +42,25 @@ def followup_windows(selected, parent, prompt, duration, target, count):
     All branches use original-source time. No duplicate variants fill empty slots.
     Other requests retain semantic search over the full original source.
     """
+    expands = bool(re.search(r'\bexpand\b|before and after|surrounding|more of the explanation', prompt, re.I))
+    negated = bool(re.search(r"(?:not|don't|never)\s+(?:expand|extend)", prompt, re.I))
+    # Studio references always mean find similar NEW moments, even for short prompts
+    # like "funnier". Only an explicit single-clip expansion retains that interval.
+    if parent and (parent.get('references') or parent.get('reference_mode') == 'similar' and (not expands or negated)):
+        refs = parent.get('references') or [parent]
+        return [clip for clip in selected if not any(
+            min(clip['end'], ref['end']) - max(clip['start'], ref['start']) > .5 * min(
+                clip['end'] - clip['start'], ref['end'] - ref['start']) for ref in refs)][:count]
     if re.search(r"(?:not|don't|never)\s+(?:expand|extend)", prompt, re.I):
         return selected[:count]
+    if parent and parent.get('references'):
+        refs = parent['references']
+        return [c for c in selected if not any(
+            min(c['end'], r['end']) - max(c['start'], r['start']) > .8 * min(c['end']-c['start'], r['end']-r['start'])
+            for r in refs)][:count]
+    if parent and re.search(r'\bsimilar\b|\blike\b|more clips|new clips', prompt, re.I) and not re.search(r'\bexpand\b|before and after|surrounding', prompt, re.I):
+        selected = [c for c in selected if min(c['end'], parent['end']) - max(c['start'], parent['start'])
+                    <= .8 * min(c['end']-c['start'], parent['end']-parent['start'])]
     if not parent or not re.search(r'\bexpand\b|before and after|surrounding|more of the explanation', prompt, re.I):
         return selected[:count]
     start, end = parent['start'], parent['end']

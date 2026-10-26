@@ -25,6 +25,7 @@ venv/
 *.mp4
 **/**/*.mp4
 backend/clips/*.mp4
+studio-ui/node_modules/
 
 # Disposable test tooling caches
 .pytest_cache/

@@ -52,13 +52,25 @@ def run():
                 keys.append(store.key(settings_path))
                 assert client.post('/api/settings', headers=headers, json={'tone': 'funny'}).status_code == 200
                 jid, folder = integration.new_feature_job({'user_id': user, 'project_id': pid}, 'generation')
+                (folder / 'source.video').write_bytes(b'synthetic-source-not-for-processing')
                 keys.extend(store.key(folder / name) for name in ('owner.json', 'progress.json', 'results.json'))
                 integration.finish_feature(jid, {'clips': [{'clip_url': f'/clips/{jid}/clip_1.mp4',
+                    'start': 0, 'end': 5, 'title': 'Synthetic clip',
                     'captions_url': f'/clips/{jid}/clip_1.vtt', 'storage': 's3',
                     's3_bucket': 'synthetic-test', 'clip_s3_key': 'synthetic-only'}]})
                 for _ in range(2):
                     assert client.post(f'/api/projects/{pid}/saved-clips', headers=headers,
                                        json={'job_id': jid, 'clip_index': 0}).status_code == 200
+                studio_url = f'/api/projects/{pid}/studio'
+                initial = client.get(studio_url, headers=headers).json()
+                sid = initial['sessions'][0]['id']
+                assert client.patch(f'{studio_url}/sessions/{sid}/state', headers=headers, json={
+                    'references': [{'job_id': jid, 'clip_index': 0}],
+                    'viewport': {'x': 12, 'y': 34, 'zoom': .75}}).status_code == 200
+                assert client.post(studio_url + '/sessions', headers=headers,
+                    json={'name': 'Emotional', 'source_job': jid}).status_code == 201
+                assert client.put(studio_url + '/editor-selection', headers=headers,
+                    json={'clips': [{'job_id': jid, 'clip_index': 0}]}).status_code == 200
                 # Remove local metadata and clear process memory: reads must come from Neon.
                 for path in Path(tmp).rglob('*.json'):
                     path.unlink()
@@ -71,6 +83,12 @@ def run():
                 assert result.json()['jobs'][0]['job_id'] == jid
                 assert len(client.get('/api/projects', headers=headers).json()['projects']) == 1
                 assert client.get('/api/settings', headers=headers).json()['tone'] == 'funny'
+                restored = client.get(studio_url, headers=headers).json()
+                assert len(restored['sessions']) == 2
+                assert restored['sessions'][0]['viewport']['zoom'] == .75
+                assert restored['sessions'][0]['references'][0]['job_id'] == jid
+                assert restored['sessions'][1]['source_job'] == jid
+                assert restored['editor_clips'][0]['job_id'] == jid
                 assert client.get(f'/api/features/{jid}', headers=headers).json()['state'] == 'done'
                 assert len(client.get('/api/my-clips', headers=headers).json()['clips']) == 1
                 assert client.get(f'/api/projects/{pid}', headers=other).status_code == 404
@@ -82,7 +100,7 @@ def run():
                     cur.execute('SELECT created_at, updated_at, thumbnail_key FROM cascade_app.projects WHERE id = %s', (pid,))
                     created, updated, thumbnail = cur.fetchone()
                     assert created is not None and updated >= created and thumbnail is None
-                print('PASS: Neon users/projects/history/clips persist; project rename/search/timestamps and ownership verified.')
+                print('PASS: Neon users/projects/studio sessions/references/viewport/editor choices persist without local JSON; ownership verified.')
         finally:
             if keys:
                 with store.connection() as conn, conn.cursor() as cur:

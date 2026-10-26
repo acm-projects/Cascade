@@ -4,6 +4,7 @@ Native document navigation is intentional: URLs, Back/Forward, per-page CSS,
 Clerk initialization and media teardown keep their existing behavior.
 """
 from pathlib import Path
+import hashlib
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -28,4 +29,9 @@ def render_page(filename: str, directory: Path) -> str:
         autoescape=True, undefined=StrictUndefined, keep_trailing_newline=True,
         block_start_string='<!--%', block_end_string='%-->',
     )
-    return environment.get_template('index.html').render(view=PAGES[filename])
+    build = hashlib.sha256()
+    for asset in ('flow_C.js', 'studio/studio.js', 'studio/studio.css'):
+        path = directory / asset
+        if path.is_file():
+            build.update(path.read_bytes())
+    return environment.get_template('index.html').render(view=PAGES[filename], studio_build=build.hexdigest()[:16])

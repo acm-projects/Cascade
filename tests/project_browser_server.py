@@ -2,6 +2,7 @@
 Run locally only. No production authentication or provider code is replaced on disk.
 """
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -24,6 +25,8 @@ if __name__=='__main__':
   app1.JOBS_DIR=Path(directory)
   app1.uses_local_storage=lambda:True
   app1.requirements_error=lambda:None
+  from backend import studio
+  studio.discuss=lambda payload:'Offline fixture response: use the shared tone and pacing of your selected clips to guide the next request.'
   app1.verify_clerk_token=lambda token:'groups-browser-user' if token=='groups-browser-fixture' else (_ for _ in ()).throw(HTTPException(401,'Fixture token required'))
   app1.authorized_parties=lambda:['http://127.0.0.1:8767']
   user='groups-browser-user';pid='e'*32;jid='c'*32
@@ -77,7 +80,7 @@ if __name__=='__main__':
    return {'removed':True}
   @app1.app.get('/__flow_test.js')
   def flow():
-   script=(app1.FRONTEND_DIR/'flow_C.js').read_text()
+   script=(app1.FRONTEND_DIR/'flow_C.js').read_text(encoding='utf-8')
    bootstrap="""window.Clerk={session:{getToken:async()=>'groups-browser-fixture'},user:{id:'groups-browser-user',fullName:'Fixture User'},openUserProfile:()=>{},signOut:async()=>{}};
      userId='groups-browser-user';if($('protected-page'))$('protected-page').hidden=false;
      if(page!=='login')showAccount();
@@ -96,5 +99,5 @@ if __name__=='__main__':
     html=(Path(snapshot)/filename).read_text()
    else:
     html=app1.frontend.render_page(filename,app1.FRONTEND_DIR)
-   return '<base href="/">'+html.replace('<script src="flow_C.js"></script>','<script src="/__flow_test.js"></script>')
+   return '<base href="/">'+re.sub(r'<script src="flow_C\.js(?:\?[^"]*)?"></script>', '<script src="/__flow_test.js"></script>', html)
   uvicorn.run(app1.app,host='127.0.0.1',port=8767,log_level='warning')

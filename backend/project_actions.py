@@ -31,13 +31,16 @@ def register(app, host, integration):
         with integration.lock:
             integration.require_project(project_id, request.state.user_id)
             rows = []
-            for number, job in enumerate((j for j in reversed(integration.project_jobs(project_id, request.state.user_id)) if j['kind']=='generation'), 1):
+            generation_jobs = [j for j in reversed(integration.project_jobs(project_id, request.state.user_id)) if j['kind']=='generation']
+            documents = host.metadata_store().read_many([
+                host.JOBS_DIR / job['job_id'] / name for job in generation_jobs for name in ('results.json', 'failure.json')])
+            for number, job in enumerate(generation_jobs, 1):
                 folder = host.JOBS_DIR / job['job_id']
-                if host.metadata_exists(folder/'results.json'):
-                    result = host.load_json(folder/'results.json')
+                if folder/'results.json' in documents:
+                    result = documents[folder/'results.json']
                     status = {'state': 'done', **result}
-                elif host.metadata_exists(folder/'failure.json'):
-                    status = {'state': 'error', **host.load_json(folder/'failure.json')}
+                elif folder/'failure.json' in documents:
+                    status = {'state': 'error', **documents[folder/'failure.json']}
                 else:
                     with host.jobs_lock:
                         status = dict(host.jobs.get(job['job_id'], {'state':'error', 'message':'Processing was interrupted. Retry this request.'}))
