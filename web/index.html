@@ -610,39 +610,34 @@
   <!-- Appears after the backend verifies the Clerk session. -->
   <main id="protected-page" hidden>
     <div class="editor-heading">
-      <h1 id="project-title">Your project</h1>
-
-      <div class="row">
-        <button id="undo" type="button" disabled>Undo</button><button id="redo" type="button" disabled>Redo</button>
+      <div class="editor-project">
+        <a class="editor-back" href="canvas_C.html">← Canvas</a>
+        <div class="editor-project-title"><h1 id="project-title">Your project</h1><span class="editor-page-label">Editor</span></div>
         <span id="save-status" role="status"></span><button id="retry-save" type="button" hidden>Retry save</button>
-        <button id="export-edit" type="button">Download edited MP4</button>
-        <button id="save-clip" type="button">Save clip</button>
-        <a class="button" href="canvas_C.html">
-          ← Canvas
+      </div>
+      <div class="editor-actions">
+        <div class="editor-history" role="group" aria-label="Edit history"><button id="undo" type="button" disabled>Undo</button><button id="redo" type="button" disabled>Redo</button></div>
+        <div class="editor-delivery" role="group" aria-label="Save and export clips">
+        <button id="save-clip" type="button" title="Save this clip to your project. Editing settings save automatically.">Save clip</button>
+        <a id="open-exports" class="button primary" href="exports_C.html">
+          Go to Exports (0) →
         </a>
-
-        <a class="button primary" href="exports_C.html">
-          Open exports →
-        </a>
+        </div>
       </div>
     </div>
 
     <div class="simple-editor">
 
       <!-- Mini canvas layout -->
-      <aside class="mini-canvas">
-        <h3>Canvas</h3>
-
-        <div class="mini-source">
-          Source video
-        </div>
-
-        <div class="mini-branches" id="editor-sessions"></div>
+      <aside class="mini-canvas" aria-label="Project clips">
+        <h2>Project clips</h2>
+        <p class="clip-navigation-help" id="clip-navigation-help">Open a clip to edit.<br>Check clips to select for export.</p>
+        <div class="mini-branches" id="editor-sessions" aria-describedby="clip-navigation-help"></div>
       </aside>
 
       <!-- Actual generated clip -->
       <section class="editor-center">
-        <h3 id="editor-clip-title">
+        <h3 id="editor-clip-title" hidden>
           Clip 1
         </h3>
 
@@ -654,31 +649,31 @@
         </div>
 
         <div class="preview-heading">
-          <div><strong id="preview-label">Edited preview</strong><p id="preview-description">Live trim and captions · original media preserved</p></div>
+          <div hidden><strong id="preview-label">Edited preview</strong><p id="preview-description">Live trim and captions · original media preserved</p></div>
           <div class="comparison" role="group" aria-label="Compare original and edited">
             <button id="preview-original" type="button" aria-pressed="false">Original</button>
             <button id="preview-edited" type="button" aria-pressed="true">Edited</button>
           </div>
         </div>
-        <p id="preview-warning" role="note" hidden></p>
-        <div id="preview-wrap"><div id="device-shell" data-device="clean"><div id="device-screen"><div id="composition-frame"><canvas id="caption-overlay" aria-hidden="true"></canvas><video
+        <p id="preview-warning" role="note" hidden></p><p id="auto-framing-status" role="status" aria-live="polite"></p>
+        <div id="preview-wrap"><div id="device-shell" data-device="clean"><div id="device-screen"><div id="composition-frame"><canvas id="caption-overlay" aria-hidden="true"></canvas><div id="footage-layer"><video
           id="editor-video"
           disablepictureinpicture
           playsinline
           hidden
-        ></video></div></div><span class="device-detail" aria-hidden="true"></span></div></div><div class="preview-transport"><button id="preview-play" type="button" aria-label="Play preview">▶ Play</button><span id="preview-time"></span><span id="playback-status" role="status"></span></div>
+        ></video></div></div></div><span class="device-detail" aria-hidden="true"></span></div></div><div class="preview-transport"><button id="preview-play" type="button" aria-label="Play preview">▶ Play</button><span id="preview-time"></span><span id="playback-status" role="status"></span></div>
 
         <section class="simple-timeline" id="timeline-controls" aria-label="Clip timeline">
           <div class="timeline-toolbar">
-            <button id="play-toggle" type="button">Play</button><span id="time-label">0:00 / 0:00</span>
+            <button id="timeline-toggle" type="button" aria-expanded="false" aria-controls="timeline-tracks">Expand tracks</button><button id="play-toggle" type="button" aria-label="Play video">Play</button><span id="time-label">0:00 / 0:00</span>
             <div class="timeline-zoom-controls" role="group" aria-label="Timeline zoom">
               <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
-              <input id="timeline-zoom" type="range" min="1" max="12" step="0.25" value="1" aria-label="Timeline zoom">
+              <input id="timeline-zoom" type="range" min="1" max="12" step="0.01" value="1" aria-label="Timeline zoom">
               <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
-              <output id="zoom-label">1.0×</output><button id="zoom-fit" type="button">Fit</button>
+              <output id="zoom-label">100%</output><button id="zoom-fit" type="button">Fit</button>
             </div>
           </div>
-          <div class="timeline-tracks">
+          <div class="timeline-tracks" id="timeline-tracks">
             <div class="track-labels" aria-hidden="true"><span>Time</span><span>Video</span><span>Captions</span><span>B-roll</span></div>
             <div id="timeline-scroll" tabindex="0" aria-label="Scrollable timeline">
               <div id="timeline-content">
@@ -692,18 +687,19 @@
               </div>
             </div>
           </div>
-          <div class="trim-inputs">
+          <div class="trim-inputs" hidden>
             <label for="trim-start">In <input id="trim-start" type="number" min="0" max="0" step="0.01" value="0"> <output id="start-label"></output></label>
             <label for="trim-end">Out <input id="trim-end" type="number" min="0" max="0" step="0.01" value="0"> <output id="end-label"></output></label>
-            <button id="reset-trim" type="button">Reset trim</button>
           </div>
+          <button id="reset-trim" type="button">Reset trim</button>
           <label for="seek" class="sr-only">Seek in generated clip</label><input id="seek" class="sr-only" type="range" min="0" max="0" step="0.01" value="0">
-          <p id="trim-summary"></p><p id="thumbnail-status" role="status"></p>
+          <p id="trim-summary" hidden></p><p id="thumbnail-status" class="sr-only" role="status"></p>
         </section>
       </section>
 
       <!-- Feature tabs -->
       <aside class="editor-controls">
+        <h2 class="editor-tools-heading">Editing tools</h2>
         <div
           class="tabs"
           role="tablist"
@@ -740,7 +736,7 @@
             aria-controls="ratio-panel"
             data-tab="ratio"
           >
-            Aspect ratio
+            Video
           </button>
 
           <button
@@ -753,6 +749,8 @@
           >
             B-roll
           </button>
+          <button id="research-tab" type="button" role="tab" aria-selected="false" aria-controls="research-panel" data-tab="research">Research Agent</button>
+          <button id="effects-tab" type="button" role="tab" aria-selected="false" aria-controls="effects-panel" data-tab="effects">Effects</button>
         </div>
 
         <section
@@ -779,20 +777,26 @@
         >
           <h3>Captions</h3>
           <fieldset id="caption-controls">
+            <div hidden>
             <label for="caption-cue">Caption segment</label><select id="caption-cue"></select>
             <label for="cap-text">Caption text</label><textarea id="cap-text" maxlength="2000" rows="3" placeholder="No caption data available"></textarea>
+            </div>
             <p id="caption-preview-note" role="status"></p>
             <label><input id="cap-enabled" type="checkbox"> Captions on</label>
             <label for="caption-preset">Style preset</label><select id="caption-preset"><option value="custom">Custom</option><option value="classic">Classic</option><option value="bold">Bold</option><option value="yellow">Yellow highlight</option></select>
+            <label for="cap-color">Caption color</label><input id="cap-color" type="color">
+            <p class="muted">For text, font size, position, and other details, ask AI Chat.</p>
+            <div hidden>
             <label for="cap-font">Font</label><select id="cap-font"><option>Arial</option><option>Georgia</option><option>Verdana</option></select>
             <label for="cap-size">Font size</label><input id="cap-size" type="number" min="12" max="80">
             <label><input id="cap-bold" type="checkbox"> Bold</label>
-            <label for="cap-color">Text color</label><input id="cap-color" type="color">
+
             <label for="cap-stroke">Outline color</label><input id="cap-stroke" type="color">
             <label for="cap-thickness">Outline thickness</label><input id="cap-thickness" type="number" min="0" max="8" step="0.5">
             <label for="cap-background">Background color</label><input id="cap-background" type="color">
             <label for="cap-opacity">Background opacity</label><input id="cap-opacity" type="range" min="0" max="1" step="0.05">
             <label for="cap-position">Position</label><select id="cap-position"><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select>
+            </div>
           </fieldset><p id="caption-warning"></p>
         </section>
 
@@ -816,12 +820,15 @@
               <button type="button" data-ratio="4:3" aria-pressed="false"><span class="ratio-icon" style="--ratio:4/3"></span><strong>4:3</strong><small>Tablet</small></button>
             </div>
             <label for="preview-device">Preview display</label><select id="preview-device"><option value="auto">Match preset</option><option value="phone">Phone</option><option value="tablet">Tablet</option><option value="desktop">Desktop monitor</option><option value="tv">Television</option><option value="clean">Clean frame</option></select><p class="device-note">Device decoration is preview only. Output ratio and downloads stay unchanged.</p>
-            <label for="framing">Video framing</label><select id="framing"><option value="fit">Fit — entire video</option><option value="fill">Fill — crop to frame</option></select>
+            <label for="framing">Video framing</label><select id="framing"><option value="fit">Fit — entire video</option><option value="fill">Fill to Frame — crop to frame</option></select>
             <div id="fit-options"><label for="frame-background">Fit background</label><input id="frame-background" type="color" value="#06110d"></div>
-            <div id="crop-options" hidden>
-              <label for="crop-x">Horizontal position <output id="crop-x-label">50%</output></label><input id="crop-x" type="range" min="0" max="1" step="0.01" value="0.5">
-              <label for="crop-y">Vertical position <output id="crop-y-label">50%</output></label><input id="crop-y" type="range" min="0" max="1" step="0.01" value="0.5">
-              <button id="crop-center" type="button">Center video</button>
+            <div id="auto-reframe-controls">
+              <strong>Automatic framing</strong>
+              <p class="muted">Fill follows the relevant subject or active speaker. Auto uses the prompt and visible categories; choose a subject to override it.</p>
+              <div class="subject-actions"><button id="subject-pick" type="button">Choose subject in preview</button><button id="subject-reset" type="button">Use Auto</button></div><p id="subject-help" class="muted">Choose subject, then click or draw a box. Selection starts at the playhead. Use Fill with a cropped aspect ratio to see tracking.</p>
+              <label for="reframe-focus">Framing focus</label><select id="reframe-focus" disabled><option value="auto">Auto — prompt and scene</option><option value="speaker">Follow the speaker</option><option value="both">Keep both people in frame</option><option value="left">Person initially on the left</option><option value="right">Person initially on the right</option></select>
+              <button id="reframe-retry" type="button" disabled>Analyze / retry tracking</button><button id="reframe-cancel" type="button" hidden>Cancel analysis</button>
+              <p id="reframe-status" role="status" aria-live="polite"></p>
             </div>
             <p id="composition-summary"></p>
           </fieldset>
@@ -834,13 +841,12 @@
           aria-labelledby="broll-tab"
           hidden
         >
-          <h3>B-roll</h3>
-
+          <h3>B-roll</h3><section class="tool-section"><h4>Find B-roll</h4><p class="muted">Search footage. Drag a result onto the timeline or select it to preview and add.</p>
           <p><a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer">Videos provided by Pexels</a></p>
           <form id="broll-search-form"><label for="broll-query">Search stock footage</label><input id="broll-query" maxlength="160" required placeholder="Mountain hiking"><button id="broll-search" type="submit">Search Pexels</button></form>
           <p id="broll-status" role="status" aria-live="polite"></p>
-          <div id="broll-results"></div><button id="broll-more" type="button" hidden>Load more</button>
-          <video id="broll-result-preview" controls muted playsinline hidden aria-label="Stock footage preview"></video>
+          <div id="broll-results"><p class="muted">Search to find footage for your video.</p></div><button id="broll-more" type="button" hidden>Load more</button>
+          </section><section class="tool-section"><h4>Preview &amp; Add</h4><p id="broll-preview-empty" class="muted">Choose a search result to preview it. Set placement below, then add it to your video.</p><video id="broll-result-preview" controls muted playsinline hidden aria-label="Stock footage preview"></video>
           <p id="broll-result-credit"></p>
           <button id="broll-add" type="button" disabled>Add to clip</button>
           <button id="broll-replace" type="button" disabled>Replace selected segment with this result</button>
@@ -852,14 +858,39 @@
             <label for="broll-mode">Stock framing</label><select id="broll-mode"><option value="fill">Fill — center crop</option><option value="fit">Fit — entire stock frame</option></select>
             <button id="broll-update" type="submit" disabled>Update selected segment</button>
           </form>
-          <div id="broll-segments" aria-label="Inserted B-roll segments"></div>
+          </section><section class="tool-section"><h4>Added B-roll</h4><p class="muted">Select footage to edit its placement above, or drag it on the B-roll track. Drag either edge to trim.</p><div id="broll-segments" aria-label="Inserted B-roll segments"></div></section>
 
         </section>
-        <section class="card">
-          <h3>Research current trends</h3>
-          <form id="research-form"><label for="research-topic">Topic</label><input id="research-topic" maxlength="200" required><button type="submit">Analyze trends</button></form>
-          <div id="research-result" aria-live="polite"></div>
+        <section id="effects-panel" class="tab-panel" role="tabpanel" aria-labelledby="effects-tab" hidden>
+          <h3>Effects</h3>
+          <fieldset id="effects-controls">
+            <label for="effect-brightness">Brightness <output id="effect-brightness-value"></output></label><input id="effect-brightness" type="range" min="0.5" max="1.5" step="0.05" value="1">
+            <label for="effect-contrast">Contrast <output id="effect-contrast-value"></output></label><input id="effect-contrast" type="range" min="0.5" max="1.5" step="0.05" value="1">
+            <label for="effect-saturation">Saturation <output id="effect-saturation-value"></output></label><input id="effect-saturation" type="range" min="0" max="2" step="0.05" value="1">
+            <label><input id="effect-grayscale" type="checkbox"> Black &amp; white</label>
+            <button id="effects-reset" type="button">Reset effects</button>
+            <p class="muted">Applies to your clip and B-roll. Captions stay clear. Saved in your draft and included in downloads.</p>
+          </fieldset>
         </section>
+        <section id="research-panel" class="tab-panel" role="tabpanel" aria-labelledby="research-tab" hidden><h3>Research Agent</h3><section class="tool-section">      <h3>Video preferences</h3>
+      <p class="muted">Saved for your account across projects. These preferences do not currently change generated output.</p>
+      <form id="settings-form">
+        <label for="settings-video-type">Video type</label>
+        <select id="settings-video-type"><option value="">Choose a type</option><option value="tutorial">Tutorial</option><option value="vlog">Vlog</option><option value="interview">Interview</option><option value="podcast">Podcast clip</option></select>
+        <label for="settings-audience">Audience</label><input id="settings-audience" maxlength="200">
+        <label for="settings-tone">Tone</label><select id="settings-tone"><option value="">Choose a tone</option><option value="casual">Casual</option><option value="professional">Professional</option><option value="funny">Funny</option><option value="educational">Educational</option></select>
+        <label for="settings-goal">Goal</label><input id="settings-goal" maxlength="500">
+        <fieldset><legend>Platforms</legend>
+          <label><input type="checkbox" name="platforms" value="tiktok"> TikTok</label>
+          <label><input type="checkbox" name="platforms" value="instagram"> Instagram</label>
+          <label><input type="checkbox" name="platforms" value="linkedin"> LinkedIn</label>
+          <label><input type="checkbox" name="platforms" value="youtube"> YouTube</label>
+        </fieldset>
+        <button class="primary continue-button" type="submit">Save preferences</button>
+      </form><p id="preferences-status" role="status" aria-live="polite"></p>
+</section><section class="tool-section"><h3>Analyze trends</h3><p class="muted">Research the selected clip’s source video and compare it with current trends.</p>
+          <form id="research-form"><label for="research-topic">Topic</label><input id="research-topic" maxlength="200" required><button type="submit">Analyze trends</button></form>
+          <div id="research-result" aria-live="polite"></div></section></section>
       </aside>
     </div>
   </main>
@@ -873,6 +904,10 @@
   <script src="editor_captions.js"></script>
   <script src="editor_timeline.js"></script>
   <script src="editor_broll.js"></script>
+  <link rel="stylesheet" href="clip_navigation.css">
+  <script src="export_selection.js"></script>
+  <script src="clip_navigation.js"></script>
+  <script src="editor_reframe.js"></script>
   <script src="editor_C.js"></script>
   <script src="flow_C.js"></script>
 </body>
@@ -996,48 +1031,16 @@
   >
     <h1>Exports</h1>
 
-    <div class="export-layout">
-      <div id="saved-clips"></div>
+    <div class="exports-workspace"><aside class="exports-navigation"><h2 hidden>Clip navigation and download selection</h2><div id="exports-tree"></div></aside>
+    <section class="export-studio" aria-label="Selected clips">
+      <div class="export-actions"><button id="download-active" class="primary" type="button" disabled>Download this clip</button><button id="export-all" type="button" disabled>Download selected clips (0)</button></div>
+      <div id="export-deck" tabindex="0" role="region" aria-label="Wave stacks. Expand a wave to browse its clips."></div>
+      <div class="export-navigation"><button id="export-prev" type="button" aria-label="Previous clip">←</button><span id="export-position" aria-live="polite"></span><button id="export-next" type="button" aria-label="Next clip">→</button></div>
+      <p id="export-progress" role="status" aria-live="polite"></p>
 
-      <section class="card">
-        <h3>Export settings</h3>
-        <p class="muted">Download the actual generated MP4 and caption file. Format conversion and resolution changes are unfinished.</p>
+    </section>
 
-        <fieldset class="placeholder-controls" disabled>
-          <label for="export-format">
-            Format
-          </label>
-
-          <select id="export-format">
-            <option>MP4</option>
-            <option>MOV</option>
-          </select>
-
-          <label for="export-resolution">
-            Resolution
-          </label>
-
-          <select id="export-resolution">
-            <option>1080p</option>
-            <option>720p</option>
-          </select>
-
-          <label>
-            <input type="checkbox" checked>
-            Include captions
-          </label>
-
-          <button
-            class="primary export-button"
-            type="button"
-            disabled
-          >
-            Export clip
-          </button>
-        </fieldset>
-      </section>
     </div>
-
     <div class="exports-footer">
       <a class="button" href="editor_C.html">
         ← Back to editor
@@ -1053,6 +1056,16 @@
     <p>Please enable JavaScript to open exports.</p>
   </noscript>
 
+  <link rel="stylesheet" href="exports_C.css">
+  <script src="export_selection.js"></script>
+  <script src="editor_state.js"></script>
+  <script src="editor_captions.js"></script>
+  <link rel="stylesheet" href="clip_navigation.css">
+  <script src="clip_navigation.js"></script>
+  <script src="editor_reframe.js"></script>
+  <script src="post_schedule.js"></script>
+  <script src="export_post.js"></script>
+  <script src="exports_C.js"></script>
   <script src="flow_C.js"></script>
 </body>
 </html><!--% elif view == "settings" %--><!DOCTYPE html>
@@ -1151,22 +1164,9 @@
     hidden
   >
     <section class="card project-panel">
-      <h1>Video preferences</h1>
-      <p class="muted">Save your video type, audience, tone, goal, and platforms. These preferences are stored for your account. Existing processing features do not yet use them to change generated output.</p>
-      <form id="settings-form">
-        <label for="settings-video-type">Video type</label>
-        <select id="settings-video-type"><option value="">Choose a type</option><option value="tutorial">Tutorial</option><option value="vlog">Vlog</option><option value="interview">Interview</option><option value="podcast">Podcast clip</option></select>
-        <label for="settings-audience">Audience</label><input id="settings-audience" maxlength="200">
-        <label for="settings-tone">Tone</label><select id="settings-tone"><option value="">Choose a tone</option><option value="casual">Casual</option><option value="professional">Professional</option><option value="funny">Funny</option><option value="educational">Educational</option></select>
-        <label for="settings-goal">Goal</label><input id="settings-goal" maxlength="500">
-        <fieldset><legend>Platforms</legend>
-          <label><input type="checkbox" name="platforms" value="tiktok"> TikTok</label>
-          <label><input type="checkbox" name="platforms" value="instagram"> Instagram</label>
-          <label><input type="checkbox" name="platforms" value="linkedin"> LinkedIn</label>
-          <label><input type="checkbox" name="platforms" value="youtube"> YouTube</label>
-        </fieldset>
-        <button class="primary continue-button" type="submit">Save preferences</button>
-      </form>
+      <h1>Settings</h1>
+      <p class="muted">Manage your account using Profile in the account menu, or Sign out above.</p>
+      <a id="research-settings-link" class="button" href="projects_C.html">Research Agent &amp; video preferences →</a>
       <a class="button" href="projects_C.html">Back to projects</a>
     </section>
   </main>

@@ -1,0 +1,241 @@
+/* Sizes are Figma pixels: calc(N * var(--u)) */
+.projects {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-size: cover;
+  background-position: center;
+  background-color: #eef6ee;
+}
+
+/* ---------- Green top bar (Figma: 119 tall, dark green gradient) ---------- */
+.projects-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: calc(119 * var(--u));
+  padding: 0 calc(42 * var(--u)) 0 calc(40 * var(--u));
+  background: linear-gradient(90deg, rgba(14, 60, 28, 0.93) 7%, rgba(17, 85, 37, 0.93) 100%);
+  flex-shrink: 0;
+}
+
+.projects-brand {
+  display: flex;
+  align-items: center;
+  gap: calc(26 * var(--u));
+  color: var(--color-cream);
+  font-family: var(--font-display);
+  font-size: calc(48 * var(--u));
+}
+
+.projects-leaf {
+  width: calc(51 * var(--u));
+  height: calc(43 * var(--u));
+}
+
+.projects-avatar {
+  width: calc(76 * var(--u));
+  height: calc(75 * var(--u));
+  border-radius: 50%;
+}
+
+/* ---------- Sidebar + main area ---------- */
+.projects-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* Left sidebar: 396 wide, with the thick black line on its right edge */
+.projects-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+  width: calc(396 * var(--u));
+  padding: calc(251 * var(--u)) 0 0 calc(34 * var(--u));
+  border-right: max(4px, calc(8 * var(--u))) solid black;
+  flex-shrink: 0;
+}
+
+/* Wooden pill buttons: 294 x 72 */
+.projects-filter {
+  width: calc(294 * var(--u));
+  height: calc(72 * var(--u));
+  border: none;
+  background-color: transparent;
+  background-size: 100% 100%;
+  color: var(--color-wood-text);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: calc(32 * var(--u));
+  cursor: pointer;
+  transition: scale 0.15s, filter 0.15s;
+}
+
+.projects-filter:hover {
+  scale: 1.04;
+}
+
+/* The selected filter: slightly darker wood */
+.projects-filter.active {
+  filter: brightness(0.85) saturate(1.2);
+}
+
+.projects-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(50 * var(--u)) calc(80 * var(--u)) 0 calc(43 * var(--u));
+}
+
+.projects-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(24 * var(--u));
+}
+
+.projects-title {
+  color: var(--color-wood-text);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: calc(96 * var(--u));
+  line-height: 1.2;
+}
+
+.projects-subtitle {
+  margin: calc(9 * var(--u)) 0 0 calc(20 * var(--u));
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: calc(32 * var(--u));
+}
+
+.projects-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(36 * var(--u));
+  margin-top: calc(29 * var(--u));
+}
+
+/* Search box: wood texture, 292 x 71, dark brown outline */
+.projects-search {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  width: calc(292 * var(--u));
+  height: calc(71 * var(--u));
+  padding: 0 calc(14 * var(--u));
+  border: max(3px, calc(8 * var(--u))) solid var(--color-wood-dark);
+  border-radius: calc(10 * var(--u));
+  background-size: cover;
+  background-position: center;
+  margin-top: calc(5 * var(--u));
+}
+
+.projects-search img {
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+}
+
+.projects-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: calc(20 * var(--u));
+}
+
+.projects-search input::placeholder {
+  color: rgba(0, 0, 0, 0.75);
+}
+
+/* "+ New Project": green wood, 195 x 76 */
+.projects-new {
+  width: calc(195 * var(--u));
+  height: calc(76 * var(--u));
+  border: max(3px, calc(8 * var(--u))) solid var(--color-wood-dark);
+  border-radius: calc(10 * var(--u));
+  background-size: cover;
+  background-position: center;
+  color: var(--color-wood-dark);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: calc(24 * var(--u));
+  cursor: pointer;
+  transition: scale 0.15s, filter 0.15s;
+}
+
+.projects-new:hover {
+  scale: 1.04;
+  filter: brightness(1.1);
+}
+
+/* ---------- Project cards: 3 per row, 382 x 292, gaps 43 / 42 ---------- */
+.projects-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;                      /* scroll when there are lots of projects */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, calc(382 * var(--u)));   /* as many 382-wide cards as fit */
+  column-gap: calc(43 * var(--u));
+  row-gap: calc(42 * var(--u));
+  align-content: start;
+  margin-top: calc(94 * var(--u));
+  padding-bottom: calc(40 * var(--u));
+}
+
+.projects-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  height: calc(292 * var(--u));
+  padding: calc(26 * var(--u)) calc(28 * var(--u));
+  border: none;
+  background-color: transparent;
+  background-size: 100% 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: scale 0.15s;
+}
+
+.projects-card:hover {
+  scale: 1.03;
+}
+
+/* Thumbnail placeholder until projects have real thumbnails */
+.projects-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: calc(150 * var(--u));
+  border-radius: calc(10 * var(--u));
+  background: rgba(65, 52, 20, 0.25);
+  color: rgba(65, 52, 20, 0.6);
+  font-size: calc(40 * var(--u));
+}
+
+.projects-card-name {
+  margin-top: calc(14 * var(--u));
+  color: var(--color-wood-text);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: calc(30 * var(--u));
+}
+
+.projects-card-meta {
+  color: rgba(66, 55, 23, 0.75);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: calc(18 * var(--u));
+}
+
+.projects-empty {
+  grid-column: 1 / -1;
+  color: var(--color-wood-text);
+  font-size: calc(28 * var(--u));
+}

@@ -10,7 +10,7 @@ import subprocess
 import time
 import urllib.request
 from PIL import Image,ImageChops,ImageStat
-from test_editor_browser import Chrome
+from tests.test_editor_browser import Chrome
 
 ARTIFACTS=Path('/tmp/cascade-aspect-artifacts')
 
@@ -53,17 +53,12 @@ async def main():
         await c.click('[data-ratio="9:16"]');await c.input('frame-background','#334455')
         fit=await c.js("({frame:document.querySelector('#composition-frame').getBoundingClientRect().toJSON(),video:document.querySelector('#editor-video').getBoundingClientRect().toJSON(),background:getComputedStyle(document.querySelector('#composition-frame')).backgroundColor})")
         assert fit['video']['height']<fit['frame']['height'] and fit['background']=='rgb(51, 68, 85)'
-        await c.input('framing','fill');await c.input('crop-x','0')
-        left=await c.js("document.querySelector('#editor-video').style.left")
-        await c.input('crop-x','1');right=await c.js("document.querySelector('#editor-video').style.left")
-        assert float(left.removesuffix('px'))==0 and float(right.removesuffix('px'))<0
-        await c.click('#undo');assert float(await c.js("document.querySelector('#crop-x').value"))==0
-        await c.click('#redo');assert float(await c.js("document.querySelector('#crop-x').value"))==1
-        # A real pointer drag on the crop slider is one history transaction.
-        slider=await c.box('#crop-x')
-        await c.drag(slider['x']+slider['width']-8,slider['y']+slider['height']/2,slider['x']+8)
-        assert float(await c.js("document.querySelector('#crop-x').value"))<.04
-        await c.click('#undo');assert float(await c.js("document.querySelector('#crop-x').value"))==1
+        await c.input('framing','fill')
+        await c.until("document.querySelector('#reframe-status').textContent.includes('ready')&&!document.querySelector('#chat-send').disabled",90)
+        assert await c.js("!document.querySelector('#crop-x')&&!document.querySelector('#crop-y')&&!document.querySelector('#follow-speaker')")
+        assert await c.js("document.querySelector('#reframe-status').textContent.includes('No usable faces')")
+        await c.click('#undo');assert await c.js("document.querySelector('#framing').value==='fit'")
+        await c.click('#redo');assert await c.js("document.querySelector('#framing').value==='fill'")
         # Captions are rasterized in the new output frame, not cropped with the source.
         await c.click('#captions-tab');await c.input('cap-position','top');await c.input('cap-color','#ffff00');await c.input('cap-size','42');await c.input('caption-cue','0')
         assert await c.js("document.querySelector('#caption-overlay').width")==360
@@ -89,20 +84,24 @@ async def main():
         assert abs(original-16/9)<.003
         await c.click('#preview-edited')
         assert await c.js('JSON.parse(localStorage.getItem('+json.dumps(state_key)+')).state')==before
-        # Download through the actual visible export button, then inspect the encoded file.
+        # Download through Exports, then inspect the encoded file.
         await c.call('Page.setDownloadBehavior',{'behavior':'allow','downloadPath':str(ARTIFACTS)})
         for mode in ['fit','fill']:
             await c.click('#ratio-tab');await c.input('framing',mode)
-            if mode=='fill': await c.input('crop-x','1')
+            await c.until("!document.querySelector('#chat-send').disabled",90)
             await c.js("(async()=>{const v=document.querySelector('#editor-video');await new Promise(r=>{v.addEventListener('seeked',r,{once:true});v.currentTime=1.5})})()")
             await c.js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
             expected=await c.js("""(()=>{const s=JSON.parse(localStorage.getItem(KEY)).state;const g=CascadeEditorState.compositionGeometry(640,360,s.composition);const canvas=document.createElement('canvas');canvas.width=g.width;canvas.height=g.height;const ctx=canvas.getContext('2d');ctx.fillStyle=s.composition.background;ctx.fillRect(0,0,g.width,g.height);const fill=s.composition.mode==='fill';ctx.drawImage(document.querySelector('#editor-video'),fill?-g.x:g.x,fill?-g.y:g.y,g.scaledWidth,g.scaledHeight);ctx.drawImage(document.querySelector('#caption-overlay'),0,0);return canvas.toDataURL('image/png').split(',')[1];})()""".replace('KEY',json.dumps(state_key)))
             (ARTIFACTS/(mode+'-expected.png')).write_bytes(base64.b64decode(expected))
-            download=ARTIFACTS/'cascade-edited.mp4'
+            download=ARTIFACTS/'cascade-session-1-wave-1-clip-1.mp4'
             if download.exists():download.unlink()
-            await c.click('#export-edit');await c.until("!document.querySelector('#export-edit').disabled && document.querySelector('#status').textContent.includes('download ready')",30)
+            await c.until("document.querySelector('#save-status').textContent==='Saved'")
+            await c.call('Page.navigate',{'url':'http://127.0.0.1:8767/__exports_test/exports?project='+'d'*32+'&job='+'a'*32+'&clip=0'})
+            await c.until('!!window.siteReady');await c.js('window.siteReady')
+            await c.until("!document.querySelector('#download-active').disabled",90)
+            await c.click('#download-active')
             for _ in range(100):
-                if download.is_file() and not (ARTIFACTS/'cascade-edited.mp4.crdownload').exists():break
+                if download.is_file() and not (ARTIFACTS/'cascade-session-1-wave-1-clip-1.mp4.crdownload').exists():break
                 await asyncio.sleep(.1)
             assert download.is_file(),'Actual export download missing'
             output=ARTIFACTS/(mode+'.mp4');download.replace(output)
@@ -118,18 +117,19 @@ async def main():
             print(mode,'export: 360×640, 1 second; mean preview/composite pixel error',round(error,2),'/255')
             if mode=='fit':
                 assert max(abs(a-b) for a,b in zip(actual.getpixel((10,10)),(51,68,85)))<6
+            await c.call('Page.navigate',{'url':destination});await c.until('!!window.editorReady');await c.js('window.editorReady');await c.until("document.querySelector('#editor-video').readyState>=2")
         # Per-clip independence and a genuinely new document after reload.
         await c.js("document.querySelectorAll('#editor-sessions button')[1].click()")
-        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 2 · Clip 1'")
+        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 2 · Wave 1 · Clip 1'")
         assert await c.js("document.querySelector('[data-ratio=original]').getAttribute('aria-pressed')")=='true'
         await c.js("document.querySelectorAll('#editor-sessions button')[0].click()")
-        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 1 · Clip 1'")
+        await c.until("document.querySelector('#editor-clip-title').textContent==='Session 1 · Wave 1 · Clip 1'")
         assert await c.js("document.querySelector('#framing').value")=='fill'
-        assert await c.js("document.querySelector('#crop-x').value")=='1'
+        assert await c.js("!document.querySelector('#crop-x')")
         await c.until("document.querySelector('#save-status').textContent==='Saved'")
         origin=await c.js('performance.timeOrigin');await c.call('Page.reload');await c.until(f'performance.timeOrigin!=={origin} && !!window.editorReady');await c.js('window.editorReady');await c.until("document.querySelector('#editor-video').readyState>=2")
         assert await c.js("document.querySelector('#framing').value")=='fill'
-        assert await c.js("document.querySelector('#crop-x').value")=='1'
+        assert await c.js("!document.querySelector('#crop-x')")
         assert await c.js("document.querySelector('#trim-start').value")=='1'
         assert await c.js("document.querySelector('#cap-color').value")=='#ffff00'
         await c.click('#ratio-tab')
@@ -139,9 +139,9 @@ async def main():
         await c.until("document.querySelector('#playback-status').textContent.includes('unavailable')")
         await c.js("document.querySelectorAll('#editor-sessions button')[0].click()")
         await c.until("document.querySelector('#editor-video').readyState>=2 && !document.querySelector('#editor-video').error")
-        assert await c.js("document.querySelector('#crop-x').value")=='1'
+        assert await c.js("!document.querySelector('#crop-x')")
         assert not c.errors,c.errors
-        print('Chrome passed: six presets, fit/background, fill/reposition, output captions, main playback/restart/pause, timeline synchronization, comparison, history, independent clips and reload.')
+        print('Chrome passed: six presets, fit/background, automatic fill/centered no-face fallback, output captions, main playback/restart/pause, timeline synchronization, comparison, history, independent clips and reload.')
         print('Artifacts:',ARTIFACTS)
 
 if __name__=='__main__':asyncio.run(main())

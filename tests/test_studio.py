@@ -240,6 +240,22 @@ class StudioTests(unittest.TestCase):
         owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
         self.assertEqual(owner['studio_revision_of'], self.ref(1))
 
+    def test_editor_handoff_preserves_studio_names_wave_labels_and_clip_identity(self):
+        chosen = [self.ref(3), self.ref(1)]
+        self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': chosen})
+        result = self.client.get('/api/projects/' + self.pid + '/editor?selected_only=true', headers=self.headers)
+        self.assertEqual(result.status_code, 200)
+        data = result.json()
+        self.assertEqual(data['selection'], chosen[0])
+        wave = data['sessions'][0]
+        self.assertEqual({clip['clip_index'] for clip in wave['clips']}, {1, 3})
+        self.assertEqual(wave['session_id'], self.sid)
+        self.assertTrue(wave['session_name'])
+        self.assertEqual(wave['session_number'], 1)
+        self.assertEqual(wave['wave_number'], 1)
+        complete = self.client.get('/api/projects/' + self.pid + '/editor', headers=self.headers).json()
+        self.assertEqual(len(complete['sessions'][0]['clips']), 4)
+
     def test_shared_selection_drives_ai_editor_and_survives_reload(self):
         selected = [self.ref(0), self.ref(2)]
         response = self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': selected})

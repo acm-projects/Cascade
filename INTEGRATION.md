@@ -40,7 +40,14 @@ Existing `.env`, Clerk validation/configuration, AWS credential resolution, S3 b
 
 ## Unfinished behavior
 
-Free-form editing chat, editable caption text/fonts/colors/placement, timeline edits, aspect ratio/cropping, subject tracking, B-roll uploads/generation/compositing, merged multi-clip sequences, format/resolution conversion, and direct social publishing have no integrated implementation. Those existing controls stay disabled or explicitly labeled unfinished. Selecting clips opens one selected clip at a time, rather than assembling a multi-clip sequence. The four caption treatments are rendered presets; tone/audience inputs in the old renderer do not affect rendering.
+The active editor supports saved edit drafts, caption styling/text, reframing and
+B-roll composition. Exports support selected final MP4/ZIP downloads, per-clip post
+metadata, owner-scoped YouTube OAuth/publishing and native scheduling. Instagram
+uses native file sharing where supported, with a manual download/open fallback;
+no Instagram automatic publishing is implied. See [docs/editor.md](docs/editor.md),
+[docs/studio.md](docs/studio.md), [docs/exports-wave-stacks.md](docs/exports-wave-stacks.md)
+and [docs/youtube-publishing.md](docs/youtube-publishing.md). AI Studio's shared
+selection is preserved when handing clips to the editor.
 
 Project metadata is shared through Neon. Original source videos still require the local job directory, and interrupted jobs do not retry automatically. The browser reloads the saved source as a Blob/File, so opening a large project downloads its source into browser memory. Clip playback/download also retains the existing authenticated Blob approach.
 

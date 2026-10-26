@@ -1,0 +1,14 @@
+/* Reset: remove the browser's default spacing so the designs control everything */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Buttons and inputs don't copy the page font by default, so tell them to */
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}

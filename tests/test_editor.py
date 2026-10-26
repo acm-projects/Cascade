@@ -30,7 +30,7 @@ class EditorTests(unittest.TestCase):
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.patches = [patch.object(app1, 'JOBS_DIR', Path(self.temp.name)), patch.object(app1, 'verify_clerk_token', side_effect=lambda token: token)]
+        self.patches = [patch.dict(os.environ, {'CASCADE_METADATA_STORE':'local'}), patch.object(app1, 'JOBS_DIR', Path(self.temp.name)), patch.object(app1, 'verify_clerk_token', side_effect=lambda token: token)]
         for p in self.patches: p.start()
         self.client = TestClient(app1.app)
         self.headers = {'Authorization':'Bearer editor-user'}
@@ -60,6 +60,109 @@ class EditorTests(unittest.TestCase):
         result=self.client.get(url or self.url,headers=self.headers)
         self.assertEqual(result.status_code,200,result.text[:500])
         return result.json()
+
+    def test_post_metadata_is_separate_persistent_and_owner_checked(self):
+        before = self.get()
+        body = {'name':'A better name','caption':'Post copy','hashtags':['hello','#hello','world'], 'cover_time':1.25}
+        result = self.client.put(self.url+'/post', headers=self.headers, json=body)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['hashtags'], ['#hello','#world'])
+        self.assertEqual(self.get(self.url+'/post'), result.json())
+        self.assertEqual(self.get(), before)
+        self.assertNotEqual(self.client.get(self.url+'/post', headers={'Authorization':'Bearer someone-else'}).status_code, 200)
+        self.assertEqual(self.client.put(self.url+'/post', headers=self.headers, json={**body,'cover_time':-1}).status_code, 422)
+        self.assertEqual(self.client.put(self.url+'/post', headers=self.headers, json={**body,'hashtags':['x'*101]}).status_code, 422)
+        self.assertEqual(self.client.get(self.base+'/'+self.jid+'/1/post', headers=self.headers).status_code, 404)
+
+    def test_post_metadata_does_not_leak_between_jobs(self):
+        other = self.job(1, 'b'*32)
+        body = {'name':'Only this clip', 'caption':'Private copy', 'hashtags':[], 'cover_time':None}
+        self.client.put(self.url+'/post', headers=self.headers, json=body)
+        self.assertEqual(self.get(self.base+'/'+other+'/0/post')['name'], 'Clip')
+        self.assertEqual(self.get(self.base+'/'+other+'/0/post')['caption'], '')
+
+    def test_post_ai_unavailable_preserves_manual_metadata(self):
+        body = {'name':'Manual', 'caption':'Keep this', 'hashtags':['#manual'], 'cover_time':None}
+        self.client.put(self.url+'/post', headers=self.headers, json=body)
+        with patch.dict(os.environ, {'OPENAI_API_KEY':''}):
+            response = self.client.post(self.url+'/post/generate', headers=self.headers, json={'action':'rewrite','metadata':body})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.get(self.url+'/post'), body)
+
+    def test_thumbnail_is_owner_checked_and_independent_of_exports(self):
+        result=self.client.get(self.url+'/thumbnail',headers=self.headers)
+        self.assertEqual(result.status_code,200,result.text[:200] if result.status_code!=200 else '')
+        self.assertEqual(result.headers['content-type'],'image/jpeg')
+        from PIL import Image
+        image=Image.open(io.BytesIO(result.content))
+        self.assertEqual(image.size,(640,360))
+        self.assertGreater(image.getpixel((320,180))[2],200)
+        self.assertEqual(self.client.get(self.url+'/thumbnail',headers=self.headers).content,result.content)
+        other=self.job(1,'b'*32)
+        other_url=self.base+'/'+other+'/0/thumbnail'
+        other_source=app1.JOBS_DIR/other/'clip_1.mp4'
+        subprocess.run(['ffmpeg','-v','error','-y','-f','lavfi','-i',
+                        'color=c=red:s=320x180:d=1','-c:v','libx264',str(other_source)],check=True)
+        other_result=self.client.get(other_url,headers=self.headers)
+        self.assertEqual(other_result.status_code,200)
+        self.assertGreater(Image.open(io.BytesIO(other_result.content)).getpixel((320,180))[0],200)
+        self.assertNotEqual(result.content,other_result.content)
+        # Replacing media must invalidate the cached frame for the same clip ID.
+        shutil.copyfile(self.fixture,other_source)
+        self.assertEqual(self.client.get(other_url,headers=self.headers).content,result.content)
+        self.assertIn(self.client.get(other_url,headers={'Authorization':'Bearer another-user'}).status_code,(403,404))
+        self.assertEqual(self.client.get(self.base+'/'+other+'/99/thumbnail',headers=self.headers).status_code,404)
+        (app1.JOBS_DIR/other/'clip_1.mp4').unlink()
+        self.assertEqual(self.client.get(other_url,headers=self.headers).status_code,404)
+
+    def test_effects_persist_validate_and_change_real_export(self):
+        draft=self.get()['draft']
+        draft['state']['captions']['enabled']=False
+        original=self.client.post(self.url+'/export',headers=self.headers,json=draft['state'])
+        self.assertEqual(original.status_code,200)
+        draft['state']['effects']={'brightness':1.1,'contrast':1.2,'saturation':0,'grayscale':True}
+        self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,200)
+        self.assertEqual(self.get()['draft']['state']['effects'],draft['state']['effects'])
+        result=self.client.post(self.url+'/export',headers=self.headers,json=draft['state'])
+        self.assertEqual(result.status_code,200,result.text[:100] if result.status_code!=200 else '')
+        colors=[]
+        for number,data in enumerate([original.content,result.content]):
+            path=Path(self.temp.name)/f'effect-{number}.mp4';path.write_bytes(data)
+            rgb=subprocess.check_output(['ffmpeg','-v','error','-i',str(path),'-frames:v','1','-vf','scale=1:1','-pix_fmt','rgb24','-f','rawvideo','-'])
+            colors.append(list(rgb))
+        self.assertGreater(max(colors[0])-min(colors[0]),100)
+        self.assertLess(max(colors[1])-min(colors[1]),5)
+        draft['state']['effects']['brightness']=2
+        self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,422)
+
+    def test_selected_zip_renders_exact_selection_and_rejects_duplicates(self):
+        import zipfile
+        self.job(2,'b'*32)
+        edit=self.get()['draft']['state'];edit.update(start=.5,end=1.5)
+        edit['captions']['enabled']=False
+        entries=[{'job_id':self.jid,'clip_index':0,'edit':edit},{'job_id':'b'*32,'clip_index':1,'edit':edit}]
+        result=self.client.post(self.base+'/export-selected',headers=self.headers,json={'clips':entries})
+        self.assertEqual(result.status_code,200,result.text[:200] if result.status_code!=200 else '')
+        with zipfile.ZipFile(io.BytesIO(result.content)) as archive:
+            self.assertEqual(len(archive.namelist()),2)
+            self.assertIn('clip-2-bbbbbbbb',archive.namelist()[1])
+            for name in archive.namelist():
+                path=Path(self.temp.name)/name;path.write_bytes(archive.read(name))
+                duration=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(path)]))
+                self.assertAlmostEqual(duration,1,delta=.12)
+        duplicate=self.client.post(self.base+'/export-selected',headers=self.headers,json={'clips':[entries[0],entries[0]]})
+        self.assertEqual(duplicate.status_code,422)
+        denied=self.client.post(self.base+'/export-selected',headers={'Authorization':'Bearer other'},json={'clips':entries})
+        self.assertEqual(denied.status_code,404)
+
+    def test_detailed_caption_chat_action_keeps_effects_and_history(self):
+        state=editor.Edit(start=0,end=3,effects=editor.Effects(contrast=1.2))
+        style=state.captions.model_copy(update={'font':'Georgia','size':60,'opacity':.5})
+        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
+            result=self.client.post(self.url+'/chat',headers=self.headers,json={'message':'Make the text larger with Georgia and a background','state':state.model_dump()})
+        self.assertEqual(result.status_code,200)
+        self.assertEqual(result.json()['state']['captions']['size'],60)
+        self.assertEqual(result.json()['state']['effects']['contrast'],1.2)
 
     def test_one_and_variable_sessions_and_derived_styles(self):
         listing=self.get(self.base)

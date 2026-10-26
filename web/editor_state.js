@@ -8,6 +8,12 @@
     if (!Number.isFinite(duration) || duration < .05) throw Error('Media duration is unavailable.');
     s.start = Math.max(0, Math.min(Number(s.start) || 0, duration - .05));
     s.end = Math.min(duration, Math.max(s.start + .05, Math.min(Number(s.end) || duration, duration)));
+    s.reframe={enabled:false,focus:'auto',analysis_id:null,selection:null,...s.reframe};
+    if(typeof s.reframe.enabled!=='boolean'||!['auto','speaker','both','left','right'].includes(s.reframe.focus)||(s.reframe.analysis_id!==null&&!/^[a-f0-9]{32}$/.test(s.reframe.analysis_id)))throw Error('Saved Auto Reframe settings are invalid.');
+    if(s.reframe.selection){const {t,box}=s.reframe.selection;if(!Number.isFinite(t)||t<0||t>=duration||!Array.isArray(box)||box.length!==4||!box.every(Number.isFinite)||Math.min(box[0],box[1])<0||Math.min(box[2],box[3])<.01||box[0]+box[2]>1.000001||box[1]+box[3]>1.000001)throw Error('Saved subject selection is invalid.');}
+    s.effects = {brightness:1,contrast:1,saturation:1,grayscale:false,...s.effects};
+    const e=s.effects;
+    if(!Number.isFinite(e.brightness)||e.brightness<.5||e.brightness>1.5||!Number.isFinite(e.contrast)||e.contrast<.5||e.contrast>1.5||!Number.isFinite(e.saturation)||e.saturation<0||e.saturation>2||typeof e.grayscale!=='boolean') throw Error('Saved effects are invalid.');
     s.broll = s.broll || [];
     validateBroll(s.broll,duration);
     s.texts = s.texts || {};
@@ -73,7 +79,13 @@
     }
     return {width,height,scaledWidth,scaledHeight,x,y};
   }
-  const api = {validateBroll,defaultComposition, compositionGeometry,clone, normalize, History, cueAt, formatTime};
+  function reframeAt(points,time){
+    if(!points.length)return {x:.5,y:.5};
+    if(time<=points[0].t)return points[0];
+    for(let i=1;i<points.length;i++)if(time<=points[i].t){const a=points[i-1],b=points[i],u=(time-a.t)/(b.t-a.t);return {x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u};}
+    return points[points.length-1];
+  }
+  const api = {reframeAt,validateBroll,defaultComposition, compositionGeometry,clone, normalize, History, cueAt, formatTime};
   if (typeof module !== 'undefined') module.exports = api;
   else root.CascadeEditorState = api;
 })(typeof window === 'undefined' ? globalThis : window);

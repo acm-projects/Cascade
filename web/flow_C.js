@@ -30,7 +30,9 @@
   let sourceURL = null;
   let restoredSource = null;
   let processing = false;
-  let signedOut = false;
+  let signedOut = false, signingOut = false;
+  const apiControllers = new Set();
+  const AUTH_EVENT_KEY = 'cascade-auth-event';
 
   const mediaURLs = [];
 
@@ -72,18 +74,90 @@
     });
   }
 
-  function redirectToLogin() {
+  function hideProtectedContent() {
+    if ($('protected-page')) $('protected-page').hidden = true;
+    if ($('account')) $('account').hidden = true;
+  }
+
+  function invalidateAuthentication() {
     signedOut = true;
+    hideProtectedContent();
+    clearInterval(historyPoll);
+    document.querySelectorAll('video,audio').forEach(media => media.pause());
+    // Recover editor state locally before stopping network work. Never delete drafts.
+    window.dispatchEvent(new Event('cascade:session-ended'));
+    for (const controller of apiControllers) controller.abort();
+    apiControllers.clear();
+  }
 
-    if ($("protected-page")) {
-      $("protected-page").hidden = true;
+  function redirectToLogin() {
+    invalidateAuthentication();
+    // A Clerk change notification can arrive before signOut finishes revoking the session.
+    // The explicit logout operation alone owns navigation while it is in progress.
+    if (!signingOut) window.location.replace(LOGIN_URL);
+  }
+
+  function clearCachedIdentity() {
+    // This old, unserved prototype may have stored a demo user alongside real project data.
+    // Remove only identity, retaining every project/edit in that record.
+    for (const storageName of ['localStorage', 'sessionStorage']) {
+      try {
+        const storage = window[storageName];
+        const raw = storage.getItem('cascade-prototype-v1');
+        if (raw) {
+          const record = JSON.parse(raw);
+          if (record && typeof record === 'object' && !Array.isArray(record)) {
+            record.user = null;
+            storage.setItem('cascade-prototype-v1', JSON.stringify(record));
+          }
+        }
+      } catch {} // Unavailable storage must not prevent provider logout.
     }
+    userId = null;
+    project = null;
+    generationGroups.clear();
+  }
 
-    if ($("account")) {
-      $("account").hidden = true;
+  async function signOut() {
+    if (signingOut) return;
+    signingOut = true;
+    const button = $('sign-out');
+    button.disabled = true;
+    hideProtectedContent();
+    setStatus('Signing out…');
+    try {
+      // The editor supplies an immediate local recovery copy and a best-effort server save.
+      const saves = [];
+      window.dispatchEvent(new CustomEvent('cascade:before-signout', {
+        detail: {waitUntil: promise => saves.push(Promise.resolve(promise))}
+      }));
+      await Promise.race([Promise.allSettled(saves), wait(2500)]);
+      invalidateAuthentication();
+      if (!window.Clerk || typeof window.Clerk.signOut !== 'function') {
+        throw new Error('Authentication is unavailable.');
+      }
+      // Clerk otherwise performs its default redirect, even without redirectUrl.
+      // Its completion callback suppresses that navigation; await final session cleanup.
+      await window.Clerk.signOut(() => {});
+      if (window.Clerk.session) throw new Error('The authentication session is still active.');
+      const response = await fetch('/api/logout', {method:'POST', credentials:'same-origin', cache:'no-store'});
+      if (!response.ok) throw new Error('Local sign-out could not finish.');
+      clearCachedIdentity();
+      try { localStorage.setItem(AUTH_EVENT_KEY, JSON.stringify({type:'sign-out',at:Date.now(),nonce:crypto.randomUUID()})); } catch {}
+      window.location.replace(LOGIN_URL);
+    } catch {
+      // A failure is retryable, and is never presented as successful sign-out.
+      if (window.Clerk?.session && window.Clerk?.user) {
+        signedOut = false;
+        window.dispatchEvent(new Event('cascade:session-restored'));
+        if ($('protected-page')) $('protected-page').hidden = false;
+      }
+      if ($('account')) $('account').hidden = false;
+      setStatus('Could not finish signing out. Check your connection and try Sign out again.');
+      button.disabled = false;
+    } finally {
+      signingOut = false;
     }
-
-    window.location.replace(LOGIN_URL);
   }
 
   // Every protected backend request gets the real
@@ -93,8 +167,12 @@
       throw new Error("Please sign in again.");
     }
 
-    const token =
-      await window.Clerk.session?.getToken();
+    const activeSession = window.Clerk.session;
+    const token = await activeSession?.getToken();
+    // getToken is asynchronous: a logout may have started while it was pending.
+    if (signedOut || activeSession !== window.Clerk.session) {
+      throw new Error('Please sign in again.');
+    }
 
     if (!token) {
       redirectToLogin();
@@ -111,11 +189,19 @@
       "Bearer " + token
     );
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      cache: "no-store"
-    });
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    options.signal?.addEventListener('abort', abort, {once:true});
+    if (options.signal?.aborted) abort();
+    apiControllers.add(controller);
+    let response;
+    try {
+      response = await fetch(url, {...options, headers, cache:'no-store', signal:controller.signal});
+    } finally {
+      apiControllers.delete(controller);
+      options.signal?.removeEventListener('abort', abort);
+    }
+    if (signedOut) throw new Error('Please sign in again.');
 
     if (!response.ok) {
       let message =
@@ -150,7 +236,9 @@
       options
     );
 
-    return response.json();
+    const result = await response.json();
+    if (signedOut) throw new Error('Please sign in again.');
+    return result;
   }
 
   // Scope saved prototype references to the real user.
@@ -196,6 +284,7 @@
     if (!id) throw new Error("Choose a project from the projects page first.");
     try {project = await apiJSON("/api/projects/" + encodeURIComponent(id));}
     catch(error) {if(error.message.includes('Project not found')) location.replace('projects_C.html');throw error;}
+    try{localStorage.setItem(projectStorageKey(),project.id);}catch{}
     document.querySelectorAll('a[href="canvas_C.html"], a[href="editor_C.html"], a[href="exports_C.html"]')
       .forEach(link => { link.href = projectURL(link.getAttribute("href"), query.get("job"), Number(query.get("clip") || 0)); });
   }
@@ -249,26 +338,7 @@
       $("account").hidden = false;
     }
 
-    if ($("sign-out")) {
-      $("sign-out").onclick = async () => {
-        const button = $("sign-out");
-
-        button.disabled = true;
-
-        try {
-          await window.Clerk.signOut({
-            redirectUrl: LOGIN_URL
-          });
-        } catch (error) {
-          setStatus(
-            error.message ||
-            "Could not sign out. Try again."
-          );
-
-          button.disabled = false;
-        }
-      };
-    }
+    if ($('sign-out')) $('sign-out').onclick = signOut;
   }
 
   // A video element cannot add an Authorization header.
@@ -441,7 +511,7 @@
   }
   function parentLabel(parent) {
     const group=generationGroups.get(parent.job_id);
-    return (group?'Generation '+group.order:'Unavailable generation')+' · Clip '+(Number(parent.clip_index)+1)+(parent.title?' · '+parent.title:'');
+    return (group?'Session '+group.session_number+' · Wave '+group.wave_number:'Unavailable generation')+' · Clip '+(Number(parent.clip_index)+1)+(parent.title?' · '+parent.title:'');
   }
   async function chooseParent(group,index,clearPrompt=true) {
     const clip=group.clips[index];if(!clip)throw Error('Choose an available parent clip.');
@@ -485,7 +555,7 @@
     const list=$('branch-track');list.querySelectorAll('.prompt-node').forEach(node=>node.remove());
     for(const group of generationGroups.values()) {
       const entry=document.createElement('section');entry.className='card prompt-node';entry.dataset.promptJob=group.job_id;entry.dataset.historyId=group.history_id || group.job_id;
-      const jump=document.createElement('button');jump.type='button';jump.className='history-jump';jump.textContent='Generation '+group.order+' · '+group.prompt;jump.onclick=()=>{navigateGeneration(group.job_id);$('branch-viewport').scrollIntoView({block:'nearest',behavior:reducedMotion()?'instant':'smooth'});};
+      const jump=document.createElement('button');jump.type='button';jump.className='history-jump';jump.textContent='Session '+group.session_number+' · Wave '+group.wave_number+' · '+group.prompt;jump.onclick=()=>{navigateGeneration(group.job_id);$('branch-viewport').scrollIntoView({block:'nearest',behavior:reducedMotion()?'instant':'smooth'});};
       const detail=document.createElement('p');detail.className='muted';detail.textContent=new Date(group.created_at*1000).toLocaleString()+' · '+group.requested_clip_count+' requested / '+group.clips.length+' found · '+group.state+' · '+(group.parent_clip?'Follow-up on '+parentLabel(group.parent_clip):'Full-video search');
       const reuse=document.createElement('button');reuse.type='button';reuse.className='history-reuse';reuse.textContent='Reuse prompt';reuse.onclick=()=>reusePrompt(group).catch(error=>setStatus(error.message));entry.append(jump,detail,reuse);
       if(group.state==='error') {const error=document.createElement('p');error.textContent=group.message || 'Generation failed.';error.className='history-error';entry.append(error,makeRetryButton(group));}
@@ -500,10 +570,10 @@
     const list = document.querySelector('.clip-group');
     const metadata = generationGroups.get(jobId) || {job_id:jobId,prompt:job.prompt || '',requested_clip_count:4};
     let section = list.querySelector('[data-job="'+jobId+'"]');
-    if (!section) { section=document.createElement('section'); section.dataset.job=jobId; section.className='generation-group';section.tabIndex=0;section.setAttribute('aria-label','Generation '+metadata.order);section.addEventListener('scroll',queueConnectors,{passive:true}); list.append(section); }
+    if (!section) { section=document.createElement('section'); section.dataset.job=jobId; section.className='generation-group';section.tabIndex=0;section.setAttribute('aria-label','Session '+metadata.session_number+' · Wave '+metadata.wave_number);section.addEventListener('scroll',queueConnectors,{passive:true}); list.append(section); }
     section.querySelectorAll('video').forEach(video=>{video.pause();if(video.src.startsWith('blob:'))URL.revokeObjectURL(video.src);video.querySelectorAll('track').forEach(track=>URL.revokeObjectURL(track.src));});
     section.replaceChildren();
-    const heading=document.createElement('h3'); heading.textContent='Generation '+(metadata.order || generationGroups.size);
+    const heading=document.createElement('h3'); heading.textContent='Session '+(metadata.session_number || 1)+' · Wave '+(metadata.wave_number || metadata.order || generationGroups.size);
     const summary=document.createElement('p'); summary.className='muted';
     summary.textContent=(job.state || 'done')+' · '+(job.clips || []).length+' of '+metadata.requested_clip_count+' requested clips'+(job.selection_note?' · '+job.selection_note:'')+(job.message?' · '+job.message:'');
     section.append(heading,summary);
@@ -943,7 +1013,7 @@
 
   // Editor page
   async function initializeEditor() {
-    return window.CascadeEditor.initialize({project, userId, apiJSON, apiFetch, setStatus, initializeResearch});
+    return window.CascadeEditor.initialize({project, userId, apiJSON, apiFetch, setStatus, initializeResearch, initializePreferences:initializeSettings});
   }
 
   function renderResearch(result) {
@@ -1002,6 +1072,13 @@
   }
 
   async function initializeSettings() {
+    if(!$("settings-form")) {
+      const link=$("research-settings-link");let id=query.get('project');try{id=id||localStorage.getItem(projectStorageKey());}catch{}
+      if(link&&/^[a-f0-9]{32}$/.test(id||''))link.href='editor_C.html?project='+encodeURIComponent(id)+'&tab=research';
+      else if(link)link.textContent='Choose a project to open Research Agent →';
+      return;
+    }
+    const preferenceStatus=message=>{if($("preferences-status"))$("preferences-status").textContent=message;else setStatus(message);};
     const preferences = await apiJSON("/api/settings");
     for (const field of ["video_type", "audience", "tone", "goal"]) {
       $("settings-" + field.replace("_", "-")).value = preferences[field] || "";
@@ -1014,35 +1091,13 @@
         for (const field of ["video_type", "audience", "tone", "goal"]) data[field] = $("settings-" + field.replace("_", "-")).value.trim();
         data.platforms = [...document.querySelectorAll('[name="platforms"]:checked')].map(input => input.value);
         await apiJSON("/api/settings", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data)});
-        setStatus("Your preferences were saved.");
-      } catch (error) { setStatus(error.message); } finally { button.disabled = false; }
+        preferenceStatus("Your preferences were saved.");
+      } catch (error) { preferenceStatus(error.message); } finally { button.disabled = false; }
     };
   }
 
   async function initializeExports() {
-    const list = $("saved-clips"); list.replaceChildren();
-    const entries = [...project.saved_clips];
-    if (query.get("job")) entries.unshift({job_id: query.get("job"), clip_index: Number(query.get("clip") || 0)});
-    const seen = new Set();
-    for (const entry of entries) {
-      const key = entry.job_id + ":" + entry.clip_index; if (seen.has(key)) continue; seen.add(key);
-      if (!project.jobs.some(item => item.job_id === entry.job_id)) { setStatus("This clip does not belong to the selected project."); continue; }
-      try {
-        const job = await apiJSON("/api/features/" + entry.job_id);
-        const clip = job.clips?.[entry.clip_index]; if (!clip) continue;
-        const card = document.createElement("section"); card.className = "card";
-        const title = document.createElement("h3"); title.textContent = clip.title || "Saved clip";
-        const video = document.createElement("video"); video.controls = true; video.playsInline = true;
-        const download = document.createElement("button"); download.textContent = "Download original MP4";
-        download.onclick = () => downloadClip(clip).catch(error => setStatus(error.message));
-        const captions = document.createElement("button"); captions.textContent = "Download captions (VTT)";
-        captions.onclick = () => downloadClip(clip, true).catch(error => setStatus(error.message));
-        const edit = document.createElement("a"); edit.className = "button"; edit.textContent = "Open editor";
-        edit.href = projectURL("editor_C.html", entry.job_id, entry.clip_index);
-        card.append(title, video, download, captions, edit); list.appendChild(card); await attachClip(video, clip);
-      } catch (error) { setStatus(error.message); }
-    }
-    if (!list.children.length) list.textContent = "No saved clips. Save a generated clip from the editor first.";
+    return window.CascadeExports.initialize({project,userId,apiJSON,apiFetch,setStatus});
   }
 
   // Load Clerk and verify the session with FastAPI.
@@ -1173,6 +1228,7 @@
 
       window.Clerk.addListener(
         ({ user, session: clerkSession }) => {
+          if (signingOut || user === undefined || clerkSession === undefined) return;
           if (
             !user ||
             !clerkSession ||
@@ -1217,12 +1273,22 @@
   }
 
   window.addEventListener('storage',event=>{
+    if(event.key===AUTH_EVENT_KEY && event.newValue) {
+      try {if(JSON.parse(event.newValue).type==='sign-out') {clearCachedIdentity();redirectToLogin();}} catch {}
+      return;
+    }
     if(event.key!=='cascade-deleted-project:'+userId || !project) return;
     try {if(JSON.parse(event.newValue)?.id===project.id) location.replace('projects_C.html');} catch {}
   });
 
   // Back/Forward retains the existing view and its listeners, never remounts it.
-  window.addEventListener('pageshow',event=>{if(event.persisted && page==='canvas' && !$('studio-root'))refreshGenerationGroups().catch(error=>setStatus(error.message));});
+  window.addEventListener('pageshow',event=>{
+    if (!event.persisted || page==='login') return;
+    // A frozen Clerk object/DOM can describe a session that ended on another page or tab.
+    // Reload the protected shell hidden, then run the normal Clerk + backend checks afresh.
+    invalidateAuthentication();
+    window.location.reload();
+  });
   window.addEventListener(
     "pagehide",
     event => {

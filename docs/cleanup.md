@@ -1,4 +1,8 @@
-> Historical editor-branch cleanup notes. The main/editor integration retains main’s separate Flask/database service, legacy backend wrappers and legacy root assets, alongside the active consolidated `web/` views. `integration.py` and `pipeline_timing.py` are compatibility imports into `backend/`. Generation uses main’s agent/Deepgram pipeline; see [current setup](setup.md).
+> CAS-9 removes the legacy root Flask service, simulation, HTML copies, standalone scripts, compatibility shims, sample prototypes, old setup documents, and sample JSON output. The active entry point is `app1.py`; page URL aliases render from `web/index.html`. The notes below describe an earlier editor-branch cleanup and its historical validation.
+
+CAS-9 reference audit found no active imports of the removed root scripts or shims. Existing tests already import `backend.integration` and `backend.pipeline_timing`. Page names in routes, links and tests are URL aliases, not reads of the deleted root HTML files. Generation JSON references in `app1.py` point into job folders, which are retained.
+
+The removed root `preferences.json` contained sample preferences. Accounts without saved preferences now use the existing built-in defaults; per-user preferences under `video_jobs/` are retained. The optional legacy-file fallback remains in backend code. Fawaz's approval to delete `fawaz.txt` was confirmed by the user; it contained no useful project notes.
 
 Historical cleanup record: the later [HTML consolidation](frontend.md) supersedes the retained root `login.html` and the separate frontend HTML source files described below.
 
