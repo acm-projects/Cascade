@@ -6,11 +6,16 @@ const MIN_CLIPS = 1;
 const MAX_CLIPS = 12;
 
 // The AI Studio chat column: messages on top (they scroll), prompt box pinned at the bottom.
-//   messages         - [{ role: "user" | "assistant", text }]
-//   onSend(text, n)  - called with the prompt and how many clips to find (1-12)
+//   messages         - [{ id?, role: "user" | "assistant", text }]
+//   onSend(text, n)  - called with the prompt and how many clips to find (1-12). If it returns
+//                      (or resolves to) false, the prompt stays in the box so it isn't lost.
 //   disabled         - true while waiting for an answer
-function ChatPanel({ messages, onSend, disabled = false }) {
-  const [text, setText] = useState("");
+//   text, onTextChange - optional: let the page fill the box (e.g. "Reuse prompt")
+//   note             - optional line under the box (e.g. "2 picked clips will guide this prompt")
+function ChatPanel({ messages, onSend, disabled = false, text: controlledText, onTextChange, note }) {
+  const [ownText, setOwnText] = useState("");
+  const text = controlledText ?? ownText;
+  const setText = onTextChange ?? setOwnText;
   const [clipCount, setClipCount] = useState(4);
   const listRef = useRef(null);
 
@@ -19,13 +24,13 @@ function ChatPanel({ messages, onSend, disabled = false }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  function send() {
+  async function send() {
     const prompt = text.trim();
     if (!prompt || disabled) return;
     const count = Math.min(MAX_CLIPS, Math.max(MIN_CLIPS, Math.round(Number(clipCount) || 4)));
-    onSend(prompt, count);
-    setText("");
     setClipCount(count);
+    const sent = await onSend(prompt, count);
+    if (sent !== false) setText("");
   }
 
   function handleKeyDown(event) {
@@ -49,7 +54,7 @@ function ChatPanel({ messages, onSend, disabled = false }) {
           <p className="chat-panel-hint">Try: "Find the funniest moments" or "Clips about the new product".</p>
         )}
         {messages.map((message, i) => (
-          <div key={i} className={`chat-bubble chat-bubble-${message.role}`}>
+          <div key={message.id ?? i} className={`chat-bubble chat-bubble-${message.role}`}>
             {message.text}
           </div>
         ))}
@@ -81,6 +86,7 @@ function ChatPanel({ messages, onSend, disabled = false }) {
             Send
           </button>
         </div>
+        {note && <p className="chat-panel-note">{note}</p>}
       </form>
     </section>
   );

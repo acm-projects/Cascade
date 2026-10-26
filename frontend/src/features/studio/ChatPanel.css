@@ -116,3 +116,9 @@
   width: 16px;
   height: 16px;
 }
+
+.chat-panel-note {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  opacity: 0.75;
+}

@@ -4,8 +4,10 @@ import * as projects from "./projects";
 import * as generations from "./generations";
 import * as editor from "./editor";
 import * as features from "./features";
+import * as studio from "./studio";
+import * as posting from "./posting";
 
-const endpoints = { ...projects, ...generations, ...editor, ...features };
+const endpoints = { ...projects, ...generations, ...editor, ...features, ...studio, ...posting };
 
 // Every api function takes the sign-in token first: listProjects(token).
 // This hook hands you the same functions with the token already filled in, so in a component you write:

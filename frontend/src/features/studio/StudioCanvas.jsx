@@ -10,9 +10,10 @@ import "./StudioCanvas.css";
 //   edgeTypes     - our own line designs (features/studio/edges, e.g. the leafy vine)
 //   onNodeClick   - (event, node) => ... when a box is clicked
 //   onDropFile(f) - a file was dropped anywhere on the canvas
+//   onNodeDragStop(event, node) - a box was dragged somewhere new (save node.position)
 //
 // Controls: scroll = pan, pinch or Ctrl/Cmd + scroll = zoom, hold Space + drag = pan (like Figma).
-function StudioCanvas({ nodes, edges, nodeTypes, edgeTypes, onNodeClick, onDropFile }) {
+function StudioCanvas({ nodes, edges, nodeTypes, edgeTypes, onNodeClick, onDropFile, onNodeDragStop }) {
   // React Flow keeps its own copy of the boxes (where you dragged them, which is selected, their size).
   const [shownNodes, setShownNodes] = useState(nodes);
   const [lastNodes, setLastNodes] = useState(nodes);
@@ -53,6 +54,7 @@ function StudioCanvas({ nodes, edges, nodeTypes, edgeTypes, onNodeClick, onDropF
         edgeTypes={edgeTypes}
         onNodesChange={(changes) => setShownNodes((current) => applyNodeChanges(changes, current))}
         onNodeClick={onNodeClick}
+        onNodeDragStop={onNodeDragStop}
         onInit={(instance) => (flowRef.current = instance)}
         fitView
         fitViewOptions={{ padding: 0.15 }}

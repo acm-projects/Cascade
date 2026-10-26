@@ -55,3 +55,40 @@
 .session-bar-actions .btn {
   font-size: 16px;
 }
+
+.session-bar {
+  gap: 8px;
+}
+
+.session-bar-select {
+  padding: 2px 6px;
+  border: 2px solid color-mix(in srgb, var(--color-wood-dark) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-wood-text);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+/* New / rename pop-up */
+.session-bar-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.session-bar-input {
+  padding: 8px 12px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
+  color: var(--color-wood-text);
+}
+
+.session-bar-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}

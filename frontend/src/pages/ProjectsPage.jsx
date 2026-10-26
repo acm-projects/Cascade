@@ -33,7 +33,7 @@ function ProjectsPage() {
   const navigate = useNavigate();
   const api = useApi();
   const toast = useToast();
-  const { startNewProject, openProject } = useProject();
+  const { openProject } = useProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
 
@@ -79,10 +79,16 @@ function ProjectsPage() {
     setSearchParams(id === "all" ? {} : { view: id });
   }
 
-  // TEMPORARY until the "New Project" pop-up (ticket 2.6): starts a local draft and opens AI Studio
-  function handleNewProject() {
-    const id = startNewProject();
-    navigate(`/projects/${id}/studio`);
+  // Creates a real (empty) project on the backend and opens its AI Studio, where you pick the video.
+  // TEMPORARY until the "New Project" pop-up (ticket 2.6) lets you name it first.
+  async function handleNewProject() {
+    try {
+      const created = await api.createProject("Untitled project");
+      openProject(created);
+      navigate(`/projects/${created.id}/studio`);
+    } catch (err) {
+      toast.show(`Couldn't create a project: ${err.message}`, "error");
+    }
   }
 
   function handleOpen(project) {
