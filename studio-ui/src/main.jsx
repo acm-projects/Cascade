@@ -34,7 +34,7 @@ function ClipNode({data}) {
       <span className="poster-play"><Play/></span><span>{seconds(data.clip.start)} — {seconds(data.clip.end)}</span>
     </button>
     <div className="node-content"><strong title={data.clip.title}>{data.clip.title||'Selected moment'}</strong>
-      {data.revision&&<p className="clip-revision-status" role="status">{['queued','processing'].includes(data.revision.state)?'Finding similar moments…':data.revision.state==='error'?'Update failed. Your previous clip is kept.':'No new matches. Your previous clip is kept.'}
+      {data.revision&&<p className="clip-revision-status" role="status">{['queued','processing'].includes(data.revision.state)?'Finding similar moments…':data.revision.state==='error'?'Update failed. Your previous clip is kept.':'No new matches. Try another request.'}
         {data.revision.state==='error'&&<button className="studio-quiet" onClick={()=>data.retry(data.revision.job_id)}>Retry update</button>}</p>}
       <p title={data.clip.explanation}>{data.clip.explanation||'A moment from your original source.'}</p>
       <div className="clip-actions nodrag nopan">
@@ -142,7 +142,7 @@ function Studio({project,apiJSON,apiFetch}) {
     fitted.current=null;
     if(session.viewport)setTimeout(()=>flow.setViewport(session.viewport),30);
   },[sessionId]);
-  const activeGroups=useMemo(()=>session?session.job_ids.map(id=>groups.find(g=>g.job_id===id)).filter(g=>g&&!g.studio_revision_of):[],[groups,session]);
+  const activeGroups=useMemo(()=>session?session.job_ids.map(id=>groups.find(g=>g.job_id===id)).filter(Boolean):[],[groups,session]);
   const sourceName=groups.find(g=>g.job_id===session?.source_job)?.source_name || project.jobs?.find(j=>j.job_id===session?.source_job)?.source_name;
 
   const selectClips=useCallback(next=>{
@@ -211,7 +211,7 @@ function Studio({project,apiJSON,apiFetch}) {
       if(mode==='discuss'){
         await apiJSON(studioURL+'/sessions/'+sid+'/chat',JSONOptions('POST',{message:text,references,request_id}));
       }else if(session.source_job){
-        await apiJSON(studioURL+'/sessions/'+sid+'/generate',JSONOptions('POST',{prompt:text,clip_count:count,references,operation:references.length?'revise':'generate',request_id}));
+        await apiJSON(studioURL+'/sessions/'+sid+'/generate',JSONOptions('POST',{prompt:text,clip_count:count,references,operation:references.length?'branch':'generate',request_id}));
       }else {
         if(!file)throw Error('Choose a source video first.');
         const form=new FormData();form.append('video',file);form.append('prompt',text);form.append('clip_count',String(count));form.append('request_id',request_id);
@@ -266,8 +266,8 @@ function Studio({project,apiJSON,apiFetch}) {
           {allMessages.map(message=>{
             const group=message.job_id&&groups.find(g=>g.job_id===message.job_id);
             return <React.Fragment key={message.id}><div className={'chat-message '+message.role}><span>{message.role==='user'?'YOU':'CASCADE'}</span><p>{message.text}</p></div>
-              {group&&<div className="chat-message assistant"><span>CASCADE</span><p>{['queued','processing'].includes(group.state)?group.message||'Finding your moments…':group.state==='error'?group.message:group.studio_revision_of&&!group.clips.length?'No new matches. Your previous clip is kept.':
-                `${group.studio_revision_of?'Updated the selected clip with':'Found'} ${group.clips.length} ${group.clips.length===1?'clip':'clips'}. Check clips to use them with the assistant or take them to the Editor.`}</p>
+              {group&&<div className="chat-message assistant"><span>CASCADE</span><p>{['queued','processing'].includes(group.state)?group.message||'Finding your moments…':group.state==='error'?group.message:group.parent_clips?.length&&!group.clips.length?'No new matches. Try another request.':
+                `${group.parent_clips?.length?'Added similar clips:':'Found'} ${group.clips.length} ${group.clips.length===1?'clip':'clips'}. Check clips to use them with the assistant or take them to the Editor.`}</p>
                 {group.selection_note&&<small>{group.selection_note}</small>}
                 <button className="studio-quiet" onClick={()=>revealGeneration(group.job_id)}>View generation ↗</button></div>}</React.Fragment>;
           })}<div ref={messagesEnd}/>
@@ -280,10 +280,10 @@ function Studio({project,apiJSON,apiFetch}) {
             <textarea id="studio-prompt" ref={textarea} value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={2000}
               placeholder={references.length===1?'More funny moments like this clip…':references.length?'More funny moments like these clips…':'Describe the moments you’re looking for…'} rows={3}
               onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();e.currentTarget.form.requestSubmit();}}}/>
-            <div className="composer-controls"><select aria-label="Assistant action" value={mode} onChange={e=>setMode(e.target.value)}><option value="generate">{references.length>1?'Update selected clips':references.length?'Update selected clip':'Find clips'}</option><option value="discuss">Discuss clips</option></select>
+            <div className="composer-controls"><select aria-label="Assistant action" value={mode} onChange={e=>setMode(e.target.value)}><option value="generate">{references.length?'Make more like selected':'Find clips'}</option><option value="discuss">Discuss clips</option></select>
               {mode==='generate'&&<label className="count-input"><input aria-label="Number of clips" type="number" min="1" max="12" value={count} onChange={e=>setCount(Number(e.target.value))}/> clips</label>}
               <button className="send-button" type="submit" disabled={busy||!prompt.trim()||mode==='generate'&&(!Number.isInteger(count)||count<1||count>12)} aria-label={mode==='discuss'?'Send discussion':references.length?'Generate similar clips':'Generate clips'}>{busy?'…':'↑'}</button></div>
-          </form><p className="composer-note">{busy?'Saving your request…':mode==='discuss'?'Discuss the context and ideas behind your clips.':references.length?'Find different footage with the same feel. Results update the checked clips in this generation.':'Check clips to guide the AI, or continue to the Editor with the same selection.'}</p>
+          </form><p className="composer-note">{busy?'Saving your request…':mode==='discuss'?'Discuss the context and ideas behind your clips.':references.length?'Find different footage with the same feel. New clips branch from your selection; the originals stay.':'Check clips to guide the AI, or continue to the Editor with the same selection.'}</p>
         </div>
       </aside>
       <section className="studio-graph" aria-label="Video branching canvas">

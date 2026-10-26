@@ -184,7 +184,7 @@ class StudioTests(unittest.TestCase):
         choices = [{'start': 10., 'end': 20.}, {'start': 30., 'end': 40.}]
         self.assertEqual(followup_windows(choices, ref, "Don't expand, find funny moments", 60, 30, 4), [choices[1]])
 
-    def test_revision_reuses_clip_context_and_records_in_place_replacement(self):
+    def test_followup_keeps_parent_and_records_same_session_branch(self):
         path = app1.JOBS_DIR / self.jid / 'results.json'
         original = path.read_bytes()
         body = {'prompt': 'More funny clips with this same feel, different footage is fine',
@@ -194,16 +194,16 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202, response.text)
         jid = response.json()['job_id']
         owner = app1.load_json(app1.JOBS_DIR / jid / 'owner.json')
-        self.assertEqual(owner['studio_revision_of'], self.ref(1))
+        self.assertIsNone(owner['studio_revision_of'])
         self.assertEqual(owner['parent_clips'][0]['clip_index'], 1)
         self.assertEqual(owner['source_job'], self.jid)
         session = self.client.get(self.base, headers=self.headers).json()['sessions'][0]
-        self.assertEqual(session['clip_revisions'][self.jid + ':1'], jid)
+        self.assertNotIn('clip_revisions', session)
         self.assertEqual(path.read_bytes(), original)
         self.assertEqual(self.client.post(url, headers=self.headers, json=body).json()['job_id'], jid)
         self.assertEqual(app1.worker.submit.call_count, 1)
         listing = self.client.get('/api/projects/' + self.pid + '/generations', headers=self.headers).json()['groups']
-        self.assertEqual(next(g for g in listing if g['job_id'] == jid)['studio_revision_of'], self.ref(1))
+        self.assertIsNone(next(g for g in listing if g['job_id'] == jid)['studio_revision_of'])
 
     def test_revision_requires_selected_clips(self):
         url = self.base + '/sessions/' + self.sid + '/generate'
@@ -221,7 +221,7 @@ class StudioTests(unittest.TestCase):
             json={'prompt': 'find similar clips to the selected one', 'references': [], 'request_id': 'old-client'})
         self.assertEqual(response.status_code, 202, response.text)
         owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
-        self.assertEqual(owner['studio_revision_of'], self.ref(2))
+        self.assertIsNone(owner['studio_revision_of'])
         self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': []})
         session = self.client.get(self.base, headers=self.headers).json()['sessions'][0]
         self.assertEqual(session['references'], [])
@@ -233,12 +233,12 @@ class StudioTests(unittest.TestCase):
         self.assertIn('No new generation was started', response.json()['detail'])
         app1.worker.submit.assert_not_called()
 
-    def test_legacy_single_explicit_reference_defaults_to_revision(self):
+    def test_legacy_single_explicit_reference_creates_branch(self):
         response = self.client.post(self.base + '/sessions/' + self.sid + '/generate', headers=self.headers,
             json={'prompt': 'funnier', 'references': [self.ref(1)], 'request_id': 'legacy-single'})
         self.assertEqual(response.status_code, 202)
         owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
-        self.assertEqual(owner['studio_revision_of'], self.ref(1))
+        self.assertIsNone(owner['studio_revision_of'])
 
     def test_shared_selection_drives_ai_editor_and_survives_reload(self):
         selected = [self.ref(0), self.ref(2)]
@@ -254,16 +254,16 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202, response.text)
         jid = response.json()['job_id']
         owner = app1.load_json(app1.JOBS_DIR / jid / 'owner.json')
-        self.assertEqual(owner['studio_revision_targets'], selected)
+        self.assertEqual(owner['studio_revision_targets'], [])
         self.assertEqual(len(owner['parent_clips']), 2)
         clips = [{'start': 41.+i*3, 'end': 43.+i*3, 'title': f'New {i}',
                   'clip_url': f'/clips/{jid}/clip_{i+1}.mp4'} for i in range(4)]
         app1.save_json(app1.JOBS_DIR / jid / 'results.json', {'clips': clips})
         state = self.client.get(self.base, headers=self.headers).json()
-        self.assertEqual(state['editor_clips'], [{'job_id': jid, 'clip_index': i} for i in (0,2,1,3)])
+        self.assertEqual(state['editor_clips'], selected)
         self.assertEqual(state['sessions'][0]['references'], state['editor_clips'])
         editor = self.client.get('/api/projects/' + self.pid + '/editor?selected_only=true', headers=self.headers)
-        self.assertEqual(len(editor.json()['sessions'][0]['clips']), 4)
+        self.assertEqual(len(editor.json()['sessions'][0]['clips']), 2)
         self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': []})
         state = self.client.get(self.base, headers=self.headers).json()
         self.assertEqual(state['editor_clips'], [])
