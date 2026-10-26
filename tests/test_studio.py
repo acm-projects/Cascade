@@ -59,7 +59,7 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(self.client.patch(url, headers=self.headers, json={'positions': {'unknown': {'x': 1, 'y': 2}}}).status_code, 400)
 
     def test_multi_reference_request_is_recorded_before_worker_and_is_idempotent(self):
-        payload = {'prompt': 'Find more clips with their shared humor', 'clip_count': 4,
+        payload = {'prompt': 'Give me 3 clips combining the humor of the first and action of the second', 'clip_count': 3,
                    'references': [self.ref(0), self.ref(3)], 'request_id': 'same-request'}
         url = self.base + '/sessions/' + self.sid + '/generate'
         first = self.client.post(url, headers=self.headers, json=payload)
@@ -69,9 +69,11 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(len(owner['parent_clips']), 2)
         self.assertEqual(owner['studio_session_id'], self.sid)
         count, context = options(app1.JOBS_DIR / jid)
-        self.assertEqual(count, 4)
+        self.assertEqual(count, 3)
         self.assertEqual(len(context['references']), 2)
         self.assertIn('ALL these references', contextual_prompt('Find more', context))
+        self.assertIn('Blend the distinctive qualities of each reference', contextual_prompt(payload['prompt'], context))
+        self.assertIsNone(owner['studio_revision_of'])
         again = self.client.post(url, headers=self.headers, json=payload)
         self.assertEqual(again.json()['job_id'], jid)
         self.assertEqual(app1.worker.submit.call_count, 1)

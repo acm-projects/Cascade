@@ -100,3 +100,7 @@ slot receives no alternatives, it keeps the previous clip. On completion, checke
 originals are replaced in the shared selection by their visible replacement clips.
 Unchecking while a request is pending prevents it from selecting the replacements
 again. Empty and failed requests retain the previous visible results and selection.
+
+Select two or more clips to combine their creative qualities in each new result.
+For example, ask for three clips blending one reference’s humor with another’s action.
+Each child connects to all selected parents; the source video supplies the footage.

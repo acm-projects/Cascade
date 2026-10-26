@@ -280,10 +280,10 @@ function Studio({project,apiJSON,apiFetch}) {
             <textarea id="studio-prompt" ref={textarea} value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={2000}
               placeholder={references.length===1?'More funny moments like this clip…':references.length?'More funny moments like these clips…':'Describe the moments you’re looking for…'} rows={3}
               onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();e.currentTarget.form.requestSubmit();}}}/>
-            <div className="composer-controls"><select aria-label="Assistant action" value={mode} onChange={e=>setMode(e.target.value)}><option value="generate">{references.length?'Make more like selected':'Find clips'}</option><option value="discuss">Discuss clips</option></select>
+            <div className="composer-controls"><select aria-label="Assistant action" value={mode} onChange={e=>setMode(e.target.value)}><option value="generate">{references.length>1?'Combine selected inspirations':references.length?'Make more like selected':'Find clips'}</option><option value="discuss">Discuss clips</option></select>
               {mode==='generate'&&<label className="count-input"><input aria-label="Number of clips" type="number" min="1" max="12" value={count} onChange={e=>setCount(Number(e.target.value))}/> clips</label>}
               <button className="send-button" type="submit" disabled={busy||!prompt.trim()||mode==='generate'&&(!Number.isInteger(count)||count<1||count>12)} aria-label={mode==='discuss'?'Send discussion':references.length?'Generate similar clips':'Generate clips'}>{busy?'…':'↑'}</button></div>
-          </form><p className="composer-note">{busy?'Saving your request…':mode==='discuss'?'Discuss the context and ideas behind your clips.':references.length?'Find different footage with the same feel. New clips branch from your selection; the originals stay.':'Check clips to guide the AI, or continue to the Editor with the same selection.'}</p>
+          </form><p className="composer-note">{busy?'Saving your request…':mode==='discuss'?'Discuss the context and ideas behind your clips.':references.length>1?'Blend the qualities of your selected clips. Each new clip connects to all selected parents.':references.length?'Find different footage with the same feel. New clips branch from your selection; the originals stay.':'Check clips to guide the AI, or continue to the Editor with the same selection.'}</p>
         </div>
       </aside>
       <section className="studio-graph" aria-label="Video branching canvas">
