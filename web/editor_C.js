@@ -377,13 +377,14 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
   });
   $('project-title').textContent = project.name;
   setLocked(true);
-  const listing = await apiJSON(base), available = [];
+  const selectedOnly = new URLSearchParams(location.search).get('selection') === 'canvas';
+  const listing = await apiJSON(base + (selectedOnly ? '?selected_only=true' : '')), available = [];
   listing.sessions.forEach((session, s) => {
-    const section = document.createElement('section'), heading = document.createElement('h4'); heading.textContent='Session '+(s+1); section.append(heading);
+    const section = document.createElement('section'), heading = document.createElement('h4'); heading.textContent=session.session_name || 'Session '+(s+1); section.append(heading);
     session.clips.forEach((clip,index) => {
       const job = clip.job_id || session.job_id, clipIndex = clip.clip_index ?? index;
-      const item = {job,index:clipIndex,key:job+':'+clipIndex,url:base+'/'+job+'/'+clipIndex,label:'Session '+(s+1)+' · Clip '+(index+1)};
-      available.push(item); const button = document.createElement('button'); button.type='button'; button.className='mini-clip'; button.textContent='Clip '+(index+1); button.dataset.key=item.key; button.onclick=()=>select(item); section.append(button);
+      const item = {job,index:clipIndex,key:job+':'+clipIndex,url:base+'/'+job+'/'+clipIndex,label:(session.session_name || 'Session '+(s+1))+' · Clip '+(clipIndex+1)};
+      available.push(item); const button = document.createElement('button'); button.type='button'; button.className='mini-clip'; button.textContent='Clip '+(clipIndex+1); button.dataset.key=item.key; button.onclick=()=>select(item); section.append(button);
     }); $('editor-sessions').append(section);
   });
   if (!available.length) { setStatus('No generated clips are available in this project. Return to the canvas to generate a clip.'); return; }

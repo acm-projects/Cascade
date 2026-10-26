@@ -49,6 +49,14 @@ The existing Clerk forms still control which signup/login fields are required.
 To require email/password or enable username, set those fields consistently in the
 Clerk dashboard; no independent password form or duplicate login table is added.
 
+## AI Studio sessions
+
+The branching React Flow studio stores its named sessions, conversation history,
+node positions, viewport, reference clips and Editor choices inside each existing
+project's `studio` JSONB field under `cascade_app.records`. Job ownership records
+include the session ID and all parent clip references. This introduces no new
+tables. See [docs/studio.md](docs/studio.md) for the UI, API and build workflow.
+
 Video/audio files, thumbnails, transcripts and model caches are **not** stored in
 Postgres. Original uploads and working files remain in `video_jobs`. Generated
 clips/captions use S3 when configured, or local storage otherwise. Keep this

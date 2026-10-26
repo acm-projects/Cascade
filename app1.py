@@ -1210,6 +1210,7 @@ def upload_video(
     source_job: str | None = Form(None),
     parent_job: str | None = Form(None),
     parent_clip_index: int | None = Form(None, ge=0),
+    canvas_context: str | None = Form(None),
 ):
     with integration.lock:
         integration.require_project(project_id, request.state.user_id)
@@ -1217,6 +1218,15 @@ def upload_video(
         if not 1 <= clip_count <= MAX_CLIPS:
             raise HTTPException(400, 'Choose 1–12 clips.')
         parent_context = None
+        from backend import studio
+        studio_context = studio.prepare_upload(sys.modules[__name__], integration, project_id,
+                                               request.state.user_id, canvas_context)
+        if studio_context:
+            if parent_job:
+                raise HTTPException(400, 'Use studio reference clips for this request.')
+            source_job = studio_context['source_job']
+            references = studio_context['references']
+            parent_context = ({'references': references} if len(references) > 1 else references[0]) if references else None
         if parent_job:
             if parent_clip_index is None:
                 raise HTTPException(400, 'Choose a parent clip.')
@@ -1324,7 +1334,12 @@ def upload_video(
                     "creation_order": 1 + max((j.get("creation_order") or i+1 for i,j in enumerate(reversed(integration.project_jobs(project_id, request.state.user_id))) if j["kind"] == "generation"), default=0),
                     "created_at": time.time(),
                     "source_job": source_job or job_id,
-                    "parent_clip": parent_context,
+                    "parent_clip": (studio_context['references'][0] if studio_context and studio_context['references'] else parent_context),
+                    "parent_clips": studio_context['references'] if studio_context else [],
+                    "studio_session_id": studio_context['session_id'] if studio_context else None,
+                    "studio_revision_of": studio_context.get('revision_of') if studio_context else None,
+                    "studio_revision_targets": studio_context.get('revision_targets', []) if studio_context else [],
+                    "request_id": studio_context['request_id'] if studio_context else None,
 
                     "user_folder": (
                         storage_information["folder"]
@@ -1365,6 +1380,13 @@ def upload_video(
             }
 
         save_json(folder / 'progress.json', dict(jobs[job_id]))
+        if studio_context:
+            try:
+                studio.record_submission(sys.modules[__name__], integration, project_id, request.state.user_id,
+                                         job_id, studio_context, search)
+            except Exception:
+                integration.fail_feature(job_id, 'Could not save the studio request. No generation was started.')
+                raise
         try:
             worker.submit(process_upload if engine=='agent' else integration.process_search,
                           job_id, video_path, search, mode if engine=='agent' else engine, clip_length)
@@ -1684,3 +1706,10 @@ editor_backend.register(app, integration)
 
 from backend import project_actions
 project_actions.register(app, sys.modules[__name__], integration)
+
+from backend import studio
+studio.register(app, sys.modules[__name__], integration)
+
+# Locally bundled React Flow assets; source files and credentials stay private.
+from fastapi.staticfiles import StaticFiles
+app.mount('/studio-assets', StaticFiles(directory=FRONTEND_DIR / 'studio', check_dir=False), name='studio-assets')

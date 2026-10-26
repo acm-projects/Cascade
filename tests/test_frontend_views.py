@@ -2,6 +2,7 @@
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
 import os
 import re
 import unittest
@@ -37,9 +38,11 @@ class FrontendViewsTests(unittest.TestCase):
                 self.assertEqual(document.heads,1,filename)
                 self.assertFalse([id for id,count in Counter(document.ids).items() if count>1],filename)
                 self.assertNotIn('<!--%',response.text)
-                self.assertEqual(document.scripts.count('flow_C.js'),0 if view=='home' else 1)
+                self.assertEqual(sum(urlsplit(src).path == 'flow_C.js' for src in document.scripts if src),0 if view=='home' else 1)
                 self.assertEqual('editor_C.js' in document.scripts,view=='editor')
-                self.assertEqual('canvas_branches.js' in document.scripts,view=='canvas')
+                if view == 'canvas':
+                    self.assertIn('studio-root', document.ids)
+                    self.assertIn('/studio-assets/studio.css', response.text)
             self.assertEqual(client.get('/').text,client.get('/index_C.html').text)
             self.assertEqual(client.get('/login').text,client.get('/login_C.html').text)
             self.assertEqual(client.get('/settings').text,client.get('/settings_C.html').text)
@@ -56,3 +59,12 @@ class FrontendViewsTests(unittest.TestCase):
     def test_unknown_views_cannot_render_template_source(self):
         for name in ['../.env','login.html','index.html?view=editor','arbitrary']:
             with self.assertRaises(ValueError):frontend.render_page(name,app1.FRONTEND_DIR)
+
+    def test_studio_html_versions_loader_and_bundle(self):
+        response = TestClient(app1.app).get('/canvas_C.html')
+        version = re.search(r'data-studio-build="([0-9a-f]{16})"', response.text).group(1)
+        self.assertIn('flow_C.js?studio=' + version, response.text)
+        self.assertIn('/studio-assets/studio.css?v=' + version, response.text)
+        script = (app1.FRONTEND_DIR / 'flow_C.js').read_text(encoding='utf-8')
+        self.assertIn('dataset.studioBuild', script)
+        self.assertIn("studio.js?v=", script)

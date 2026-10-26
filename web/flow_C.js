@@ -748,6 +748,13 @@
 
   // Canvas page
   async function initializeCanvas() {
+    if ($('studio-root')) {
+      setStatus('');
+      const version = $('studio-root').dataset.studioBuild || String(Date.now());
+      const module = await import('/studio-assets/studio.js?v=' + encodeURIComponent(version));
+      window.cascadeStudio = await module.mountStudio($('studio-root'), {project, apiJSON, apiFetch, userId});
+      return;
+    }
     $("project-title").textContent =
       getProjectName();
 
@@ -1215,13 +1222,14 @@
   });
 
   // Back/Forward retains the existing view and its listeners, never remounts it.
-  window.addEventListener('pageshow',event=>{if(event.persisted && page==='canvas')refreshGenerationGroups().catch(error=>setStatus(error.message));});
+  window.addEventListener('pageshow',event=>{if(event.persisted && page==='canvas' && !$('studio-root'))refreshGenerationGroups().catch(error=>setStatus(error.message));});
   window.addEventListener(
     "pagehide",
     event => {
       document.querySelectorAll('video,audio').forEach(media=>media.pause());
       // A cached document needs its Blob URLs and frozen timer when restored.
       if(event.persisted)return;
+      window.cascadeStudio?.destroy();
       clearInterval(historyPoll);
       mediaURLs.forEach(url => {
         URL.revokeObjectURL(url);

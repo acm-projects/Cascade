@@ -1,5 +1,6 @@
 """Neon-backed JSON metadata; media and model caches remain on disk/S3."""
 import json
+import logging
 import hashlib
 import os
 import re
@@ -8,7 +9,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from threading import Lock
+from threading import Lock, BoundedSemaphore
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -23,6 +24,7 @@ class MetadataStore:
         self.database_url = database_url
         self.pool = None
         self.init_lock = Lock()
+        self.connection_slots = BoundedSemaphore(8)
 
     def key(self, path):
         try:
@@ -43,19 +45,43 @@ class MetadataStore:
     @contextmanager
     def connection(self):
         conn = None
+        acquired = False
         try:
             self.initialize()
-            conn = self.pool.getconn()
+            acquired = self.connection_slots.acquire(timeout=10)
+            if not acquired:
+                raise HTTPException(503, 'Database is busy. Please retry shortly.')
+            from psycopg2 import OperationalError, InterfaceError
+            # Neon can close an idle socket while the pool still considers it open.
+            # Reconnect only before giving a connection to an operation; never replay writes.
+            for attempt in range(2):
+                try:
+                    conn = self.pool.getconn()
+                    with conn.cursor() as cur:
+                        cur.execute("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '5s'; SELECT 1")
+                    break
+                except (OperationalError, InterfaceError):
+                    if conn is not None:
+                        self.pool.putconn(conn, close=True)
+                        conn = None
+                    if attempt:
+                        raise
             with conn:
-                with conn.cursor() as cur:
-                    cur.execute("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '5s'")
                 yield conn
-        except Exception:
+        except HTTPException:
+            raise
+        except Exception as error:
+            logging.getLogger(__name__).warning('Metadata database failure: %s (SQLSTATE %s)',
+                                               type(error).__name__, getattr(error, 'pgcode', None))
             # Driver errors can contain connection details. Never expose them.
             raise HTTPException(503, 'Database unavailable. Check the API database configuration and retry.') from None
         finally:
-            if conn is not None:
-                self.pool.putconn(conn, close=bool(conn.closed))
+            try:
+                if conn is not None:
+                    self.pool.putconn(conn, close=bool(conn.closed))
+            finally:
+                if acquired:
+                    self.connection_slots.release()
 
     def initialize(self):
         if not self.database_url or self.pool is not None:
@@ -115,6 +141,18 @@ class MetadataStore:
             except FileNotFoundError:
                 return False
         return Path(path).is_file()
+
+    def read_many(self, paths):
+        """Fetch a project's job status in one round trip instead of per clip/job."""
+        paths = [Path(path) for path in paths]
+        if not self.database_url:
+            return {path: self.read(path) for path in paths if path.is_file()}
+        keys = {self.key(path): path for path in paths if self.key(path)}
+        if not keys:
+            return {}
+        with self.connection() as conn, conn.cursor() as cur:
+            cur.execute('SELECT key, payload FROM cascade_app.records WHERE key = ANY(%s)', (list(keys),))
+            return {keys[key]: data for key, data in cur.fetchall()}
 
     def write(self, path, data, *, import_only=False):
         from psycopg2.extras import Json

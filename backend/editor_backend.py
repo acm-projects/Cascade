@@ -453,7 +453,7 @@ def register(app, integration):
         return FileResponse(path,media_type='image/jpeg')
 
     @app.get('/api/projects/{pid}/editor')
-    def editor_index(pid: str, request: Request):
+    def editor_index(pid: str, request: Request, selected_only: bool = False):
         project = integration.require_project(pid, request.state.user_id)
         jobs = list(reversed(integration.project_jobs(pid, request.state.user_id)))
         by_id = {j['job_id']: j for j in jobs}
@@ -476,7 +476,18 @@ def register(app, integration):
                 clips = host.load_json(path).get('clips', [])
                 group['clips'].extend({**host.public_clip(c), 'job_id': job['job_id'], 'clip_index': i} for i, c in enumerate(clips))
         sessions = [group for group in groups.values() if group['clips']]
-        return {'sessions': sessions, 'selection': project.get('editor_selection')}
+        studio = project.get('studio', {})
+        chosen = studio.get('editor_clips', [])
+        allowed = {(r['job_id'], r['clip_index']) for r in chosen}
+        for group in sessions:
+            match = next((s for s in studio.get('sessions', []) if group['job_id'] in s['job_ids']), None)
+            if match:
+                group['session_name'] = match['name']
+            if selected_only:
+                group['clips'] = [c for c in group['clips'] if (c['job_id'], c['clip_index']) in allowed]
+        sessions = [group for group in sessions if group['clips']]
+        selection = chosen[0] if selected_only and chosen else project.get('editor_selection')
+        return {'sessions': sessions, 'selection': selection}
 
     @app.get('/api/projects/{pid}/editor/{jid}/{index}')
     def get_draft(pid: str, jid: str, index: int, request: Request):
