@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
@@ -12,6 +12,7 @@ import { clipKey, flattenClips } from "../features/editor/clips";
 import useClipDraft from "../features/editor/useClipDraft";
 import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
+import Timeline from "../features/editor/Timeline";
 import { CaptionControls, RatioControls, TrimControls } from "../features/editor/EditorControls";
 
 const panelTabs = ["Trim", "Captions", "Aspect Ratio", "Chat"];
@@ -96,6 +97,8 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
   const draft = useClipDraft(projectId, clip);
   const [panelTab, setPanelTab] = useState("Trim");
   const [thinking, setThinking] = useState(false);
+  const [focusedCue, setFocusedCue] = useState(null); // caption line clicked on the timeline (for the Captions tab)
+  const player = useRef(null); // the ClipPlayer's remote control: seek(t), getTime()
   const { info, state, change } = draft;
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
 
@@ -139,11 +142,21 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
             {draft.error ? (
               <EmptyState icon="🌧️" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
-              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} />
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} />
             ) : (
               <div className="editor-loading"><Spinner label="Loading clip" /></div>
             )}
           </section>
+          {info && state && (
+            <section className="editor-timeline" aria-label="Timeline">
+              <Timeline duration={info.duration} cues={info.cues} state={state} player={player}
+                change={change} patch={draft.patch} recordUndo={draft.recordUndo}
+                focusedCue={focusedCue} onCueClick={(index) => {
+                  setFocusedCue(index);
+                  setPanelTab("Captions");
+                }} />
+            </section>
+          )}
           {info?.warning && <p className="editor-warning">{info.warning}</p>}
         </main>
 
