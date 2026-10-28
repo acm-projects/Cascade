@@ -79,6 +79,8 @@ def tracking_info(jid,clip):
 
 def begin_analysis(pid,jid,index,user,selection=None,focus='auto'):
     clip=selected(pid,jid,index,user);info=tracking_info(jid,clip)
+    if info.get('has_video') is False:
+        raise HTTPException(422, 'Subject tracking and reframing require video; this clip is audio-only.')
     if selection and selection.t>=info['duration']:raise HTTPException(422,'Selection time is outside this clip.')
     selection_data=selection.model_dump() if selection else None
     key=reframelib.analysis_key(info,focus,selection_data)

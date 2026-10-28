@@ -145,7 +145,9 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
       .forEach(el => el.disabled = value);
     document.querySelectorAll('#editor-sessions button,#editor-sessions input').forEach(el => el.disabled = busy);
     timeline.setDisabled(value);
-    broll?.setLocked(value);
+    const audioOnly=info?.has_video===false;
+    broll?.setLocked(value||audioOnly);
+    if(audioOnly)document.querySelectorAll('#ratio-controls input,#ratio-controls select,#ratio-controls button,#effects-controls input,#effects-controls button,#ratio-tab,#broll-tab,#effects-tab').forEach(el=>el.disabled=true);
     $('undo').disabled = value || !history?.undoStack.length;
     $('redo').disabled = value || !history?.redoStack.length;
     if(history) { renderCaptionText(); renderFraming(); }

@@ -11,6 +11,7 @@ function MediaPreview({ item, onClose }) {
   const api = useApi();
   const [url, setUrl] = useState(null);
   const [error, setError] = useState(null);
+  const [audio, setAudio] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -18,6 +19,7 @@ function MediaPreview({ item, onClose }) {
     const load = item.file ? Promise.resolve(item.file) : api.getMedia(item.path);
     load
       .then((blob) => {
+        setAudio(blob.type.startsWith('audio/') || /\.(mp3|wav|m4a|flac)$/i.test(item.file?.name || ''));
         objectUrl = URL.createObjectURL(blob);
         if (active) setUrl(objectUrl);
       })
@@ -33,7 +35,8 @@ function MediaPreview({ item, onClose }) {
       {error ? (
         <p role="alert">{error}</p>
       ) : url ? (
-        <video className="studio-preview-video" src={url} controls autoPlay playsInline />
+        audio ? <audio aria-label="Audio preview" src={url} controls autoPlay style={{width:'100%'}} />
+          : <video className="studio-preview-video" src={url} controls autoPlay playsInline />
       ) : (
         <div className="studio-preview-loading"><Spinner label="Loading video" /> Loading…</div>
       )}

@@ -164,6 +164,8 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
           <div className="editor-panel-tabs">
             {panelTabs.map((tab) => (
               <button key={tab} type="button" className={`editor-panel-tab${tab === panelTab ? " active" : ""}`}
+                disabled={info?.has_video === false && tab === 'Aspect Ratio'}
+                title={info?.has_video === false && tab === 'Aspect Ratio' ? 'Audio recordings have no video framing' : undefined}
                 onClick={() => setPanelTab(tab)}>{tab}</button>
             ))}
           </div>

@@ -13,7 +13,7 @@ from starlette.background import BackgroundTask
 from backend import reframe as reframelib
 from .models import BatchExport, ExportInput
 from .composition import composition_filter, composition_geometry, effects_filter, resolution_filter
-from .validation import details, trimmed_cues, validate_edit
+from .validation import details, trimmed_cues, validate_edit, validate_media_edit
 from .captions import make_ass, raster_filters
 from .storage import media, selected, stock_store
 from .reframe import begin_analysis, read_analysis
@@ -44,7 +44,7 @@ def export_selected(pid: str, body: BatchExport, request: Request):
             raise HTTPException(422, 'Export selection contains duplicate clips.')
         seen.add(key)
         clip = selected(pid, entry.job_id, entry.clip_index, request.state.user_id)
-        validate_edit(entry.edit, details(entry.job_id, clip)['duration'])
+        validate_media_edit(entry.edit, details(entry.job_id, clip))
         stock_store(pid, entry.job_id, entry.clip_index, request.state.user_id).verify(entry.edit)
     directory = tempfile.TemporaryDirectory(prefix='cascade-export-selection-')
     try:
@@ -53,7 +53,11 @@ def export_selected(pid: str, body: BatchExport, request: Request):
             for number, entry in enumerate(body.clips, 1):
                 response = export(pid, entry.job_id, entry.clip_index, entry.edit, request)
                 try:
-                    archive.write(response.path, f'{number:03d}-clip-{entry.clip_index+1}-{entry.job_id[:8]}.mp4')
+                    name = f'{number:03d}-clip-{entry.clip_index+1}-{entry.job_id[:8]}'
+                    archive.write(response.path, name+Path(response.path).suffix)
+                    captions = Path(response.path).with_suffix('.vtt')
+                    if captions.is_file():
+                        archive.write(captions, name+'.vtt')
                 finally:
                     response.background.func(*response.background.args, **response.background.kwargs)
         return FileResponse(path, filename='cascade-clips.zip', media_type='application/zip', background=BackgroundTask(directory.cleanup))
@@ -65,12 +69,17 @@ def export_selected(pid: str, body: BatchExport, request: Request):
 def export(pid: str, jid: str, index: int, body: ExportInput, request: Request):
     clip = selected(pid, jid, index, request.state.user_id)
     info = details(jid, clip)
-    validate_edit(body, info['duration'])
+    validate_media_edit(body, info)
     stock=stock_store(pid,jid,index,request.state.user_id)
     stock.verify(body)
     directory = tempfile.TemporaryDirectory(prefix='cascade-export-')
     try:
         folder = Path(directory.name)
+        if info.get('has_video') is False:
+            from .audio import render_audio
+            with media(jid, clip) as source:
+                render_audio(source, folder, body, info['cues'])
+            return FileResponse(folder/'edited.mp3', filename='cascade-edited.mp3', media_type='audio/mpeg', background=BackgroundTask(directory.cleanup))
         g=composition_geometry(info['width'],info['height'],body.composition)
         base_filter=composition_filter(g,body.composition)
         needs_tracking=body.composition.mode=='fill' and (g['scaledWidth']>g['width'] or g['scaledHeight']>g['height'])

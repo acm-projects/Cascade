@@ -5,8 +5,8 @@ export function exportEdit(state, settings) {
     captions: { ...state.captions, enabled: settings.includeCaptions && state.captions.enabled } };
 }
 
-export function downloadName(project, number) {
-  return `${fileSafe(project, 'cascade')}-selected-${number}.mp4`;
+export function downloadName(project, number, audio = false) {
+  return `${fileSafe(project, 'cascade')}-selected-${number}.${audio ? 'mp3' : 'mp4'}`;
 }
 
 export { downloadBlob as saveBlob } from '../editor/clips.js';

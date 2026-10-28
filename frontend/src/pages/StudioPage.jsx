@@ -11,6 +11,7 @@ import SessionBar from "../features/studio/SessionBar";
 import ChatPanel from "../features/studio/ChatPanel";
 import StudioCanvas from "../features/studio/StudioCanvas";
 import MediaPreview from "../features/studio/MediaPreview";
+import { isSupportedMedia } from '../utils/media';
 import useStudioData from "../features/studio/useStudioData";
 import { nodeTypes } from "../features/studio/nodes";
 import { edgeTypes } from "../features/studio/edges";
@@ -59,8 +60,8 @@ function StudioPage() {
   // ---------- What the canvas boxes can do ----------
   const chooseFile = useCallback((file) => {
     if (!file) return;
-    if (!file.type.startsWith("video/")) {
-      toast.show("That isn't a video file.", "error");
+    if (!isSupportedMedia(file)) {
+      toast.show("Choose MP4, MOV, WebM, MKV, MP3, WAV, M4A, or FLAC audio/video.", "error");
       return;
     }
     if (session?.source_job) {
@@ -140,7 +141,7 @@ function StudioPage() {
   // ---------- Sending a prompt ----------
   async function send(text, clipCount) {
     if (!session.source_job && !pendingFile) {
-      toast.show("Choose a video on the canvas first.", "error");
+      toast.show("Choose audio or video on the canvas first.", "error");
       return false;
     }
     if (references.length > 12) {
@@ -247,7 +248,7 @@ function StudioPage() {
   let note;
   if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
   else if (references.length) note = `${plural(references.length, "picked clip")} will guide this prompt: new clips branch from them and keep the originals.`;
-  else if (!session.source_job) note = pendingFile ? "Your video uploads when you send your first prompt." : "Choose a video on the canvas, then describe the clips you want.";
+  else if (!session.source_job) note = pendingFile ? "Your video uploads when you send your first prompt." : "Choose audio or video on the canvas, then describe the clips you want.";
 
   return (
     <div className="studio leaf-page">

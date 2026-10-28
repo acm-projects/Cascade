@@ -239,7 +239,9 @@ class ToolBox:
             )
 
         blocks: list[dict[str, Any]] = [{"type": "text", "text": body}]
-        n = OVERVIEW_FRAMES
+        n = OVERVIEW_FRAMES if getattr(idx, "has_video", True) else 0
+        if not getattr(idx, "has_video", True):
+            blocks[0]["text"] += "\nAudio-only recording: use speech search and transcript tools. No visual frames exist. Rank highlights by what is said and its context."
         for i in range(n):
             t = idx.duration * (i + 0.5) / n
             jpeg = self.frame_grabber(self.video_path, t)
@@ -317,6 +319,8 @@ class ToolBox:
         if mode not in ("visual", "speech"):
             return _text("mode must be 'visual' or 'speech'"), True
         top_k = max(1, min(int(top_k), 10))
+        if not getattr(self.index, "has_video", True):
+            mode = "speech"
         hits = self.index.search(query, mode=mode, top_k=top_k)
         if not hits:
             return _text("No results (the video may have no transcript)."), False
@@ -328,7 +332,7 @@ class ToolBox:
             return _text(
                 f"Invalid range. Need 0 <= start < end <= {self.index.duration:.1f}s."
             ), True
-        n = max(1, min(int(num_frames), MAX_INSPECT_FRAMES))
+        n = max(1, min(int(num_frames), MAX_INSPECT_FRAMES)) if getattr(self.index, "has_video", True) else 0
         blocks: list[dict[str, Any]] = []
         for i in range(n):
             t = start + (end - start) * (i + 0.5) / n

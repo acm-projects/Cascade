@@ -10,6 +10,17 @@ from fastapi import HTTPException
 from backend import broll as stocklib
 from .storage import media
 from .runtime import jobs_dir, load_json, metadata_exists
+from .models import Composition, Effects
+
+
+def validate_media_edit(state, info):
+    validate_edit(state, info['duration'])
+    if info.get('has_video') is False and (
+        state.reframe.enabled or state.reframe.selection is not None or state.broll
+        or state.composition != Composition() or state.effects != Effects()
+    ):
+        raise HTTPException(422, 'Audio-only clips support trimming and transcript edits; video effects, B-roll, framing, and subject tracking are unavailable.')
+    return state
 
 def validate_edit(state, duration):
     if not math.isfinite(duration) or not 0 <= state.start < state.end <= duration or state.end - state.start < .05 - 1e-8:
@@ -83,5 +94,7 @@ def cached_details(folder_key, jid, serialized, revisions):
     burned = kind == 'caption-styles' or 'burned' in clip.get('explanation', '').lower() or bool(clip.get('captions_burned_in'))
     if burned:
         warning = 'This generated clip has burned-in captions. They cannot be removed or restyled; controls affect additional captions only.'
+    has_video = any(s.get('codec_type') == 'video' for s in data['streams'])
     return json.dumps({'duration': duration, 'cues': cues, 'warning': warning, 'burned_in': burned,
+                       'has_video': has_video, 'media_kind': 'video' if has_video else 'audio',
                        'has_audio':any(s.get('codec_type')=='audio' for s in data['streams']),'width': dimensions.get('width', 1280), 'height': dimensions.get('height', 720)})

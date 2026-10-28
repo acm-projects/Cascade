@@ -15,11 +15,18 @@ def selected(pid, jid, index, user):
     return selected_clip(pid, SimpleNamespace(job_id=jid, clip_index=index), user)[1]
 
 
+def selected_video(pid, jid, index, user):
+    clip = selected(pid, jid, index, user)
+    if clip.get('media_kind') == 'audio' or clip.get('clip_url', '').endswith('.mp3'):
+        raise HTTPException(422, 'This feature requires video. Export this audio recording as MP3 instead.')
+    return clip
+
+
 @contextmanager
 def media(jid, clip, captions=False):
     field = 'captions_url' if captions else 'clip_url'
     name = Path(clip.get(field, '')).name
-    if not re.fullmatch(r'clip_[1-9][0-9]*\.(mp4|vtt)', name):
+    if not re.fullmatch(r'clip_[1-9][0-9]*\.(mp4|mp3|vtt)', name):
         raise HTTPException(404, 'Clip media is unavailable.')
     path = jobs_dir() / jid / name
     if metadata_exists(path):

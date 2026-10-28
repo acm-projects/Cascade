@@ -715,50 +715,10 @@ def processing_error(error, stage):
 
 
 def inspect_video(video_path):
-    information = json.loads(
-        run_command([
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_format",
-            "-show_streams",
-            "-of",
-            "json",
-            str(video_path),
-        ])
-    )
-
-    streams = information.get(
-        "streams",
-        [],
-    )
-
-    if not any(
-        stream.get("codec_type") == "video"
-        for stream in streams
-    ):
-        raise ValueError(
-            "This file has no video track."
-        )
-
-    duration = float(
-        information["format"]["duration"]
-    )
-
-    if (
-        not math.isfinite(duration)
-        or duration <= 0
-    ):
-        raise ValueError(
-            "Invalid video duration."
-        )
-
-    has_audio = any(
-        stream.get("codec_type") == "audio"
-        for stream in streams
-    )
-
-    return duration, has_audio
+    # Compatibility name: callers may now provide either an audio or video source.
+    from backend.media import probe_media
+    info = probe_media(video_path)
+    return info['duration'], info['has_audio']
 
 
 # --------------------------------------------------
@@ -852,6 +812,11 @@ def encoder_threads(workers):
 
 
 def render_clip(video_path, selection, output_path, threads):
+    if Path(output_path).suffix == '.mp3':
+        run_command(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-ss', str(selection['start']),
+            '-i', str(video_path), '-t', str(selection['end']-selection['start']),
+            '-map', '0:a:0', '-vn', '-c:a', 'libmp3lame', '-b:a', '192k', str(output_path)])
+        return
     run_command([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-ss", str(selection["start"]),
@@ -907,9 +872,19 @@ def process_upload(
             state="processing",
         )
 
-        progress("Reading uploaded video...")
+        progress("Reading uploaded audio..." if load_json(folder/"owner.json").get("media_kind") == "audio" else "Reading uploaded video...")
         timer.start('Video inspection')
-        duration, _ = inspect_video(video_path)
+        from backend.media import probe_media, normalize_media
+        media_info = normalize_media(video_path, probe_media(video_path))
+        duration = media_info['duration']
+        owner = load_json(folder/'owner.json')
+        owner.update(media_info)
+        from backend.core.storage import upload_source_media
+        if owner.get('source_job', job_id) == job_id and not owner.get('source_s3_key'):
+            owner.update(upload_source_media(folder, job_id, owner))
+        save_json(folder/'owner.json', owner)
+        suffix = '.mp4' if media_info['has_video'] else '.mp3'
+        update_job(job_id, media_kind=media_info['media_kind'])
 
         # The agent: Deepgram transcript, search index, and a multi-step selection of the best
         # moments across the whole video. Cutting, captions and storage below are unchanged.
@@ -944,14 +919,14 @@ def process_upload(
             futures = {}
             for number, selection in enumerate(selected, start=1):
                 progress(f"Cutting clip {number}/{total}...")
-                filename = f"clip_{number}.mp4"
+                filename = f"clip_{number}{suffix}"
                 futures[pool.submit(render_clip, video_path, selection, folder / filename, threads)] = number
             try:
                 for future in as_completed(futures):
                     number = futures[future]
                     future.result()
                     selection = selected[number - 1]
-                    filename = f"clip_{number}.mp4"
+                    filename = f"clip_{number}{suffix}"
                     captions_filename = f"clip_{number}.vtt"
                     write_captions(folder / captions_filename, transcript, selection["start"], selection["end"])
                     progress(f"Saving clip {number}/{total}...")
@@ -959,6 +934,8 @@ def process_upload(
                     results[number] = {
                         **selection,
                         "clip_id": f"{job_id}:{number-1}",
+                        "media_kind": media_info["media_kind"],
+                        "has_video": media_info["has_video"],
                         **storage,
                         "clip_url": f"/clips/{job_id}/{filename}",
                         "captions_url": f"/clips/{job_id}/{captions_filename}",
@@ -1050,7 +1027,12 @@ def upload_video(
         if source_job:
             original = integration.original_source(project_id, source_job, request.state.user_id)
             source_job = original.parent.name
+        from backend.media import validate_filename, AUDIO_EXTENSIONS
+        if not source_job:
+            validate_filename(video.filename)
         source_name = Path(video.filename or 'video').name
+        if Path(source_name).suffix.lower() in AUDIO_EXTENSIONS:
+            engine = 'agent'
         if source_job:
             source_owner = load_json(JOBS_DIR / source_job / 'owner.json')
             source_name = source_owner.get('source_name', source_name)
@@ -1131,6 +1113,7 @@ def upload_video(
                     "project_id": project_id,
                     "prompt": search,
                     "source_name": source_name,
+                    "media_kind": "audio" if Path(source_name).suffix.lower() in AUDIO_EXTENSIONS else "video",
                     "video_sha256": fingerprint.hexdigest(),
                     "engine": engine,
                     "mode": mode if engine=="agent" else engine,
@@ -1275,7 +1258,7 @@ def get_clip(
 
     # Keep compatibility with previously saved jobs.
     if not re.fullmatch(
-        r"clip_[1-9][0-9]*\.(mp4|vtt)",
+        r"clip_[1-9][0-9]*\.(mp4|mp3|vtt)",
         filename,
     ):
         raise HTTPException(
@@ -1295,7 +1278,7 @@ def get_clip(
         for clip in results.get("clips", []):
             field = (
                 "clip_url"
-                if filename.endswith(".mp4")
+                if not filename.endswith(".vtt")
                 else "captions_url"
             )
 
@@ -1307,15 +1290,12 @@ def get_clip(
 
     key_field = (
         "clip_s3_key"
-        if filename.endswith(".mp4")
+        if not filename.endswith(".vtt")
         else "captions_s3_key"
     )
 
-    media_type = (
-        "video/mp4"
-        if filename.endswith(".mp4")
-        else "text/vtt"
-    )
+    from backend.media import content_type
+    media_type = content_type(filename)
 
     path = folder / filename
     if path.is_file():

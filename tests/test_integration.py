@@ -244,7 +244,8 @@ class IntegrationTests(unittest.TestCase):
             Path(command[-1]).write_bytes(b'local-video')
         with patch.dict(os.environ, {'CASCADE_STORAGE': 'auto', 'S3_BUCKET_NAME': '', 'DATABASE_URL': '', 'NEON_DATABASE_URL': ''}), \
                 patch.object(backend.core.storage, 's3_client', side_effect=AssertionError('Local generation must not use S3')), \
-                patch.object(app1, 'inspect_video', return_value=(2, True)), \
+                patch('backend.media.probe_media', return_value={'duration':2,'has_audio':True,'has_video':True,
+                    'media_kind':'video','video_codec':'h264','audio_codec':'aac','container':'mp4','pixel_format':'yuv420p'}), \
                 patch.object(app1, 'select_with_agent', return_value=([selection], transcript, {})), \
                 patch.object(app1, 'run_command', side_effect=render):
             app1.process_upload(job_id, folder / 'source.video', 'caption', 'speech', 2)

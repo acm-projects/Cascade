@@ -225,7 +225,7 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     return row.rendering;
   }
   function download(blob,name){if(ended)throw Error('Session ended.');const link=document.createElement('a'),objectURL=URL.createObjectURL(blob);link.href=objectURL;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(objectURL),30000);}
-  function filename(row){return 'cascade-session-'+(row.wave.session_number||1)+'-wave-'+(row.wave.wave_number||1)+'-clip-'+row.number+'.mp4';}
+  function filename(row){return 'cascade-session-'+(row.wave.session_number||1)+'-wave-'+(row.wave.wave_number||1)+'-clip-'+row.number+(row.media_kind==='audio'||row.clip_url?.endsWith('.mp3')?'.mp3':'.mp4');}
   async function show(index,{expand=true,scroll=false,rail=true,syncPost=true}={}) {
     if(ended)return;
     rows[active].video.pause(); active=Math.max(0,Math.min(rows.length-1,index));

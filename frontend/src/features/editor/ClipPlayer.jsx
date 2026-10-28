@@ -88,7 +88,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   if (!url) return <div className="clip-player-message"><Spinner label="Loading clip" /> Loading clip…</div>;
 
   const { composition, captions } = state;
-  const ratio = composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
+  const audioOnly = info.has_video === false;
+  const ratio = audioOnly ? 16/9 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
   const cueIndex = info.cues.findIndex((cue) => cue.start <= time && time < cue.end);
   const caption = cueIndex >= 0 ? state.texts?.[cueIndex] ?? info.cues[cueIndex].text : null;
   const outputHeight = Math.max(info.height, 1);
@@ -100,7 +101,12 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
     <div className="clip-player">
       <div ref={stageRef} className="clip-player-stage">
         <div className="clip-player-frame" style={{ width: frameWidth, height: frameHeight, background: composition.background }}>
-          <video
+          {audioOnly ? <>
+            <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>🎧 Audio recording</p>
+            <audio ref={videoRef} src={url} aria-label="Edited audio preview"
+              onLoadedMetadata={e => {e.target.currentTime=state.start;}}
+              onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
+          </> : <video
             ref={videoRef}
             src={url}
             playsInline
@@ -114,7 +120,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onClick={togglePlay}
-          />
+          />}
           {captions.enabled && caption && (
             <div className="clip-player-captions" style={{ justifyContent: POSITIONS[captions.position] }}>
               <span

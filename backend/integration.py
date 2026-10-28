@@ -69,7 +69,7 @@ def project_jobs(project_id, user_id):
         if owner.get('user_id') == user_id and owner.get('project_id') == project_id and not owner.get('project_deleted'):
             result.append({'job_id': path.parent.name, 'prompt': owner.get('prompt', ''),
                            'source_name': owner.get('source_name', ''),
-                           'kind': owner.get('kind', 'generation'), 'has_source': (path.parent / 'source.video').is_file(),
+                           'kind': owner.get('kind', 'generation'), 'media_kind': owner.get('media_kind', 'video'), 'has_source': (path.parent / 'source.video').is_file() or bool(owner.get('source_s3_key')),
                            'created_at': owner.get('created_at', path.stat().st_mtime if path.is_file() else 0),
                            'session_id': owner.get('session_id'), 'wave_id': owner.get('wave_id'),
                            'history_id': owner.get('history_id', path.parent.name), 'creation_order': owner.get('creation_order'),
@@ -114,6 +114,16 @@ def original_source(project_id, job_id, user_id):
             job_id = root
             continue
         source = host.JOBS_DIR / job_id / 'source.video'
+        if not source.is_file() and owner.get('source_s3_key'):
+            temporary = source.with_name(uuid4().hex+'.download')
+            try:
+                source.parent.mkdir(parents=True, exist_ok=True)
+                host.s3_client().download_file(owner['source_s3_bucket'], owner['source_s3_key'], str(temporary))
+                temporary.replace(source)
+            except Exception:
+                raise HTTPException(503, 'Could not retrieve the original media from storage. Retry shortly.') from None
+            finally:
+                temporary.unlink(missing_ok=True)
         if source.is_file():
             return source
         job_id = owner.get('parent_job')
@@ -172,6 +182,9 @@ def process_search(job_id, video_path, search, mode, target):
         stage = message
         host.update_job(job_id, message=message)
     try:
+        if host.load_json(host.JOBS_DIR/job_id/'owner.json').get('media_kind') == 'audio':
+            host.process_upload(job_id, video_path, search, 'speech', target)
+            return
         timer.start('Dependency imports')
         from backend.video_search.router import search_video, OUTPUTS
         from backend.generation import options, contextual_prompt
@@ -344,10 +357,9 @@ def register(app, backend):
     def source_video(project_id: str, job_id: str, request: Request):
         from fastapi.responses import FileResponse
         owner_for_job(project_id, job_id, request.state.user_id)
-        source = host.JOBS_DIR / job_id / 'source.video'
-        if not source.is_file():
-            raise HTTPException(404, 'Source video is unavailable.')
-        return FileResponse(source, media_type='application/octet-stream', headers={'Cache-Control': 'no-store'})
+        source = original_source(project_id, job_id, request.state.user_id)
+        owner = owner_for_job(project_id, job_id, request.state.user_id)
+        return FileResponse(source, media_type='audio/mpeg' if owner.get('media_kind') == 'audio' else 'video/mp4', headers={'Cache-Control': 'no-store'})
 
     @app.post('/api/projects/{project_id}/saved-clips')
     def save_clip(project_id: str, body: ClipInput, request: Request):

@@ -55,11 +55,12 @@ class VideoIndex:
     chunk_summaries: list[dict[str, Any]] = field(default_factory=list)
     summary_usage: dict[str, Any] = field(default_factory=dict)
     transcription_cost_usd: float = 0.0  # Deepgram spend for this build; 0 on a cache hit
+    has_video: bool = True
     video_key: str = ""  # sha256 of the video file; ties per-video caches (and saved research) together
 
     def search(self, query: str, mode: str = "visual", top_k: int = 5) -> list[dict[str, Any]]:
         """Return up to top_k well-separated hits as {start, end, score, text?, speaker?}."""
-        if mode == "speech":
+        if mode == "speech" or not self.has_video:
             if len(self.transcript) == 0:
                 return []
             scores = self.segment_embeddings @ self.encode_text_query(query)
@@ -168,7 +169,10 @@ def build_index(
     from backend.video_search import router as vs
 
     emit("Preparing search models")
-    vs.load_models("visual", emit)
+    from backend.media import probe_media
+    media_info = probe_media(video_path)
+    if media_info["has_video"]:
+        vs.load_models("visual", emit)
     vs.load_models("speech", emit)
 
     def encode_visual_query(q: str) -> np.ndarray:
@@ -179,33 +183,39 @@ def build_index(
 
     key = file_sha256(video_path)
 
-    # ---- frames (provider-independent) ----
-    frames_path = CACHE_DIR / f"frames_{key}.npz"
-    if frames_path.exists():
-        emit("Loaded frame embeddings from cache")
-        data = np.load(frames_path)
-        duration = float(data["duration"])
-        interval = float(data["interval"])
-        frame_times = [float(t) for t in data["frame_times"]]
-        frame_embeddings = data["frame_embeddings"]
+    if not media_info['has_video']:
+        duration = media_info['duration']
+        interval = MIN_FRAME_INTERVAL
+        frame_times = []
+        frame_embeddings = np.zeros((0, 1), dtype=np.float32)
     else:
-        duration = _probe_duration(video_path)
-        interval = max(MIN_FRAME_INTERVAL, duration / MAX_FRAMES)
-        emit("Sampling frames")
-        frame_times, frame_paths = _sample_frames(video_path, work_dir / "index_frames", duration, interval)
-        emit("Embedding frames with CLIP")
-        images = []
-        for p in frame_paths:
-            with Image.open(p) as img:
-                images.append(img.convert("RGB"))
-        frame_embeddings = vs.visual_model.encode(images, normalize_embeddings=True, batch_size=32)
-        np.savez(
-            frames_path,
-            frame_embeddings=frame_embeddings,
-            frame_times=np.array(frame_times),
-            interval=np.array(interval),
-            duration=np.array(duration),
-        )
+        # ---- frames (provider-independent) ----
+        frames_path = CACHE_DIR / f"frames_{key}.npz"
+        if frames_path.exists():
+            emit("Loaded frame embeddings from cache")
+            data = np.load(frames_path)
+            duration = float(data["duration"])
+            interval = float(data["interval"])
+            frame_times = [float(t) for t in data["frame_times"]]
+            frame_embeddings = data["frame_embeddings"]
+        else:
+            duration = _probe_duration(video_path)
+            interval = max(MIN_FRAME_INTERVAL, duration / MAX_FRAMES)
+            emit("Sampling frames")
+            frame_times, frame_paths = _sample_frames(video_path, work_dir / "index_frames", duration, interval)
+            emit("Embedding frames with CLIP")
+            images = []
+            for p in frame_paths:
+                with Image.open(p) as img:
+                    images.append(img.convert("RGB"))
+            frame_embeddings = vs.visual_model.encode(images, normalize_embeddings=True, batch_size=32)
+            np.savez(
+                frames_path,
+                frame_embeddings=frame_embeddings,
+                frame_times=np.array(frame_times),
+                interval=np.array(interval),
+                duration=np.array(duration),
+            )
 
     # ---- transcript (keyed by provider + model) ----
     tag = TRANSCRIPT_TAG
@@ -231,6 +241,7 @@ def build_index(
 
     return VideoIndex(
         duration=duration,
+        has_video=media_info["has_video"],
         frame_interval=interval,
         frame_times=frame_times,
         frame_embeddings=frame_embeddings,

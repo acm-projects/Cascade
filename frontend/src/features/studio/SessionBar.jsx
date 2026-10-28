@@ -49,7 +49,7 @@ function SessionBar({ sessions, activeId, onSwitch, onCreate, onRename, children
       {dialog && (
         <Modal title={dialog === "create" ? "New session" : "Rename session"} onClose={() => !saving && setDialog(null)}>
           <form className="session-bar-form" onSubmit={submit}>
-            {dialog === "create" && <p>Start with a new source video. Your other sessions and clips stay saved.</p>}
+            {dialog === "create" && <p>Start with a new audio or video source. Your other sessions and clips stay saved.</p>}
             <input className="session-bar-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80}
               placeholder="Funny moments, Emotional, Highlights…" aria-label="Session name" autoFocus />
             <div className="session-bar-form-actions">

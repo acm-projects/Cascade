@@ -1,7 +1,7 @@
 """Editor drafts; extracted without changing media behavior."""
 from fastapi import HTTPException, Request
 from .models import Captions, Draft, Edit
-from .validation import details, validate_edit
+from .validation import details, validate_edit, validate_media_edit
 from .storage import draft_path, selected, stock_store
 from .reframe import read_analysis
 from .runtime import jobs_dir, load_json, save_json, metadata_exists, public_clip
@@ -55,7 +55,7 @@ def get_draft(pid: str, jid: str, index: int, request: Request):
     if metadata_exists(path):
         try:
             draft = Draft.model_validate(load_json(path))
-            validate_edit(draft.state, info['duration'])
+            validate_media_edit(draft.state, info)
         except (ValueError, HTTPException):
             info['warning'] += ' Outdated saved edits were reset.'
             draft = None
@@ -66,7 +66,7 @@ def get_draft(pid: str, jid: str, index: int, request: Request):
 
 def save_draft(pid: str, jid: str, index: int, body: Draft, request: Request):
     clip = selected(pid, jid, index, request.state.user_id)
-    validate_edit(body.state, details(jid, clip)['duration'])
+    validate_media_edit(body.state, details(jid, clip))
     stock_store(pid,jid,index,request.state.user_id).verify(body.state)
     if body.state.reframe.enabled:read_analysis(pid,jid,index,body.state.reframe.analysis_id,request.state.user_id)
     with lock:

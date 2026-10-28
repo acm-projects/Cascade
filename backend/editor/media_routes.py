@@ -31,6 +31,8 @@ def thumbnail(jid, serialized, revision):
 
 def get_thumbnail(pid: str, jid: str, index: int, request: Request):
     clip = selected(pid, jid, index, request.state.user_id)
+    if clip.get('media_kind') == 'audio' or clip.get('clip_url', '').endswith('.mp3'):
+        raise HTTPException(422, 'Audio-only clips do not have video thumbnails.')
     source = jobs_dir() / jid / Path(clip.get('clip_url', '')).name
     revision = (source.stat().st_mtime_ns, source.stat().st_size) if source.is_file() else None
     return Response(thumbnail(jid, json.dumps(clip, sort_keys=True), revision),
@@ -46,4 +48,4 @@ def get_media(pid: str, jid: str, index: int, request: Request):
         with temp:
             with source.open('rb') as stream:
                 shutil.copyfileobj(stream, temp)
-    return FileResponse(temp.name, media_type='video/mp4', background=BackgroundTask(Path(temp.name).unlink))
+    return FileResponse(temp.name, media_type='audio/mpeg' if clip.get('media_kind') == 'audio' or clip.get('clip_url', '').endswith('.mp3') else 'video/mp4', background=BackgroundTask(Path(temp.name).unlink))

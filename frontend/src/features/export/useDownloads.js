@@ -25,7 +25,7 @@ export default function useDownloads(api, projectId, projectName, settings) {
       }
       const blob = batch ? await api.exportSelected(projectId, entries)
         : await api.exportClip(projectId, entries[0].job_id, entries[0].clip_index, entries[0].edit);
-      const filename = batch ? `cascade-${fileSafe(projectName, 'project')}.zip` : downloadName(projectName, number);
+      const filename = batch ? `cascade-${fileSafe(projectName, 'project')}.zip` : downloadName(projectName, number, blob.type.startsWith('audio/'));
       saveBlob(blob, filename);
       setProgressText('Download ready.');
       return { blob, filename };

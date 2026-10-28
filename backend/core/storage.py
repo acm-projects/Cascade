@@ -5,6 +5,7 @@ import os
 import re
 import time
 import traceback
+from pathlib import Path
 
 import boto3
 from botocore.config import Config
@@ -170,6 +171,7 @@ def upload_clip_files(
     filename,
     captions_filename,
 ):
+    from backend.media import content_type as media_content_type
     # Local media already uses the same ownership-checked /clips route.
     if uses_local_storage():
         return {"storage": "local"}
@@ -193,7 +195,7 @@ def upload_clip_files(
     for name, content_type, field in (
         (
             filename,
-            "video/mp4",
+            media_content_type(filename),
             "clip_s3_key",
         ),
         (
@@ -219,3 +221,22 @@ def upload_clip_files(
         "s3_bucket": bucket,
         **keys,
     }
+
+
+def upload_source_media(folder, job_id, owner):
+    """Back up normalized sources alongside clips; retain local sources for editing."""
+    if uses_local_storage():
+        return {}
+    from backend.media import content_type
+    suffix = '.mp3' if owner.get('media_kind') == 'audio' else '.mp4'
+    prefix = f"{safe_folder_name(owner.get('user_folder')) or DEFAULT_FOLDER}/{owner['user_id']}/jobs/{job_id}"
+    bucket, client = s3_bucket(), s3_client()
+    key = prefix+'/source'+suffix
+    client.upload_file(str(folder/'source.video'), bucket, key, ExtraArgs={'ContentType':content_type(key)})
+    result = {'source_s3_bucket':bucket, 'source_s3_key':key}
+    original = folder/'original-upload.media'
+    if original.is_file():
+        original_key = prefix+'/original-upload'+Path(owner.get('source_name','')).suffix.lower()
+        client.upload_file(str(original), bucket, original_key, ExtraArgs={'ContentType':'application/octet-stream'})
+        result['original_source_s3_key'] = original_key
+    return result

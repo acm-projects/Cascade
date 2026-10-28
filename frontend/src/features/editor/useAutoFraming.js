@@ -6,7 +6,7 @@ const POLL_MS = 1500;
 
 // Does this edit crop the video? (Fill into a different shape than the clip's own)
 export function needsFraming(state, info) {
-  if (!state || !info || state.composition.mode !== "fill" || state.composition.ratio === "original") return false;
+  if (!state || !info || info.has_video === false || state.composition.mode !== "fill" || state.composition.ratio === "original") return false;
   return Math.abs(RATIOS[state.composition.ratio] - info.width / info.height) > 0.01;
 }
 

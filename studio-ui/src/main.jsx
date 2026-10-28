@@ -18,9 +18,9 @@ function SourceNode({data}) {
     <button className="studio-poster source-poster nodrag nopan" onClick={data.previewSource} disabled={!data.session.source_job&&!data.file}>
       <span className="poster-play"><Play/></span><span>{data.session.source_job||data.file?'Preview original':'Your story starts here'}</span>
     </button>
-    <div className="node-content"><strong>{data.sourceName||data.file?.name||'Upload a video'}</strong>
+    <div className="node-content"><strong>{data.sourceName||data.file?.name||'Upload audio or video'}</strong>
       <p>One source. Endless directions.</p>
-      {!data.session.source_job&&<button className="studio-quiet nodrag" onClick={data.chooseFile}>Choose video ↗</button>}
+      {!data.session.source_job&&<button className="studio-quiet nodrag" onClick={data.chooseFile}>Choose media ↗</button>}
     </div><Handle type="source" position={Position.Right}/>
   </article>;
 }
@@ -67,15 +67,15 @@ function GenerationNode({data}) {
 const nodeTypes = {source:SourceNode,clip:ClipNode,generation:GenerationNode};
 
 function Preview({item,apiFetch,onClose}) {
-  const [url,setURL]=useState(''),[error,setError]=useState('');
+  const [url,setURL]=useState(''),[error,setError]=useState(''),[audio,setAudio]=useState(false);
   useEffect(()=>{
     let active=true,objectURL;
     (async()=>{
       try {
-        if(item.file) objectURL=URL.createObjectURL(item.file);
+        if(item.file) { objectURL=URL.createObjectURL(item.file); setAudio(item.file.type.startsWith("audio/") || /\.(mp3|wav|m4a|flac)$/i.test(item.file.name)); }
         else {
           if(!item.url.startsWith('/clips/')&&!item.url.startsWith('/api/projects/'))throw Error('Invalid media URL.');
-          const response=await apiFetch(item.url); objectURL=URL.createObjectURL(await response.blob());
+          const response=await apiFetch(item.url); const blob=await response.blob(); setAudio(blob.type.startsWith("audio/")); objectURL=URL.createObjectURL(blob);
         }
         if(active)setURL(objectURL);else URL.revokeObjectURL(objectURL);
       } catch(e){if(active)setError(e.message);}
@@ -86,7 +86,7 @@ function Preview({item,apiFetch,onClose}) {
   const close=useRef(null);useEffect(()=>{close.current?.focus();},[]);
   return <div className="studio-modal-backdrop" onClick={onClose}><section className="studio-modal preview-modal" role="dialog" aria-modal="true" aria-label={item.title} onClick={e=>e.stopPropagation()}>
     <header><strong>{item.title}</strong><button ref={close} onClick={onClose} aria-label="Close preview">×</button></header>
-    {error?<p role="alert">{error}</p>:url?<video src={url} controls autoPlay playsInline/>:<p>Loading preview…</p>}
+    {error?<p role="alert">{error}</p>:url?(audio?<audio src={url} controls autoPlay/>:<video src={url} controls autoPlay playsInline/>):<p>Loading preview…</p>}
   </section></div>;
 }
 
@@ -288,7 +288,7 @@ function Studio({project,apiJSON,apiFetch}) {
       </aside>
       <section className="studio-graph" aria-label="Video branching canvas">
         <div className="graph-heading"><span className="graph-kicker">AI STUDIO</span><strong>{session.name}</strong><span>{activeGroups.reduce((n,g)=>n+displayClips(session,groups,g).length,0)} clips · {activeGroups.length} generations</span></div>
-        <input ref={fileInput} className="sr-only" type="file" accept="video/*" onChange={e=>setFile(e.target.files?.[0]||null)}/>
+        <input ref={fileInput} className="sr-only" type="file" accept=".mp4,.mov,.webm,.mkv,.mp3,.wav,.m4a,.flac,.avi,.m4v" onChange={e=>setFile(e.target.files?.[0]||null)}/>
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes}
           onNodesChange={changes=>setNodes(current=>applyNodeChanges(changes,current))}
           onNodeDragStop={(_,node)=>{saveSession(session.id,{positions:{[node.id]:node.position}}).catch(()=>{});}}
@@ -303,7 +303,7 @@ function Studio({project,apiJSON,apiFetch}) {
             <ControlButton aria-label="Fit View" title="Fit View" onClick={()=>changeViewport('fit')}>⛶</ControlButton>
           </Controls><MiniMap pannable zoomable nodeColor={n=>n.type==='source'?'#42765d':n.type==='generation'?'#b9aaa0':'#c1d6c8'} maskColor="rgba(242,245,240,.7)"/>
         </ReactFlow>
-        {!session.source_job&&<div className="upload-hint"><Film/><span>{file?file.name:'Upload your source video to get started'}</span><button onClick={()=>fileInput.current?.click()}>{file?'Change video':'Choose video'}</button></div>}
+        {!session.source_job&&<div className="upload-hint"><Film/><span>{file?file.name:'Upload your audio or video source to get started'}</span><button onClick={()=>fileInput.current?.click()}>{file?'Change video':'Choose media'}</button></div>}
         <div className="graph-legend"><span><i className="legend-editor"/> Selected for AI & Editor</span><span>Drag nodes · Scroll to pan · Pinch to zoom</span></div>
       </section>
     </div>

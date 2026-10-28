@@ -16,6 +16,7 @@ import useDownloads from "../features/export/useDownloads";
 import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
+import { isAudioClip } from '../utils/media';
 
 // Built from the Figma "Export" wireframe (node 557:2263), connected to backend/editor_backend.py
 // (rendering) and Manila's posting backend. Every download is rendered by the server with your edits.
@@ -72,7 +73,7 @@ function ExportPage() {
       ) : (
         <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads}
           clipNumber={clips.indexOf(current)+1}
-          settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length}/>}
+          settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)}/>}
           picker={
             <div className="export-clip-tabs" role="tablist" aria-label="Picked clips">
               {clips.map((clip, index) => (
@@ -118,7 +119,7 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
   const [post, setPost] = useState(null);
   async function downloadMp4() {
     const result = await downloads.downloadOne(clip, clipNumber);
-    if(result) setRendered(new File([result.blob], result.filename, {type: "video/mp4"}));
+    if(result) setRendered(new File([result.blob], result.filename, {type: result.blob.type}));
   }
 
   // Instagram/TikTok/etc. have no upload API for us, so hand the file to the phone/computer's share sheet
@@ -149,7 +150,7 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
           <h3 className="export-section-title">This clip</h3>
           {state && (
             <p className="export-summary">
-              {formatTime(state.end - state.start)} long · {state.composition.ratio === "original" ? "original shape" : state.composition.ratio}
+              {formatTime(state.end - state.start)} long · {isAudioClip(clip) ? 'audio recording' : state.composition.ratio === "original" ? "original shape" : state.composition.ratio}
               {" · "}captions {state.captions.enabled ? "on" : "off"}
             </p>
           )}
@@ -157,7 +158,7 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
             <Button variant="primary" size="sm" onClick={downloadMp4} disabled={!state || rendering || framing.status === "working"}>
               {rendering ? <><Spinner size={14} label="Rendering" /> Rendering…</>
                 : framing.status === "working" ? <><Spinner size={14} label="Preparing" /> Preparing framing {Math.round(framing.progress * 100)}%</>
-                  : "⬇ Download MP4"}
+                  : isAudioClip(clip) ? "⬇ Download MP3" : "⬇ Download MP4"}
             </Button>
             <Button variant="ghost" size="sm" onClick={onEdit}>✎ Edit</Button>
           </div>
@@ -168,11 +169,11 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
 
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
-        <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />
+        {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
         <div className="export-post">
-          <h3 className="export-social-title">📱 Instagram, TikTok & more</h3>
+          <h3 className="export-social-title">{isAudioClip(clip) ? '🎧 Share audio' : '📱 Instagram, TikTok & more'}</h3>
           <p className="export-social-note">
-            {rendered
+            {isAudioClip(clip) ? 'Download the MP3, or share it with apps on this device that accept audio files.' : rendered
               ? canShare ? "Share the MP4 you just downloaded to any app on this device." : "This browser can't share files. Upload the downloaded MP4 in the app."
               : "Download the MP4 first, then share it to Instagram, TikTok or anywhere else."}
           </p>

@@ -1,7 +1,7 @@
 """Editor chat; extracted without changing media behavior."""
 from fastapi import HTTPException, Request
 from .models import ChatInput
-from .validation import details, validate_edit
+from .validation import details, validate_edit, validate_media_edit
 from .actions import apply_actions
 from .storage import selected, stock_store
 from .reframe import begin_analysis
@@ -11,15 +11,16 @@ from .runtime import public_clip
 def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     clip = selected(pid, jid, index, request.state.user_id)
     info = details(jid, clip)
-    validate_edit(body.state, info['duration'])
+    validate_media_edit(body.state, info)
     stock=stock_store(pid,jid,index,request.state.user_id)
     stock.verify(body.state)
     results=[stock.entry(asset_id)['asset'] for asset_id in body.result_ids]
     if body.selected_segment and not any(s.id==body.selected_segment for s in body.state.broll):
         raise HTTPException(422, 'Selected B-roll segment does not exist.')
-    proposal = ai.request_edit({'broll_results': results, 'selected_broll_segment':body.selected_segment, 'clip': public_clip(clip), 'duration': info['duration'], 'state': body.state.model_dump(),
+    proposal = ai.request_edit({'broll_results': results, 'selected_broll_segment':body.selected_segment, 'media_kind': info.get('media_kind', 'video'), 'clip': public_clip(clip), 'duration': info['duration'], 'state': body.state.model_dump(),
                              'transcript': info['cues'][:300], 'history': [m.model_dump() for m in body.chat[-20:]], 'request': body.message})
     state = apply_actions(body.state, proposal.actions, info['duration'], len(info['cues']), stock, body.result_ids, body.selected_segment)
+    validate_media_edit(state, info)
     if state.reframe.enabled and not state.reframe.analysis_id:
         state.reframe.analysis_id=begin_analysis(pid,jid,index,request.state.user_id,state.reframe.selection,state.reframe.focus)['analysis_id']
     searches=[a for a in proposal.actions if a.type=='broll_search']
