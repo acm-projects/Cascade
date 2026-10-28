@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import app1
-from backend import editor_backend as editor
+from backend import editor
 
 
 class EditorTests(unittest.TestCase):
@@ -158,7 +158,7 @@ class EditorTests(unittest.TestCase):
     def test_detailed_caption_chat_action_keeps_effects_and_history(self):
         state=editor.Edit(start=0,end=3,effects=editor.Effects(contrast=1.2))
         style=state.captions.model_copy(update={'font':'Georgia','size':60,'opacity':.5})
-        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
+        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'message':'Make the text larger with Georgia and a background','state':state.model_dump()})
         self.assertEqual(result.status_code,200)
         self.assertEqual(result.json()['state']['captions']['size'],60)
@@ -213,17 +213,17 @@ class EditorTests(unittest.TestCase):
     def test_chat_validated_transaction_provider_failure_and_no_key(self):
         state=self.get()['draft']['state']
         proposal=editor.Proposal(message='Trimmed one second and made captions yellow.', actions=[editor.Action(type='trim_first',seconds=1),editor.Action(type='caption_color',color='#ffff00')])
-        with patch.object(editor,'request_edit',return_value=proposal) as ai:
+        with patch.object(editor.ai,'request_edit',return_value=proposal) as ai:
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'trim and yellow','chat':[]})
             self.assertEqual(result.status_code,200,result.text)
             self.assertEqual(result.json()['state']['start'],1)
             self.assertEqual(result.json()['state']['captions']['color'],'#ffff00')
             self.assertEqual(ai.call_args.args[0]['transcript'][0]['start'],.5)
-        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
+        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'bad'}).status_code,422)
-        with patch.dict(os.environ,{'OPENAI_API_KEY':''}):
+        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':'','CASCADE_EDITOR_PROVIDER':''}):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'}).status_code,503)
-        with patch.dict(os.environ,{'OPENAI_API_KEY':'mock'}), patch.object(editor.httpx,'post',side_effect=editor.httpx.ConnectError('private info')):
+        with patch.object(editor.ai,'structured_json',side_effect=RuntimeError('private info')):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'})
             self.assertEqual(result.status_code,502)
             self.assertNotIn('private info',result.text)
@@ -233,20 +233,18 @@ class EditorTests(unittest.TestCase):
     def test_ai_request_schema_and_response_validation(self):
         from types import SimpleNamespace
         valid = {'message':'Which part should I keep?', 'actions':[]}
-        mock_response = SimpleNamespace(status_code=200, json=lambda: {'status':'completed', 'output':[{'content':[{'type':'output_text','text':json.dumps(valid)}]}]})
-        with patch.dict(os.environ, {'OPENAI_API_KEY':'mock-key'}), patch.object(editor.httpx, 'post', return_value=mock_response) as post:
+        with patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data=valid)) as call:
             proposal = editor.request_edit({'request':'make it shorter'})
             self.assertEqual(proposal.actions, [])
-            payload = post.call_args.kwargs['json']
-            self.assertEqual(payload['text']['format']['type'], 'json_schema')
-            self.assertTrue(payload['text']['format']['strict'])
-            self.assertFalse(payload['store'])
-            self.assertNotIn('mock-key', json.dumps(payload))
-        invalid = SimpleNamespace(status_code=200, json=lambda: {'status':'completed', 'output':[{'content':[{'type':'output_text','text':'{"message":"ok","actions":[{"type":"shell"}]}'}]}]})
-        with patch.dict(os.environ, {'OPENAI_API_KEY':'mock-key'}), patch.object(editor.httpx, 'post', return_value=invalid):
+            schema=call.call_args.args[1]
+            self.assertFalse(schema['additionalProperties'])
+            self.assertEqual(schema['required'],list(schema['properties']))
+            self.assertIn('make it shorter',call.call_args.args[0])
+        with patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data={'message':'ok','actions':[{'type':'shell'}]})):
             with self.assertRaises(HTTPException) as error:
                 editor.request_edit({})
             self.assertEqual(error.exception.status_code,502)
+            self.assertEqual(error.exception.detail,'The editing AI returned an invalid response. Try rephrasing.')
         for actions, expected in [([editor.Action(type='keep_first',seconds=1)], (0,1)),
                                   ([editor.Action(type='trim_first',seconds=1), editor.Action(type='reset_trim')], (0,3))]:
             result=editor.apply_actions(editor.Edit(start=0,end=3),actions,3)

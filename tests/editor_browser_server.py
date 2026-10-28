@@ -15,7 +15,7 @@ import os
 os.environ['CASCADE_WARM_MODELS']='0'
 os.environ['CASCADE_METADATA_STORE']='local'
 from backend import integration
-from backend import editor_backend as editor
+from backend import editor
 from backend import broll
 
 if __name__ == '__main__':
@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
                 raise HTTPException(502,'Fixture provider unavailable. No edits applied.')
             return editor.Proposal(message='Edited',actions=[editor.Action(type='trim_first',seconds=2),editor.Action(type='caption_color',color='#ffff00'),editor.Action(type='caption_position',position='top'),editor.Action(type='caption_bold',enabled=True)])
-        editor.request_edit=ai
+        editor.ai.request_edit=ai
         @app1.app.post('/__editor_reset')
         def reset_fixture():
             import shutil

@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 from PIL import Image
-from backend import broll, editor_backend as editor, integration
+from backend import broll, editor, integration
 from tests import test_editor as editor_fixture
 
 
@@ -96,7 +96,7 @@ class BrollEditorTests(unittest.TestCase):
         return broll.Segment(id='e'*32,asset=asset,start=.5,duration=1,offset=1,**kw)
 
     def chat(self,state,actions,**extra):
-        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='model text',actions=actions)) as ai:
+        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='model text',actions=actions)) as ai:
             response=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'explicit fixture edit',**extra})
             return response,ai
 

@@ -132,7 +132,7 @@ class IntegrationTests(unittest.TestCase):
         job_id = self.upload()
         folder = app1.JOBS_DIR / job_id
         (folder / 'clip_1.mp4').write_bytes(b'real-file-fixture')
-        (folder / 'clip_1.vtt').write_text('WEBVTT\n\n')
+        (folder / 'clip_1.vtt').write_bytes(b'WEBVTT\n\n')
         clip = {'clip_url': f'/clips/{job_id}/clip_1.mp4', 'captions_url': f'/clips/{job_id}/clip_1.vtt', 'title': 'Clip', 'start': 0, 'end': 2}
         app1.save_json(folder / 'results.json', {'clips': [clip], 'research': {'comparison': 'fixture'}})
         app1.jobs.clear()
@@ -274,7 +274,7 @@ class IntegrationTests(unittest.TestCase):
                 's3_bucket': 'old-bucket', 'clip_s3_key': 'old-video', 'captions_s3_key': 'old-captions'}
         app1.save_json(folder / 'results.json', {'clips': [clip]})
         (folder / 'clip_1.mp4').write_bytes(b'local-copy')
-        (folder / 'clip_1.vtt').write_text('WEBVTT\n\n')
+        (folder / 'clip_1.vtt').write_bytes(b'WEBVTT\n\n')
         with patch.object(app1, 's3_client', side_effect=AssertionError('Use existing local copies')):
             response = self.client.get(clip['clip_url'], headers=self.headers)
             self.assertEqual(response.content, b'local-copy')

@@ -92,6 +92,35 @@ def start_worker(target, args):
     threading.Thread(target=target, args=args, daemon=True).start()
 
 
+def process_alive(pid):
+    """Query liveness without sending a Windows console-control signal."""
+    if pid == os.getpid():
+        return True
+    if os.name == 'nt':
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == 5  # Access denied does not prove death.
+        try:
+            code = wintypes.DWORD()
+            return not kernel.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value == 259
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
 SCOPES = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl'
 
 
@@ -502,9 +531,7 @@ def register(app, integration, selected, export, export_model):
         if not rec:
             return {'status': 'Ready'}
         if rec['status'] in ('Rendering', 'Uploading'):
-            try:
-                os.kill(rec.get('worker_pid', os.getpid()), 0)
-            except ProcessLookupError:
+            if not process_alive(rec.get('worker_pid', os.getpid())):
                 rec.update(status='Failed', error='The publishing worker was interrupted. Check YouTube Studio; duplicate upload retries are blocked.', upload_attempted=rec.get('upload_attempted', rec['status'] == 'Uploading'))
                 write('publish', key, rec)
         if rec['status'] in ('Processing', 'Scheduled', 'Verifying'):

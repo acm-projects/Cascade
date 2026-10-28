@@ -1515,8 +1515,8 @@ from backend import integration
 integration.register(app, sys.modules[__name__])
 
 # Editor-only routes use the existing ownership and JSON persistence adapters.
-from backend import editor_backend
-editor_backend.register(app, integration)
+from backend.main import include_editor
+include_editor(app)
 
 from backend import project_actions
 project_actions.register(app, sys.modules[__name__], integration)

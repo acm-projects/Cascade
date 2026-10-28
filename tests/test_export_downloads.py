@@ -7,7 +7,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from tests.test_editor import EditorTests
-from backend.editor_backend import resolution_filter
+from backend.editor import resolution_filter
 import app1
 
 

@@ -28,7 +28,7 @@ ff(['-i',str(root/'talk.mp4'),'-f','lavfi','-i','color=c=#18251e:s=960x540:r=25:
 print('Controlled test videos ready in',root)
 
 from backend.reframe import analyze,plan
-from backend.editor_backend import composition_geometry,Composition
+from backend.editor import composition_geometry,Composition
 for name,duration in [('conversation',12),('moving',6)]:
  analysis=analyze(root/(name+'.mp4'),{'width':960,'height':540,'duration':duration})
  motion=plan(analysis,composition_geometry(960,540,Composition(mode='fill',ratio='9:16')))

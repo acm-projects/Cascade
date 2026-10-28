@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
-from backend import editor_backend as editor
+from backend import editor
 from backend.agent.tools import ToolBox
 
 
@@ -44,7 +44,7 @@ class MainEditorIntegrationTests(unittest.TestCase):
                 self.assertIn('Caption 4',info['cues'][0]['text'])
                 original=(root/jid/'clip_5.mp4').read_bytes()
                 proposal=editor.Proposal(message='Trim and captions',actions=[editor.Action(type='trim_first',seconds=1),editor.Action(type='caption_color',color='#ffff00')])
-                with patch.object(editor,'request_edit',return_value=proposal):
+                with patch.object(editor.ai,'request_edit',return_value=proposal):
                     response=client.post(url+'/chat',headers=headers,json={'state':state,'message':'Trim first second and make captions yellow'})
                 self.assertEqual(response.status_code,200,response.text);state=response.json()['state']
                 self.assertEqual(state['start'],1);self.assertEqual(state['captions']['color'],'#ffff00')

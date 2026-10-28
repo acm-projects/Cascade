@@ -39,6 +39,10 @@ class SocialTests(unittest.TestCase):
         with social.schedule_lock('same-publish-request'):
             pass
 
+    def test_current_worker_liveness_never_sends_a_signal(self):
+        with patch.object(social.os, 'kill', side_effect=AssertionError('Do not signal the server')):
+            self.assertTrue(social.process_alive(os.getpid()))
+
     def test_owner_and_missing_account(self):
         self.assertEqual(self.client.get(self.base, headers={'x-user':'other'}).status_code,404)
         self.assertEqual(self.client.post(self.base,json={'title':'Title','edit':{},'submission_id':str(uuid.uuid4())}).status_code,409)

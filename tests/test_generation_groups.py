@@ -88,7 +88,7 @@ class GenerationGroupsTests(unittest.TestCase):
         self.assertEqual([g['order'] for g in groups],[1,2,3,4])
         # Existing editor metadata/persistence accepts clips across every group.
         from types import SimpleNamespace
-        with patch('backend.editor_backend.subprocess.run',return_value=SimpleNamespace(stdout=json.dumps({'format':{'duration':8},'streams':[{'width':640,'height':360}]}))):
+        with patch('backend.editor.validation.subprocess.run',return_value=SimpleNamespace(stdout=json.dumps({'format':{'duration':8},'streams':[{'width':640,'height':360}]}))):
             for jid,index in [(original,4),(ordinary,1),(child,0),(grand,0)]:
                 url=f'/api/projects/{self.project}/editor/{jid}/{index}'
                 response=self.client.get(url,headers=self.headers)
