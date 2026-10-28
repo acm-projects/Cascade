@@ -30,3 +30,8 @@ backend/clips/*.mp4
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Local HTTPS certificates, private keys and temporary proxy files
+.local-https/
+
+node_modules/

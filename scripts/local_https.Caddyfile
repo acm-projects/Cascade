@@ -1,0 +1,14 @@
+{
+	admin off
+	auto_https off
+	# No access log. Also omit error request dumps, which could include OAuth queries.
+	log default {
+		exclude http.log.error
+	}
+}
+
+https://localhost:8443 {
+	bind 127.0.0.1 ::1
+	tls {$CASCADE_LOCAL_TLS_DIR}/localhost.pem {$CASCADE_LOCAL_TLS_DIR}/localhost-key.pem
+	reverse_proxy 127.0.0.1:8000
+}

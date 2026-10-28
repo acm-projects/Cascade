@@ -209,3 +209,8 @@
 .schedule-cancel-confirm p {margin-top:0}
 .schedule-cancel-confirm button {margin:4px 6px 0 0}
 @media(max-width:380px){.schedule-popover{padding:12px}.schedule-calendar [role=row]{gap:2px}}
+
+.post-linkedin {margin:16px 0 12px}
+.post-linkedin[hidden] {display:none}
+.post-linkedin .post-linkedin-publish {padding:10px 16px;background:#b9e887;color:#13291b;border-color:#b9e887;font-weight:600}
+.post-linkedin a[hidden] {display:none}

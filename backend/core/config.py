@@ -54,6 +54,7 @@ FRONTEND_FILES = {
     "clip_navigation.css",
     "exports_C.js",
     "export_post.js",
+    "post_linkedin.js",
     "post_schedule.js",
     "exports_C.css",
     "editor_C.css",

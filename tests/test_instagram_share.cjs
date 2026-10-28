@@ -24,7 +24,7 @@ global.window={};require('../web/export_post.js');const sharing=window.CascadeIn
  // Manual flow reserves a tab before awaiting the renderer; blocked popups still download.
  let downloaded=0;const order=[],popup={opener:{},closed:false,location:{href:''},close(){this.closed=true;}};
  const fallback=await sharing.downloadAndOpen({open:url=>{assert.equal(url,'about:blank');order.push('open');return popup;},download:async()=>{order.push('render/download');downloaded++;assert.equal(popup.location.href,'');}});
- assert.deepEqual(order,['open','render/download']);assert.equal(popup.opener,null);assert.equal(popup.location.href,'https://www.instagram.com/');assert.ok(fallback.ready);assert.match(fallback.message,/select your downloaded video/);
+ assert.deepEqual(order,['open','render/download']);assert.equal(popup.opener,null);assert.equal(popup.location.href,'https://www.instagram.com/');assert.ok(fallback.ready);assert.match(fallback.message,/Click Create and select your downloaded clip\./);
  const blocked=await sharing.downloadAndOpen({open:()=>null,download:async()=>downloaded++});assert.equal(downloaded,2);assert.match(blocked.message,/popup was blocked/);
  const throwing=await sharing.downloadAndOpen({open:()=>{throw Error('blocked');},download:async()=>downloaded++});assert.equal(downloaded,3);assert.ok(throwing.ready);
  popup.closed=false;popup.location.href='';await assert.rejects(sharing.downloadAndOpen({open:()=>popup,download:async()=>{throw Error('Render failed');}}),/Render failed/);assert.ok(popup.closed);assert.equal(popup.location.href,'');

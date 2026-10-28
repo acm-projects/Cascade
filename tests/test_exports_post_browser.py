@@ -43,7 +43,7 @@ async def main():
   # The form is manual, and destination settings stay scoped to their platform.
   assert await c.js("!document.querySelector('#export-youtube')&&document.querySelectorAll('.export-actions button').length===2")
   assert await c.js("!['Generate caption','Rewrite','Suggest tags','Copy post text'].some(text=>[...document.querySelectorAll('.post-controls button')].some(b=>b.textContent===text))")
-  assert await c.js("document.querySelectorAll('.post-platform').length===4&&document.querySelector('[data-destination=linkedin]').disabled&&document.querySelector('.post-timing button').getAttribute('aria-pressed')==='true'&&!document.querySelectorAll('.post-timing button')[1].disabled&&document.querySelector('.post-timing').hidden")
+  assert await c.js("document.querySelectorAll('.post-platform').length===4&&!document.querySelector('[data-destination=linkedin]').disabled&&document.querySelector('.post-timing button').getAttribute('aria-pressed')==='true'&&!document.querySelectorAll('.post-timing button')[1].disabled&&document.querySelector('.post-timing').hidden")
   await c.js("document.querySelector('[data-destination=youtube]').click()")
   await c.until("document.querySelector('.post-account').textContent.includes('Connect your YouTube channel.')")
   assert await c.js("!document.querySelector('.post-account').hidden&&document.querySelector('.post-field select').value==='private'&&document.querySelector('.post-destination>button').disabled")
@@ -70,7 +70,7 @@ async def main():
   assert downloads()!=before,'Instagram MP4 download missing'
   # Successful handoff opens Instagram after the download starts.
   await c.js("window.open=window.nativePostOpen;document.querySelector('.post-destination>button').click()")
-  await c.until("document.querySelector('.post-destination>p').textContent.includes('MP4 download started. On Instagram')")
+  await c.until("document.querySelector('.post-destination>p').textContent.includes('MP4 download started. Click Create')")
   for _ in range(100):
    targets=(await c.call('Target.getTargets'))['targetInfos']
    if any(t['url'].startswith('https://www.instagram.com/') for t in targets):break

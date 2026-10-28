@@ -102,7 +102,8 @@ async def main():
   await c.js("document.querySelector('#export-next').click()")
   await c.until("!document.querySelector('.post-section').hidden&&document.querySelector('#export-position').textContent==='2 of 2'")
   await c.js("document.querySelector('[data-destination=instagram]').click()")
-  assert await c.js("document.querySelector('.post-timing').hidden&&document.querySelector('.post-schedule').hidden&&document.querySelector('.post-destination>button').textContent==='Download & Open Instagram'")
+  await c.until("['Download & Open Instagram','Share video…'].includes(document.querySelector('.post-destination>button').textContent)")
+  assert await c.js("document.querySelector('.post-timing').hidden&&document.querySelector('.post-schedule').hidden")
   await c.js("document.querySelector('[data-destination=download]').click()")
   assert await c.js("document.querySelector('.post-timing').hidden&&document.querySelector('.post-destination>button').textContent==='Download MP4'")
   assert not c.errors,c.errors

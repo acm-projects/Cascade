@@ -926,6 +926,8 @@ def register(app, integration):
 
     from backend import social_youtube
     social_youtube.register(app, integration, selected, export, ExportInput)
+    from backend import social_linkedin
+    social_linkedin.register(app, integration, selected, export, ExportInput)
 
 def make_ass(cues, style, width, height):
     def color(hex_color, opacity=1):

@@ -16,7 +16,7 @@ window.CascadeInstagramShare={
     let popup=null;try{popup=open('about:blank');if(popup)popup.opener=null;}catch{}
     try{
       await download();
-      if(popup&&!popup.closed){popup.location.href='https://www.instagram.com/';return {ready:true,message:'MP4 download started. On Instagram, click Create and select your downloaded video.'};}
+      if(popup&&!popup.closed){popup.location.href='https://www.instagram.com/';return {ready:true,message:'MP4 download started. Click Create and select your downloaded clip.'};}
       return {ready:true,message:'MP4 download started. Instagram popup was blocked or closed. Allow popups and try again, or use Open Instagram below.'};
     }catch(error){popup?.close();throw error;}
   },
@@ -81,9 +81,9 @@ window.CascadePostPreparation=class {
     const icons={download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',youtube:'<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 6 3-6 3z"/>',instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17 7h.01"/>',linkedin:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 10v7m0-10h.01M11 17v-7m0 3c0-4 6-4 6 0v4"/>'};
     rec.deliveryStatus ||= {};let destination=rec.destination||'download';const platformButtons=new Map();
     for(const [value,label] of [['download','Download'],['youtube','YouTube'],['instagram','Instagram'],['linkedin','LinkedIn']]){
-      const b=button('',()=>{destination=value;rec.destination=value;updateAction();});b.className='post-platform';b.dataset.destination=value;b.setAttribute('aria-label',label+(value==='linkedin'?' · Coming soon':''));
+      const b=button('',()=>{destination=value;rec.destination=value;updateAction();});b.className='post-platform';b.dataset.destination=value;b.setAttribute('aria-label',label);
       const icon=el('span','post-platform-icon');icon.setAttribute('aria-hidden','true');icon.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+icons[value]+'</svg>';
-      b.append(icon,el('span','',label));if(value==='linkedin'){b.disabled=true;b.append(el('small','','Coming soon'));}platformButtons.set(value,b);platforms.append(b);
+      b.append(icon,el('span','',label));platformButtons.set(value,b);platforms.append(b);
     }
     rec.timing ||= 'now';rec.scheduleDraft ||= {};let editingSchedule=false;
     const timing=el('div','post-timing');timing.setAttribute('role','group');timing.setAttribute('aria-label','YouTube timing');
@@ -129,17 +129,19 @@ window.CascadePostPreparation=class {
     const keep=button('Keep schedule',()=>{cancelPrompt.hidden=true;});
     const confirmCancel=button('Cancel & keep Private',async()=>{rec.youtubeRevision=(rec.youtubeRevision||0)+1;clearTimeout(this.pollTimer);rec.localBusy=true;updateAction();try{const data=await this.apiJSON(this.url(row)+'/publish/youtube/schedule',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({schedule:null,revision:rec.youtube.revision||0})});cancelPrompt.hidden=true;editingSchedule=false;applyStatus(data);if(data.status==='Verifying')rec.schedulePoll?.();}catch(error){rec.youtube={...rec.youtube,error:error.message};}finally{rec.localBusy=false;rec.refreshUI?.();}});
     cancelPrompt.append(keep,confirmCancel);management.append(change,cancel,cancelPrompt);destinationSection.append(management);
+    const linkedinPanel=new window.CascadeLinkedInPanel({container:destinationSection,apiJSON:this.apiJSON,url:this.url,payload:this.payload,row,record:rec,projectId:this.projectId,notify:()=>rec.refreshUI?.(),isCurrent});this.linkedinPanel=linkedinPanel;
     const updateAction=()=>{
       const youtube=destination==='youtube',scheduled=rec.timing==='schedule',data=youtube?rec.youtube:null,hasVideo=!!data?.video_id;
       const needsReconnect=/reconnect|authorization expired|revoked/i.test(data?.error||'');
       const busy=!!rec.localBusy||(youtube&&['Rendering','Uploading','Processing','Verifying'].includes(data?.status));
-      for(const [value,b] of platformButtons){b.setAttribute('aria-pressed',String(value===destination));b.disabled=value==='linkedin'||!!rec.localBusy||!!rec.loadFailed;}
+      for(const [value,b] of platformButtons){b.setAttribute('aria-pressed',String(value===destination));b.disabled=!!rec.localBusy||!!rec.loadFailed;}
       timing.hidden=!youtube;now.setAttribute('aria-pressed',String(!scheduled));later.setAttribute('aria-pressed',String(scheduled));now.disabled=later.disabled=busy;
       scheduleWrap.hidden=!youtube||!scheduled||(hasVideo&&!editingSchedule);picker.setDisabled(busy);scheduleNote.textContent=hasVideo?'Your existing upload becomes public on YouTube at the selected time.':'Your video uploads now and becomes public on YouTube at the selected time.';scheduleHelp.textContent=hasVideo?'Changing the schedule keeps the uploaded video and post text. Choose a time at least 30 minutes from now.':'Uploads stay Private until processing finishes and YouTube confirms the schedule. Allow at least 30 minutes; long videos may need more time.';
       account.hidden=!youtube;connect.hidden=connected&&!needsReconnect&&(!scheduled||canSchedule);connect.textContent=needsReconnect?'Reconnect YouTube':connected&&scheduled&&!canSchedule?'Reconnect for scheduling':'Connect YouTube';privacy.parentElement.hidden=!youtube||scheduled;privacy.disabled=busy||!!rec.loadFailed;instagram.hidden=destination!=='instagram';
-      manualInstagram.hidden=!rec.shareFile;manualInstagram.disabled=busy||!!rec.loadFailed;instagramNote.textContent=rec.shareFile?'Choose Instagram in your device’s share sheet and finish posting there. Instagram may not appear or retain the caption; copy it if needed.':'On Instagram, click Create and select your downloaded video.';
+      manualInstagram.hidden=!rec.shareFile;manualInstagram.disabled=busy||!!rec.loadFailed;instagramNote.textContent=rec.shareFile?'Choose Instagram in your device’s share sheet, then Reels if offered. Finish posting in Instagram. The caption may not carry over; use Copy caption & hashtags.':'Click Create and select your downloaded clip.';
       submit.textContent=youtube?(scheduled?(hasVideo?'Save schedule':'Schedule on YouTube'):'Publish'):destination==='instagram'?(rec.shareFile?'Share video…':shareAPI.available()&&!rec.shareChecked?'Preparing video…':'Download & Open Instagram'):'Download MP4';
-      submit.hidden=youtube&&hasVideo&&!editingSchedule;
+      linkedinPanel.setActive(destination==='linkedin');publishStatus.hidden=destination==='linkedin';
+      submit.hidden=destination==='linkedin'||(youtube&&hasVideo&&!editingSchedule);
       submit.disabled=busy||!!rec.loadFailed||(destination==='instagram'&&shareAPI.available()&&!rec.shareChecked)||(youtube&&(!connected||(data?.upload_attempted&&!hasVideo)||(scheduled&&(!canSchedule||!picker.valid))||(!scheduled&&(hasVideo||data?.status==='Published'))));
       const confirmed=data?.status==='Scheduled'&&data.schedule;
       publishStatus.textContent=youtube?(confirmed?'Scheduled for '+window.CascadeScheduleTime.format(data.schedule)+'.':data?.status==='Ready'?'':data?.status||'')+(data?.error?': '+data.error:'')+(data?.message?' '+data.message:''):(rec.deliveryStatus[destination]||'');
@@ -182,6 +184,6 @@ window.CascadePostPreparation=class {
     if(rec.loadFailed)this.section.querySelectorAll('button').forEach(b=>{if(![header.lastChild,this.retry].includes(b))b.disabled=true;});
     this.section.hidden=false;this.section.classList.remove('post-enter');void this.section.offsetWidth;this.section.classList.add('post-enter');heading.focus({preventScroll:true});loadPreview();requestAnimationFrame(()=>{if(scroll&&this.openToken===token)this.section.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});});
   }
-  close(focus=true){clearTimeout(this.pollTimer);this.openToken=null;if(!this.current)return;clearTimeout(this.current.timer);if(this.current.saved<this.current.revision)this.save(this.current);this.section.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});this.section.hidden=true;this.anchor?.setAttribute('aria-expanded','false');this.current=null;if(focus)this.anchor?.focus({preventScroll:true});}
+  close(focus=true){this.linkedinPanel?.destroy();clearTimeout(this.pollTimer);this.openToken=null;if(!this.current)return;clearTimeout(this.current.timer);if(this.current.saved<this.current.revision)this.save(this.current);this.section.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});this.section.hidden=true;this.anchor?.setAttribute('aria-expanded','false');this.current=null;if(focus)this.anchor?.focus({preventScroll:true});}
   destroy(){this.close(false);document.removeEventListener('play',this.playHandler,true);this.section.remove();for(const rec of this.records.values())if(rec.row.coverURL)URL.revokeObjectURL(rec.row.coverURL);}
 };
