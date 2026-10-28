@@ -8,10 +8,12 @@ import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
-import { clipKey, downloadBlob, fileSafe, flattenClips } from "../features/editor/clips";
+import { clipKey, flattenClips } from "../features/editor/clips";
 import useClipDraft from "../features/editor/useClipDraft";
-import useAutoFraming, { needsFraming } from "../features/editor/useAutoFraming";
+import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
+import useDownloads from "../features/export/useDownloads";
+import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
 
@@ -21,13 +23,13 @@ function ExportPage() {
   const navigate = useNavigate();
   const { projectId } = useParams();
   const api = useApi();
-  const toast = useToast();
   const [clips, setClips] = useState(null);
   const [error, setError] = useState(null);
   const [projectName, setProjectName] = useState(null);
   const [currentKey, setCurrentKey] = useState(null);
   const [inZip, setInZip] = useState([]);       // clip keys to put in the ZIP
-  const [zipping, setZipping] = useState(false);
+  const [settings, setSettings] = useState({resolution: "original", includeCaptions: true});
+  const downloads = useDownloads(api, projectId, projectName, settings);
 
   useEffect(() => {
     let active = true;
@@ -48,29 +50,7 @@ function ExportPage() {
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
 
-  // Render every checked clip with its saved edits, as one ZIP
-  async function downloadZip() {
-    const chosen = clips.filter((clip) => inZip.includes(clipKey(clip)));
-    setZipping(true);
-    try {
-      const drafts = await Promise.all(chosen.map((clip) => api.getDraft(projectId, clip.job_id, clip.clip_index)));
-      // Fill (crop) clips need their framing analysis first: say which ones, instead of a vague server error
-      const waiting = chosen.filter((_, i) => needsFraming(drafts[i].draft.state, drafts[i]) && !drafts[i].draft.state.reframe.analysis_id);
-      if (waiting.length) {
-        const names = waiting.map((clip) => `"${clip.title || "Clip"}"`).join(", ");
-        toast.show(`${names} uses Fill (crop) and its automatic framing isn't ready. Open it here first, or switch it to Fit in the Editor.`, "error");
-        return;
-      }
-      const zip = await api.exportSelected(projectId,
-        chosen.map((clip, i) => ({ job_id: clip.job_id, clip_index: clip.clip_index, edit: drafts[i].draft.state })));
-      downloadBlob(zip, `${fileSafe(projectName, "cascade")}-clips.zip`);
-      toast.show(`Downloaded ${chosen.length} clip${chosen.length === 1 ? "" : "s"}`);
-    } catch (err) {
-      toast.show(`Export failed: ${err.message}`, "error");
-    } finally {
-      setZipping(false);
-    }
-  }
+  const downloadZip = () => downloads.downloadSelected(clips.filter(clip => inZip.includes(clipKey(clip))));
 
   const toggleZip = (key) => setInZip((keys) => (keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]));
 
@@ -90,7 +70,9 @@ function ExportPage() {
       {message ? (
         <div className="export-empty">{message}</div>
       ) : (
-        <ClipExport key={currentKey} projectId={projectId} clip={current}
+        <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads}
+          clipNumber={clips.indexOf(current)+1}
+          settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length}/>}
           picker={
             <div className="export-clip-tabs" role="tablist" aria-label="Picked clips">
               {clips.map((clip, index) => (
@@ -113,8 +95,8 @@ function ExportPage() {
                   </label>
                 ))}
               </div>
-              <Button variant="primary" size="sm" onClick={downloadZip} disabled={zipping || !inZip.length}>
-                {zipping ? <><Spinner size={14} label="Rendering" /> Rendering {inZip.length}…</> : `⬇ Download ${inZip.length} as ZIP`}
+              <Button variant="primary" size="sm" onClick={downloadZip} disabled={downloads.working || !inZip.length}>
+                {downloads.working ? <><Spinner size={14} label="Rendering" /> Rendering {inZip.length}…</> : `⬇ Download ${inZip.length} as ZIP`}
               </Button>
             </div>
           }
@@ -126,28 +108,17 @@ function ExportPage() {
 }
 
 // Preview, MP4 download and posting for one clip. key={clip key}, so it follows the chosen clip.
-function ClipExport({ projectId, clip, picker, zip, onEdit }) {
-  const api = useApi();
+function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumber, settingsPanel }) {
   const toast = useToast();
   const { info, state, error, patch } = useClipDraft(projectId, clip); // only patch()ed by framing below
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
   const framing = useAutoFraming(projectId, clip, state, info, patch);
-  const [rendering, setRendering] = useState(false);
+  const rendering = downloads.working;
   const [rendered, setRendered] = useState(null); // the last MP4, so it can be shared
   const [post, setPost] = useState(null);
-  const fileName = `${fileSafe(post?.name || clip.title)}.mp4`;
-
   async function downloadMp4() {
-    setRendering(true);
-    try {
-      const video = await api.exportClip(projectId, clip.job_id, clip.clip_index, state);
-      downloadBlob(video, fileName);
-      setRendered(new File([video], fileName, { type: "video/mp4" }));
-    } catch (err) {
-      toast.show(`Export failed: ${err.message}`, "error");
-    } finally {
-      setRendering(false);
-    }
+    const result = await downloads.downloadOne(clip, clipNumber);
+    if(result) setRendered(new File([result.blob], result.filename, {type: "video/mp4"}));
   }
 
   // Instagram/TikTok/etc. have no upload API for us, so hand the file to the phone/computer's share sheet
@@ -173,6 +144,7 @@ function ClipExport({ projectId, clip, picker, zip, onEdit }) {
 
       <section className="export-settings">
         <h2 className="export-title">Export</h2>
+        {settingsPanel}
         <div className="export-section">
           <h3 className="export-section-title">This clip</h3>
           {state && (

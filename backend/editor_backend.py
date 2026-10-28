@@ -327,7 +327,17 @@ class CaptionImage(BaseModel):
 
 
 class ExportInput(Edit):
+    resolution: Literal['original', '1080p', '720p'] = 'original'
     overlays: list[CaptionImage] | None = Field(default=None, max_length=1000)
+
+
+def resolution_filter(width, height, resolution):
+    """Cap the composed short side, preserving aspect ratio without upscaling."""
+    if resolution == 'original':
+        return 'null'
+    factor = min(1, int(resolution[:-1]) / min(width, height))
+    w, h = max(2, int(width * factor) // 2 * 2), max(2, int(height * factor) // 2 * 2)
+    return f'scale={w}:{h}:flags=lanczos,setsar=1'
 
 
 class BatchEntry(BaseModel):
@@ -549,6 +559,8 @@ def register(app, integration):
 
     from backend import post_metadata
     post_metadata.register(app, integration, selected, details)
+    from backend.routers import social
+    social.register(app, integration, selected, details, draft_path)
 
     def stock_store(pid, jid, index, user):
         return stocklib.Store(draft_path(pid,jid,index,user).parent/'stock'/(jid+'-'+str(index)))
@@ -914,6 +926,9 @@ def register(app, integration):
                 graph+=f';[{label}]ass=captions.ass[out]'
             else:
                 graph+=f';[{label}]null[out]'
+            # Resize the completed composition, including captions and B-roll.
+            graph = graph.replace('[out]', '[composed]')
+            graph += f";[composed]{resolution_filter(g['width'], g['height'], body.resolution)}[out]"
             # Avoid OS argument limits for long crop trajectories. FFmpeg 7+ reads
             # option arguments from files; older releases use filter_complex_script.
             graph_args=['-filter_complex',graph]
