@@ -21,13 +21,13 @@ export function getStudio(token, projectId) {
 }
 
 /**
- * POST .../studio/sessions   body: { name (1-80 chars), source_job? }
- * Reuse the current session's source_job so the new session works on the same video. Max 30 sessions.
+ * POST .../studio/sessions   body: { name (1-80 chars) }
+ * Each new session starts empty and accepts its own uploaded video. Max 30 sessions.
  * @returns {Promise<Session>} status 201
  */
-export function createStudioSession(token, projectId, name, sourceJob = null) {
+export function createStudioSession(token, projectId, name) {
   return apiFetch(`${studioPath(projectId)}/sessions`, {
-    token, method: "POST", body: { name, source_job: sourceJob },
+    token, method: "POST", body: { name },
   });
 }
 

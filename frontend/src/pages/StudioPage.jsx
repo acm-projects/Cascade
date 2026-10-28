@@ -64,7 +64,7 @@ function StudioPage() {
       return;
     }
     if (session?.source_job) {
-      toast.show("This session already has a video. Start a new project for a different one.", "error");
+      toast.show("This session already has a video. Start a new session for a different one.", "error");
       return;
     }
     setPendingFile(file);
@@ -178,13 +178,15 @@ function StudioPage() {
 
   // ---------- Sessions ----------
   function switchSession(id) {
+    setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
     navigate(`/projects/${projectId}/studio/${id}`);
     api.saveStudioState(projectId, id, {}).catch(() => {}); // remember it as the active one
   }
 
   async function createSession(name) {
     try {
-      const created = await api.createStudioSession(projectId, name, session?.source_job ?? null);
+      const created = await api.createStudioSession(projectId, name);
+      setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
       await refresh();
       navigate(`/projects/${projectId}/studio/${created.id}`);
     } catch (err) {

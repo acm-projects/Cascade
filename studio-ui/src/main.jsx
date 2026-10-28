@@ -188,7 +188,7 @@ function Studio({project,apiJSON,apiFetch}) {
   const createSession=async event=>{
     event.preventDefault();setBusy(true);setError('');
     try {await queue.current;const created=await apiJSON(studioURL+'/sessions',JSONOptions('POST',{
-      name:sessionName.trim(),source_job:session?.source_job||null}));
+      name:sessionName.trim()}));
       setDocument(d=>({...d,sessions:[...d.sessions,created]}));setSessionId(created.id);setNewSession(false);setSessionName('');}
     catch(e){fail(e);}finally{setBusy(false);}
   };

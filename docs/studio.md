@@ -17,7 +17,8 @@ It needs no separate frontend server, CDN scripts, or browser-exposed API keys.
    from the uploaded source can match their humor, action, tone and pacing.
 4. **Discuss clips** asks the configured model about the selected context and saves
    the conversation without queueing generation. It does not claim to edit media.
-5. Create named sessions to explore different moods with the same source. Sessions
+5. Create named sessions with separate source videos. Every new session starts
+   with an empty upload slot, even if an older client sends the previous source. Sessions
    have separate requests, chat, references, node positions and viewport state.
 6. Check all clips you want from any generation/session, then choose
    **Continue to Editor**. The existing editor shows just the checked clips when

@@ -23,6 +23,7 @@ class ClipRef(BaseModel):
 
 class SessionInput(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    # Accepted for old clients; new sessions never inherit a source.
     source_job: str | None = None
 
 
@@ -114,6 +115,11 @@ def ensure(host, integration, pid, user):
     if not studio['sessions']:
         studio['sessions'].append(_session('Main session'))
         changed = True
+    for session in studio['sessions']:
+        # Repair empty sessions created by older clients that inherited a video.
+        if not session['job_ids'] and session.get('source_job'):
+            session['source_job'] = None
+            changed = True
     if not studio.get('active_session_id'):
         studio['active_session_id'] = studio['sessions'][0]['id']
         changed = True
@@ -249,8 +255,7 @@ def register(app, host, integration):
             name = body.name.strip()
             if not name:
                 raise HTTPException(400, 'Enter a session name.')
-            source = integration.original_source(pid, body.source_job, user).parent.name if body.source_job else None
-            session = _session(name, source)
+            session = _session(name)
             project['studio']['sessions'].append(session)
             project['studio']['active_session_id'] = session['id']
             save(host, integration, project, user)
@@ -329,9 +334,9 @@ def register(app, host, integration):
                 raise HTTPException(400, 'Describe the clips you want.')
             context = json.dumps({'session_id': sid, 'generation': body.model_dump()})
             if session['source_job']:
+                if video is not None:
+                    raise HTTPException(400, 'This session already has generated clips. Start a new session to upload a different source video.')
                 source = integration.original_source(pid, session['source_job'], user)
-                if video:
-                    video.file.close()
                 video = UploadFile(source.open('rb'), filename='saved-source.video')
             elif video is None:
                 raise HTTPException(400, 'Upload a source video first.')

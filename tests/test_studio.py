@@ -82,12 +82,12 @@ class StudioTests(unittest.TestCase):
         self.assertIn(jid, state['sessions'][0]['job_ids'])
         self.assertEqual(state['sessions'][0]['messages'][-1]['text'], payload['prompt'])
 
-    def test_session_reuses_source_and_rejects_references_from_other_sessions(self):
+    def test_new_session_ignores_inherited_source_and_rejects_other_session_references(self):
         created = self.client.post(self.base + '/sessions', headers=self.headers,
                                    json={'name': 'Emotional', 'source_job': self.jid})
         self.assertEqual(created.status_code, 201)
         new = created.json()
-        self.assertEqual(new['source_job'], self.jid)
+        self.assertIsNone(new['source_job'])
         self.assertEqual(new['job_ids'], [])
         response = self.client.post(self.base + '/sessions/' + new['id'] + '/generate', headers=self.headers,
             json={'prompt': 'More like that', 'references': [self.ref()], 'request_id': 'bad-ref'})
@@ -106,6 +106,44 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(len(state['sessions']), 1)
         self.assertEqual(state['sessions'][0]['source_job'], response.json()['job_id'])
         self.assertEqual(state['sessions'][0]['job_ids'], [response.json()['job_id']])
+
+    def test_new_session_accepts_different_source_and_preserves_previous_session(self):
+        original = self.client.get(self.base, headers=self.headers).json()['sessions'][0]
+        new = self.client.post(self.base+'/sessions', headers=self.headers,
+            json={'name':'Interview', 'source_job':self.jid}).json()
+        self.assertIsNone(new['source_job'])
+        self.assertEqual(new['job_ids'], [])
+        self.assertEqual(new['references'], [])
+        response = self.client.post(self.base+'/sessions/'+new['id']+'/upload', headers=self.headers,
+            data={'prompt':'Find insightful moments', 'request_id':'different-source'},
+            files={'video':('interview.mp4', b'different-interview-footage', 'video/mp4')})
+        self.assertEqual(response.status_code, 202, response.text)
+        jid = response.json()['job_id']
+        self.assertEqual((app1.JOBS_DIR/jid/'source.video').read_bytes(), b'different-interview-footage')
+        state = self.client.get(self.base, headers=self.headers).json()
+        by_id = {session['id']:session for session in state['sessions']}
+        self.assertEqual(len(by_id), 2)
+        self.assertEqual(by_id[new['id']]['source_job'], jid)
+        self.assertEqual(by_id[new['id']]['job_ids'], [jid])
+        self.assertEqual(by_id[self.sid], original)
+
+    def test_old_empty_inherited_sessions_become_uploadable(self):
+        from backend import integration
+        path = integration.project_dir('studio-user')/(self.pid+'.json')
+        project = app1.load_json(path)
+        stale = studio._session('Old inherited session', self.jid)
+        project['studio']['sessions'].append(stale)
+        app1.save_json(path, project)
+        state = self.client.get(self.base, headers=self.headers).json()
+        self.assertIsNone(next(s for s in state['sessions'] if s['id']==stale['id'])['source_job'])
+        self.assertEqual(next(s for s in state['sessions'] if s['id']==self.sid)['source_job'], self.jid)
+
+    def test_upload_never_silently_discards_new_video_for_an_existing_source(self):
+        response = self.client.post(self.base+'/sessions/'+self.sid+'/upload', headers=self.headers,
+            data={'prompt':'Find insights', 'request_id':'wrong-source'},
+            files={'video':('new.mp4', b'new-footage', 'video/mp4')})
+        self.assertEqual(response.status_code, 400)
+        app1.worker.submit.assert_not_called()
 
     def test_editor_handoff_limits_listing_to_checked_clips(self):
         selected = [self.ref(0), self.ref(3)]
@@ -274,8 +312,9 @@ class StudioTests(unittest.TestCase):
     def test_shared_selection_keeps_other_sessions_out_of_ai_context(self):
         another = self.client.post(self.base + '/sessions', headers=self.headers,
                                   json={'name': 'Other', 'source_job': self.jid}).json()
-        response = self.client.post(self.base + '/sessions/' + another['id'] + '/generate', headers=self.headers,
-            json={'prompt': 'A different mood', 'request_id': 'other-wave'})
+        response = self.client.post(self.base + '/sessions/' + another['id'] + '/upload', headers=self.headers,
+            data={'prompt': 'A different mood', 'request_id': 'other-wave'},
+            files={'video': ('other.mp4', b'other-source-video', 'video/mp4')})
         jid = response.json()['job_id']
         app1.save_json(app1.JOBS_DIR / jid / 'results.json', {'clips': [
             {'start': 50., 'end': 55., 'title': 'Other session clip', 'clip_url': f'/clips/{jid}/clip_1.mp4'}]})
