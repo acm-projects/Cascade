@@ -13,6 +13,7 @@
   min-height: 0;
   display: grid;
   place-items: center;
+  padding-top: 16px; /* a little breathing room above the video */
 }
 
 /* Its width/height are set in ClipPlayer.jsx: the biggest frame of the chosen ratio that fits */

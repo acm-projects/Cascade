@@ -10,6 +10,7 @@ const HISTORY_LIMIT = 50;
 //   state   - the edit: { start, end, captions, composition, effects, reframe, texts, broll }
 //   change(next) - set a new state (undoable); next can be a function of the current state
 //   patch(next)  - same, but not an undo step
+//   recordUndo(before) - after live patch() updates (a drag), add ONE undo step back to `before`
 //   undo / redo / canUndo / canRedo
 //   chat, setChat - the editor chat for this clip (saved with the draft)
 //   saveStatus - "saved" | "saving" | "error"
@@ -72,6 +73,15 @@ export default function useClipDraft(projectId, clip) {
     }));
   }, []);
 
+  // After a drag that used patch() for live updates, make the whole drag ONE undo step:
+  // `before` is the state from when the drag started.
+  const recordUndo = useCallback((before) => {
+    setHistory(({ past, present, future }) =>
+      JSON.stringify(before) === JSON.stringify(present)
+        ? { past, present, future }
+        : { past: [...past, before].slice(-HISTORY_LIMIT), present, future: [] });
+  }, []);
+
   const undo = useCallback(() => {
     setHistory(({ past, present, future }) =>
       past.length ? { past: past.slice(0, -1), present: past[past.length - 1], future: [present, ...future] } : { past, present, future });
@@ -83,7 +93,7 @@ export default function useClipDraft(projectId, clip) {
   }, []);
 
   return {
-    info, error, state, change, patch, undo, redo,
+    info, error, state, change, patch, recordUndo, undo, redo,
     canUndo: history.past.length > 0, canRedo: history.future.length > 0,
     chat, setChat, saveStatus,
   };

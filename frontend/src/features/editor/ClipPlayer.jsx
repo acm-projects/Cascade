@@ -17,7 +17,9 @@ function withOpacity(hex, opacity) {
 // Live preview of one clip with its edits: plays only the trimmed part (looping), in the chosen
 // aspect-ratio frame, with the captions drawn on top. The real render happens on Export.
 //   clip  - { job_id, clip_index } ; info - { duration, width, height, cues } ; state - the draft
-function ClipPlayer({ projectId, clip, info, state }) {
+//   controlRef - optional useRef() from the page: gets { seek(t), getTime(), isReady() } so the timeline
+//                can move the playhead and jump the video
+function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -52,6 +54,22 @@ function ClipPlayer({ projectId, clip, info, state }) {
     observer.observe(element);
     return () => observer.disconnect();
   }, [url]);
+
+  // The "remote control" the timeline uses
+  useEffect(() => {
+    if (!controlRef) return;
+    controlRef.current = {
+      seek: (t) => {
+        if (videoRef.current) videoRef.current.currentTime = t;
+        setTime(t);
+      },
+      getTime: () => videoRef.current?.currentTime ?? 0,
+      isReady: () => Boolean(videoRef.current),
+    };
+    return () => {
+      controlRef.current = null;
+    };
+  }, [controlRef]);
 
   // Stay inside the trim: jump back to the start when the end is reached
   function handleTimeUpdate() {
