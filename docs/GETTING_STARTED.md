@@ -44,5 +44,5 @@ Never hard-code `http://127.0.0.1:8000` in `frontend/src`. The browser treats po
 
 - **`/api/...` returns the React page's HTML.** Vite isn't proxying. Restart `npm run dev` after any change to `vite.config.js`, and make sure it was started from `frontend/`.
 - **`403 Origin not allowed`.** The page's origin is missing from the allowed list. The default list in `authorized_parties()` (`app1.py`) includes ports 8000 and 5173. If your `.env` sets `CLERK_AUTHORIZED_PARTIES`, it replaces that default, so add `http://localhost:5173,http://127.0.0.1:5173` there. If Vite started on another port (for example 5174, because 5173 was busy), stop the other server or use that port's origin.
-- **`401 Please sign in first`.** The proxy works and the backend wants a signed-in user. Sign in, or use the dev login once it exists (CAS-8).
+- **`401 Please sign in first`.** The proxy works and the backend wants a signed-in user. Sign in, or set `CASCADE_DEV_AUTH=1` in your local `.env` and restart the backend. Credential-free loopback requests then use `dev-user`; existing credentials are still checked. `/api/auth-config` reports `dev_auth` for frontend support. Never enable this in production.
 - **`502` or `ECONNREFUSED` in the Vite terminal.** The backend isn't running on port 8000.

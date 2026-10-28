@@ -70,6 +70,11 @@ def warm_models():
 
 @app.on_event("startup")
 def start_model_warmup():
+    if DEV_AUTH:
+        try:
+            print("⚠️  CASCADE_DEV_AUTH is ON – never use this in production", flush=True)
+        except UnicodeEncodeError:  # Windows consoles may use a legacy encoding.
+            print("WARNING: CASCADE_DEV_AUTH is ON - never use this in production", flush=True)
     # CASCADE_WARM_MODELS=0 skips it (the models hold roughly 700 MB of RAM once loaded).
     if os.getenv("CASCADE_WARM_MODELS", "1") != "0":
         threading.Thread(target=warm_models, name="model-warmup", daemon=True).start()
@@ -86,6 +91,21 @@ from backend.core.config import (
     PRIVATE_CLIP_FIELDS,
     CLERK_HINTS,
 )
+
+DEV_AUTH = os.environ.get("CASCADE_DEV_AUTH") == "1"
+DEV_USER_ID = "dev-user"
+LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def is_dev_auth_request(request: Request):
+    """Only credential-free requests from a local peer may use dev identity."""
+    return (
+        DEV_AUTH
+        and request.client is not None
+        and request.client.host in LOCAL_HOSTS
+        and "authorization" not in request.headers
+        and "__session" not in request.cookies
+    )
 
 from backend import frontend
 
@@ -410,39 +430,43 @@ async def authenticate_backend(
                 status_code=403,
             )
 
-        authorization = request.headers.get(
-            "authorization",
-            "",
-        )
-
-        if authorization.startswith("Bearer "):
-            token = authorization[7:]
+        if is_dev_auth_request(request):
+            request.state.user_id = DEV_USER_ID
+            request.state.dev_auth = True
         else:
-            token = request.cookies.get(
-                "__session"
+            authorization = request.headers.get(
+                "authorization",
+                "",
             )
 
-        if not token:
-            return JSONResponse(
-                {
-                    "detail": "Please sign in first."
-                },
-                status_code=401,
-            )
-
-        try:
-            request.state.user_id = (
-                await run_in_threadpool(
-                    verify_clerk_token,
-                    token,
+            if authorization.startswith("Bearer "):
+                token = authorization[7:]
+            else:
+                token = request.cookies.get(
+                    "__session"
                 )
-            )
 
-        except HTTPException as error:
-            return JSONResponse(
-                {"detail": error.detail},
-                status_code=error.status_code,
-            )
+            if not token:
+                return JSONResponse(
+                    {
+                        "detail": "Please sign in first."
+                    },
+                    status_code=401,
+                )
+
+            try:
+                request.state.user_id = (
+                    await run_in_threadpool(
+                        verify_clerk_token,
+                        token,
+                    )
+                )
+
+            except HTTPException as error:
+                return JSONResponse(
+                    {"detail": error.detail},
+                    status_code=error.status_code,
+                )
 
     response = await call_next(request)
 
@@ -496,12 +520,14 @@ def login_page():
 
 
 @app.get("/api/auth-config")
-def frontend_auth_config():
-    key, domain = clerk_configuration()
+def frontend_auth_config(request: Request):
+    dev_auth = is_dev_auth_request(request)
+    key, domain = ("", "") if dev_auth else clerk_configuration()
 
     # Only the publishable key is sent to the browser.
     return JSONResponse(
         {
+            "dev_auth": dev_auth,
             "publishable_key": key,
             "domain": domain,
         },
@@ -528,11 +554,12 @@ def frontend_logout(request: Request):
 @app.get("/api/session")
 def frontend_session(request: Request):
     metadata_store().ensure_user(request.state.user_id)
-    # The middleware has already verified this token.
+    # The middleware has established the request identity.
+    payload = {"user_id": request.state.user_id}
+    if getattr(request.state, "dev_auth", False):
+        payload["dev"] = True
     return JSONResponse(
-        {
-            "user_id": request.state.user_id,
-        },
+        payload,
         headers={
             "Cache-Control": "no-store",
         },
