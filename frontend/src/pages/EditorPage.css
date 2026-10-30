@@ -215,6 +215,7 @@
 .editor-panel-content {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;            /* long tabs (like Captions) scroll inside the panel */
   padding: calc(18 * var(--u));
 }
 

@@ -13,7 +13,8 @@ import useClipDraft from "../features/editor/useClipDraft";
 import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
 import Timeline from "../features/editor/Timeline";
-import { CaptionControls, RatioControls, TrimControls } from "../features/editor/EditorControls";
+import { RatioControls, TrimControls } from "../features/editor/EditorControls";
+import CaptionsTab from "../features/editor/tabs/CaptionsTab";
 
 const panelTabs = ["Trim", "Captions", "Aspect Ratio", "Chat"];
 const saveLabels = { saved: "✓ Saved", saving: "Saving…", error: "⚠ Not saved" };
@@ -98,6 +99,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
   const [panelTab, setPanelTab] = useState("Trim");
   const [thinking, setThinking] = useState(false);
   const [focusedCue, setFocusedCue] = useState(null); // caption line clicked on the timeline (for the Captions tab)
+  const [captionsView, setCaptionsView] = useState("Style"); // the Captions tab's sub-tab: "Style" | "Text"
   const player = useRef(null); // the ClipPlayer's remote control: seek(t), getTime()
   const { info, state, change } = draft;
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
@@ -154,6 +156,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
                 focusedCue={focusedCue} onCueClick={(index) => {
                   setFocusedCue(index);
                   setPanelTab("Captions");
+                  setCaptionsView("Text");
                 }} />
             </section>
           )}
@@ -175,7 +178,9 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
             ) : panelTab === "Trim" ? (
               <TrimControls state={state} duration={info.duration} change={change} />
             ) : panelTab === "Captions" ? (
-              <CaptionControls state={state} change={change} burnedIn={info.burned_in} />
+              <CaptionsTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo}
+                player={player} view={captionsView} onView={setCaptionsView}
+                focusedCue={focusedCue} onFocusCue={setFocusedCue} />
             ) : panelTab === "Aspect Ratio" ? (
               <RatioControls state={state} change={change} />
             ) : (
