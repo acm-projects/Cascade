@@ -1,3 +1,16 @@
+/* The jungle fonts (see --font-title / --font-display below) */
+@font-face {
+  font-family: "The Last Trunks";
+  src: url("../assets/fonts/TheLastTrunks.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Jungle Adventurer";
+  src: url("../assets/fonts/JungleAdventurer.ttf") format("truetype");
+  font-display: swap;
+}
+
 /* ============================================================
    THEME: change these values to restyle the whole app.
    Every page is built from the Figma frames, which are 1728 x 1117.
@@ -60,9 +73,10 @@
   --space-3: 24px;
   --space-4: 32px;
 
-  /* Fonts (Figma note: "Main fonts: Fredoka One, Fredoka, Nunito Sans, Nunito") */
-  --font-display: "Fredoka One", sans-serif;   /* logo, buttons, step tabs */
-  --font-heading: "Fredoka", sans-serif;       /* page and panel titles */
+  /* Fonts. The two jungle fonts are in assets/fonts (free for personal use only, from 1001fonts.com) */
+  --font-title: "The Last Trunks", "Fredoka One", sans-serif;      /* big chunky titles: logo, "CASCADE", page titles */
+  --font-display: "Jungle Adventurer", "Fredoka One", sans-serif;  /* buttons, step tabs */
+  --font-heading: "Jungle Adventurer", "Fredoka", sans-serif;      /* panel titles, clip names */
   --font-body: "Nunito", sans-serif;           /* regular text */
   --font-ui: "Nunito Sans", sans-serif;        /* small labels, inputs */
 }
@@ -71,6 +85,7 @@ body {
   background: var(--color-page);
   color: var(--color-text);
   font-family: var(--font-body);
+  font-synthesis: none; /* the jungle fonts have one weight; don't let "bold" smear them */
 }
 
 /* ---------- Buttons used across the app ----------
