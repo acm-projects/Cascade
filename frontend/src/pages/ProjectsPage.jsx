@@ -6,7 +6,7 @@ import woodPill from "../assets/figma/wood-pill.png";
 import woodGreen from "../assets/figma/wood-green-btn.png";
 import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
-import { useProject } from "../context/ProjectContext";
+import { useProject } from "../context/projectContextValue";
 import useApi from "../api/useApi";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";

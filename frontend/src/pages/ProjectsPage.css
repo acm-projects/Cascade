@@ -92,7 +92,7 @@
 
 .projects-title {
   color: var(--color-wood-text);
-  font-family: var(--font-heading);
+  font-family: var(--font-title);
   font-weight: 600;
   font-size: calc(96 * var(--u));
   line-height: 1.2;

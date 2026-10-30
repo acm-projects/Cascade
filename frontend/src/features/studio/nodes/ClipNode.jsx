@@ -9,14 +9,15 @@ import { sameRef } from "../graph";
 //   data.label      - "2", or "2.1" after a "more like this" update replaced it
 //   data.number     - which prompt it came from
 //   data.revision   - a "more like this" update still running/failed for this slot (or null)
+//   data.highlighted - the ref whose chip is hovered in the chat (that clip glows)
 //   data.editorClips, data.onToggle(ref), data.onPreview(clip, ref), data.onRetry(jobId)
 function ClipNode({ data }) {
-  const { clip, ref, label, number, revision, editorClips, onToggle, onPreview, onRetry, referenceLabels = [] } = data;
+  const { clip, ref, label, number, revision, editorClips, highlighted, onToggle, onPreview, onRetry, referenceLabels = [] } = data;
   const selected = editorClips.some((item) => sameRef(item, ref));
   const updating = revision && ["queued", "processing"].includes(revision.state);
 
   return (
-    <div className={`studio-node studio-clip-node${selected ? " is-selected" : ""}`}>
+    <div className={`studio-node studio-clip-node${selected ? " is-selected" : ""}${highlighted && sameRef(highlighted, ref) ? " is-highlighted" : ""}`}>
       <Handle type="target" position={Position.Left} />
       <div className="studio-clip-head">
         <span>P{number} · Clip {label}</span>

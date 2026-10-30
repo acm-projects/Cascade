@@ -7,14 +7,14 @@
   background-position: center;
 }
 
-/* "CASCADE": Knewave, white, with a dark fuzzy outline */
+/* "CASCADE": The Last Trunks (--font-title), white, with a dark fuzzy outline */
 .landing-title {
   position: absolute;
   left: 50%;
   top: 37%;
   translate: -50% -50%;
   color: white;
-  font-family: "Knewave", var(--font-display);
+  font-family: var(--font-title);
   font-weight: normal;
   font-size: min(14.8vw, 23vh);           /* 256px on the 1728 x 1117 Figma frame */
   letter-spacing: 0.02em;

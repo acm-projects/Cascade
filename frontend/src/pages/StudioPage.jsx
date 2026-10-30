@@ -5,12 +5,13 @@ import TopNav from "../components/TopNav";
 import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
-import { useProject } from "../context/ProjectContext";
+import { useProject } from "../context/projectContextValue";
 import useApi from "../api/useApi";
 import SessionBar from "../features/studio/SessionBar";
 import ChatPanel from "../features/studio/ChatPanel";
 import StudioCanvas from "../features/studio/StudioCanvas";
 import MediaPreview from "../features/studio/MediaPreview";
+import ReferenceChips from "../features/studio/ReferenceChips";
 import { isSupportedMedia } from '../utils/media';
 import useStudioData from "../features/studio/useStudioData";
 import { nodeTypes } from "../features/studio/nodes";
@@ -54,6 +55,9 @@ function StudioPage() {
   const focusPrompt = useCallback((jobId) => {
     setChatFocus(previous => ({ jobId, visit: (previous?.visit || 0) + 1 }));
   }, []);
+  const [leftOut, setLeftOut] = useState([]);           // picked clips switched off (chips) for the next prompt
+  const [highlighted, setHighlighted] = useState(null); // the clip whose chip is hovered: it glows on the canvas
+
   // Re-sending the exact same prompt after a network hiccup reuses its request id, so the
   // backend never starts (and charges for) a second job
   const submission = useRef(null);
@@ -61,9 +65,14 @@ function StudioPage() {
   // useMemo: these only change when the backend data does, so the canvas isn't rebuilt every render
   const session = useMemo(() => studio?.sessions.find((s) => s.id === sessionId) ?? null, [studio, sessionId]);
   const editorClips = useMemo(() => studio?.editor_clips ?? [], [studio]);
-  const references = useMemo(
+  const picked = useMemo(
     () => (session ? editorClips.filter((ref) => session.job_ids.includes(ref.job_id)) : []),
     [session, editorClips]
+  );
+  // The picked clips that guide the next prompt: all of them, minus the chips you switched off
+  const references = useMemo(
+    () => picked.filter((ref) => !leftOut.some((item) => sameRef(item, ref))),
+    [picked, leftOut]
   );
   const sourceName = session ? groups.find((g) => g.job_id === session.source_job)?.source_name : undefined;
 
@@ -116,9 +125,10 @@ function StudioPage() {
   const actions = useMemo(() => ({
     editorClips, pendingFile, sourceName,
     onChooseFile: chooseFile, onPreviewSource: previewSource, onToggle: toggleClip,
-    onPreview: previewClip, onStop: stop, onRetry: retry, onReuse: setDraft,
+    onPreview: previewClip, onStop: stop, onRetry: retry, onReuse: setDraft, highlighted,
     onFocusPrompt: focusPrompt,
-  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry, focusPrompt]);
+  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry, highlighted, focusPrompt]);
+
 
   const graph = useMemo(
     () => (session ? buildGraph(session, groups, { ...actions, showHistory }) : { nodes: [], edges: [] }),
@@ -182,6 +192,8 @@ function StudioPage() {
       }
       submission.current = null;
       setChatFocus(null);
+      setLeftOut([]); // the next prompt starts with every picked clip switched on again
+
       await refresh();
       return true;
     } catch (err) {
@@ -195,7 +207,7 @@ function StudioPage() {
 
   // ---------- Sessions ----------
   function switchSession(id) {
-    setChatFocus(null);
+    setChatFocus(null); setLeftOut([]); setHighlighted(null);
     setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
     navigate(`/projects/${projectId}/studio/${id}`);
     api.saveStudioState(projectId, id, {}).catch(() => {}); // remember it as the active one
@@ -204,7 +216,7 @@ function StudioPage() {
   async function createSession(name) {
     try {
       const created = await api.createStudioSession(projectId, name);
-      setChatFocus(null);
+      setChatFocus(null); setLeftOut([]); setHighlighted(null);
       setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
       await refresh();
       navigate(`/projects/${projectId}/studio/${created.id}`);
@@ -285,6 +297,14 @@ function StudioPage() {
     };
   }
 
+  // One chip per picked clip of this session, named like its box on the canvas ("P1 · Clip 2")
+  const chips = picked.map((ref) => {
+    const node = graph.nodes.find((n) => n.type === "clip" && sameRef(n.data.ref, ref));
+    return { ref, label: node ? `P${node.data.number} · Clip ${node.data.label}` : "Clip", title: node?.data.clip.title };
+  });
+  const toggleChip = (ref) => setLeftOut((list) =>
+    list.some((item) => sameRef(item, ref)) ? list.filter((item) => !sameRef(item, ref)) : [...list, ref]);
+
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
   let note;
   if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
@@ -319,7 +339,9 @@ function StudioPage() {
 
       <div className="studio-body">
         <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note}
-          focusRequest={chatFocus} onStop={stop} onRetry={retry} onReuse={setDraft} />
+          focusRequest={chatFocus} onStop={stop} onRetry={retry} onReuse={setDraft}
+          chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
+
         <div className="studio-canvas-frame">
           <StudioCanvas nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onDropFile={chooseFile} onNodeDragStop={savePosition} />
