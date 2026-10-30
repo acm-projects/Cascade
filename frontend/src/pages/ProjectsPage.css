@@ -120,7 +120,7 @@
   width: calc(292 * var(--u));
   height: calc(71 * var(--u));
   padding: 0 calc(14 * var(--u));
-  border: max(3px, calc(8 * var(--u))) solid var(--color-wood-dark);
+  border: max(2px, calc(4 * var(--u))) solid var(--color-wood-dark);
   border-radius: calc(10 * var(--u));
   background-size: cover;
   background-position: center;
@@ -151,7 +151,7 @@
 .projects-new {
   width: calc(195 * var(--u));
   height: calc(76 * var(--u));
-  border: max(3px, calc(8 * var(--u))) solid var(--color-wood-dark);
+  border: max(2px, calc(4 * var(--u))) solid var(--color-wood-dark);
   border-radius: calc(10 * var(--u));
   background-size: cover;
   background-position: center;
