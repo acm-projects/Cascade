@@ -240,3 +240,8 @@
   height: 16px;
   accent-color: var(--color-jungle-deep);
 }
+
+/* Glows while you hover its chip in the chat (ReferenceChips) */
+.studio-clip-node.is-highlighted {
+  box-shadow: 0 0 0 6px color-mix(in srgb, #ffd400 70%, transparent), var(--shadow-soft);
+}
