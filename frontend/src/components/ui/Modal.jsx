@@ -5,7 +5,8 @@ import "./ui.css";
 // A pop-up window over the page. Show it with {isOpen && <Modal ...>}.
 //   <Modal title="Delete project?" onClose={() => setIsOpen(false)}> ...buttons... </Modal>
 // Closes on Esc, on a click outside the box, and with the × button.
-function Modal({ title, children, onClose }) {
+//   wide - a big pop-up (about 80% of the screen), e.g. for watching a video
+function Modal({ title, children, onClose, wide = false }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -31,7 +32,7 @@ function Modal({ title, children, onClose }) {
   // createPortal: draw it at the end of <body>, so it sits above everything on the page
   return createPortal(
     <div className="ui-modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div ref={dialogRef} className="ui-modal wood-panel" role="dialog" aria-modal="true"
+      <div ref={dialogRef} className={`ui-modal wood-panel${wide ? " ui-modal-wide" : ""}`} role="dialog" aria-modal="true"
         aria-labelledby={titleId} tabIndex={-1}>
         <div className="ui-modal-header">
           <h2 id={titleId} className="ui-modal-title">{title}</h2>

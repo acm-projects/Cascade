@@ -35,6 +35,10 @@
   color: var(--color-wood-text);
 }
 
+.ui-modal-wide {
+  width: min(80vw, 1100px);
+}
+
 .ui-modal-header {
   display: flex;
   align-items: center;

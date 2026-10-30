@@ -9,7 +9,7 @@ import { sameRef } from "../graph";
 //   data.label      - "2", or "2.1" after a "more like this" update replaced it
 //   data.number     - which prompt it came from
 //   data.revision   - a "more like this" update still running/failed for this slot (or null)
-//   data.editorClips, data.onToggle(ref), data.onPreview(clip), data.onRetry(jobId)
+//   data.editorClips, data.onToggle(ref), data.onPreview(clip, ref), data.onRetry(jobId)
 function ClipNode({ data }) {
   const { clip, ref, label, number, revision, editorClips, onToggle, onPreview, onRetry } = data;
   const selected = editorClips.some((item) => sameRef(item, ref));
@@ -22,7 +22,7 @@ function ClipNode({ data }) {
         <span>P{number} · Clip {label}</span>
         <span>{formatTime(clip.end - clip.start)}</span>
       </div>
-      <button type="button" className="studio-poster nodrag nopan" onClick={() => onPreview(clip)}
+      <button type="button" className="studio-poster nodrag nopan" onClick={() => onPreview(clip, ref)}
         aria-label={`Preview ${clip.title || "clip"}`}>
         <span className="studio-poster-play">▶</span>
         <span>{formatTime(clip.start)} – {formatTime(clip.end)}</span>
