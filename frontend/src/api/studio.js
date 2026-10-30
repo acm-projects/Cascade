@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, apiUpload } from "./client";
 
 // AI Studio: backend/studio.py (Kashmine). Everything lives under /api/projects/{projectId}/studio.
 //
@@ -77,16 +77,17 @@ export function studioGenerate(token, projectId, sessionId, body) {
 
 /**
  * POST .../studio/sessions/{sessionId}/upload   (multipart form) - the FIRST prompt: uploads the video too.
+ * onProgress(percent) is called while the video uploads.
  * @returns {Promise<{ job_id: string }>} status 202
  */
-export function studioUpload(token, projectId, sessionId, { video, prompt, clipCount, requestId }) {
+export function studioUpload(token, projectId, sessionId, { video, prompt, clipCount, requestId, onProgress }) {
   const form = new FormData();
   form.append("video", video);
   form.append("prompt", prompt);
   form.append("clip_count", String(clipCount));
   form.append("request_id", requestId);
-  return apiFetch(`${studioPath(projectId)}/sessions/${encodeURIComponent(sessionId)}/upload`, {
-    token, method: "POST", form,
+  return apiUpload(`${studioPath(projectId)}/sessions/${encodeURIComponent(sessionId)}/upload`, {
+    token, form, onProgress,
   });
 }
 

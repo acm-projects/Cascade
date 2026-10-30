@@ -9,6 +9,7 @@ import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/ProjectContext";
 import useApi from "../api/useApi";
 import ProjectCard from "../components/ProjectCard";
+import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
@@ -44,6 +45,7 @@ function ProjectsPage() {
 
   // The project waiting for "Are you sure?" (null = no pop-up)
   const [toDelete, setToDelete] = useState(null);
+  const [creatingNew, setCreatingNew] = useState(false); // the New Project pop-up is open
   const [deleting, setDeleting] = useState(false);
 
   // Each load gets a number, so if Retry is clicked twice only the newest answer is used.
@@ -79,16 +81,16 @@ function ProjectsPage() {
     setSearchParams(id === "all" ? {} : { view: id });
   }
 
-  // Creates a real (empty) project on the backend and opens its AI Studio, where you pick the video.
-  // TEMPORARY until the "New Project" pop-up (ticket 2.6) lets you name it first.
-  async function handleNewProject() {
-    try {
-      const created = await api.createProject("Untitled project");
-      openProject(created);
-      navigate(`/projects/${created.id}/studio`);
-    } catch (err) {
-      toast.show(`Couldn't create a project: ${err.message}`, "error");
-    }
+  function handleNewProject() {
+    setCreatingNew(true);
+  }
+
+  // From the New Project pop-up: create the project, then open its AI Studio. A picked video goes along
+  // and uploads there with the first prompt.
+  async function createProject(name, file) {
+    const created = await api.createProject(name);
+    openProject(created);
+    navigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined });
   }
 
   function handleOpen(project) {
@@ -228,6 +230,8 @@ function ProjectsPage() {
           <div className="projects-content">{renderContent()}</div>
         </main>
       </div>
+
+      {creatingNew && <NewProjectModal onCreate={createProject} onClose={() => setCreatingNew(false)} />}
 
       {toDelete && (
         <Modal title="Delete project?" onClose={() => !deleting && setToDelete(null)}>
