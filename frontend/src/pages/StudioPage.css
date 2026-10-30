@@ -55,19 +55,39 @@
   padding: var(--space-3) 0;
 }
 
-/* "Watch it big" pop-up */
-.studio-preview-video {
-  width: 100%;
-  max-height: 60vh;
-  border-radius: var(--radius-md);
-  background: var(--color-jungle-deep);
+.studio-preview-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: 14px;
 }
 
-.studio-preview-loading {
+.studio-preview-details b {
+  color: var(--color-jungle-deep);
+}
+
+.studio-preview-why {
+  margin-top: 6px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.studio-preview-actions {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-3) 0;
+  margin-top: var(--space-2);
+}
+
+.studio-preview-count {
+  margin: 0 auto;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  opacity: 0.75;
 }
 
 /* Upload progress under the chat box */

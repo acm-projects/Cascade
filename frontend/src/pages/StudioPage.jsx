@@ -44,7 +44,7 @@ function StudioPage() {
   // Video picked (here, or in the New Project pop-up), uploads with the first prompt
   const [pendingFile, setPendingFile] = useState(() => location.state?.file ?? null);
   const [uploadProgress, setUploadProgress] = useState(null); // 0-100 while the video uploads
-  const [preview, setPreview] = useState(null);         // what the "watch it big" pop-up shows
+  const [preview, setPreview] = useState(null);         // the "watch it big" pop-up: { ref } for a clip, or { path | file, title }
   const [draft, setDraft] = useState("");               // the chat box text
   const [sending, setSending] = useState(false);
   // Re-sending the exact same prompt after a network hiccup reuses its request id, so the
@@ -96,7 +96,7 @@ function StudioPage() {
     }
   }, [pendingFile, session, projectId, sourceName]);
 
-  const previewClip = useCallback((clip) => setPreview({ path: clip.clip_url, title: clip.title || "Clip" }), []);
+  const previewClip = useCallback((_clip, ref) => setPreview({ ref }), []);
 
   const stop = useCallback((jobId) => {
     api.cancelFeature(jobId).then(refresh).catch((err) => toast.show(err.message, "error"));
@@ -250,6 +250,27 @@ function StudioPage() {
     );
   }
 
+  // A clip in the pop-up: its details, Pick, and ← / → through the clips of the same prompt
+  function previewProps(shown) {
+    if (!shown.ref) return { item: shown };
+    const group = groups.find((g) => g.job_id === shown.ref.job_id);
+    const index = shown.ref.clip_index;
+    const clip = group?.clips[index];
+    if (!clip) return { item: { title: "Clip", path: "" } };
+    const go = (i) => () => setPreview({ ref: { job_id: group.job_id, clip_index: i } });
+    return {
+      item: { title: clip.title || "Clip", path: clip.clip_url },
+      clip: {
+        start: clip.start, end: clip.end, explanation: clip.explanation, prompt: group.prompt,
+        position: `${index + 1} of ${group.clips.length}`,
+        picked: editorClips.some((item) => sameRef(item, shown.ref)),
+        onTogglePick: () => toggleClip(shown.ref),
+        onPrevious: index > 0 ? go(index - 1) : undefined,
+        onNext: index < group.clips.length - 1 ? go(index + 1) : undefined,
+      },
+    };
+  }
+
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
   let note;
   if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
@@ -285,7 +306,7 @@ function StudioPage() {
         </div>
       </div>
 
-      {preview && <MediaPreview item={preview} onClose={() => setPreview(null)} />}
+      {preview && <MediaPreview {...previewProps(preview)} onClose={() => setPreview(null)} />}
     </div>
   );
 }
