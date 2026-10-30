@@ -16,9 +16,14 @@ import Timeline from "../features/editor/Timeline";
 import { TrimControls } from "../features/editor/EditorControls";
 import AspectTab from "../features/editor/tabs/AspectTab";
 import CaptionsTab from "../features/editor/tabs/CaptionsTab";
+import { describeChanges } from "../features/editor/chatChanges";
 
 const panelTabs = ["Trim", "Captions", "Aspect Ratio", "Chat"];
 const saveLabels = { saved: "✓ Saved", saving: "Saving…", error: "⚠ Not saved" };
+// Ready-made requests shown while the Chat tab is empty
+const chatSuggestions = [
+  "Remove the first 2 seconds", "Make captions bigger and yellow", "Move captions to the top", "Turn captions off",
+].map((prompt) => ({ label: prompt, prompt }));
 
 // Built from the Figma "Editor" wireframe (node 560:2716), connected to backend/editor_backend.py.
 // Shows the clips picked in AI Studio; every edit is saved to the backend automatically.
@@ -118,22 +123,42 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
     return () => window.removeEventListener("keydown", handleKey);
   }, [undo, redo]);
 
-  // "Make the captions yellow": the backend's editor AI returns a new edit + a reply
+  // The Chat tab's extras that aren't saved with the draft: what each AI reply changed, and app notes
+  const [chatChanges, setChatChanges] = useState({}); // { [message index]: ["Trim 3.0–30.0 s", …] }
+  const [chatNote, setChatNote] = useState(null);
+  const latestState = useRef(state);
+  useEffect(() => {
+    latestState.current = state;
+  });
+
+  // "Make the captions yellow": the backend's editor AI returns a new edit + a reply.
+  // The new edit goes in as ONE undo step, so Cmd+Z takes back the whole AI change.
   async function sendChat(message) {
     const history = draft.chat;
+    const sent = state;
     draft.setChat([...history, { role: "user", text: message }]);
+    setChatNote(null);
     setThinking(true);
     try {
-      const result = await api.sendEditorChat(projectId, clip.job_id, clip.clip_index, { state, chat: history, message });
+      const result = await api.sendEditorChat(projectId, clip.job_id, clip.clip_index,
+        { state: sent, chat: history.slice(-20), message });
+      if (latestState.current !== sent) {
+        toast.show("The AI's edit replaced changes you made while it was working. Undo to get them back.");
+      }
       change(result.state);
       draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: result.message }]);
+      setChatChanges((all) => ({ ...all, [history.length + 1]: describeChanges(sent, result.state) }));
     } catch (err) {
       draft.setChat(history);
-      toast.show(err.message, "error");
+      if (err.status === 503) setChatNote(err.message); // the editing AI isn't set up on the server
+      else toast.show(err.message, "error");
     } finally {
       setThinking(false);
     }
   }
+
+  const chatMessages = draft.chat.map((message, index) => ({ ...message, changes: chatChanges[index] }));
+  if (chatNote) chatMessages.push({ role: "system", text: chatNote });
 
   return (
     <>
@@ -199,7 +224,8 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
             ) : panelTab === "Aspect Ratio" ? (
               <AspectTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo} />
             ) : (
-              <ChatBox messages={draft.chat} onSend={sendChat} disabled={thinking}
+              <ChatBox messages={chatMessages} onSend={sendChat} disabled={thinking} typing={thinking}
+                quickActions={draft.chat.length === 0 ? chatSuggestions : []}
                 placeholder={thinking ? "Editing…" : "e.g. cut the first 2 seconds, make captions yellow"} />
             )}
           </div>

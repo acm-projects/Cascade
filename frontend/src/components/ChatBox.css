@@ -77,6 +77,38 @@
   color: #fffbea;
 }
 
+/* Notes from the app (e.g. "the editing AI isn't set up"): centered, plain */
+.chatbox-message.system {
+  align-self: center;
+  background: rgba(255, 220, 160, 0.85);
+  font-size: calc(17 * var(--u));
+  text-align: center;
+}
+
+/* What the AI changed, as small chips under its reply */
+.chatbox-changes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.chatbox-change {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 251, 234, 0.2);
+  font-size: calc(15 * var(--u));
+}
+
+.chatbox-typing {
+  letter-spacing: 2px;
+  animation: chatbox-pulse 1s ease-in-out infinite;
+}
+
+@keyframes chatbox-pulse {
+  50% { opacity: 0.4; }
+}
+
 /* The "attached video" tag above the text box */
 .chatbox-tag {
   display: flex;
