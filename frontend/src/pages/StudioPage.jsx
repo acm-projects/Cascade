@@ -5,7 +5,7 @@ import TopNav from "../components/TopNav";
 import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
-import { useProject } from "../context/ProjectContext";
+import { useProject } from "../context/projectContextValue";
 import useApi from "../api/useApi";
 import SessionBar from "../features/studio/SessionBar";
 import ChatPanel from "../features/studio/ChatPanel";
