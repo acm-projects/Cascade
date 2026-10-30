@@ -21,6 +21,7 @@ from backend.cascade_llm import LLMConfigError, make_client  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def env(monkeypatch):
+    monkeypatch.setattr(website, 'classify_request', lambda prompt: 'general')
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-test")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
@@ -81,7 +82,8 @@ def stubbed(monkeypatch):
             chunk_summaries=[], summary_usage={}, transcription_cost_usd=0.0, video_key="k",
         )
 
-        def fake_build(video_path, work_dir, progress=None):
+        def fake_build(video_path, work_dir, progress=None, **kwargs):
+            rec.index_kwargs = kwargs
             rec.work_dirs.append(Path(work_dir))
             assert Path(work_dir).is_dir()
             progress("Indexing video")
@@ -127,6 +129,34 @@ def test_index_work_uses_a_scratch_folder_that_is_removed(stubbed):
     run(rec)
     assert len(rec.work_dirs) == 1 and "agent_index_" in rec.work_dirs[0].name
     assert not rec.work_dirs[0].exists()  # frames and the temporary MP3 never outlive the build
+
+
+def test_classifies_raw_request_once_and_records_intent(stubbed, monkeypatch):
+    rec = Recorder()
+    stubbed(rec)
+    calls = []
+    monkeypatch.setattr(website, 'classify_request', lambda prompt: calls.append(prompt) or 'specific')
+    _, _, meta = website.select_with_agent(Path('video.mp4'), 120, 'expanded reference context', 30,
+        rec.steps.append, rec.stages.append, request_prompt='the teddy bear fight', exclude_windows=[[80, 100]])
+    assert calls == ['the teddy bear fight']
+    assert rec.toolbox.intent == meta['intent'] == 'specific'
+    assert rec.toolbox.exclude_windows == [(80, 100)]
+    assert '2 new clips' in meta['selection_note']
+
+
+def test_spoken_documentary_uses_batch_selection_without_summaries(stubbed, monkeypatch):
+    rec = Recorder()
+    stubbed(rec)
+    monkeypatch.setattr(website, 'ensure_summaries', lambda *a, **kw: (_ for _ in ()).throw(AssertionError('Unexpected summaries')))
+    monkeypatch.setattr(website, 'run_transcript_selection', lambda *a: {
+        'suggestions': rec.suggestions, 'candidates_considered': 2, 'ranked_by_agent': True,
+        'spacing_relaxed': False, 'iterations': 1, 'usage': {}, 'selection_mode': 'transcript-batch'})
+    clips, _, meta = website.select_with_agent(Path('documentary.mp4'), 120, 'Find historical explanations in this documentary',
+        30, rec.steps.append, rec.stages.append)
+    assert len(clips) == 2
+    assert rec.index_kwargs == {'visual': False}
+    assert meta['selection_mode'] == 'transcript-batch'
+    assert 'Transcript summaries' not in rec.stages
 
 
 @pytest.mark.parametrize("target,low,high", [(15, 8.0, 22.5), (30, 8.0, 45.0), (60, 8.0, 90.0)])

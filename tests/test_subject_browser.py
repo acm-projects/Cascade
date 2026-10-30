@@ -1,4 +1,7 @@
 """Real models/media, preview subject picking, undo, isolation, persistence and MP4."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,json,urllib.request,base64,subprocess
 from pathlib import Path
 from tests.test_editor_browser import Chrome

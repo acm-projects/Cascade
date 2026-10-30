@@ -1,4 +1,7 @@
 """Responsive editor checks against the isolated editor_browser_server fixture."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import base64
 import json

@@ -51,9 +51,9 @@ class GenerationGroupsTests(unittest.TestCase):
     def groups(self):return self.client.get(f'/api/projects/{self.project}/generations',headers=self.headers).json()['groups']
 
     def test_counts_bounds_old_defaults_and_fifth_clip_routes(self):
-        for count in [0,-1,13,'5.5','invalid']:
+        for count in [0,-1,51,'5.5','invalid']:
             self.assertEqual(self.upload(count).status_code,422,count)
-        for count in [1,5,12]:
+        for count in [1,5,12,20,50]:
             response=self.upload(count);self.assertEqual(response.status_code,202,response.text)
             jid=response.json()['job_id'];self.done(jid,count)
             owner=json.loads((self.root/jid/'owner.json').read_text())
@@ -62,7 +62,7 @@ class GenerationGroupsTests(unittest.TestCase):
         self.assertEqual(self.client.get(f'/clips/{jid}/clip_5.mp4',headers=self.headers).status_code,200)
         self.assertEqual(self.client.post(f'/api/projects/{self.project}/saved-clips',headers=self.headers,json={'job_id':jid,'clip_index':4}).status_code,200)
         self.assertEqual(self.client.get(f'/clips/{jid}/clip_99.mp4',headers=self.headers).status_code,404)
-        for invalid in [0,13,5.5,True,'5']:
+        for invalid in [0,51,5.5,True,'5']:
             self.assertEqual(self.generate(jid,invalid).status_code,422)
 
     def test_ordinary_prompts_nested_followups_idempotency_and_reload(self):

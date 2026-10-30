@@ -71,7 +71,7 @@ class MainEditorIntegrationTests(unittest.TestCase):
         candidates=[{'id':i,'start':i*25.,'end':i*25.+8,'score':.9,'title':'Fixture','reason':'Supported'} for i in range(7)]
         five.candidates=candidates;four.candidates=candidates
         self.assertEqual(len(five.final_selection()),5);self.assertEqual(len(four.final_selection()),4)
-        with self.assertRaises(ValueError):ToolBox(SimpleNamespace(duration=200),Path('fixture.mp4'),target_clips=13)
+        with self.assertRaises(ValueError):ToolBox(SimpleNamespace(duration=200),Path('fixture.mp4'),target_clips=51)
 
 
 if __name__=='__main__':unittest.main()

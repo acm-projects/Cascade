@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
@@ -181,10 +182,27 @@ class ToolBox:
         min_clip_seconds: float = MIN_CLIP_SECONDS,
         max_clip_seconds: float = MAX_CLIP_SECONDS,
         target_clips: int = TARGET_CLIPS,
+        intent: str = 'general',
+        exclude_windows: list | None = None,
+        references: list | None = None,
+        require_count: bool = False,
     ):
-        if isinstance(target_clips,bool) or not isinstance(target_clips,int) or not 1<=target_clips<=12:
-            raise ValueError("Choose 1–12 clips.")
+        if isinstance(target_clips,bool) or not isinstance(target_clips,int) or not 1<=target_clips<=50:
+            raise ValueError("Choose 1–50 clips.")
         self.target_clips=target_clips
+        self.intent = intent
+        self.references = references or []
+        self.require_count = require_count
+        self.exclude_windows = []
+        for start, end in exclude_windows or []:
+            start, end = float(start), float(end)
+            if math.isfinite(start) and math.isfinite(end) and 0 <= start < end <= index.duration:
+                self.exclude_windows.append((start, end))
+        for ref in self.references:
+            window = (float(ref['start']), float(ref['end']))
+            if window not in self.exclude_windows:
+                self.exclude_windows.append(window)
+        self.excluded_candidates = 0
         self.index = index
         self.video_path = video_path
         self.frame_grabber = frame_grabber
@@ -224,6 +242,8 @@ class ToolBox:
 
         idx = self.index
         header = f"Video duration: {idx.duration:.1f}s ({fmt_time(idx.duration)})"
+        if getattr(idx, 'index_mode', '') == 'transcript-first' and getattr(idx, 'has_video', True):
+            header += '\nTranscript-first search: search_video uses speech embeddings. Inspect real frames with inspect_clip when visual confirmation is needed.'
         full = format_transcript(idx.transcript)
 
         if len(full) <= OVERVIEW_TRANSCRIPT_CHARS:
@@ -352,15 +372,28 @@ class ToolBox:
         blocks.append({"type": "text", "text": f"Transcript {start:.1f}s-{end:.1f}s: {spoken}"})
         return blocks, False
 
-    def _add_candidate(self, start_time: float, end_time: float, reason: str, score: float, title: str = ""):
+    def _add_candidate(self, start_time: float, end_time: float, reason: str, score: float, title: str = "", reference_matches: list | None = None):
         start, end = float(start_time), float(end_time)
         length = end - start
+        if not all(math.isfinite(v) for v in (start, end, float(score))):
+            return _text('Timestamps and score must be finite numbers.'), True
         if start < 0 or end > self.index.duration + 0.01:
             return _text(f"Clip must lie within 0-{self.index.duration:.1f}s."), True
         if not (self.min_clip_seconds <= length <= self.max_clip_seconds):
             return _text(
                 f"Clip length must be {self.min_clip_seconds:g}-{self.max_clip_seconds:g}s (got {length:.1f}s)."
             ), True
+        if len(self.references) > 1:
+            matches = reference_matches or []
+            if (len(matches) != len(self.references) or any(
+                not isinstance(match, dict) or match.get('reference') != i + 1
+                or not isinstance(match.get('explanation'), str) or not match['explanation'].strip()
+                for i, match in enumerate(matches))):
+                return _text('Explain how this candidate combines EVERY selected reference. Provide reference_matches in reference order, with reference (1-based) and a concrete explanation for each. Search for another moment if it only matches one reference.'), True
+        for left, right in self.exclude_windows:
+            if min(end, right) - max(start, left) > MAX_OVERLAP_RATIO * min(length, right - left):
+                self.excluded_candidates += 1
+                return _text(f'That moment was already shown in this session ({left:.1f}–{right:.1f}s). Pick a different moment.'), True
         for existing in self.candidates:
             overlap = min(end, existing["end"]) - max(start, existing["start"])
             if overlap > MAX_OVERLAP_RATIO * min(length, existing["end"] - existing["start"]):
@@ -374,8 +407,11 @@ class ToolBox:
             "end": round(end, 1),
             "title": (str(title).strip() or str(reason).strip())[:80],
             "reason": str(reason),
-            "score": round(max(0.0, min(1.0, float(score))), 2),
+            "score": max(0.0, min(1.0, float(score))),
         }
+        if len(self.references) > 1:
+            candidate['reference_matches'] = [{'reference': m['reference'], 'explanation': m['explanation'].strip()[:500]}
+                                               for m in reference_matches]
         self.candidates.append(candidate)
         return _text(
             f"Added candidate #{candidate['id']} ({candidate['start']}s-{candidate['end']}s). "
@@ -394,7 +430,7 @@ class ToolBox:
             f"{fmt_time(i * size)}-{fmt_time((i + 1) * size)}: {n}" for i, n in enumerate(counts)
         ]
         empty = [i for i, n in enumerate(counts) if n == 0]
-        hint = " Some regions have no candidates yet - look there." if empty and len(self.candidates) >= 2 else ""
+        hint = " Some regions have no candidates yet - look there." if self.intent != 'specific' and empty and len(self.candidates) >= 2 else ""
         return "Candidates by region of the video - " + "; ".join(parts) + "." + hint
 
     def _rank_candidates(self, ranking: list):
@@ -411,14 +447,15 @@ class ToolBox:
         note = " Spacing was relaxed to fill the set." if self.spacing_relaxed else ""
         return _text("Final selection: " + "; ".join(lines) + "." + note), False
 
-    def final_selection(self) -> list[dict[str, Any]]:
+    def final_selection(self, intent: str | None = None) -> list[dict[str, Any]]:
         """The best TARGET_CLIPS candidates, in ranked order, spread across the video.
 
         Order = the agent's ranking, then any unranked candidates by their own score. A pick is
         skipped if its midpoint is closer than the minimum gap to a better-ranked pick; the gap
         is relaxed in steps only if that leaves fewer than TARGET_CLIPS.
         """
-        by_id = {c["id"]: c for c in self.candidates}
+        intent = intent or self.intent
+        by_id = {c["id"]: c for c in self.candidates if intent != 'specific' or c['score'] >= .5}
         order: list[int] = []
         notes: dict[int, str] = {}
         for entry in self.ranking or []:
@@ -436,11 +473,14 @@ class ToolBox:
         base_gap = self.index.duration / (2 * self.target_clips)
         chosen: list[int] = []
         strict_count = 0
-        for step, factor in enumerate(SPACING_RELAX_STEPS):
+        for step, factor in enumerate((0.0,) if intent == 'specific' else SPACING_RELAX_STEPS):
             gap = base_gap * factor
             chosen = []
             for cid in order:
-                if all(abs(mid(cid) - mid(other)) >= gap for other in chosen):
+                if all(abs(mid(cid) - mid(other)) >= gap and
+                       min(by_id[cid]['end'], by_id[other]['end']) - max(by_id[cid]['start'], by_id[other]['start'])
+                       <= MAX_OVERLAP_RATIO * min(by_id[cid]['end'] - by_id[cid]['start'], by_id[other]['end'] - by_id[other]['start'])
+                       for other in chosen):
                     chosen.append(cid)
                 if len(chosen) == self.target_clips:
                     break
@@ -461,6 +501,7 @@ class ToolBox:
                 "reason": by_id[cid]["reason"],
                 "score": by_id[cid]["score"],
                 "comparison": notes.get(cid, ""),
+                **({'reference_matches': by_id[cid]['reference_matches']} if 'reference_matches' in by_id[cid] else {}),
             }
             for n, cid in enumerate(chosen)
         ]

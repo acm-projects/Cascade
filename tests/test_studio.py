@@ -44,6 +44,47 @@ class StudioTests(unittest.TestCase):
     def ref(self, index=0):
         return {'job_id': self.jid, 'clip_index': index}
 
+    def test_finished_prefix_can_be_selected_while_later_clips_render(self):
+        result = app1.load_json(app1.JOBS_DIR / self.jid / 'results.json')
+        (app1.JOBS_DIR / self.jid / 'results.json').unlink()
+        app1.jobs[self.jid] = {'state': 'processing', 'clips': result['clips'][:1], 'ready_clip_count': 1}
+        response = self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': [self.ref()]})
+        self.assertEqual(response.status_code, 200, response.text)
+        response = self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': [self.ref(1)]})
+        self.assertEqual(response.status_code, 404)
+
+    def test_generation_excludes_only_finished_current_session_clips(self):
+        payload = {'prompt': 'Give me more funny moments', 'request_id': 'new-moments'}
+        url = self.base + '/sessions/' + self.sid + '/generate'
+        response = self.client.post(url, headers=self.headers, json=payload)
+        self.assertEqual(response.status_code, 202, response.text)
+        owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
+        self.assertEqual(owner['exclude_windows'], [[30., 40.], [20., 30.], [10., 20.], [0., 10.]])
+        project = integration.require_project(self.pid, 'studio-user')
+        from backend.services.sessions import session_clip_windows
+        project['studio']['sessions'].append({'id': 'other', 'job_ids': []})
+        self.assertEqual(session_clip_windows(project, 'other', app1, integration, 'studio-user'), [])
+
+    def test_expansion_skips_exclusion_but_similar_and_multi_reference_do_not(self):
+        for prompt, refs, expected in [('Expand this moment', [self.ref()], False),
+                                       ("Don't expand; find similar clips", [self.ref()], True),
+                                       ('Expand these moments', [self.ref(), self.ref(1)], True)]:
+            raw = json.dumps({'session_id': self.sid, 'generation': {
+                'prompt': prompt, 'references': refs, 'request_id': 'expansion-test'}})
+            context = studio.prepare_upload(app1, integration, self.pid, 'studio-user', raw)
+            self.assertEqual(bool(context['exclude_windows']), expected)
+
+    def test_session_exclusion_is_capped_newest_first_and_skips_incomplete_results(self):
+        from backend.services.sessions import session_clip_windows
+        folder = app1.JOBS_DIR / self.jid
+        app1.save_json(folder / 'results.json', {'clips': [{'start': i * 10., 'end': i * 10. + 8} for i in range(80)]})
+        project = integration.require_project(self.pid, 'studio-user')
+        windows = session_clip_windows(project, self.sid, app1, integration, 'studio-user')
+        self.assertEqual(len(windows), 60)
+        self.assertEqual(windows[0], [790., 798.])
+        app1.save_json(folder / 'results.json', {'state': 'processing', 'clips': [{'start': 0, 'end': 10}]})
+        self.assertEqual(session_clip_windows(project, self.sid, app1, integration, 'studio-user'), [])
+
     def test_legacy_generations_and_session_state_survive_reload(self):
         url = self.base + '/sessions/' + self.sid + '/state'
         patch_data = {'references': [self.ref(3)], 'positions': {'clip:' + self.jid + ':3': {'x': 900, 'y': 90}},

@@ -51,7 +51,7 @@ class GenerateInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     operation: Literal['generate', 'branch', 'revise'] | None = None
     prompt: str = Field(min_length=1, max_length=2000)
-    clip_count: int = Field(default=4, strict=True, ge=1, le=12)
+    clip_count: int = Field(default=4, strict=True, ge=1, le=50)
     references: list[ClipRef] = Field(default_factory=list, max_length=12)
     request_id: str = Field(pattern=r'^[a-zA-Z0-9_-]{1,80}$')
 
@@ -192,7 +192,12 @@ def prepare_upload(host, integration, pid, user, raw):
     refs = resolve_references(host, integration, pid, user, session, chosen)
     if body.operation in ('branch', 'revise') and not refs:
         raise HTTPException(400, 'Check at least one clip to find more like it.')
+    from backend.services.sessions import session_clip_windows
+    from backend.generation import is_expansion
+    exclude_windows = ([] if len(refs) == 1 and is_expansion(body.prompt, refs[0]) else
+                       session_clip_windows(project, session['id'], host, integration, user))
     return {'revision_of': None, 'revision_targets': [],
+            'exclude_windows': exclude_windows,
             'session_id': session['id'], 'source_job': session['source_job'], 'references': refs,
             'request_id': body.request_id}
 
@@ -353,7 +358,7 @@ def register(app, host, integration):
 
     @app.post(prefix + '/sessions/{sid}/upload', status_code=202)
     def upload(pid: str, sid: str, request: Request, video: UploadFile = File(...),
-               prompt: str = Form(..., max_length=2000), clip_count: int = Form(4, ge=1, le=12),
+               prompt: str = Form(..., max_length=2000), clip_count: int = Form(4, ge=1, le=50),
                request_id: str = Form(..., pattern=r'^[a-zA-Z0-9_-]{1,80}$')):
         try:
             return submit(pid, sid, GenerateInput(prompt=prompt, clip_count=clip_count, request_id=request_id), request, video)

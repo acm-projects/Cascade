@@ -1,6 +1,9 @@
 """Chrome DevTools browser checks against editor_browser_server.py, no paid APIs.
 Run isolated Chrome with --headless=new --remote-debugging-port=9333, then this file.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import base64
 import io

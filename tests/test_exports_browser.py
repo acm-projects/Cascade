@@ -1,4 +1,7 @@
 """Real Chrome + FFmpeg workflow against editor_browser_server.py; no paid APIs."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import json
 import subprocess

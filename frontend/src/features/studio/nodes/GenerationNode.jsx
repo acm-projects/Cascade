@@ -1,37 +1,25 @@
 import { Handle, Position } from "@xyflow/react";
-import Spinner from "../../../components/ui/Spinner";
 
-// One prompt you sent ("a generation"). Its clips grow out of its right side.
-//   data.group   - from listGenerations: { job_id, prompt, state, message, clips, requested_clip_count,
-//                  selection_note, displayed_clip_count, is_updated }
-//   data.number  - 1, 2, 3... in this session
-//   data.onStop(jobId), data.onRetry(jobId), data.onReuse(prompt)
+// Compact canvas waypoint; the chat owns the prompt and generation controls.
 function GenerationNode({ data }) {
-  const { group, number, onStop, onRetry, onReuse } = data;
-  const active = ["queued", "processing"].includes(group.state);
-
-  let status;
-  if (active) status = group.message || "Finding moments…";
-  else if (group.state === "error") status = group.message || "This request failed.";
-  else if (group.is_updated) status = `${group.displayed_clip_count} clips · updated`;
-  else status = `${group.clips.length} of ${group.requested_clip_count || group.clips.length} clips ready`;
+  const { group, number, onFocusPrompt, referenceLabels = [] } = data;
+  const context = referenceLabels.length > 1
+    ? `Combines ${referenceLabels.map(ref => `Clip ${ref.label}`).join(" + ")}. ` : "";
 
   return (
-    <div className={`studio-node studio-generation-node is-${group.state}`}>
+    <div className={`studio-prompt-pad is-${group.state}`}>
       <Handle type="target" position={Position.Left} />
-      <span className="studio-node-kicker">💬 Prompt {number}</span>
-      <span className="studio-generation-prompt">{group.prompt}</span>
-      <span className="studio-generation-status" role="status">
-        {active && <Spinner size={14} label="Working" />} {status}
-      </span>
-      {group.selection_note && !group.is_updated && <span className="studio-generation-note">{group.selection_note}</span>}
-      <div className="studio-node-actions nodrag nopan">
-        {active && <button type="button" className="btn btn-ghost btn-small" onClick={() => onStop(group.job_id)}>Stop</button>}
-        {group.state === "error" && (
-          <button type="button" className="btn btn-primary btn-small" onClick={() => onRetry(group.job_id)}>Retry</button>
-        )}
-        <button type="button" className="btn btn-ghost btn-small" onClick={() => onReuse(group.prompt)}>Reuse prompt</button>
-      </div>
+      <button type="button" className="studio-pad-button nodrag nopan"
+        onClick={() => onFocusPrompt?.(group.job_id)}
+        aria-label={`Go to prompt ${number} in AI chat: ${group.prompt}`}
+        title={`${context}${group.prompt}\nOpen this prompt in AI chat`}>
+        <svg viewBox="0 0 130 100" aria-hidden="true">
+          <path className="studio-pad-shadow" d="M64 8C28 3 5 23 5 49s22 43 56 44c35 1 64-16 64-44 0-14-8-26-21-33L69 46 82 10C76 9 70 8 64 8Z" />
+          <path className="studio-pad-leaf" d="M64 4C28-1 5 19 5 45s22 43 56 44c35 1 64-16 64-44 0-14-8-26-21-33L69 42 82 6C76 5 70 4 64 4Z" />
+          <path className="studio-pad-veins" d="M68 44 24 22M68 44 12 48M68 44 29 74M68 44 65 84M68 44 109 69" />
+        </svg>
+        <span className="studio-pad-label">P{number}</span>
+      </button>
       <Handle type="source" position={Position.Right} />
     </div>
   );

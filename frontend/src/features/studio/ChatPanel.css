@@ -63,6 +63,10 @@
 }
 
 /* ---------- Prompt box ---------- */
+.chat-bubble-focused {outline:3px solid var(--color-jungle-deep);outline-offset:3px;box-shadow:0 0 0 6px #94bf6533;}
+.chat-generation-actions {display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.chat-generation-actions .btn {font-size:12px;}
+.chat-reference-context {display:flex;flex-direction:column;gap:4px;margin-top:10px;font-size:12px;}
 .chat-panel-form {
   display: flex;
   flex-direction: column;

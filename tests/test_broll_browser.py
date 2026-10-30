@@ -1,4 +1,7 @@
 """Headless Chrome + isolated editor_browser_server; no live provider/AI calls."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import json
 import urllib.request

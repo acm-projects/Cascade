@@ -25,7 +25,9 @@ function generationStatus(group) {
   if (isRunning(group)) return group.message || "Finding your moments…";
   if (group.state === "error") return group.message || "That request failed. Use Retry on the canvas.";
   if (group.parent_clips?.length && !group.clips.length) return "No new matches. Your previous clip is kept.";
-  const found = `${group.parent_clips?.length ? "Added similar clips:" : "Found"} ${plural(group.clips.length, "clip")}.`;
+  const found = group.parent_clips?.length > 1
+    ? `Combined context from ${group.parent_clips.length} clips: ${group.clips.length} of ${group.requested_clip_count || group.clips.length} results.`
+    : `${group.parent_clips?.length ? "Added similar clips:" : "Found"} ${plural(group.clips.length, "clip")}.`;
   return `${found} Pick the ones you like, then go to the Editor.${group.selection_note ? ` (${group.selection_note})` : ""}`;
 }
 
@@ -47,6 +49,11 @@ function StudioPage() {
   const [preview, setPreview] = useState(null);         // the "watch it big" pop-up: { ref } for a clip, or { path | file, title }
   const [draft, setDraft] = useState("");               // the chat box text
   const [sending, setSending] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [chatFocus, setChatFocus] = useState(null);
+  const focusPrompt = useCallback((jobId) => {
+    setChatFocus(previous => ({ jobId, visit: (previous?.visit || 0) + 1 }));
+  }, []);
   // Re-sending the exact same prompt after a network hiccup reuses its request id, so the
   // backend never starts (and charges for) a second job
   const submission = useRef(null);
@@ -110,11 +117,12 @@ function StudioPage() {
     editorClips, pendingFile, sourceName,
     onChooseFile: chooseFile, onPreviewSource: previewSource, onToggle: toggleClip,
     onPreview: previewClip, onStop: stop, onRetry: retry, onReuse: setDraft,
-  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry]);
+    onFocusPrompt: focusPrompt,
+  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry, focusPrompt]);
 
   const graph = useMemo(
-    () => (session ? buildGraph(session, groups, actions) : { nodes: [], edges: [] }),
-    [session, groups, actions]
+    () => (session ? buildGraph(session, groups, { ...actions, showHistory }) : { nodes: [], edges: [] }),
+    [session, groups, actions, showHistory]
   );
 
   // ---------- Chat: your prompts + what happened to each ----------
@@ -124,18 +132,19 @@ function StudioPage() {
     const list = [];
     const addStatus = (jobId, key) => {
       const group = byId.get(jobId);
-      if (group) list.push({ id: `${key}-status`, role: "assistant", text: generationStatus(group) });
+      if (group) list.push({ id: `${key}-status`, role: "assistant", text: generationStatus(group), group });
     };
     for (const message of session.messages) {
-      const guided = message.references?.length ? ` (more like ${plural(message.references.length, "picked clip")})` : "";
-      list.push({ id: message.id, role: message.role, text: message.text + guided });
+      const guided = message.references?.length > 1 ? ` (combining ${plural(message.references.length, "picked clip")})`
+        : message.references?.length ? ` (more like ${plural(message.references.length, "picked clip")})` : "";
+      list.push({ id: message.id, role: message.role, text: message.text + guided, jobId: message.job_id });
       if (message.job_id) addStatus(message.job_id, message.id);
     }
     // Older generations that have no chat message yet
     for (const jobId of session.job_ids) {
       if (session.messages.some((m) => m.job_id === jobId)) continue;
       const group = byId.get(jobId);
-      if (group) list.push({ id: jobId, role: "user", text: group.prompt });
+      if (group) list.push({ id: jobId, role: "user", text: group.prompt, jobId });
       addStatus(jobId, jobId);
     }
     return list;
@@ -172,6 +181,7 @@ function StudioPage() {
         if (location.state?.file) navigate(location.pathname, { replace: true, state: null }); // a reload won't bring it back
       }
       submission.current = null;
+      setChatFocus(null);
       await refresh();
       return true;
     } catch (err) {
@@ -185,6 +195,7 @@ function StudioPage() {
 
   // ---------- Sessions ----------
   function switchSession(id) {
+    setChatFocus(null);
     setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
     navigate(`/projects/${projectId}/studio/${id}`);
     api.saveStudioState(projectId, id, {}).catch(() => {}); // remember it as the active one
@@ -193,6 +204,7 @@ function StudioPage() {
   async function createSession(name) {
     try {
       const created = await api.createStudioSession(projectId, name);
+      setChatFocus(null);
       setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
       await refresh();
       navigate(`/projects/${projectId}/studio/${created.id}`);
@@ -262,6 +274,8 @@ function StudioPage() {
       item: { title: clip.title || "Clip", path: clip.clip_url },
       clip: {
         start: clip.start, end: clip.end, explanation: clip.explanation, prompt: group.prompt,
+        referenceMatches: clip.reference_matches,
+        referenceLabels: graph.nodes.find(node => node.id === `clip:${shown.ref.job_id}:${index}`)?.data.referenceLabels,
         position: `${index + 1} of ${group.clips.length}`,
         picked: editorClips.some((item) => sameRef(item, shown.ref)),
         onTogglePick: () => toggleClip(shown.ref),
@@ -291,6 +305,11 @@ function StudioPage() {
       <SessionBar sessions={studio.sessions} activeId={session.id}
         onSwitch={switchSession} onCreate={createSession} onRename={renameSession}>
         {clipTotal > 0 && <span>{editorClips.length} of {plural(clipTotal, "clip")} picked</span>}
+        <button type="button" className="btn btn-small" aria-pressed={showHistory}
+          onClick={() => setShowHistory(value => !value)}
+          title="Earlier attempts stay saved. Picked clips and source references always remain visible.">
+          {showHistory ? 'Show latest attempts' : 'Show earlier attempts'}
+        </button>
         <button type="button" className={`btn btn-small ${editorClips.length ? "btn-primary" : "disabled"}`}
           disabled={!editorClips.length}
           title={editorClips.length ? undefined : "Pick at least one clip first"} onClick={goToEditor}>
@@ -299,7 +318,8 @@ function StudioPage() {
       </SessionBar>
 
       <div className="studio-body">
-        <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note} />
+        <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note}
+          focusRequest={chatFocus} onStop={stop} onRetry={retry} onReuse={setDraft} />
         <div className="studio-canvas-frame">
           <StudioCanvas nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onDropFile={chooseFile} onNodeDragStop={savePosition} />

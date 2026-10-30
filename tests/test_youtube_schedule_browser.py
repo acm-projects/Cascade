@@ -1,4 +1,7 @@
 """Calendar UI and native-scheduling state management in a real browser; Google is mocked."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,base64,json,sys,urllib.request
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))

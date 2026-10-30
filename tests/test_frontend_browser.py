@@ -3,6 +3,9 @@ Requires project_browser_server.py and isolated Chrome. Identity/generation and
 Clerk's external widget are fixtures; media, routes, persistence and downloads are real.
 Optional original-page screenshots use the /tmp migration snapshot manifest.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import base64
 import io

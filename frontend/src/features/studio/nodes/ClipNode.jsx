@@ -11,7 +11,7 @@ import { sameRef } from "../graph";
 //   data.revision   - a "more like this" update still running/failed for this slot (or null)
 //   data.editorClips, data.onToggle(ref), data.onPreview(clip, ref), data.onRetry(jobId)
 function ClipNode({ data }) {
-  const { clip, ref, label, number, revision, editorClips, onToggle, onPreview, onRetry } = data;
+  const { clip, ref, label, number, revision, editorClips, onToggle, onPreview, onRetry, referenceLabels = [] } = data;
   const selected = editorClips.some((item) => sameRef(item, ref));
   const updating = revision && ["queued", "processing"].includes(revision.state);
 
@@ -28,7 +28,16 @@ function ClipNode({ data }) {
         <span>{formatTime(clip.start)} – {formatTime(clip.end)}</span>
       </button>
       <strong className="studio-clip-title" title={clip.title}>{clip.title || "A moment from your video"}</strong>
+      {referenceLabels.length > 1 && <span className="studio-combination-badge">
+        Context from {referenceLabels.map(parent => `Clip ${parent.label}`).join(' + ')}
+      </span>}
       {clip.explanation && <span className="studio-clip-why" title={clip.explanation}>{clip.explanation}</span>}
+      {clip.reference_matches?.length > 1 && <details className="studio-blend-details nodrag nopan">
+        <summary>How this combines the clips</summary>
+        {clip.reference_matches.map(match => <p key={match.reference}>
+          <b>Clip {referenceLabels[match.reference - 1]?.label || match.reference}:</b> {match.explanation}
+        </p>)}
+      </details>}
       {revision && (
         <span className="studio-clip-revision" role="status">
           {updating ? "Finding similar moments…" : revision.state === "error" ? "Update failed. Your clip is kept." : "No new matches. Your clip is kept."}

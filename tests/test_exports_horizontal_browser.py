@@ -1,4 +1,7 @@
 """Native horizontal scroll, mouse drag, touch input, snapping and wave spread."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,base64,json,urllib.request
 from pathlib import Path
 from tests.test_editor_browser import Chrome

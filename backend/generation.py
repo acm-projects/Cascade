@@ -1,11 +1,33 @@
 """Generation request metadata and source-relative follow-up selection."""
 import json
 import math
+import os
+import shutil
+import hashlib
 
 from fastapi import HTTPException
 import re
 
-MAX_CLIPS = 12  # Bound encoder work and local selection while allowing varied counts.
+MAX_CLIPS = 50  # Bound work while supporting larger user-requested batches.
+
+
+def reuse_source(source, destination):
+    """Call only after ownership/source resolution. Hard links avoid copying multi-GB follow-ups."""
+    try:
+        os.link(source, destination)
+    except OSError:
+        shutil.copyfile(source, destination)
+    fingerprint = hashlib.sha256()
+    with destination.open('rb') as stream:
+        while chunk := stream.read(1024 * 1024):
+            fingerprint.update(chunk)
+    return fingerprint
+
+
+def is_expansion(prompt, parent):
+    return bool(parent and not parent.get('references')
+                and re.search(r'\bexpand\b|before and after|surrounding|more of the explanation', prompt, re.I)
+                and not re.search(r"(?:not|don't|never)\s+(?:expand|extend)", prompt, re.I))
 
 
 def options(folder):

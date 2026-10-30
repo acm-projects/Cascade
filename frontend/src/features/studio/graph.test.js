@@ -1,6 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildGraph,displayClips,sessionGroups} from './graph.js';
+import {buildGraph,displayClips,sessionGroups,visibleGenerationIds} from './graph.js';
+
+test('repeated requests from the same references replace the visible attempt, with history available',()=>{
+ const groups=[{job_id:'a',clips:[{},{}],state:'done'},
+ {job_id:'old',prompt:'Mix these',clips:[{}],state:'done',parent_clips:[{job_id:'a',clip_index:0},{job_id:'a',clip_index:1}]},
+ {job_id:'new',prompt:'I asked for two',clips:[],state:'processing',parent_clips:[{job_id:'a',clip_index:1},{job_id:'a',clip_index:0}]}];
+ const session={source_job:'a',job_ids:['a','old','new']};
+ const current=buildGraph(session,groups,{});
+ assert.ok(!current.nodes.some(n=>n.id==='clip:old:0'));
+ assert.ok(current.nodes.some(n=>n.id==='generation:new'));
+ assert.ok(current.nodes.some(n=>n.id==='clip:a:0'));
+ assert.ok(buildGraph(session,groups,{showHistory:true}).nodes.some(n=>n.id==='clip:old:0'));
+ assert.ok(visibleGenerationIds(session,groups,[{job_id:'old',clip_index:0}]).has('old'));
+ assert.equal(groups[1].clips.length,1,'saved results are never deleted');
+});
+
+test('older results used by a descendant stay visible and clip numbers stay stable',()=>{
+ const groups=[{job_id:'a',clips:[{},{}]},
+ {job_id:'old',clips:[{}],parent_clips:[{job_id:'a',clip_index:0}]},
+ {job_id:'child',clips:[{}],parent_clips:[{job_id:'old',clip_index:0}]},
+ {job_id:'new',clips:[{}],parent_clips:[{job_id:'a',clip_index:0}]}];
+ const session={source_job:'a',job_ids:groups.map(g=>g.job_id)};
+ const graph=buildGraph(session,groups,{});
+ assert.ok(graph.nodes.some(n=>n.id==='clip:old:0'));
+ assert.equal(graph.nodes.find(n=>n.id==='clip:new:0').data.label,'5');
+});
 
 test('clips 4 5 6 branch directly from clip 3 and can branch again',()=>{
  const groups=[{job_id:'a',clips:[{},{},{}],state:'done'},
@@ -29,7 +54,20 @@ test('legacy replacement data preserves parents and multiple references connect 
  {job_id:'a',clips:[{},{}],state:'done'},
  {job_id:'b',clips:[{}],state:'done',studio_revision_of:{job_id:'a',clip_index:0},parent_clips:[{job_id:'a',clip_index:0},{job_id:'a',clip_index:1}]}],{});
  assert.equal(nodes.filter(n=>n.type==='clip').length,3);
- assert.deepEqual(edges.filter(e=>e.target==='clip:b:0').map(e=>e.source),['clip:a:0','clip:a:1']);
+ assert.deepEqual(edges.filter(e=>e.target==='generation:b').map(e=>e.source),['clip:a:0','clip:a:1']);
+ assert.deepEqual(edges.filter(e=>e.target==='clip:b:0').map(e=>e.source),['generation:b']);
+});
+
+test('two-reference requests keep a combination hub with requested count and both output cards',()=>{
+ const groups=[{job_id:'a',clips:[{title:'Humor'},{title:'Action'}],state:'done'},
+ {job_id:'b',clips:[{title:'Blend one'},{title:'Blend two'}],state:'done',requested_clip_count:2,
+ parent_clips:[{job_id:'a',clip_index:0},{job_id:'a',clip_index:1}]}];
+ const {nodes,edges}=buildGraph({source_job:'a',job_ids:['a','b']},groups,{});
+ const hub=nodes.find(n=>n.id==='generation:b');
+ assert.equal(hub.data.group.requested_clip_count,2);
+ assert.deepEqual(hub.data.referenceLabels.map(r=>r.label),['1','2']);
+ assert.equal(edges.filter(e=>e.source==='generation:b').length,2);
+ for(const id of ['clip:b:0','clip:b:1'])assert.equal(nodes.find(n=>n.id===id).data.referenceLabels.length,2);
 });
 test('a session with no prompts yet shows only the source box',()=>{
  const {nodes,edges}=buildGraph({source_job:null,job_ids:[]},[],{});

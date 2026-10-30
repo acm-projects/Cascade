@@ -890,8 +890,19 @@ def process_upload(
         # moments across the whole video. Cutting, captions and storage below are unchanged.
         selected, transcript, metadata = select_with_agent(
             video_path, duration, search, target, progress, timer.start,
-            **({'requested_count':requested_count} if requested_count!=4 else {}))
+            **({'requested_count':requested_count} if requested_count!=4 else {}),
+            **({'exclude_windows': owner['exclude_windows']} if owner.get('exclude_windows') else {}),
+            **({'references': owner['parent_clips']} if len(owner.get('parent_clips', [])) > 1 else {}),
+            **({'request_prompt': original_search} if parent_context else {}))
         selected = followup_windows(selected, parent_context, original_search, duration, target, requested_count)
+        if owner.get('exclude_windows'):
+            # Also guard transformations performed after the agent's candidate checks.
+            before_exclusion = len(selected)
+            selected = [clip for clip in selected if not any(
+                min(clip['end'], end) - max(clip['start'], start) > .5 * min(clip['end'] - clip['start'], end - start)
+                for start, end in owner['exclude_windows'])]
+            if len(selected) < before_exclusion:
+                metadata['selection_note'] = f'Found {len(selected)} new clips; others were already in this session.'
         metadata['requested_clip_count']=requested_count
         if len(selected)<requested_count:
             metadata['selection_note']=f'Found {len(selected)} of {requested_count} requested suitable clips. '+metadata.get('selection_note','')
@@ -940,6 +951,16 @@ def process_upload(
                         "clip_url": f"/clips/{job_id}/{filename}",
                         "captions_url": f"/clips/{job_id}/{captions_filename}",
                     }
+                    # Publish a stable prefix as soon as it is playable. A later, faster
+                    # encoder must not change the clip indexes of already selected cards.
+                    ready = []
+                    for index in range(1, total + 1):
+                        if index not in results:
+                            break
+                        ready.append(public_clip(results[index]))
+                    if ready and 'first_clip_ready_seconds' not in metadata:
+                        metadata['first_clip_ready_seconds'] = round(time.monotonic() - started, 3)
+                    update_job(job_id, clips=ready, ready_clip_count=len(ready), requested_clip_count=requested_count)
             except BaseException:
                 for future in futures:
                     future.cancel()  # clips not started yet are skipped; running encodes finish on their own
@@ -989,7 +1010,7 @@ def upload_video(
     clip_length: int = Form(30),
     project_id: str = Form(...),
     engine: str = Form("agent"),
-    clip_count: int = Form(4, ge=1, le=12),
+    clip_count: int = Form(4, ge=1, le=50),
     source_job: str | None = Form(None),
     parent_job: str | None = Form(None),
     parent_clip_index: int | None = Form(None, ge=0),
@@ -999,7 +1020,7 @@ def upload_video(
         integration.require_project(project_id, request.state.user_id)
         from backend.generation import MAX_CLIPS
         if not 1 <= clip_count <= MAX_CLIPS:
-            raise HTTPException(400, 'Choose 1–12 clips.')
+            raise HTTPException(400, 'Choose 1–50 clips.')
         parent_context = None
         from backend import studio
         studio_context = studio.prepare_upload(sys.modules[__name__], integration, project_id,
@@ -1093,12 +1114,13 @@ def upload_video(
         try:
             fingerprint = hashlib.sha256()
             if source_job:
-                video.file.close()
-                video.file = original.open('rb')
-            with video_path.open("wb") as destination:
-                while chunk := video.file.read(1024 * 1024):
-                    fingerprint.update(chunk)
-                    destination.write(chunk)
+                from backend.generation import reuse_source
+                fingerprint = reuse_source(original, video_path)
+            else:
+                with video_path.open("wb") as destination:
+                    while chunk := video.file.read(1024 * 1024):
+                        fingerprint.update(chunk)
+                        destination.write(chunk)
 
             if video_path.stat().st_size == 0:
                 raise HTTPException(
@@ -1126,6 +1148,7 @@ def upload_video(
                     "parent_clip": (studio_context['references'][0] if studio_context and studio_context['references'] else parent_context),
                     "parent_clips": studio_context['references'] if studio_context else [],
                     "studio_session_id": studio_context['session_id'] if studio_context else None,
+                    "exclude_windows": studio_context.get('exclude_windows', []) if studio_context else [],
                     "studio_revision_of": studio_context.get('revision_of') if studio_context else None,
                     "studio_revision_targets": studio_context.get('revision_targets', []) if studio_context else [],
                     "request_id": studio_context['request_id'] if studio_context else None,

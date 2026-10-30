@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict
 class GenerationInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(min_length=1, max_length=2000)
-    clip_count: int = Field(default=4, strict=True, ge=1, le=12)
+    clip_count: int = Field(default=4, strict=True, ge=1, le=50)
     source_job: str
     parent_job: str | None = None
     parent_clip_index: int | None = Field(default=None, strict=True, ge=0)

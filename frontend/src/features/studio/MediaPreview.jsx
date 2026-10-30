@@ -70,6 +70,12 @@ function MediaPreview({ item, clip, onClose }) {
             {clip.prompt && <span>Prompt: <b>“{clip.prompt}”</b></span>}
           </div>
           {clip.explanation && <p className="studio-preview-why">{clip.explanation}</p>}
+          {clip.referenceLabels?.length > 1 && <section className="studio-combination" aria-label="Combined clip context">
+            <strong>Combines {clip.referenceLabels.map(ref => `Clip ${ref.label}`).join(' + ')}</strong>
+            {clip.referenceMatches?.map(match => <p key={match.reference}>
+              <b>Clip {clip.referenceLabels[match.reference - 1]?.label || match.reference}:</b> {match.explanation}
+            </p>)}
+          </section>}
           <div className="studio-preview-actions">
             <button type="button" className="btn btn-small" onClick={onPrevious} disabled={!onPrevious}
               aria-label="Previous clip" title="Previous clip (←)">←</button>
