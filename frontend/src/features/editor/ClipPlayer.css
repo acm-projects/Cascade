@@ -24,6 +24,20 @@
   box-shadow: var(--shadow-soft);
 }
 
+/* Fill mode: drag the video to reposition it */
+.clip-player-frame.can-drag {
+  cursor: grab;
+  touch-action: none;
+}
+
+.clip-player-frame.can-drag:active {
+  cursor: grabbing;
+}
+
+.clip-player-frame.can-drag .clip-player-video {
+  cursor: inherit;
+}
+
 .clip-player-video {
   display: block;
   width: 100%;

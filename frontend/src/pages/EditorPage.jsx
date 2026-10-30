@@ -13,7 +13,8 @@ import useClipDraft from "../features/editor/useClipDraft";
 import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
 import Timeline from "../features/editor/Timeline";
-import { RatioControls, TrimControls } from "../features/editor/EditorControls";
+import { TrimControls } from "../features/editor/EditorControls";
+import AspectTab from "../features/editor/tabs/AspectTab";
 import CaptionsTab from "../features/editor/tabs/CaptionsTab";
 
 const panelTabs = ["Trim", "Captions", "Aspect Ratio", "Chat"];
@@ -157,7 +158,8 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
             {draft.error ? (
               <EmptyState icon="🌧️" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
-              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} />
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
             ) : (
               <div className="editor-loading"><Spinner label="Loading clip" /></div>
             )}
@@ -195,7 +197,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
                 player={player} view={captionsView} onView={setCaptionsView}
                 focusedCue={focusedCue} onFocusCue={setFocusedCue} />
             ) : panelTab === "Aspect Ratio" ? (
-              <RatioControls state={state} change={change} />
+              <AspectTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo} />
             ) : (
               <ChatBox messages={draft.chat} onSend={sendChat} disabled={thinking}
                 placeholder={thinking ? "Editing…" : "e.g. cut the first 2 seconds, make captions yellow"} />

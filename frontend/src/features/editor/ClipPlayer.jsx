@@ -3,7 +3,7 @@ import useApi from "../../api/useApi";
 import Spinner from "../../components/ui/Spinner";
 import { formatTime } from "../../utils/time";
 import { clipMediaPath } from "./clips";
-import { activeCueIndex, effectsFilter, frameSize } from "./playerMath";
+import { activeCueIndex, dragFraming, effectsFilter, frameSize } from "./playerMath";
 import "./ClipPlayer.css";
 
 const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 4 / 3 };
@@ -21,7 +21,9 @@ function withOpacity(hex, opacity) {
 //   clip  - { job_id, clip_index } ; info - { duration, width, height, cues } ; state - the draft
 //   controlRef - optional useRef() from the page: gets { seek(t), getTime(), isReady() } so the timeline
 //                can move the playhead and jump the video
-function ClipPlayer({ projectId, clip, info, state, controlRef }) {
+//   framing    - optional { patch, recordUndo } from useClipDraft: in Fill mode you can then drag the video
+//                to choose what stays in the frame (one undo step per drag)
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -31,6 +33,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [loop, setLoop] = useState(true);
+  const drag = useRef(null);        // the Fill-mode drag in progress
+  const justDragged = useRef(false); // so letting go after a drag doesn't also play/pause
   const [stage, setStage] = useState({ width: 0, height: 0 });
 
   // Download the clip with the sign-in token (videos can't send it themselves)
@@ -109,6 +113,10 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   }
 
   function togglePlay() {
+    if (justDragged.current) {
+      justDragged.current = false;
+      return;
+    }
     const video = videoRef.current;
     if (video.paused) video.play();
     else video.pause();
@@ -124,11 +132,43 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   const caption = cueIndex >= 0 ? state.texts?.[cueIndex] ?? info.cues[cueIndex].text : null;
   const outputHeight = Math.max(info.height, 1);
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
+  const canDrag = Boolean(framing) && !audioOnly && composition.mode === "fill";
+
+  // ---------- Drag to reposition (Fill) ----------
+  function startDrag(event) {
+    if (!canDrag || event.button !== 0) return;
+    drag.current = { x: event.clientX, y: event.clientY, from: { x: composition.x, y: composition.y }, before: state, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event) {
+    const current = drag.current;
+    if (!current) return;
+    const dx = event.clientX - current.x;
+    const dy = event.clientY - current.y;
+    if (!current.moved && Math.hypot(dx, dy) < 4) return; // a small wobble is still a click
+    current.moved = true;
+    const video = videoRef.current;
+    const next = dragFraming(current.from, dx, dy, { width: frameWidth, height: frameHeight },
+      { width: video.videoWidth, height: video.videoHeight });
+    framing.patch((s) => ({ ...s, composition: { ...s.composition, ...next } }));
+  }
+
+  function endDrag() {
+    const current = drag.current;
+    drag.current = null;
+    if (!current?.moved) return;
+    framing.recordUndo(current.before);
+    justDragged.current = true;
+  }
 
   return (
     <div className="clip-player">
       <div ref={stageRef} className="clip-player-stage">
-        <div className="clip-player-frame" style={{ width: frameWidth, height: frameHeight, background: composition.background }}>
+        <div className={`clip-player-frame${canDrag ? " can-drag" : ""}`}
+          style={{ width: frameWidth, height: frameHeight, background: composition.background }}
+          title={canDrag ? "Drag to choose what stays in the frame" : undefined}
+          onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
           {audioOnly ? <>
             <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>🎧 Audio recording</p>
             <audio ref={videoRef} src={url} muted={muted} aria-label="Edited audio preview"
