@@ -14,6 +14,9 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import app1
+from backend.core import jobs as core_jobs
+from backend.core import media as core_media
+from backend.core import auth
 from backend import editor
 
 
@@ -30,7 +33,7 @@ class EditorTests(unittest.TestCase):
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.patches = [patch.dict(os.environ, {'CASCADE_METADATA_STORE':'local'}), patch.object(app1, 'JOBS_DIR', Path(self.temp.name)), patch.object(app1, 'verify_clerk_token', side_effect=lambda token: token)]
+        self.patches = [patch.dict(os.environ, {'CASCADE_METADATA_STORE':'local'}), patch.object(core_jobs, 'JOBS_DIR', Path(self.temp.name)), patch.object(auth, 'verify_clerk_token', side_effect=lambda token: token)]
         for p in self.patches: p.start()
         self.client = TestClient(app1.app)
         self.headers = {'Authorization':'Bearer editor-user'}
@@ -42,18 +45,18 @@ class EditorTests(unittest.TestCase):
     def tearDown(self):
         for p in reversed(self.patches): p.stop()
         self.temp.cleanup()
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
 
     def job(self, count, jid, kind='generation', parent=None):
-        folder = app1.JOBS_DIR / jid
+        folder = core_jobs.JOBS_DIR / jid
         folder.mkdir()
-        app1.save_json(folder/'owner.json', {'user_id':'editor-user','project_id':self.pid,'kind':kind,'parent_job':parent})
+        core_jobs.save_json(folder/'owner.json', {'user_id':'editor-user','project_id':self.pid,'kind':kind,'parent_job':parent})
         clips = []
         for i in range(count):
             shutil.copyfile(self.fixture, folder/f'clip_{i+1}.mp4')
             (folder/f'clip_{i+1}.vtt').write_text('WEBVTT\n\n00:00.500 --> 00:02.500\nHello world\n\n')
             clips.append({'start':101,'end':104,'title':'Clip','clip_url':f'/clips/{jid}/clip_{i+1}.mp4','captions_url':f'/clips/{jid}/clip_{i+1}.vtt'})
-        app1.save_json(folder/'results.json',{'clips':clips})
+        core_jobs.save_json(folder/'results.json',{'clips':clips})
         return jid
 
     def get(self,url=None):
@@ -100,7 +103,7 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(self.client.get(self.url+'/thumbnail',headers=self.headers).content,result.content)
         other=self.job(1,'b'*32)
         other_url=self.base+'/'+other+'/0/thumbnail'
-        other_source=app1.JOBS_DIR/other/'clip_1.mp4'
+        other_source=core_jobs.JOBS_DIR/other/'clip_1.mp4'
         subprocess.run(['ffmpeg','-v','error','-y','-f','lavfi','-i',
                         'color=c=red:s=320x180:d=1','-c:v','libx264',str(other_source)],check=True)
         other_result=self.client.get(other_url,headers=self.headers)
@@ -112,7 +115,7 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(self.client.get(other_url,headers=self.headers).content,result.content)
         self.assertIn(self.client.get(other_url,headers={'Authorization':'Bearer another-user'}).status_code,(403,404))
         self.assertEqual(self.client.get(self.base+'/'+other+'/99/thumbnail',headers=self.headers).status_code,404)
-        (app1.JOBS_DIR/other/'clip_1.mp4').unlink()
+        (core_jobs.JOBS_DIR/other/'clip_1.mp4').unlink()
         self.assertEqual(self.client.get(other_url,headers=self.headers).status_code,404)
 
     def test_effects_persist_validate_and_change_real_export(self):
@@ -188,7 +191,7 @@ class EditorTests(unittest.TestCase):
         draft['chat']=[{'role':'user','text':'Make captions yellow'}]
         draft['updated_at']=123
         self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,200)
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
         self.assertEqual(self.get()['draft'],draft)
         other=self.get(self.base+'/'+'b'*32+'/1')['draft']
         self.assertEqual(other['state']['start'],0)
@@ -206,7 +209,7 @@ class EditorTests(unittest.TestCase):
             self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,422)
         draft=self.get()['draft']; draft['state']['captions']['color']='red; execute'
         self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,422)
-        with patch.object(app1,'save_json',side_effect=OSError('disk unavailable')):
+        with patch.object(core_jobs,'save_json',side_effect=OSError('disk unavailable')):
             client=TestClient(app1.app,raise_server_exceptions=False)
             self.assertEqual(client.put(self.url,headers=self.headers,json=self.get()['draft']).status_code,500)
 
@@ -253,7 +256,7 @@ class EditorTests(unittest.TestCase):
     def test_vtt_entities_are_plain_text_without_mutating_manual_edits(self):
         text="Let's say <that> & \"again\"."
         path=Path(self.temp.name)/'escaped.vtt'
-        app1.write_captions(path,[{'start':100,'end':102,'text':text}],100,103)
+        core_media.write_captions(path,[{'start':100,'end':102,'text':text}],100,103)
         self.assertNotIn('&#x27;',path.read_text())
         cues=editor.parse_vtt(path.read_text())
         self.assertEqual(cues,[{'start':0,'end':2,'text':text}])
@@ -276,7 +279,7 @@ class EditorTests(unittest.TestCase):
         exported=Path(self.temp.name)/'exported.mp4'; exported.write_bytes(response.content)
         duration=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(exported)]))
         self.assertAlmostEqual(duration,1,delta=.1)
-        self.assertEqual((app1.JOBS_DIR/self.jid/'clip_1.mp4').read_bytes(),before)
+        self.assertEqual((core_jobs.JOBS_DIR/self.jid/'clip_1.mp4').read_bytes(),before)
         # Caption controls must affect encoded pixels, not merely metadata.
         state.captions.enabled=False
         clean=self.client.post(self.url+'/export',headers=self.headers,json=state.model_dump())

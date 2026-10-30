@@ -3,6 +3,7 @@ import math
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend import broll as stocklib
+from .advanced_models import AudioSegment, Motion, TextOverlay, Transition, TimelineSpan, SpeedRamp, CutAccent, ReelInfo
 
 
 class Captions(BaseModel):
@@ -17,6 +18,10 @@ class Captions(BaseModel):
     opacity: float = Field(default=0, ge=0, le=1)
     position: Literal['top', 'middle', 'bottom'] = 'bottom'
     bold: bool = False
+    animation: Literal['none','pop','karaoke'] = 'none'
+    max_words: int = Field(default=0, ge=0, le=8)
+    emphasis: list[str] = Field(default_factory=list, max_length=12)
+    highlight: str = Field(default='#ffdc39', pattern=r'^#[0-9a-fA-F]{6}$')
 
 
 class Composition(BaseModel):
@@ -73,6 +78,15 @@ class Edit(BaseModel):
     reframe: Reframe = Field(default_factory=Reframe)
     texts: dict[str, str] = Field(default_factory=dict, max_length=1000)
     broll: list[stocklib.Segment] = Field(default_factory=list, max_length=30)
+    audio: list[AudioSegment] = Field(default_factory=list, max_length=24)
+    motion: list[Motion] = Field(default_factory=list, max_length=30)
+    text_overlays: list[TextOverlay] = Field(default_factory=list, max_length=30)
+    transition: Transition = Field(default_factory=Transition)
+    timeline: list[TimelineSpan] = Field(default_factory=list, max_length=20)
+    speed: list[SpeedRamp] = Field(default_factory=list, max_length=8)
+    accents: list[CutAccent] = Field(default_factory=list, max_length=8)
+    reel: ReelInfo | None = None
+    dialogue_volume: float = Field(default=1, ge=0, le=2)
 
 
 class Message(BaseModel):
@@ -89,14 +103,17 @@ class Draft(BaseModel):
 class ChatInput(BaseModel):
     state: Edit
     chat: list[Message] = Field(default_factory=list, max_length=200)
-    message: str = Field(min_length=1, max_length=2000)
+    message: str = Field(min_length=1, max_length=8000)
     result_ids: list[str] = Field(default_factory=list, max_length=120)
     selected_segment: str | None = Field(default=None, max_length=32)
+    research_id: str | None = Field(default=None,pattern='^[a-f0-9]{32}$')
+    suggestion: int | None = Field(default=None,ge=0,le=7)
+    suggestions: list[int] | None = Field(default=None,min_length=1,max_length=8)
 
 
 class Action(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
-    type: Literal['trim_first', 'keep_first', 'reset_trim', 'captions_enabled', 'caption_color', 'caption_bold', 'caption_position', 'caption_text', 'caption_settings', 'reframe_focus', 'broll_search', 'broll_insert', 'broll_update', 'broll_remove']
+    type: Literal['trim_first', 'keep_first', 'reset_trim', 'captions_enabled', 'caption_color', 'caption_bold', 'caption_position', 'caption_text', 'caption_settings', 'reframe_focus', 'broll_search', 'broll_insert', 'broll_update', 'broll_remove', 'broll_auto', 'audio_add', 'audio_update', 'audio_remove', 'motion', 'text_overlay', 'color_adjust', 'transition', 'caption_animation', 'dialogue_volume', 'high_energy_reel', 'speed_ramp', 'cut_accent']
     focus: Literal['speaker','both','left','right','off'] | None = None
     settings: Captions | None = None
     seconds: float | None = Field(default=None, gt=0)
@@ -114,12 +131,24 @@ class Action(BaseModel):
     offset: float | None = Field(default=None, ge=0)
     mode: Literal['fit', 'fill'] | None = None
     time_basis: Literal['generated', 'preview'] | None = None
+    anchor: str | None = Field(default=None, max_length=200)
+    audio: AudioSegment | None = None
+    motion: Motion | None = None
+    overlay: TextOverlay | None = None
+    effects: Effects | None = None
+    transition: Transition | None = None
+    track: Literal['music','sfx'] | None = None
+    volume: float | None = Field(default=None, ge=0, le=2)
+    animation: Literal['none','pop','karaoke'] | None = None
+    speed: SpeedRamp | None = None
+    accent: CutAccent | None = None
 
 
 class Proposal(BaseModel):
     model_config = ConfigDict(extra='forbid')
     message: str = Field(min_length=1, max_length=2000)
-    actions: list[Action] = Field(max_length=10)
+    actions: list[Action] = Field(max_length=30)
+    unsupported: list[str] = Field(default_factory=list, max_length=20)
 
 
 class CaptionImage(BaseModel):

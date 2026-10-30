@@ -55,6 +55,8 @@ export function CaptionControls({ state, change, burnedIn }) {
           <span>Size <b>{captions.size}</b></span>
           <input type="range" min={12} max={80} value={captions.size} onChange={(e) => set("size", Number(e.target.value))} />
         </label>
+        <label className="editor-control">Animation<select value={captions.animation || 'none'} onChange={e => set('animation', e.target.value)}><option value="none">None</option><option value="pop">Pop in</option><option value="karaoke">Highlighted words (estimated timing)</option></select></label>
+        <label className="editor-control">Highlight color<input type="color" value={captions.highlight || '#ffdc39'} onChange={e => set('highlight', e.target.value)} /></label>
         <div className="editor-control-row">
           <label className="editor-control">
             <span>Text</span>

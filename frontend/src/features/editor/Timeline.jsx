@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { formatTime } from "../../utils/time";
 import { moveEnd, moveStart, rulerStep, rulerTicks, timeToX, xToTime } from "./timelineMath";
 import "./Timeline.css";
+import BrollTrack from "./BrollTrack";
 
 const pct = (t, duration) => `${timeToX(t, duration, 100)}%`; // a time as a % across the track
 
@@ -22,7 +23,7 @@ function firstWords(text, count = 4) {
 //   player           - the ClipPlayer's controlRef ({ seek(t), getTime() })
 //   change, patch, recordUndo - from useClipDraft
 //   focusedCue, onCueClick(index) - which caption block is highlighted
-function Timeline({ duration, cues, state, player, change, patch, recordUndo, focusedCue, onCueClick }) {
+function Timeline({ duration, cues, state, player, change, patch, recordUndo, focusedCue, onCueClick, selectedBroll, onSelectBroll, disabled }) {
   const trackRef = useRef(null);
   const playheadRef = useRef(null);
   const drag = useRef(null); // { kind: "start" | "end" | "playhead", before }
@@ -151,6 +152,9 @@ function Timeline({ duration, cues, state, player, change, patch, recordUndo, fo
         })}
       </div>
 
+      <BrollTrack state={state} duration={duration} player={player} change={change} patch={patch}
+        recordUndo={recordUndo} selectedId={selectedBroll} onSelect={onSelectBroll} disabled={disabled} />
+      {[['Kept footage', (state.timeline || []).map(s => ({ start: s.start, duration: s.end - s.start }))], ['Speed ramps', (state.speed || []).map(s => ({ start: s.start, duration: s.end - s.start }))], ['Music', (state.audio || []).filter(s => s.track === 'music')], ['Sound effects', (state.audio || []).filter(s => s.track === 'sfx')], ['Zoom / shake', state.motion || []], ['Text', state.text_overlays || []]].filter(([,items]) => items.length).map(([name,items]) => <div className="timeline-added" key={name} aria-label={name+' track'}><small>{name}</small><div>{items.map((item,i) => <button key={item.id || i} type="button" className="timeline-cue" style={{ left: pct(item.start,duration), width: pct(item.duration,duration) }} title={`${name} ${item.start.toFixed(2)}–${(item.start+item.duration).toFixed(2)}s`} onClick={() => player.current?.seek(item.start)}>{item.track || item.text || name}</button>)}</div></div>)}
       <div className="timeline-footer">
         <span>Trim {time(state.start)} – {time(state.end)} · {time(state.end - state.start)} long</span>
         <span className="timeline-keys">Drag the green handles · click to jump · <kbd>[</kbd> <kbd>]</kbd> trim at playhead</span>

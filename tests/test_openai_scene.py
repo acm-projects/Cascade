@@ -9,6 +9,8 @@ from unittest.mock import patch
 
 import httpx
 import app1
+from backend.core import jobs as core_jobs
+from backend.core import media as core_media
 from backend import openai_scene as scene
 
 
@@ -137,20 +139,20 @@ class OpenAISceneTests(unittest.TestCase):
             source = folder / 'source.video'
             subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=160x120:r=10:d=40',
                             '-c:v', 'libx264', '-f', 'mp4', str(source)], check=True, timeout=30)
-            app1.save_json(folder / 'owner.json', {'user_id': 'test', 'user_folder': 'users'})
-            app1.jobs[job_id] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
+            core_jobs.save_json(folder / 'owner.json', {'user_id': 'test', 'user_folder': 'users'})
+            core_jobs.jobs[job_id] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
             with patch.dict(os.environ, {'OPENAI_API_KEY': 'test-key', 'CASCADE_STORAGE': 'local'}), \
                  patch.object(scene.httpx, 'Client', side_effect=lambda **kwargs: real_client(transport=httpx.MockTransport(handle), **kwargs)):
                 selected, _ = scene.select_scenes(source, folder, 40, [], 'four funny clips', 15,
-                    lambda _: None, lambda _: None, app1.run_command, app1.save_json)
+                    lambda _: None, lambda _: None, core_media.run_command, core_jobs.save_json)
                 self.assertEqual(len(selected),4)
                 _, metadata = scene.select_scenes(source, folder, 40, [], 'four funny clips', 15,
-                    lambda _: None, lambda _: None, app1.run_command, app1.save_json)
+                    lambda _: None, lambda _: None, core_media.run_command, core_jobs.save_json)
                 self.assertTrue(metadata['selection_cached'])
                 self.assertEqual(len(requests), 1)
                 _, metadata = scene.select_scenes(source, folder, 40, [], 'four surprising moments', 15,
-                    lambda _: None, lambda _: None, app1.run_command, app1.save_json)
+                    lambda _: None, lambda _: None, core_media.run_command, core_jobs.save_json)
                 self.assertFalse(metadata['selection_cached'])
                 self.assertEqual(len(requests), 2)
                 self.assertNotIn('test-key', (folder / 'openai_selection.json').read_text())
-            app1.jobs.pop(job_id, None)
+            core_jobs.jobs.pop(job_id, None)

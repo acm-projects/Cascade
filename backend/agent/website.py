@@ -1,4 +1,4 @@
-"""Bridge between the website's job pipeline (app1.process_upload) and the clip agent.
+"""Bridge between the website's job pipeline (backend.routers.clips.process_upload) and the clip agent.
 
 `select_with_agent()` returns what the website already expects from a selection engine - clips shaped
 {start, end, title, explanation} - plus the transcript (the website writes caption files from it) and

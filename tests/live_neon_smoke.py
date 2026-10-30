@@ -11,7 +11,9 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app1
-import integration
+from backend.core import jobs as core_jobs
+from backend.core import auth
+from backend.services import projects_store
 from fastapi.testclient import TestClient
 
 
@@ -22,10 +24,10 @@ def run():
     headers = {'Authorization': 'Bearer ' + user}
     other = {'Authorization': 'Bearer other-' + user}
     keys = []
-    with tempfile.TemporaryDirectory() as tmp, patch.object(app1, 'JOBS_DIR', Path(tmp)), \
+    with tempfile.TemporaryDirectory() as tmp, patch.object(core_jobs, 'JOBS_DIR', Path(tmp)), \
             patch.dict(os.environ, {'CASCADE_METADATA_STORE': 'neon'}), \
-            patch.object(app1, 'verify_clerk_token', side_effect=lambda token: token):
-        store = app1.metadata_store()
+            patch.object(auth, 'verify_clerk_token', side_effect=lambda token: token):
+        store = core_jobs.metadata_store()
         try:
             with TestClient(app1.app) as client:
                 assert client.get('/api/health').json()['metadata_storage'] == 'neon'
@@ -39,7 +41,7 @@ def run():
                 response = client.post('/api/projects', headers=headers, json={'name': 'Synthetic Neon persistence test'})
                 assert response.status_code == 201, response.status_code
                 pid = response.json()['id']
-                project_path = integration.project_dir(user) / (pid + '.json')
+                project_path = projects_store.project_dir(user) / (pid + '.json')
                 keys.append(store.key(project_path))
                 original_created = response.json()['created_at']
                 assert response.json()['thumbnail_key'] is None
@@ -48,13 +50,13 @@ def run():
                 assert renamed.json()['created_at'] == original_created
                 assert client.patch(f'/api/projects/{pid}', headers=other, json={'name': 'Forbidden'}).status_code == 404
                 assert len(client.get('/api/projects?q=RENAMED', headers=headers).json()['projects']) == 1
-                settings_path = integration.project_dir(user) / 'settings' / 'preferences.json'
+                settings_path = projects_store.project_dir(user) / 'settings' / 'preferences.json'
                 keys.append(store.key(settings_path))
                 assert client.post('/api/settings', headers=headers, json={'tone': 'funny'}).status_code == 200
-                jid, folder = integration.new_feature_job({'user_id': user, 'project_id': pid}, 'generation')
+                jid, folder = projects_store.new_feature_job({'user_id': user, 'project_id': pid}, 'generation')
                 (folder / 'source.video').write_bytes(b'synthetic-source-not-for-processing')
                 keys.extend(store.key(folder / name) for name in ('owner.json', 'progress.json', 'results.json'))
-                integration.finish_feature(jid, {'clips': [{'clip_url': f'/clips/{jid}/clip_1.mp4',
+                projects_store.finish_feature(jid, {'clips': [{'clip_url': f'/clips/{jid}/clip_1.mp4',
                     'start': 0, 'end': 5, 'title': 'Synthetic clip',
                     'captions_url': f'/clips/{jid}/clip_1.vtt', 'storage': 's3',
                     's3_bucket': 'synthetic-test', 'clip_s3_key': 'synthetic-only'}]})
@@ -74,7 +76,7 @@ def run():
                 # Remove local metadata and clear process memory: reads must come from Neon.
                 for path in Path(tmp).rglob('*.json'):
                     path.unlink()
-                app1.jobs.pop(jid, None)
+                core_jobs.jobs.pop(jid, None)
                 result = client.get(f'/api/projects/{pid}', headers=headers)
                 assert result.status_code == 200
                 assert len(result.json()['saved_clips']) == 1

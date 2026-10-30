@@ -1,6 +1,6 @@
 import { apiFetch } from "./client";
 
-// Projects: backend/integration.py and backend/project_actions.py
+// Projects: backend/routers/projects.py and backend/routers/generations.py
 // A project looks like: { id, name, user_id, created_at (unix seconds), saved_clips: [{ job_id, clip_index }] }
 
 /**
@@ -25,6 +25,10 @@ export function createProject(token, name) {
  */
 export function getProject(token, projectId) {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, { token });
+}
+
+export function updateProject(token, projectId, changes) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, { token, method: "PATCH", body: changes });
 }
 
 /**

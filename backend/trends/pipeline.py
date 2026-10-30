@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import yt_dlp
+from .diagnostics import stage,ydl_options
 
 from backend.cascade_llm import OPENAI, make_client, selected_model, selected_provider, structured_json
 from backend.cascade_stt import transcribe_media
@@ -67,7 +68,17 @@ TAG_SCHEMA = {
 def download_video(video_id: str, dest_dir: Path) -> Path:
     """Download a YouTube video by id into dest_dir, return the file path."""
     out_template = str(dest_dir / f"{video_id}.%(ext)s")
+    def duration_filter(info, *, incomplete=False):
+        if (info.get('duration') or 0)>600:
+            raise RuntimeError(f"Reference duration {info['duration']:.0f}s exceeds the 600s analysis limit.")
+        return None
     ydl_opts = {
+        **ydl_options(),
+        "socket_timeout": 25,
+        "retries": 1,
+        "fragment_retries": 1,
+        "noplaylist": True,
+        "match_filter": duration_filter,
         "format": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]/best",
         "merge_output_format": "mp4",
         "outtmpl": out_template,
@@ -156,7 +167,7 @@ def _has_audio_stream(video_path: Path) -> bool:
 
 
 def _run_ffmpeg(args: list[str]) -> None:
-    result = subprocess.run(args, capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True, timeout=180)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg failed: {result.stderr.strip()}")
 
@@ -286,16 +297,17 @@ def analyze_video_file(
     emit = progress or (lambda msg: None)
 
     emit("Extracting frames")
-    frames = extract_frames(video_path, work_dir)
+    reference=work_dir.name if len(work_dir.name)==11 else None
+    frames = stage('video_frames',extract_frames,video_path,work_dir,reference=reference)
 
     emit("Extracting audio")
-    audio_path = extract_audio(video_path, work_dir)
+    audio_path = stage('audio_extract',extract_audio,video_path,work_dir,reference=reference)
 
     emit("Transcribing audio" if audio_path else "No audio track found, skipping transcription")
-    transcript = transcribe(audio_path)
+    transcript = stage('transcription',transcribe,audio_path,reference=reference)
 
     emit("Tagging with Claude")
-    tags = extract_tags(frames, transcript)
+    tags = stage('ai_tagging',extract_tags,frames,transcript,reference=reference)
 
     emit("Done")
     return {"tags": tags, "transcript": transcript}
@@ -310,5 +322,5 @@ def analyze_youtube_video(
     emit("Downloading video")
     video_dir = work_dir / video_id
     video_dir.mkdir(exist_ok=True)
-    video_path = download_video(video_id, video_dir)
+    video_path = stage('download',download_video,video_id,video_dir,reference=video_id)
     return analyze_video_file(video_path, video_dir, progress=progress)

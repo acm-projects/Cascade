@@ -14,6 +14,8 @@ import shutil
 import tempfile
 import threading
 import uuid
+import time
+from collections import Counter
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
@@ -102,7 +104,7 @@ async def analyze(
 
     job_id = _new_job()
 
-    if cache_path.exists():
+    if cache_path.exists() and time.time()-cache_path.stat().st_mtime < 21600:
         shutil.rmtree(work_dir, ignore_errors=True)
         _finish_job(job_id, json.loads(cache_path.read_text()), from_cache=True)
         return {"job_id": job_id}
@@ -116,7 +118,7 @@ def _result_cache_key(topic: str, video_hash: str) -> str:
     # The model is part of the key, so switching provider re-analyzes instead of serving a
     # result produced by the other one.
     return hashlib.sha256(
-        f"{selected_model()}|{normalized_topic}|{video_hash}".encode("utf-8")
+        f"provenance-v2|{selected_model()}|{normalized_topic}|{video_hash}".encode("utf-8")
     ).hexdigest()
 
 
@@ -147,6 +149,7 @@ def _run_analysis(
             return
 
         trending_results = []
+        failures = []
         for i, tv in enumerate(trending_videos, start=1):
             def report(msg: str, i=i, title=tv["title"]) -> None:
                 report_progress(f"Trending video {i}/{len(trending_videos)} ({title}): {msg}")
@@ -157,6 +160,7 @@ def _run_analysis(
             except Exception:
                 logger.exception("Failed to analyze trending video %s", tv["video_id"])
                 # Skip this one video rather than failing the whole request.
+                failures.append({'url': tv['url'], 'reason': 'Reference analysis failed.'})
                 continue
 
         if not trending_results:
@@ -183,11 +187,17 @@ def _run_analysis(
                     "channel": r["channel"],
                     "url": r["url"],
                     "tags": r["tags"],
+                    "published_at": r.get('published_at'),
+                    "view_count": r.get('view_count'),
                 }
                 for r in trending_results
             ],
             "your_video_tags": your_analysis["tags"],
             "comparison": comparison,
+            "researched_at": time.time(),
+            "expires_at": time.time()+21600,
+            "failures": failures,
+            "source": "YouTube",
         }
         cache_path.write_text(json.dumps(result))
         _finish_job(job_id, result)
@@ -243,7 +253,8 @@ def _compare_tags(your_tags: dict, trending_tags_list: list[dict]) -> dict:
         if your_value and your_value in trending_values:
             matching_traits.append(f"{field}: {your_value}")
         elif trending_values:
-            common = max(trending_values, key=lambda v: v)
+            counts = Counter(str(tags.get(field, '')).lower() for tags in trending_tags_list if tags.get(field))
+            common = sorted(counts, key=lambda v: (-counts[v], v))[0]
             missing_traits.append(f"{field}: trending videos favor '{common}'")
 
     narrative = _build_narrative(matching_traits, missing_traits)

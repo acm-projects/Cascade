@@ -8,6 +8,7 @@ import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/ProjectContext";
 import useApi from "../api/useApi";
+import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
 import ProjectCard from "../components/ProjectCard";
 import UserAvatar from "../components/UserAvatar";
 import Button from "../components/ui/Button";
@@ -16,17 +17,21 @@ import Modal from "../components/ui/Modal";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 
-const WEEK_SECONDS = 7 * 24 * 60 * 60;
-
-// Left sidebar (hard-coded, as the Figma meeting note says). The chosen one lives in the URL: ?view=recent
-// Favorites / Archives / Trash need backend support first (ticket 7.5), so they say "coming soon".
 const views = [
-  { id: "all", label: "All Projects", test: () => true },
-  { id: "recent", label: "Recents", test: (p) => Date.now() / 1000 - (p.updated_at ?? p.created_at) < WEEK_SECONDS },
-  { id: "favorites", label: "Favorites", soon: { icon: "⭐", text: "Star your favorite projects to find them here." } },
-  { id: "archives", label: "Archives", soon: { icon: "📦", text: "Archived projects will be tucked away here." } },
-  { id: "trash", label: "Trash", soon: { icon: "🗑️", text: "Deleted projects will wait here before they're gone." } },
+  { id: "all", label: "All Projects" },
+  { id: "recent", label: "Recents" },
+  { id: "favorites", label: "Favorites" },
+  { id: "archives", label: "Archives" },
+  { id: "trash", label: "Trash" },
 ];
+
+const emptyViews = {
+  all: ["🌿", "No active projects", "Create a project or restore one from Archives or Trash."],
+  recent: ["🕰️", "Nothing from the last 7 days", "Projects you work on this week show up here."],
+  favorites: ["⭐", "No favorites yet", "Choose Favorite from a project's menu to find it here."],
+  archives: ["📦", "No archived projects", "Archive a project from its menu to keep it here."],
+  trash: ["🗑️", "Trash is empty", "Projects moved to trash can be restored here."],
+};
 
 // Built from the Figma "Projects/Archive Page" (section 2, node 640:529)
 function ProjectsPage() {
@@ -42,8 +47,9 @@ function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // The project waiting for "Are you sure?" (null = no pop-up)
-  const [toDelete, setToDelete] = useState(null);
+  // Bulk deletion only runs after the user confirms the Trash dialog.
+  const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
+  const [updating, setUpdating] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
 
   // Each load gets a number, so if Retry is clicked twice only the newest answer is used.
@@ -71,9 +77,8 @@ function ProjectsPage() {
 
   const view = views.find((v) => v.id === searchParams.get("view")) ?? views[0];
   const query = search.trim().toLowerCase();
-  const shown = view.soon
-    ? []
-    : projects.filter((p) => view.test(p) && p.name.toLowerCase().includes(query));
+  const trashedProjects = projects.filter(isTrashed);
+  const shown = projects.filter((p) => projectMatchesView(p, view.id) && p.name.toLowerCase().includes(query));
 
   function chooseView(id) {
     setSearchParams(id === "all" ? {} : { view: id });
@@ -96,28 +101,35 @@ function ProjectsPage() {
     navigate(`/projects/${project.id}/studio`);
   }
 
-  async function confirmDelete() {
-    const project = toDelete;
-    setDeleting(true);
+  async function handleUpdate(project, changes) {
+    setUpdating((ids) => new Set(ids).add(project.id));
+    // Discard any older list response so it cannot overwrite this mutation.
+    ++loadCount.current;
     try {
-      await api.deleteProject(project.id);
-      setProjects((list) => list.filter((p) => p.id !== project.id));
-      toast.show(`Deleted "${project.name}"`);
+      const updated = await api.updateProject(project.id, changes);
+      setProjects((list) => list.map((p) => p.id === updated.id ? updated : p));
+      if (changes.trashed === true) toast.show(`Moved "${project.name}" to trash`);
+      if (changes.trashed === false) toast.show(`Restored "${project.name}"`);
     } catch (err) {
-      // e.g. 409 "Stop active generation/research ... before deleting this project."
       toast.show(err.message, "error");
     } finally {
-      setDeleting(false);
-      setToDelete(null);
+      setUpdating((ids) => { const next = new Set(ids); next.delete(project.id); return next; });
     }
   }
 
-  // Pick what goes in the main area: one of six "moods"
+  async function confirmEmptyTrash() {
+    setDeleting(true);
+    // Use the existing owner-checked delete endpoint; retain projects that fail.
+    const { removed, failures } = await deleteTrashedProjects(trashedProjects, api.deleteProject);
+    setProjects((list) => list.filter((p) => !removed.has(p.id)));
+    if (removed.size) toast.show(`Permanently deleted ${removed.size} project${removed.size === 1 ? "" : "s"}`);
+    if (failures.length) toast.show(`Some projects could not be deleted. ${failures.join(" ")}`, "error");
+    setDeleting(false);
+    setEmptyTrashOpen(false);
+  }
+
+  // Loading, errors and empty states stay specific to the selected view.
   function renderContent() {
-    // Coming-soon views don't need any data, so they never wait for the backend
-    if (view.soon) {
-      return <EmptyState icon={view.soon.icon} title="Coming soon" text={view.soon.text} />;
-    }
     if (loading) {
       return (
         <div className="projects-state">
@@ -136,7 +148,7 @@ function ProjectsPage() {
         </div>
       );
     }
-    if (projects.length === 0) {
+    if (projects.length === 0 && view.id === "all") {
       return (
         <EmptyState
           icon="🌿"
@@ -150,19 +162,19 @@ function ProjectsPage() {
       return query ? (
         <EmptyState icon="🔍" title={`No projects match "${search.trim()}"`} text="Try a different name." />
       ) : (
-        <EmptyState icon="🕰️" title="Nothing from the last 7 days" text="Projects you work on this week show up here." />
+        <EmptyState icon={emptyViews[view.id][0]} title={emptyViews[view.id][1]} text={emptyViews[view.id][2]} />
       );
     }
     return (
       <div className="projects-grid">
         {shown.map((project) => (
-          <ProjectCard key={project.id} project={project} onOpen={handleOpen} onDelete={setToDelete} />
+          <ProjectCard key={project.id} project={project} onOpen={handleOpen} onUpdate={handleUpdate} busy={deleting || updating.has(project.id)} />
         ))}
-        <button type="button" className="project-card-new" onClick={handleNewProject}>
+        {view.id !== "trash" && <button type="button" className="project-card-new" onClick={handleNewProject}>
           <span className="project-card-new-plus" aria-hidden="true">+</span>
           <span className="project-card-new-title">New Project</span>
           <span className="project-card-new-text">Upload a video to get started</span>
-        </button>
+        </button>}
       </div>
     );
   }
@@ -204,6 +216,8 @@ function ProjectsPage() {
             </div>
 
             <div className="projects-actions">
+              {view.id === "trash" && <Button size="sm" disabled={loading || deleting || updating.size > 0 || trashedProjects.length === 0}
+                onClick={() => setEmptyTrashOpen(true)}>Empty trash</Button>}
               <label className="projects-search" style={{ backgroundImage: `url(${woodPill})` }}>
                 <img src={searchIcon} alt="" />
                 <input
@@ -229,17 +243,17 @@ function ProjectsPage() {
         </main>
       </div>
 
-      {toDelete && (
-        <Modal title="Delete project?" onClose={() => !deleting && setToDelete(null)}>
+      {emptyTrashOpen && (
+        <Modal title="Empty trash?" onClose={() => !deleting && setEmptyTrashOpen(false)}>
           <p className="projects-delete-text">
-            Delete <strong>{toDelete.name}</strong>? This removes its sessions and clips.
+            Permanently delete all <strong>{trashedProjects.length}</strong> trashed projects and their sessions and clips? This cannot be undone.
           </p>
           <div className="projects-delete-actions">
-            <Button variant="ghost" size="sm" onClick={() => setToDelete(null)} disabled={deleting}>
+            <Button variant="ghost" size="sm" onClick={() => setEmptyTrashOpen(false)} disabled={deleting}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" onClick={confirmDelete} disabled={deleting}>
-              {deleting ? <Spinner size={14} label="Deleting" /> : "Delete"}
+            <Button variant="primary" size="sm" onClick={confirmEmptyTrash} disabled={deleting}>
+              {deleting ? <Spinner size={14} label="Deleting" /> : "Empty trash permanently"}
             </Button>
           </div>
         </Modal>

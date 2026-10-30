@@ -24,12 +24,6 @@ FAILURE_CACHE_SECONDS = 30
 
 DEFAULT_FOLDER = "users"
 
-PROTECTED_EXACT_PATHS = (
-    "/upload",
-    "/api/my-clips",
-    "/api/session",
-    "/api/settings",
-)
 
 FRONTEND_FILES = {
     "index.html",

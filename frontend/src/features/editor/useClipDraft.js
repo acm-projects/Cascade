@@ -23,6 +23,26 @@ export default function useClipDraft(projectId, clip) {
   const [saveStatus, setSaveStatus] = useState("saved");
   const loaded = useRef(false);    // don't save the draft we just loaded straight back
   const saveCount = useRef(0);
+  const pending = useRef(null);
+  const queue = useRef(Promise.resolve());
+  const persist = useCallback((body) => {
+    const next = queue.current.catch(() => {}).then(() => api.saveDraft(projectId, clip.job_id, clip.clip_index, body));
+    queue.current = next;
+    return next;
+  }, [api, projectId, clip.job_id, clip.clip_index]);
+  const flush = useCallback(async () => {
+    const body = pending.current;
+    if (body) {
+      setSaveStatus('saving');
+      try { await persist(body); if (pending.current === body) { pending.current = null; setSaveStatus('saved'); } }
+      catch (e) { setSaveStatus('error'); throw e; }
+    } else await queue.current;
+  }, [persist]);
+  useEffect(() => {
+    function warn(event) { if (pending.current) { event.preventDefault(); event.returnValue = ''; } }
+    window.addEventListener('beforeunload', warn);
+    return () => { window.removeEventListener('beforeunload', warn); if (pending.current) persist(pending.current).catch(() => {}); };
+  }, [persist]);
 
   useEffect(() => {
     let active = true;
@@ -49,14 +69,16 @@ export default function useClipDraft(projectId, clip) {
       return;
     }
     const thisSave = ++saveCount.current;
+    setSaveStatus("saving");
+    pending.current = { state, chat, updated_at: Math.floor(Date.now() / 1000) };
     const timer = setTimeout(() => {
       setSaveStatus("saving");
-      api.saveDraft(projectId, clip.job_id, clip.clip_index, { state, chat, updated_at: Math.floor(Date.now() / 1000) })
-        .then(() => thisSave === saveCount.current && setSaveStatus("saved"))
+      persist(pending.current)
+        .then(() => { if (thisSave === saveCount.current) { pending.current = null; setSaveStatus("saved"); } })
         .catch(() => thisSave === saveCount.current && setSaveStatus("error"));
     }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [state, chat, api, projectId, clip.job_id, clip.clip_index]);
+  }, [state, chat, persist]);
 
   const change = useCallback((next) => {
     setHistory(({ past, present }) => {
@@ -95,6 +117,6 @@ export default function useClipDraft(projectId, clip) {
   return {
     info, error, state, change, patch, recordUndo, undo, redo,
     canUndo: history.past.length > 0, canRedo: history.future.length > 0,
-    chat, setChat, saveStatus,
+    chat, setChat, saveStatus, flush,
   };
 }

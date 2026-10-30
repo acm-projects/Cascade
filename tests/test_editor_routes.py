@@ -3,6 +3,7 @@ import json
 import unittest
 from pathlib import Path
 import app1
+from backend.core import config as service_config
 
 
 def route_contract(router):
@@ -22,5 +23,5 @@ class EditorRouteTests(unittest.TestCase):
         self.assertEqual(sorted(route_contract(app1.app)), before)
 
     def test_editor_modules_remain_small(self):
-        for file in (Path(app1.PROJECT_DIR)/'backend'/'editor').glob('*.py'):
+        for file in (Path(service_config.PROJECT_DIR)/'backend'/'editor').glob('*.py'):
             self.assertLessEqual(len(file.read_text(encoding='utf-8').splitlines()), 300, file.name)

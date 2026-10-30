@@ -5,6 +5,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 import app1
+from backend.core import config as service_config
 
 
 class References(HTMLParser):
@@ -21,7 +22,7 @@ class References(HTMLParser):
 class FrontendRoutesTests(unittest.TestCase):
     def test_every_public_page_and_local_asset_resolves(self):
         with TestClient(app1.app) as client:
-            for filename in sorted(app1.FRONTEND_FILES):
+            for filename in sorted(service_config.FRONTEND_FILES):
                 with self.subTest(filename=filename):
                     response = client.get('/' + filename)
                     self.assertEqual(response.status_code, 200)

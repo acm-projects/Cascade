@@ -3,9 +3,11 @@ import subprocess
 from .validation import trimmed_cues
 
 
-def render_audio(source, folder, state, cues):
+def render_audio(source, folder, state, cues, audio_store=None):
+    from .timeline_render import audio_graph
+    inputs,filters,label=audio_graph(state,cues,audio_store,True,1)
     subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-ss', str(state.start),
-        '-i', str(source), '-t', str(state.end-state.start), '-map', '0:a:0', '-vn',
+        '-i', str(source), *inputs, '-t', str(state.end-state.start), '-filter_complex', ';'.join(filters), '-map', label, '-vn',
         '-c:a', 'libmp3lame', '-b:a', '192k', str(folder/'edited.mp3')],
         capture_output=True, check=True, timeout=300)
     if state.captions.enabled:

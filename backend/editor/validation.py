@@ -15,9 +15,13 @@ from .models import Composition, Effects
 
 def validate_media_edit(state, info):
     validate_edit(state, info['duration'])
+    from .retiming import validate_timing
+    validate_timing(state,info['cues'],info['duration'])
+    if (state.timeline or state.speed) and (state.reframe.enabled or state.composition.mode=='fill'):
+        raise HTTPException(422,'Use Fit framing for a retimed Reel; source-time tracking cannot be reused after cuts or speed changes.')
     if info.get('has_video') is False and (
         state.reframe.enabled or state.reframe.selection is not None or state.broll
-        or state.composition != Composition() or state.effects != Effects()
+        or state.composition != Composition() or state.effects != Effects() or state.motion or state.text_overlays or state.timeline or state.speed or state.accents
     ):
         raise HTTPException(422, 'Audio-only clips support trimming and transcript edits; video effects, B-roll, framing, and subject tracking are unavailable.')
     return state
@@ -28,6 +32,13 @@ def validate_edit(state, duration):
     if any(not re.fullmatch(r'[0-9]+', key) or len(value)>2000 for key,value in state.texts.items()):
         raise HTTPException(422, 'Caption text must identify a timed segment and stay within 2000 characters.')
     if state.reframe.selection and state.reframe.selection.t>=duration:raise HTTPException(422,'Subject selection is outside this clip.')
+    for segment in [*state.audio, *state.motion, *state.text_overlays, *state.accents]:
+        if segment.start+segment.duration > duration+.001:
+            raise HTTPException(422, 'Timeline items must fit inside the generated clip.')
+    if len({s.id for s in state.audio}) != len(state.audio):
+        raise HTTPException(422, 'Audio segment IDs must be unique.')
+    if state.transition.fade_in+state.transition.fade_out > state.end-state.start:
+        raise HTTPException(422, 'Transitions must fit within the trimmed clip.')
     stocklib.validate_segments(state.broll, duration)
     return state
 

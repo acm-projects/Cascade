@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
@@ -17,6 +17,7 @@ import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
 import { isAudioClip } from '../utils/media';
+import TrendsModal from '../features/editor/TrendsModal';
 
 // Built from the Figma "Export" wireframe (node 557:2263), connected to backend/editor_backend.py
 // (rendering) and Manila's posting backend. Every download is rendered by the server with your edits.
@@ -31,6 +32,9 @@ function ExportPage() {
   const [inZip, setInZip] = useState([]);       // clip keys to put in the ZIP
   const [settings, setSettings] = useState({resolution: "original", includeCaptions: true});
   const downloads = useDownloads(api, projectId, projectName, settings);
+  const activeFlush = useRef(null);
+  const registerFlush = useCallback(fn => { activeFlush.current = fn; }, []);
+  const toast = useToast();
 
   useEffect(() => {
     let active = true;
@@ -51,7 +55,10 @@ function ExportPage() {
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
 
-  const downloadZip = () => downloads.downloadSelected(clips.filter(clip => inZip.includes(clipKey(clip))));
+  const downloadZip = async () => {
+    try { await activeFlush.current?.(); await downloads.downloadSelected(clips.filter(clip => inZip.includes(clipKey(clip)))); }
+    catch (err) { toast.show(err.message, 'error'); }
+  };
 
   const toggleZip = (key) => setInZip((keys) => (keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]));
 
@@ -71,7 +78,7 @@ function ExportPage() {
       {message ? (
         <div className="export-empty">{message}</div>
       ) : (
-        <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads}
+        <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads} registerFlush={registerFlush}
           clipNumber={clips.indexOf(current)+1}
           settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)}/>}
           picker={
@@ -109,17 +116,30 @@ function ExportPage() {
 }
 
 // Preview, MP4 download and posting for one clip. key={clip key}, so it follows the chosen clip.
-function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumber, settingsPanel }) {
+function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumber, settingsPanel, registerFlush }) {
   const toast = useToast();
-  const { info, state, error, patch } = useClipDraft(projectId, clip); // only patch()ed by framing below
+  const draft = useClipDraft(projectId, clip);
+  const [trendsOpen, setTrendsOpen] = useState(false);
+  const { info, state, error, patch } = draft;
+  useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
+  const api = useApi();
+  async function applyResearch(research_id, suggestion) {
+    const result = await api.applyTrends(projectId, clip.job_id, clip.clip_index, { state, research_id, ...(Array.isArray(suggestion) ? { suggestions: suggestion } : { suggestion }) });
+    draft.change(result.state);
+    draft.setChat([...draft.chat, { role: 'user', text: 'Apply suggested edits from YouTube research.' }, { role: 'assistant', text: result.message }]);
+    return result;
+  }
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
   const framing = useAutoFraming(projectId, clip, state, info, patch);
   const rendering = downloads.working;
   const [rendered, setRendered] = useState(null); // the last MP4, so it can be shared
   const [post, setPost] = useState(null);
   async function downloadMp4() {
-    const result = await downloads.downloadOne(clip, clipNumber);
-    if(result) setRendered(new File([result.blob], result.filename, {type: result.blob.type}));
+    try {
+      await draft.flush();
+      const result = await downloads.downloadOne(clip, clipNumber);
+      if(result) setRendered(new File([result.blob], result.filename, {type: result.blob.type}));
+    } catch (err) { toast.show(err.message, 'error'); }
   }
 
   // Instagram/TikTok/etc. have no upload API for us, so hand the file to the phone/computer's share sheet
@@ -169,6 +189,10 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
 
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
+        {state && !isAudioClip(clip) && <div className="export-post"><Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends · YouTube research</Button></div>}
+        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onApply={applyResearch} onClose={() => setTrendsOpen(false)}>
+          <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</Button><small>{draft.saveStatus}</small></div>
+        </TrendsModal>}
         {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
         <div className="export-post">
           <h3 className="export-social-title">{isAudioClip(clip) ? '🎧 Share audio' : '📱 Instagram, TikTok & more'}</h3>
