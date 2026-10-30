@@ -3,6 +3,7 @@ import useApi from "../../api/useApi";
 import Spinner from "../../components/ui/Spinner";
 import { formatTime } from "../../utils/time";
 import { clipMediaPath } from "./clips";
+import { activeCueIndex, effectsFilter, frameSize } from "./playerMath";
 import "./ClipPlayer.css";
 
 const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 4 / 3 };
@@ -14,8 +15,9 @@ function withOpacity(hex, opacity) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${opacity})`;
 }
 
-// Live preview of one clip with its edits: plays only the trimmed part (looping), in the chosen
-// aspect-ratio frame, with the captions drawn on top. The real render happens on Export.
+// Live preview of one clip with its edits: plays only the trimmed part (looping, unless you turn it off),
+// in the chosen aspect-ratio frame, with the effects and captions drawn on top. The real render happens on Export.
+// Space plays/pauses (when you're not typing).
 //   clip  - { job_id, clip_index } ; info - { duration, width, height, cues } ; state - the draft
 //   controlRef - optional useRef() from the page: gets { seek(t), getTime(), isReady() } so the timeline
 //                can move the playhead and jump the video
@@ -27,6 +29,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   const [error, setError] = useState(null);
   const [time, setTime] = useState(state.start);
   const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [loop, setLoop] = useState(true);
   const [stage, setStage] = useState({ width: 0, height: 0 });
 
   // Download the clip with the sign-in token (videos can't send it themselves)
@@ -71,11 +75,37 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
     };
   }, [controlRef]);
 
-  // Stay inside the trim: jump back to the start when the end is reached
+  // Space = play / pause (but not while typing or when a button has focus: Space already "clicks" those)
+  useEffect(() => {
+    function handleKey(event) {
+      if (event.key !== " " || event.target.closest?.("input, textarea, select, button, [contenteditable]")) return;
+      const video = videoRef.current;
+      if (!video) return;
+      event.preventDefault();
+      if (video.paused) video.play();
+      else video.pause();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  // Stay inside the trim: at the end, go back to the start (and keep playing only if Loop is on)
   function handleTimeUpdate() {
     const video = videoRef.current;
-    if (video.currentTime >= state.end || video.currentTime < state.start - 0.05) video.currentTime = state.start;
+    if (video.currentTime >= state.end) {
+      video.currentTime = state.start;
+      if (!loop) video.pause();
+    } else if (video.currentTime < state.start - 0.05) {
+      video.currentTime = state.start;
+    }
     setTime(video.currentTime);
+  }
+
+  // When the trim reaches the very end of the file, the browser stops the video by itself first
+  function handleEnded() {
+    const video = videoRef.current;
+    video.currentTime = state.start;
+    if (loop) video.play();
   }
 
   function togglePlay() {
@@ -90,12 +120,10 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   const { composition, captions } = state;
   const audioOnly = info.has_video === false;
   const ratio = audioOnly ? 16/9 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
-  const cueIndex = info.cues.findIndex((cue) => cue.start <= time && time < cue.end);
+  const cueIndex = activeCueIndex(info.cues, time);
   const caption = cueIndex >= 0 ? state.texts?.[cueIndex] ?? info.cues[cueIndex].text : null;
   const outputHeight = Math.max(info.height, 1);
-  // The biggest frame of this shape that fits the space
-  const frameWidth = Math.min(stage.width, stage.height * ratio);
-  const frameHeight = frameWidth / ratio;
+  const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
 
   return (
     <div className="clip-player">
@@ -103,20 +131,23 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
         <div className="clip-player-frame" style={{ width: frameWidth, height: frameHeight, background: composition.background }}>
           {audioOnly ? <>
             <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>🎧 Audio recording</p>
-            <audio ref={videoRef} src={url} aria-label="Edited audio preview"
+            <audio ref={videoRef} src={url} muted={muted} aria-label="Edited audio preview"
               onLoadedMetadata={e => {e.target.currentTime=state.start;}}
-              onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
+              onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
           </> : <video
             ref={videoRef}
             src={url}
             playsInline
+            muted={muted}
             className="clip-player-video"
             style={{
+              filter: effectsFilter(state.effects),
               objectFit: composition.mode === "fill" ? "cover" : "contain",
               objectPosition: `${composition.x * 100}% ${composition.y * 100}%`,
             }}
             onLoadedMetadata={(e) => (e.target.currentTime = state.start)}
             onTimeUpdate={handleTimeUpdate}
+            onEnded={handleEnded}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onClick={togglePlay}
@@ -147,6 +178,14 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
         <span className="clip-player-time">
           {formatTime(Math.max(0, time - state.start))} / {formatTime(state.end - state.start)}
         </span>
+        <button type="button" className="btn btn-small btn-ghost" onClick={() => setMuted((m) => !m)}
+          aria-pressed={muted} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>
+          {muted ? "🔇" : "🔊"}
+        </button>
+        <button type="button" className={`btn btn-small btn-ghost clip-player-loop${loop ? " active" : ""}`}
+          onClick={() => setLoop((l) => !l)} aria-pressed={loop} title={loop ? "Looping: on" : "Looping: off"}>
+          🔁 Loop
+        </button>
       </div>
     </div>
   );

@@ -62,6 +62,11 @@
   font-size: 16px;
 }
 
+/* Loop off = faded */
+.clip-player-loop:not(.active) {
+  opacity: 0.5;
+}
+
 .clip-player-message {
   display: flex;
   align-items: center;
