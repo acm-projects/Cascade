@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
@@ -18,6 +18,7 @@ import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
 import { isAudioClip } from '../utils/media';
 import TrendsModal from '../features/editor/TrendsModal';
+import { exportTree } from "../features/export/exportTree";
 
 // Built from the Figma "Export" wireframe (node 557:2263), connected to backend/editor_backend.py
 // (rendering) and Manila's posting backend. Every download is rendered by the server with your edits.
@@ -54,13 +55,25 @@ function ExportPage() {
   }, [api, projectId]);
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
+  const tree = useMemo(() => exportTree(clips ?? []), [clips]);
+  const picked = clips?.filter((clip) => inZip.includes(clipKey(clip))) ?? [];
 
   const downloadZip = async () => {
     try { await activeFlush.current?.(); await downloads.downloadSelected(clips.filter(clip => inZip.includes(clipKey(clip)))); }
     catch (err) { toast.show(err.message, 'error'); }
   };
 
-  const toggleZip = (key) => setInZip((keys) => (keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]));
+  async function pickClip(key) {
+    try { await activeFlush.current?.(); setCurrentKey(key); }
+    catch (err) { toast.show(err.message, "error"); }
+  }
+
+  // Checkboxes: one clip, or every clip in a wave/session at once
+  const allIn = (list) => list.every((clip) => inZip.includes(clipKey(clip)));
+  function toggleGroup(list) {
+    const keys = list.map(clipKey);
+    setInZip((current) => (allIn(list) ? current.filter((k) => !keys.includes(k)) : [...new Set([...current, ...keys])]));
+  }
 
   let message;
   if (error) message = <EmptyState icon="🌧️" title="Couldn't open Export" text={error.message} />;
@@ -78,45 +91,67 @@ function ExportPage() {
       {message ? (
         <div className="export-empty">{message}</div>
       ) : (
-        <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads} registerFlush={registerFlush}
-          clipNumber={clips.indexOf(current)+1}
-          settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)}/>}
-          picker={
-            <div className="export-clip-tabs" role="tablist" aria-label="Picked clips">
-              {clips.map((clip, index) => (
-                <button key={clipKey(clip)} type="button" role="tab" aria-selected={clipKey(clip) === currentKey}
-                  className={`export-clip-tab${clipKey(clip) === currentKey ? " active" : ""}`}
-                  onClick={() => setCurrentKey(clipKey(clip))} title={clip.title}>
-                  {index + 1}. {clip.title || "Clip"}
-                </button>
-              ))}
-            </div>
-          }
-          zip={
-            <div className="export-section">
-              <h3 className="export-section-title">All picked clips</h3>
-              <div className="export-zip-list">
-                {clips.map((clip, index) => (
-                  <label key={clipKey(clip)} className="export-check">
-                    <input type="checkbox" checked={inZip.includes(clipKey(clip))} onChange={() => toggleZip(clipKey(clip))} />
-                    {index + 1}. {clip.title || "Clip"}
-                  </label>
-                ))}
-              </div>
-              <Button variant="primary" size="sm" onClick={downloadZip} disabled={downloads.working || !inZip.length}>
-                {downloads.working ? <><Spinner size={14} label="Rendering" /> Rendering {inZip.length}…</> : `⬇ Download ${inZip.length} as ZIP`}
-              </Button>
-            </div>
-          }
-          onEdit={() => navigate(`/projects/${projectId}/editor`)}
-        />
+        <div className="export-body">
+          <aside className="export-tree" aria-label="Clips to export">
+            {tree.map((session) => {
+              const sessionClips = session.waves.flatMap((wave) => wave.clips);
+              return (
+                <TreeGroup key={session.id} label={session.name} checked={allIn(sessionClips)}
+                  onCheck={() => toggleGroup(sessionClips)}>
+                  {session.waves.map((wave) => (
+                    <TreeGroup key={wave.id} label={wave.name} title={wave.prompt} checked={allIn(wave.clips)}
+                      onCheck={() => toggleGroup(wave.clips)}>
+                      {wave.clips.map((clip) => {
+                        const key = clipKey(clip);
+                        return (
+                          <div key={key} className="export-tree-clip">
+                            <input type="checkbox" checked={inZip.includes(key)} onChange={() => toggleGroup([clip])}
+                              aria-label={`Include clip ${clips.indexOf(clip) + 1} in the download`} />
+                            <button type="button" className={`export-tree-clip-name${key === currentKey ? " active" : ""}`}
+                              onClick={() => pickClip(key)} title={clip.title}>
+                              Clip {clips.indexOf(clip) + 1}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </TreeGroup>
+                  ))}
+                </TreeGroup>
+              );
+            })}
+          </aside>
+
+          <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads} registerFlush={registerFlush}
+            clips={clips} picked={picked} onPick={pickClip} onDownloadSelected={downloadZip}
+            clipNumber={clips.indexOf(current) + 1}
+            settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)}/>}
+            onEdit={() => navigate(`/projects/${projectId}/editor`)}
+            onProjects={() => navigate("/projects")}
+          />
+        </div>
       )}
     </div>
   );
 }
 
-// Preview, MP4 download and posting for one clip. key={clip key}, so it follows the chosen clip.
-function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumber, settingsPanel, registerFlush }) {
+// A folder in the left list (a session or a wave): ▾ to fold it, a checkbox for all its clips, then its contents
+function TreeGroup({ label, title, checked, onCheck, children }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="export-tree-group">
+      <div className="export-tree-row" title={title}>
+        <button type="button" className="export-tree-fold" onClick={() => setOpen(!open)}
+          aria-expanded={open} aria-label={`${open ? "Fold" : "Unfold"} ${label}`}>{open ? "▾" : "▸"}</button>
+        <input type="checkbox" checked={checked} onChange={onCheck} aria-label={`Include all of ${label}`} />
+        <span>{label}</span>
+      </div>
+      {open && <div className="export-tree-children">{children}</div>}
+    </div>
+  );
+}
+
+// Everything right of the list, for the clip on screen. key={clip key}, so it follows the chosen clip.
+function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, onEdit, onProjects, downloads, clipNumber, settingsPanel, registerFlush }) {
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [trendsOpen, setTrendsOpen] = useState(false);
@@ -134,6 +169,7 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
   const rendering = downloads.working;
   const [rendered, setRendered] = useState(null); // the last MP4, so it can be shared
   const [post, setPost] = useState(null);
+  const [expanded, setExpanded] = useState(false); // "Expand clips": every clip as a small card
   async function downloadMp4() {
     try {
       await draft.flush();
@@ -152,40 +188,67 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
     }
   }
 
+  const index = clipNumber - 1;
+  const goTo = (i) => onPick(clipKey(clips[i]));
+  let status = null;
+  if (framing.status === "error") status = `⚠ ${framing.message}`;
+  else if (framing.status === "working") status = `Preparing automatic framing… ${Math.round(framing.progress * 100)}%`;
+  else if (state) {
+    status = `Clip ${clipNumber}: ${formatTime(state.end - state.start)} long · ${isAudioClip(clip) ? "audio recording"
+      : state.composition.ratio === "original" ? "original shape" : state.composition.ratio} · captions ${state.captions.enabled ? "on" : "off"}`;
+  }
+
   return (
-    <div className="export-body">
-      <section className="export-preview">
-        {picker}
-        <div className="export-player">
-          {error ? <p role="alert">{error.message}</p>
-            : info && state ? <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} />
-              : <Spinner label="Loading clip" />}
-        </div>
+    <main className="export-main">
+      <div className="export-actions">
+        <Button size="sm" onClick={downloadMp4} disabled={!state || rendering || framing.status === "working"}>
+          {rendering ? <><Spinner size={14} label="Rendering" /> Rendering…</> : "Download this clip"}
+        </Button>
+        <Button variant="primary" size="sm" onClick={onDownloadSelected} disabled={rendering || !picked.length}>
+          Download selected clips ({picked.length})
+        </Button>
+      </div>
+
+      <section className="export-stage">
+        <header className="export-stage-head">
+          <h2 className="export-title">▦ {clips.length} {clips.length === 1 ? "clip" : "clips"}</h2>
+          {clips.length > 1 && (
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+              {expanded ? "Stack clips ↑" : "Expand clips ↓"}
+            </button>
+          )}
+        </header>
+        {expanded ? (
+          <div className="export-grid">
+            {clips.map((item, i) => (
+              <button key={clipKey(item)} type="button" className={`export-grid-card${i === index ? " active" : ""}`}
+                onClick={() => { goTo(i); setExpanded(false); }}>
+                <b>Clip {i + 1}</b>
+                <span>{item.title || "Clip"}</span>
+                <span>{formatTime(item.end - item.start)}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className={`export-stack${clips.length > 1 ? " is-stacked" : ""}`}>
+            <div className="export-player">
+              {error ? <p role="alert">{error.message}</p>
+                : info && state ? <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} />
+                  : <Spinner label="Loading clip" />}
+            </div>
+          </div>
+        )}
       </section>
 
-      <section className="export-settings">
-        <h2 className="export-title">Export</h2>
-        {settingsPanel}
-        <div className="export-section">
-          <h3 className="export-section-title">This clip</h3>
-          {state && (
-            <p className="export-summary">
-              {formatTime(state.end - state.start)} long · {isAudioClip(clip) ? 'audio recording' : state.composition.ratio === "original" ? "original shape" : state.composition.ratio}
-              {" · "}captions {state.captions.enabled ? "on" : "off"}
-            </p>
-          )}
-          <div className="export-post-actions">
-            <Button variant="primary" size="sm" onClick={downloadMp4} disabled={!state || rendering || framing.status === "working"}>
-              {rendering ? <><Spinner size={14} label="Rendering" /> Rendering…</>
-                : framing.status === "working" ? <><Spinner size={14} label="Preparing" /> Preparing framing {Math.round(framing.progress * 100)}%</>
-                  : isAudioClip(clip) ? "⬇ Download MP3" : "⬇ Download MP4"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onEdit}>✎ Edit</Button>
-          </div>
-        </div>
-        {framing.status === "error" && <p className="export-summary" role="alert">⚠ {framing.message}</p>}
-        {zip}
-      </section>
+      <div className="export-pager">
+        <button type="button" className="btn btn-small" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous clip">←</button>
+        <span>{clipNumber} of {clips.length}</span>
+        <button type="button" className="btn btn-small" onClick={() => goTo(index + 1)} disabled={index === clips.length - 1} aria-label="Next clip">→</button>
+      </div>
+
+      {status && <p className="export-status" role="status">{status}</p>}
+
+      <section className="export-settings">{settingsPanel}</section>
 
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
@@ -199,12 +262,17 @@ function ClipExport({ projectId, clip, picker, zip, onEdit, downloads, clipNumbe
           <p className="export-social-note">
             {isAudioClip(clip) ? 'Download the MP3, or share it with apps on this device that accept audio files.' : rendered
               ? canShare ? "Share the MP4 you just downloaded to any app on this device." : "This browser can't share files. Upload the downloaded MP4 in the app."
-              : "Download the MP4 first, then share it to Instagram, TikTok or anywhere else."}
+              : "Download this clip first, then share it to Instagram, TikTok or anywhere else."}
           </p>
           {canShare && <Button size="sm" onClick={share}>Share…</Button>}
         </div>
       </section>
-    </div>
+
+      <div className="export-footer">
+        <Button size="sm" onClick={async () => { try { await draft.flush(); onEdit(); } catch (err) { toast.show(err.message, "error"); } }}>← Back to editor</Button>
+        <Button variant="primary" size="sm" onClick={onProjects}>Back to projects →</Button>
+      </div>
+    </main>
   );
 }
 

@@ -9,10 +9,15 @@ export function clipMediaPath(projectId, clip) {
   return `/api/projects/${encodeURIComponent(projectId)}/editor/${encodeURIComponent(clip.job_id)}/${clip.clip_index}/media`;
 }
 
-/** Flatten the editor index ({ sessions: [{ clips }] }) into one list, each clip knowing its session */
+/** Flatten the editor index ({ sessions: [{ clips }] }) into one list, each clip knowing its session.
+ *  (Each index entry is one prompt's results, a "wave"; session_name is the AI Studio session it's in.) */
 export function flattenClips(index) {
   return index.sessions.flatMap((session) =>
-    session.clips.map((clip) => ({ ...clip, sessionName: session.session_name || session.prompt })));
+    session.clips.map((clip) => ({
+      ...clip, sessionName: session.session_name || session.prompt,
+      studioSession: session.session_name, studioSessionId: session.session_id,
+      waveId: session.job_id, wavePrompt: session.prompt,
+    })));
 }
 
 /** Save a Blob (e.g. a rendered MP4 or ZIP) to the user's Downloads folder as `filename` */
