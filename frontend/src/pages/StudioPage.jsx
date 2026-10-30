@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
 import EmptyState from "../components/ui/EmptyState";
@@ -34,13 +34,16 @@ function generationStatus(group) {
 // Picked clips also guide the next prompt ("more like these").
 function StudioPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { projectId, sessionId } = useParams();
   const api = useApi();
   const toast = useToast();
   const { project } = useProject();
   const { studio, setStudio, groups, error, refresh } = useStudioData(projectId);
 
-  const [pendingFile, setPendingFile] = useState(null); // video picked, uploads with the first prompt
+  // Video picked (here, or in the New Project pop-up), uploads with the first prompt
+  const [pendingFile, setPendingFile] = useState(() => location.state?.file ?? null);
+  const [uploadProgress, setUploadProgress] = useState(null); // 0-100 while the video uploads
   const [preview, setPreview] = useState(null);         // the "watch it big" pop-up: { ref } for a clip, or { path | file, title }
   const [draft, setDraft] = useState("");               // the chat box text
   const [sending, setSending] = useState(false);
@@ -161,19 +164,22 @@ function StudioPage() {
           request_id: submission.current.id,
         });
       } else {
+        setUploadProgress(0);
         await api.studioUpload(projectId, session.id, {
-          video: pendingFile, prompt: text, clipCount, requestId: submission.current.id,
+          video: pendingFile, prompt: text, clipCount, requestId: submission.current.id, onProgress: setUploadProgress,
         });
         setPendingFile(null);
+        if (location.state?.file) navigate(location.pathname, { replace: true, state: null }); // a reload won't bring it back
       }
       submission.current = null;
       await refresh();
       return true;
     } catch (err) {
-      toast.show(err.message, "error"); // the prompt stays in the box
+      toast.show(err.message, "error"); // the prompt stays in the box; sending again retries with the same request id
       return false;
     } finally {
       setSending(false);
+      setUploadProgress(null);
     }
   }
 
@@ -218,7 +224,7 @@ function StudioPage() {
   // ---------- What to show ----------
   // No (or an unknown) session in the URL: go to the one the backend says is active
   if (studio && !session) {
-    return <Navigate to={`/projects/${projectId}/studio/${studio.active_session_id}`} replace />;
+    return <Navigate to={`/projects/${projectId}/studio/${studio.active_session_id}`} replace state={location.state} />;
   }
 
   const topNav = (
@@ -269,7 +275,15 @@ function StudioPage() {
   let note;
   if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
   else if (references.length) note = `${plural(references.length, "picked clip")} will guide this prompt: new clips branch from them and keep the originals.`;
-  else if (!session.source_job) note = pendingFile ? "Your video uploads when you send your first prompt." : "Choose audio or video on the canvas, then describe the clips you want.";
+  else if (!session.source_job) note = pendingFile ? `“${pendingFile.name}” uploads when you send your first prompt.` : "Choose audio or video on the canvas, then describe the clips you want.";
+  if (uploadProgress !== null) {
+    note = (
+      <span className="studio-upload">
+        Uploading your video… {uploadProgress}%
+        <progress max={100} value={uploadProgress} aria-label="Upload progress" />
+      </span>
+    );
+  }
 
   return (
     <div className="studio leaf-page">

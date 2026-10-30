@@ -50,3 +50,37 @@ export async function apiFetch(path, { token, method = "GET", body, form } = {})
   }
   return data;
 }
+
+/**
+ * Upload a file form like apiFetch(..., { form }), but report progress as it goes
+ * (fetch() can't tell you how much has been sent; XMLHttpRequest can).
+ * @param {string} path
+ * @param {object} options
+ * @param {string|null} [options.token]
+ * @param {FormData} options.form
+ * @param {(percent: number) => void} [options.onProgress]  0-100 while uploading
+ * @returns {Promise<any>} parsed JSON
+ */
+export function apiUpload(path, { token, form, onProgress }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => {
+      let data = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        // not JSON (e.g. the Vite proxy's own error page)
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else if (!data && xhr.status >= 502 && xhr.status <= 504) reject(new ApiError(xhr.status, SERVER_DOWN));
+      else reject(new ApiError(xhr.status, data?.detail || xhr.statusText));
+    };
+    xhr.onerror = () => reject(new ApiError(0, SERVER_DOWN));
+    xhr.send(form);
+  });
+}
