@@ -23,6 +23,8 @@ export default function useClipDraft(projectId, clip) {
   const [saveStatus, setSaveStatus] = useState("saved");
   const loaded = useRef(false);    // don't save the draft we just loaded straight back
   const saveCount = useRef(0);
+  const pending = useRef(null);    // { state, chat } waiting for the autosave timer, or null
+  const sending = useRef(0);       // saves sent but not answered yet
 
   useEffect(() => {
     let active = true;
@@ -40,6 +42,15 @@ export default function useClipDraft(projectId, clip) {
     };
   }, [api, projectId, clip.job_id, clip.clip_index]);
 
+  // Send one save to the backend
+  const send = useCallback((edits) => {
+    sending.current += 1;
+    return api.saveDraft(projectId, clip.job_id, clip.clip_index, { ...edits, updated_at: Math.floor(Date.now() / 1000) })
+      .finally(() => {
+        sending.current -= 1;
+      });
+  }, [api, projectId, clip.job_id, clip.clip_index]);
+
   // Auto-save a moment after the last change
   const state = history.present;
   useEffect(() => {
@@ -49,14 +60,33 @@ export default function useClipDraft(projectId, clip) {
       return;
     }
     const thisSave = ++saveCount.current;
+    pending.current = { state, chat };
     const timer = setTimeout(() => {
+      pending.current = null;
       setSaveStatus("saving");
-      api.saveDraft(projectId, clip.job_id, clip.clip_index, { state, chat, updated_at: Math.floor(Date.now() / 1000) })
+      send({ state, chat })
         .then(() => thisSave === saveCount.current && setSaveStatus("saved"))
         .catch(() => thisSave === saveCount.current && setSaveStatus("error"));
     }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [state, chat, api, projectId, clip.job_id, clip.clip_index]);
+  }, [state, chat, send]);
+
+  // Switching clips closes this editor before the timer goes off: send the waiting save right away
+  // so the last change isn't lost.
+  useEffect(() => () => {
+    if (pending.current) send(pending.current).catch(() => {});
+  }, [send]);
+
+  // Closing the tab while something isn't saved yet: let the browser ask "Leave site?"
+  useEffect(() => {
+    function warn(event) {
+      if (!pending.current && !sending.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 
   const change = useCallback((next) => {
     setHistory(({ past, present }) => {

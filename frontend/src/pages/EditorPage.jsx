@@ -101,8 +101,21 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
   const [focusedCue, setFocusedCue] = useState(null); // caption line clicked on the timeline (for the Captions tab)
   const [captionsView, setCaptionsView] = useState("Style"); // the Captions tab's sub-tab: "Style" | "Text"
   const player = useRef(null); // the ClipPlayer's remote control: seek(t), getTime()
-  const { info, state, change } = draft;
+  const { info, state, change, undo, redo } = draft;
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
+
+  // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z = redo (text boxes keep their own undo)
+  useEffect(() => {
+    function handleKey(event) {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
+      if (event.target.closest?.("input:not([type]), input[type=text], textarea, [contenteditable]")) return;
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [undo, redo]);
 
   // "Make the captions yellow": the backend's editor AI returns a new edit + a reply
   async function sendChat(message) {
