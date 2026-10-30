@@ -1,72 +1,14 @@
-import { createContext, useContext, useState } from "react";
+import { useState } from "react";
+import { ProjectContext } from "./projectContextValue";
 
-// The project being worked on, shared by AI Studio -> Editor -> Export.
-// Any page can read it with:  const project = useProject();
-const ProjectContext = createContext(null);
-
+// Shares the project you opened (see projectContextValue.js). Pages read it with useProject().
 export function ProjectProvider({ children }) {
-  const [project, setProject] = useState(null);           // { id, name, isExisting }
-  const [sourceVideo, setSourceVideo] = useState(null);   // the dropped video: { name, url, duration }
-  const [messages, setMessages] = useState([]);           // AI Studio chat: [{ role, text }]
-  const [prompts, setPrompts] = useState([]);             // AI Studio prompts: [{ id, text, batch, x, y, loading }]
-  const [clips, setClips] = useState([]);                 // generated / saved clips: [{ id, start, end, x, y, batch }]
-  const [sourcePos, setSourcePos] = useState({ x: 80, y: 260 }); // where the video node sits on the AI Studio canvas
-  const [selectedIds, setSelectedIds] = useState([]);     // which clips go to the editor
-  const [aspectRatio, setAspectRatio] = useState("16:9"); // chosen in the editor, used by export
+  const [project, setProject] = useState(null); // { id, name }
 
-  function resetWork() {
-    if (sourceVideo) URL.revokeObjectURL(sourceVideo.url);
-    setSourceVideo(null);
-    setMessages([]);
-    setPrompts([]);
-    setClips([]);
-    setSelectedIds([]);
-    setAspectRatio("16:9");
-    setSourcePos({ x: 80, y: 260 });
-  }
-
-  // "+ New Project" on the Projects page. Returns the new id so the page can go to /projects/<id>/studio.
-  // FAKE id until the backend creates real projects (ticket 1.6).
-  function startNewProject() {
-    resetWork();
-    const id = `draft-${Date.now().toString(36)}`;
-    setProject({ id, name: "Untitled project", isExisting: false });
-    return id;
-  }
-
-  // Clicking an existing project. Real projects from the backend don't carry clips yet (loading them is
-  // ticket 3.4), so clips are optional.
+  // Clicking a project (or creating one) on the Projects page
   function openProject(saved) {
-    resetWork();
-    setProject({ id: saved.id, name: saved.name, isExisting: true });
-    const savedClips = saved.clips ?? [];
-    setClips(savedClips);
-    setSelectedIds(savedClips.map((clip) => clip.id));
+    setProject({ id: saved.id, name: saved.name });
   }
 
-  // Selected clips, in the order the user picked them (that's their order in the editor)
-  const selectedClips = selectedIds
-    .map((id) => clips.find((clip) => clip.id === id))
-    .filter(Boolean);
-
-  const value = {
-    project, setProject,
-    sourceVideo, setSourceVideo,
-    messages, setMessages,
-    prompts, setPrompts,
-    clips, setClips,
-    sourcePos, setSourcePos,
-    selectedIds, setSelectedIds,
-    selectedClips,
-    aspectRatio, setAspectRatio,
-    startNewProject, openProject,
-    // Editor and Export unlock once there are clips to work with
-    stepsUnlocked: selectedClips.length > 0,
-  };
-
-  return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
-}
-
-export function useProject() {
-  return useContext(ProjectContext);
+  return <ProjectContext.Provider value={{ project, openProject }}>{children}</ProjectContext.Provider>;
 }
