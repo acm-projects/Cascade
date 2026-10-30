@@ -190,6 +190,7 @@
 
 .editor-panel-tabs {
   display: flex;
+  flex-wrap: wrap;            /* 4 tabs don't fit on one line in the narrow panel */
   gap: calc(12 * var(--u));
   padding: calc(17 * var(--u)) calc(18 * var(--u)) 0;
   border-bottom: 1px solid rgba(65, 52, 20, 0.25);
@@ -214,6 +215,7 @@
 .editor-panel-content {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;            /* long tabs (like Captions) scroll inside the panel */
   padding: calc(18 * var(--u));
 }
 
@@ -243,4 +245,42 @@
 
 .editor-ratio.active {
   background: #3fae4a var(--wood-green) center / 100% 100%;
+}
+
+/* ---------- Connected editor ---------- */
+.editor-empty,
+.editor-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+}
+
+.editor-save {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-wood-text);
+}
+
+.editor-save-error {
+  color: var(--color-plank);
+}
+
+.editor-warning {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-plank);
+}
+
+.editor-media-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The timeline sizes itself to its content (ruler, track, captions, footer) */
+.editor-timeline {
+  height: auto;
+  padding: 10px 6px;
 }

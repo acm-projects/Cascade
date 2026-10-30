@@ -1,9 +1,13 @@
 """Real models/media, preview subject picking, undo, isolation, persistence and MP4."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,json,urllib.request,base64,subprocess
 from pathlib import Path
 from tests.test_editor_browser import Chrome
 BASE='http://127.0.0.1:8767';PID='8'*32;JID='e'*32
-ART=Path('/tmp/cascade-subject-browser');ART.mkdir(exist_ok=True)
+import tempfile
+ART=Path(tempfile.gettempdir())/'cascade-subject-browser';ART.mkdir(exist_ok=True)
 
 def api(path):return json.load(urllib.request.urlopen(urllib.request.Request(BASE+path,headers={'Authorization':'Bearer editor-browser-fixture'})))
 async def main():

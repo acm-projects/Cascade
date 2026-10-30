@@ -26,3 +26,9 @@ openai
 # Local face tracks and audio-visual active speaker inference (Auto Reframe)
 opencv-python-headless>=4.10,<6
 python_speech_features==0.6
+
+# Encrypted server-side social OAuth tokens
+cryptography>=43
+
+# IANA timezone database for native YouTube scheduling (zoneinfo fallback)
+tzdata

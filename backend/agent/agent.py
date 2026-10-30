@@ -7,6 +7,7 @@ TARGET_CLIPS from that ranking, spread out through the video."""
 from __future__ import annotations
 
 import logging
+import copy
 from typing import Any, Callable
 
 from backend.cascade_llm import ToolResult, call_cost, make_conversation, selected_model
@@ -29,7 +30,7 @@ TARGET_SUGGESTIONS = TARGET_CLIPS  # final clips returned (set in tools.py)
 
 SYSTEM_PROMPT = f"""You find the {TARGET_SUGGESTIONS} best clips of a whole video for a given category (e.g. "funny", "interesting"). They must be the best of the ENTIRE video and spread out through it - not four moments from the same stretch.
 
-Your first action is always get_overview (it is called for you on the first turn). For a short video it gives you the full transcript; for a long one (a podcast, an interview) it gives you an outline: per-chunk summaries with notable lines and exact timestamps. Either way you also get a few sample frames. Read it carefully - it tells you what this video is about, who is speaking and where candidate moments might be. Base your searches on THIS video, not on generic ideas.
+Your first action is always get_overview (it is called for you on the first turn). For a short video it gives you the full transcript; for a long one (a podcast, an interview) it gives you an outline: per-chunk summaries with notable lines and exact timestamps. Video inputs also provide sample frames. Audio-only inputs provide no images: rely on speech search and transcripts, never invent visuals. Read it carefully - it tells you what this video is about, who is speaking and where candidate moments might be. Base your searches on THIS video, not on generic ideas.
 
 How to work (you have {MAX_ITERATIONS} turns after the overview):
 1. FIND candidates across the whole video - aim for roughly {2 * TARGET_SUGGESTIONS}-{3 * TARGET_SUGGESTIONS}, from every part of it, not just the first stretch you look at. Verify promising ones, and ADD each one with add_candidate as soon as you have confirmed it - do not save all the adding for later. If add_candidate rejects a clip (too long, overlapping), fix it and add it again right away.
@@ -46,15 +47,15 @@ Tools:
 
 Be efficient: call several tools in the same turn (e.g. multiple searches at once, inspecting or adding several candidates at once). Do not spend turns narrating. If your searches are returning weak or irrelevant results, say so honestly in the scores instead of inventing a justification."""
 
-def pacing_note(turn: int) -> str:
+def pacing_note(turn: int, limit: int = MAX_ITERATIONS) -> str:
     """Per-turn reminder of how many turns are left, so ranking is never left to the last call."""
-    left = MAX_ITERATIONS - turn  # turns remaining after this one
+    left = limit - turn  # turns remaining after this one
     if left >= 3:
         return ""
     if left == 0:
         return ""  # the final turn has its own note
     return (
-        f"\n\nTurn {turn} of {MAX_ITERATIONS}: only {left} turn(s) remain after this one. Stop researching "
+        f"\n\nTurn {turn} of {limit}: only {left} turn(s) remain after this one. Stop researching "
         "now - add any remaining candidates and call rank_candidates this turn or the next."
     )
 
@@ -78,15 +79,46 @@ def run_agent(
     emit = progress or (lambda msg: None)
 
     target_clips=getattr(toolbox,"target_clips",TARGET_SUGGESTIONS)
+    iteration_limit = min(32, max(MAX_ITERATIONS, target_clips + 4))
     system=SYSTEM_PROMPT
+    system = system.replace(f'you have {MAX_ITERATIONS} turns', f'you have {iteration_limit} turns')
+    system += ('\nThe requested clip count is the generation target. Keep searching for distinct suitable '
+               'matches until that target is met or plausible source moments are exhausted. '
+               'Do not stop at a default batch size. Never duplicate clips to fill the count.')
+    specific = getattr(toolbox, 'intent', 'general') == 'specific'
+    if specific:
+        system = system.replace('They must be the best of the ENTIRE video and spread out through it - not four moments from the same stretch.',
+                                'Search the entire video for the requested event; good matches may be close together.')
+        system = system.replace('from every part of it, not just the first stretch you look at', 'only where the requested event actually occurs')
+        system = system.replace('skipping any pick that is too close in time to a better-ranked one - so make sure your pool contains strong candidates from different parts of the video, and don\'t rely on a single region',
+                                'retaining only clear matches with confidence at least 0.5, without a spacing requirement')
+        system += ('\nThis is a SPECIFIC request. Only add candidates that clearly show the requested event. '
+                   'It is fine to return fewer clips. Do not add loosely related moments to reach the count. '
+                   'Ignore coverage gaps for this request; precision takes priority.')
     if target_clips!=TARGET_SUGGESTIONS:
         system=system.replace(f"{2*TARGET_SUGGESTIONS}-{3*TARGET_SUGGESTIONS}",f"{2*target_clips}-{3*target_clips}").replace(f"{TARGET_SUGGESTIONS} best",f"{target_clips} best").replace(f"top {TARGET_SUGGESTIONS}",f"top {target_clips}").replace("not four moments","not several moments")
     conv = conversation or make_conversation(client)
     model = selected_model()
     first_message = (
-        f"Find the {target_clips} best '{category}' moments of this whole video, spread out "
-        f"through it (duration {toolbox.index.duration:.1f}s)."
+        f"Find {'up to' if specific else 'the'} {target_clips} best '{category}' moments of this whole video"
+        + (', only clear matches' if specific else ', spread out through it')
+        + f" (duration {toolbox.index.duration:.1f}s)."
     )
+    if getattr(toolbox, 'exclude_windows', None):
+        first_message += ('\nThe user has already seen these moments in this session: '
+                          + ', '.join(f'{a:.1f}–{b:.1f}s' for a, b in toolbox.exclude_windows)
+                          + '. Find different ones.')
+    combined = len(getattr(toolbox, 'references', [])) > 1
+    if combined:
+        system += ('\nCOMBINED REFERENCE SEARCH: every output must blend the content or qualities of ALL '
+                   'selected references within that one moment, not alternate between references. '
+                   'Explain concrete evidence for each reference in reference_matches. Search multiple '
+                   'regions and inspect alternatives until you have the requested number of distinct '
+                   'strong combined matches, or have exhausted plausible matches. Do not stop after '
+                   'finding the first one. Never duplicate a moment or invent weak matches to fill slots.')
+        first_message += '\nSelected references in order:\n' + '\n'.join(
+            f"Reference {i + 1}: {ref.get('title', '')}; {ref.get('description', '')}"
+            for i, ref in enumerate(toolbox.references))
     if toolbox.min_clip_seconds != MIN_CLIP_SECONDS or toolbox.max_clip_seconds != MAX_CLIP_SECONDS or target_seconds:
         first_message += (
             f" For this request every clip must be between {toolbox.min_clip_seconds:g} and "
@@ -128,6 +160,24 @@ def run_agent(
         nonlocal final_text
         if target_clips!=TARGET_SUGGESTIONS:
             tools=[{**tool,'description':tool['description'].replace(f'{TARGET_SUGGESTIONS} clips',f'{target_clips} clips')} for tool in tools]
+        if specific:
+            descriptions = {
+                'add_candidate': ('Add only a candidate that clearly matches the specific request. '
+                                  'Do not fill coverage gaps. Use honest 0–1 confidence; scores below 0.5 will not be selected.'),
+                'rank_candidates': (f'Finish by ranking clear matches best first. Return at most {target_clips}; fewer is fine. '
+                                    'Nearby matches are allowed; overlapping duplicates and confidence below 0.5 are excluded.'),
+            }
+            tools = [{**tool, 'description': descriptions.get(tool['name'], tool['description'])} for tool in tools]
+        if combined:
+            tools = copy.deepcopy(tools)
+            for tool in tools:
+                if tool['name'] == 'add_candidate':
+                    tool['input_schema']['properties']['reference_matches'] = {
+                        'type': 'array', 'minItems': len(toolbox.references), 'maxItems': len(toolbox.references),
+                        'items': {'type': 'object', 'properties': {
+                            'reference': {'type': 'integer', 'minimum': 1, 'maximum': len(toolbox.references)},
+                            'explanation': {'type': 'string'}}, 'required': ['reference', 'explanation']}}
+                    tool['input_schema']['required'].append('reference_matches')
         emit(label)
         turn = conv.take_turn(system=system, tools=tools, tool_choice=tool_choice, note=note)
         emit(f"{label} done{record_usage(turn)}")
@@ -165,15 +215,29 @@ def run_agent(
         return {"suggestions": [], "summary": final_text, "iterations": 0, "usage": _usage_summary(usage)}
 
     iterations = 0
-    for i in range(MAX_ITERATIONS):
+    refill_attempts = 0
+    refill_note = ''
+    for i in range(iteration_limit):
         iterations = i + 1
-        last_turn = i == MAX_ITERATIONS - 1
+        last_turn = i == iteration_limit - 1
         keep_going = take_turn(
-            f"Agent turn {iterations}/{MAX_ITERATIONS}",
+            f"Agent turn {iterations}/{iteration_limit}",
             FINAL_SCHEMAS if last_turn else TOOL_SCHEMAS,
             {"type": "any"} if last_turn else None,
-            note=(LAST_TURN_NOTE if last_turn else pacing_note(iterations)).strip() or None,
+            note=(LAST_TURN_NOTE if last_turn else refill_note + pacing_note(iterations, iteration_limit)).strip() or None,
         )
+        refill_note = ''
+        if (combined or getattr(toolbox, 'require_count', False)) and (toolbox.finalized or not keep_going) and not last_turn and refill_attempts < 2:
+            found = len(toolbox.final_selection())
+            if found < target_clips:
+                refill_attempts += 1
+                toolbox.finalized = False
+                refill_note = (f'Only {found} of {target_clips} requested {"combined " if combined else ""}matches are available. '
+                               + ('Search and inspect other source moments that blend ALL references, add distinct ' if combined
+                                  else 'Search and inspect other source moments matching the request, add distinct ')
+                               + 'candidates, then rank again. Do not reuse selected or already-seen intervals.')
+                emit(refill_note)
+                continue
         # The agent ends the search itself by ranking; otherwise it runs to the turn limit.
         if not keep_going or toolbox.finalized:
             break

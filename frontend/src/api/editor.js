@@ -15,14 +15,26 @@ function clipPath(projectId, jobId, index) {
   return `/api/projects/${encodeURIComponent(projectId)}/editor/${encodeURIComponent(jobId)}/${index}`;
 }
 
+export function getTrends(token, projectId, jobId, index, researchId) {
+  return apiFetch(clipPath(projectId, jobId, index) + '/trends' + (researchId ? `?research_id=${encodeURIComponent(researchId)}` : ''), { token });
+}
+export function analyzeTrends(token, projectId, jobId, index, body) {
+  return apiFetch(clipPath(projectId, jobId, index) + '/trends', { token, method: 'POST', body });
+}
+export function applyTrends(token, projectId, jobId, index, body) {
+  return apiFetch(clipPath(projectId, jobId, index) + '/trends/apply', { token, method: 'POST', body });
+}
+
 /**
- * GET /api/projects/{projectId}/editor
+ * GET /api/projects/{projectId}/editor[?selected_only=true]
  * The clips you can edit, grouped by the AI Studio session ("wave") they came from.
- * @returns {Promise<{ sessions: { job_id, prompt, clips: { job_id, clip_index, start, end, title }[] }[],
- *                     selection: { job_id, clip_index } | null }>}  selection = the clip you last edited
+ * selectedOnly: only the clips picked in AI Studio (the studio's editor_clips).
+ * @returns {Promise<{ sessions: { job_id, prompt, session_name?, clips: { job_id, clip_index, start, end, title }[] }[],
+ *                     selection: { job_id, clip_index } | null }>}  selection = the clip to open first
  */
-export function getEditorIndex(token, projectId) {
-  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor`, { token });
+export function getEditorIndex(token, projectId, { selectedOnly = false } = {}) {
+  const query = selectedOnly ? "?selected_only=true" : "";
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor${query}`, { token });
 }
 
 /**
@@ -74,4 +86,43 @@ export function exportSelected(token, projectId, clips) {
     method: "POST",
     body: { clips },
   });
+}
+
+/**
+ * POST .../editor/{jobId}/{index}/reframe   body: { composition, focus: "auto", selection: null }
+ * Starts the "who is in the frame" analysis that Fill (crop) exports need, so the crop can follow people.
+ * Safe to call again: a finished analysis for the same clip is reused (cache_hit).
+ * @returns {Promise<{ analysis_id: string, status: "queued" | "processing" | "ready" }>}
+ */
+export function startReframe(token, projectId, jobId, index, body) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/reframe`, { token, method: "POST", body });
+}
+
+/**
+ * GET .../editor/{jobId}/{index}/reframe/{analysisId} - how the analysis is going
+ * @returns {Promise<{ status: "queued" | "processing" | "ready" | "error", progress: 0-1, message }>}
+ */
+export function getReframe(token, projectId, jobId, index, analysisId) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/reframe/${encodeURIComponent(analysisId)}`, { token });
+}
+
+export function listAudioAssets(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/audio`, { token });
+}
+export function uploadAudioAsset(token, projectId, jobId, index, file, kind = 'music') {
+  const form = new FormData(); form.append('audio', file); form.append('name', file.name); form.append('kind', kind);
+  return apiFetch(`${clipPath(projectId, jobId, index)}/audio`, { token, method: 'POST', form });
+}
+export function audioAssetPath(projectId, jobId, index, assetId) {
+  return `${clipPath(projectId, jobId, index)}/audio/${encodeURIComponent(assetId)}/media`;
+}
+
+/** Search only through the owner-checked backend; provider keys stay server-side. */
+export function searchBroll(token, projectId, jobId, index, query, page = 1) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/broll/search?${new URLSearchParams({ query, page })}`, { token });
+}
+
+export function getBrollMedia(token, projectId, jobId, index, assetId, kind = "media") {
+  const suffix = kind === "thumbnail" ? "thumbnail" : "media";
+  return apiFetch(`${clipPath(projectId, jobId, index)}/broll/${encodeURIComponent(assetId)}/${suffix}`, { token });
 }

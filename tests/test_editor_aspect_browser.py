@@ -1,6 +1,9 @@
 """Real Chrome framing/playback/export checks; requires editor_browser_server.py.
 No paid calls. Test server replaces identity only and uses temporary real media.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import base64
 import io

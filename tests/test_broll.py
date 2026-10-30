@@ -14,7 +14,8 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 from PIL import Image
-from backend import broll, editor_backend as editor, integration
+from backend import broll, editor
+from backend.services import projects_store
 from tests import test_editor as editor_fixture
 
 
@@ -82,7 +83,7 @@ class BrollEditorTests(unittest.TestCase):
     get=editor_fixture.EditorTests.get
 
     def stock(self):
-        store=broll.Store(integration.project_dir('editor-user')/'editor'/self.pid/'stock'/(self.jid+'-0'))
+        store=broll.Store(projects_store.project_dir('editor-user')/'editor'/self.pid/'stock'/(self.jid+'-0'))
         asset=broll.Asset(id='px-12-25',provider_id=12,creator='Fixture Creator',creator_url='https://www.pexels.com/@fixture/',source_url='https://www.pexels.com/video/12/',duration=3,width=320,height=180)
         broll.write_json(store.folder/'assets.json',{asset.id:{'asset':asset.model_dump(),'video':'https://videos.pexels.com/fixture.mp4','image':'https://images.pexels.com/image.jpg'}})
         # Red then green, and 880Hz stock audio that must never enter the output.
@@ -96,7 +97,7 @@ class BrollEditorTests(unittest.TestCase):
         return broll.Segment(id='e'*32,asset=asset,start=.5,duration=1,offset=1,**kw)
 
     def chat(self,state,actions,**extra):
-        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='model text',actions=actions)) as ai:
+        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='model text',actions=actions)) as ai:
             response=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'explicit fixture edit',**extra})
             return response,ai
 

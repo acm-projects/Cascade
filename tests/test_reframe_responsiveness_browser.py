@@ -1,4 +1,7 @@
 """Real analysis responsiveness, cancellation/rejoin and ready-cache latency."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,json,urllib.request,time,statistics
 from pathlib import Path
 from tests.test_editor_browser import Chrome

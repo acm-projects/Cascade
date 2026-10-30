@@ -1,6 +1,6 @@
 """One structured-JSON call (a prompt, optional images, a JSON schema) on either provider.
 
-Used by the transcript summarizer (both providers) and the Trends tab's OpenAI path.
+Used by generation features, summaries, social copy, and editor chat.
 OpenAI schemas must satisfy strict mode: additionalProperties=false and every property required.
 """
 
@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from .clients import OPENAI, make_client, selected_model, selected_provider
+from .clients import OPENAI, MODELS, LLMConfigError, make_client, selected_model, selected_provider
 
 
 @dataclass
@@ -30,9 +30,13 @@ def structured_json(
     effort: str = "low",
     max_output_tokens: int = 4096,  # reasoning tokens count against this on both providers
     client: Any = None,
+    provider: str | None = None,
 ) -> StructuredResult:
-    provider = selected_provider()
-    model = selected_model()
+    # Per-call overrides never mutate the process environment or affect other jobs.
+    model = selected_model() if provider is None else MODELS.get(provider)
+    provider = provider or selected_provider()
+    if model is None:
+        raise LLMConfigError('Provider must be anthropic or openai.')
     client = client or make_client(provider)
     if provider == OPENAI:
         return _openai(client, model, prompt, schema, name, images or [], effort, max_output_tokens)
@@ -71,6 +75,7 @@ def _openai(client, model, prompt, schema, name, images, effort, max_output_toke
     ]
     response = client.responses.create(
         model=model,
+        store=False,
         input=[{"role": "user", "content": content}],
         text={"format": {"type": "json_schema", "name": name, "schema": schema, "strict": True}},
         reasoning={"effort": effort},

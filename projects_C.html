@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Cascade | Projects</title>
+
+  <link rel="stylesheet" href="styles_C.css">
+
+  <style>
+    .projects-page {
+      min-height: calc(100vh - 75px);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .project-panel {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .project-panel h1 {
+      margin-bottom: 12px;
+      font-size: 30px;
+    }
+
+    .continue-button {
+      width: 100%;
+      margin-top: 24px;
+    }
+
+    .account-name {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .account-id {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      padding: 16px 24px;
+      color: var(--muted);
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    #status:empty {
+      display: none;
+    }
+  </style>
+</head>
+
+<body data-page="projects">
+  <header class="topbar">
+    <a class="brand" href="index_C.html">
+      <span>≋</span>
+      Cascade
+    </a>
+
+    <div id="account" class="row" hidden>
+      <span
+        id="account-name"
+        class="account-name"
+      ></span>
+
+      <button id="sign-out" type="button">
+        Sign out
+      </button>
+    </div>
+  </header>
+
+  <p
+    id="status"
+    role="status"
+    aria-live="polite"
+  >
+    Checking sign-in…
+  </p>
+
+  <!-- Shown after app1.py verifies the Clerk session. -->
+  <main
+    id="protected-page"
+    class="projects-page"
+    hidden
+  >
+    <section class="card project-panel">
+      <h1>Your projects</h1>
+      <label for="project-search">Search projects</label>
+      <input id="project-search" type="search" placeholder="Search projects…" maxlength="100">
+      <div id="project-tiles" class="project-tiles"></div>
+      <details><summary>Previous generated clips</summary><div id="clip-library" class="project-tiles"></div></details>
+
+      <p class="muted">
+        Name your project, then open the canvas.
+      </p>
+
+      <form id="project-form">
+        <label for="project-name">
+          Project name
+        </label>
+
+        <input
+          id="project-name"
+          type="text"
+          placeholder="Untitled project"
+          maxlength="100"
+          required
+        >
+
+        <button
+          class="primary continue-button"
+          type="submit"
+        >
+          Create project →
+        </button>
+      </form>
+
+      <p
+        id="account-id"
+        class="account-id"
+      ></p>
+    </section>
+  </main>
+
+  <noscript>
+    <p>Please enable JavaScript to open your projects.</p>
+  </noscript>
+
+  <script src="flow_C.js"></script>
+</body>
+</html>

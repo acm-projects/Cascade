@@ -24,7 +24,7 @@ All trim boundaries use generated-media time. Source `start`/`end` metadata is n
 
 The Aspect Ratio tab offers Original, 9:16, 1:1, 4:5, 16:9 and 4:3 presets with ratio illustrations and selected-state indicators. `composition` is an additive per-clip state field containing the preset, Fit/Fill mode, normalized horizontal/vertical crop positions and Fit background color. Old drafts default to Original/Fit/centered without losing trim or caption edits. All controls participate in the same history and autosave; one crop-slider gesture is one history entry.
 
-`editor_state.js` and `editor_backend.py` calculate matching output geometry. Presets use standard ratios with even integer dimensions derived from the source’s longest edge, rather than device-specific resolutions. Fit uniformly scales the video within the frame and pads unused pixels; Fill scales to cover and crops at the chosen position. Scaling and offsets are rounded for encoder/chroma alignment. Captions are drawn at output-frame dimensions after framing, so they stay inside the final composition. Export scales/pads/crops the source before compositing those same caption PNGs. Original comparison bypasses framing and additional captions without changing saved state.
+`editor_state.js` and `backend/editor/composition.py` calculate matching output geometry. Presets use standard ratios with even integer dimensions derived from the source’s longest edge, rather than device-specific resolutions. Fit uniformly scales the video within the frame and pads unused pixels; Fill scales to cover and crops at the chosen position. Scaling and offsets are rounded for encoder/chroma alignment. Captions are drawn at output-frame dimensions after framing, so they stay inside the final composition. Export scales/pads/crops the source before compositing those same caption PNGs. Original comparison bypasses framing and additional captions without changing saved state.
 
 The visible Play/Pause button sits beneath the main preview, shares playback with the timeline, shows time relative to the retained range, restarts after trim end, and exposes loading/playback errors. The main video and local caption layer compose live; normal framing changes do not render or request a new MP4.
 
@@ -36,7 +36,7 @@ The visible Play/Pause button sits beneath the main preview, shares playback wit
 
 Browser-initiated edited downloads send the exact locally rendered transparent caption PNGs and their trimmed intervals. The backend validates PNG format, dimensions, payload size and intervals against the clip's real cues, then composites them over the trimmed video. This preserves browser caption layout and font rendering in export. H.264/yuv420p encoding is lossy, including chroma subsampling near caption edges. Clients without raster previews can still use the existing ASS export fallback, which requires FFmpeg with libass. An installed Homebrew `ffmpeg-full` is detected where available; `CASCADE_EDITOR_FFMPEG` can specify a compatible binary. Export status is indeterminate while encoding; there are no simulated percentages. Edited downloads render on demand; the existing Exports page continues downloading originals.
 
-Chat uses the existing server-side OpenAI key/model configuration, with optional `OPENAI_EDITOR_MODEL` override. The Responses API uses strict structured output, followed by Pydantic and media-boundary validation. Supported actions: remove initial trim seconds, keep initial trim seconds, reset trim, captions on/off, text color, bold, top/middle/bottom position and text for an identified caption segment. Multiple actions in one response form one undo transaction. No generated commands are executed. Provider calls are mocked in tests. Request format follows [official OpenAI documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
+Chat uses `backend/editor/ai.py` and the shared `cascade_llm` structured helper. `LLM_PROVIDER` selects Anthropic or OpenAI; optional `CASCADE_EDITOR_PROVIDER` overrides only editor chat, without mutating process-wide provider settings. Pydantic and media-boundary validation follow the structured response. Supported actions: remove initial trim seconds, keep initial trim seconds, reset trim, captions on/off, text color, bold, top/middle/bottom position and text for an identified caption segment. Multiple actions in one response form one undo transaction. No generated commands are executed. Provider calls are mocked in tests. Request format follows [official OpenAI documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
 
 Burned-in-caption detection relies on existing clip metadata/job kind. Those pixels remain in both comparison modes and exports; additional captions cannot erase them. Pexels B-roll now replaces main video pixels during inserted segments, so original burned-in captions can be covered by stock footage. The additional caption layer remains above B-roll. See [B-roll setup and workflow](broll.md).
 
@@ -91,3 +91,25 @@ Additional verification: run `python3 -m tests.test_exports_browser` with `tests
 
 
 Follow Speaker now integrates with Fill to Frame, saved drafts, Chat, comparison, and every edited export. See [Auto Reframe processing, setup, limitations and verification](auto-reframe.md).
+
+
+## Backend package (CAS-43 / CAS-44)
+
+`backend/main.py` includes `backend/editor/routes.py` as an APIRouter. The editor
+models, action validation, caption rendering, composition, media, drafts, tracking,
+and exports each live in their own module under `backend/editor/`. The old
+`backend/editor_backend.py` is a two-line compatibility re-export, not a second
+implementation. Request-time service imports keep app startup free of circular
+imports and retain isolated job-directory overrides in tests.
+
+`tests/editor_routes_before.json` records the route contract before extraction.
+`tests/test_editor_routes.py` compares every path/method pair and enforces the
+300-line module budget. Provider tests mock both adapters; they exercise caption
+changes with either provider's key, override isolation, invalid proposals, missing
+credentials, and disabled OpenAI response storage. Automated tests do not make
+paid provider calls.
+
+On Windows, tracking locks use `msvcrt`, and publishing worker liveness is queried
+without `os.kill(pid, 0)` (which can send a Windows console signal). OpenCV and
+`tzdata` must be installed from the existing runtime requirements for the related
+tracking and timezone tests.

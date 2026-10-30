@@ -1,0 +1,92 @@
+.clip-player {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* The stage centers a frame of the chosen aspect ratio inside whatever space there is */
+.clip-player-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding-top: 16px; /* a little breathing room above the video */
+}
+
+/* Its width/height are set in ClipPlayer.jsx: the biggest frame of the chosen ratio that fits */
+.clip-player-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Fill mode: drag the video to reposition it */
+.clip-player-frame.can-drag {
+  cursor: grab;
+  touch-action: none;
+}
+
+.clip-player-frame.can-drag:active {
+  cursor: grabbing;
+}
+
+.clip-player-frame.can-drag .clip-player-video {
+  cursor: inherit;
+}
+
+.clip-player-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.clip-player-captions {
+  position: absolute;
+  inset: 6% 5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.clip-player-captions span {
+  max-width: 90%;
+  padding: 0.1em 0.35em;
+  border-radius: 0.2em;
+  line-height: 1.25;
+  text-align: center;
+  white-space: pre-wrap;
+}
+
+.clip-player-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  color: var(--color-wood-text);
+}
+
+.clip-player-bar .btn {
+  font-size: 16px;
+}
+
+/* Loop off = faded */
+.clip-player-loop:not(.active) {
+  opacity: 0.5;
+}
+
+.clip-player-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+}

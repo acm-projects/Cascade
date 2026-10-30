@@ -13,7 +13,9 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
+import time
+from queue import Queue, Empty
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -55,11 +57,14 @@ class VideoIndex:
     chunk_summaries: list[dict[str, Any]] = field(default_factory=list)
     summary_usage: dict[str, Any] = field(default_factory=dict)
     transcription_cost_usd: float = 0.0  # Deepgram spend for this build; 0 on a cache hit
+    has_video: bool = True
+    index_mode: str = "multimodal"
+    timings: dict[str, float] = field(default_factory=dict)
     video_key: str = ""  # sha256 of the video file; ties per-video caches (and saved research) together
 
     def search(self, query: str, mode: str = "visual", top_k: int = 5) -> list[dict[str, Any]]:
         """Return up to top_k well-separated hits as {start, end, score, text?, speaker?}."""
-        if mode == "speech":
+        if mode == "speech" or not self.has_video or not self.frame_times:
             if len(self.transcript) == 0:
                 return []
             scores = self.segment_embeddings @ self.encode_text_query(query)
@@ -158,87 +163,100 @@ def build_index(
     video_path: Path,
     work_dir: Path,
     progress: Callable[[str], None] | None = None,
+    *,
+    visual: bool = True,
 ) -> VideoIndex:
-    """Build (or load from cache) the search index for a video file."""
-    emit = progress or (lambda msg: None)
-
-    # Use the website's own lazy model loader, through its one module path (backend.video_search.router),
-    # so CLIP / MiniLM are loaded once per process even when the visual/speech engines run too.
+    """Build independent transcript/visual indexes concurrently; callbacks stay on the caller thread."""
     from PIL import Image
     from backend.video_search import router as vs
+    from backend.media import probe_media
 
-    emit("Preparing search models")
-    vs.load_models("visual", emit)
-    vs.load_models("speech", emit)
-
-    def encode_visual_query(q: str) -> np.ndarray:
-        return vs.visual_model.encode(q, normalize_embeddings=True)
-
-    def encode_text_query(q: str) -> np.ndarray:
-        return vs.search_model.encode(q, normalize_embeddings=True)
-
+    emit = progress or (lambda msg: None)
+    media_info = probe_media(video_path)
     key = file_sha256(video_path)
+    timings = {}
 
-    # ---- frames (provider-independent) ----
-    frames_path = CACHE_DIR / f"frames_{key}.npz"
-    if frames_path.exists():
-        emit("Loaded frame embeddings from cache")
-        data = np.load(frames_path)
-        duration = float(data["duration"])
-        interval = float(data["interval"])
-        frame_times = [float(t) for t in data["frame_times"]]
-        frame_embeddings = data["frame_embeddings"]
-    else:
-        duration = _probe_duration(video_path)
-        interval = max(MIN_FRAME_INTERVAL, duration / MAX_FRAMES)
-        emit("Sampling frames")
-        frame_times, frame_paths = _sample_frames(video_path, work_dir / "index_frames", duration, interval)
-        emit("Embedding frames with CLIP")
-        images = []
-        for p in frame_paths:
-            with Image.open(p) as img:
-                images.append(img.convert("RGB"))
-        frame_embeddings = vs.visual_model.encode(images, normalize_embeddings=True, batch_size=32)
-        np.savez(
-            frames_path,
-            frame_embeddings=frame_embeddings,
-            frame_times=np.array(frame_times),
-            interval=np.array(interval),
-            duration=np.array(duration),
-        )
-
-    # ---- transcript (keyed by provider + model) ----
-    tag = TRANSCRIPT_TAG
-    transcript_path, segemb_path = transcript_cache_paths(key, tag)
-    transcription_cost = 0.0
-    if transcript_path.exists() and segemb_path.exists():
-        emit("Loaded transcript from cache")
-        transcript = json.loads(transcript_path.read_text())
-        segment_embeddings = np.load(segemb_path)
-    else:
-        t_info: dict[str, Any] = {}
-        transcript = transcribe_media(video_path, work_dir, progress=emit, info=t_info)
-        transcription_cost = t_info.get("cost_usd", 0.0)
-        if transcript:
-            emit("Embedding transcript")
-            segment_embeddings = vs.search_model.encode(
-                [seg["text"] for seg in transcript], normalize_embeddings=True
-            )
+    def transcript_index(report):
+        started = time.perf_counter()
+        transcript_path, segemb_path = transcript_cache_paths(key, TRANSCRIPT_TAG)
+        cost = 0.0
+        vs.load_models("speech", report)
+        if transcript_path.exists() and segemb_path.exists():
+            report("Loaded transcript from cache")
+            transcript = json.loads(transcript_path.read_text())
+            embeddings = np.load(segemb_path)
         else:
-            segment_embeddings = np.zeros((0, 1), dtype=np.float32)
-        transcript_path.write_text(json.dumps(transcript))
-        np.save(segemb_path, segment_embeddings)
+            info = {}
+            transcript = transcribe_media(video_path, work_dir, progress=report, info=info)
+            cost = info.get("cost_usd", 0.0)
+            if transcript:
+                report("Embedding transcript")
+                embeddings = vs.search_model.encode([s["text"] for s in transcript], normalize_embeddings=True)
+            else:
+                embeddings = np.zeros((0, 1), dtype=np.float32)
+            transcript_path.write_text(json.dumps(transcript))
+            np.save(segemb_path, embeddings)
+        timings['transcript_index_seconds'] = round(time.perf_counter() - started, 3)
+        return transcript, embeddings, cost
+
+    def visual_index(report):
+        started = time.perf_counter()
+        vs.load_models("visual", report)
+        cache = CACHE_DIR / f"frames_{key}.npz"
+        if cache.exists():
+            report("Loaded frame embeddings from cache")
+            with np.load(cache) as data:
+                result = (float(data["duration"]), float(data["interval"]),
+                          [float(t) for t in data["frame_times"]], data["frame_embeddings"])
+        else:
+            duration = media_info['duration']
+            interval = max(MIN_FRAME_INTERVAL, duration / MAX_FRAMES)
+            report("Sampling frames")
+            times, paths = _sample_frames(video_path, work_dir / "index_frames", duration, interval)
+            report("Embedding frames with CLIP")
+            images = []
+            for path in paths:
+                with Image.open(path) as image:
+                    images.append(image.convert("RGB"))
+            embeddings = vs.visual_model.encode(images, normalize_embeddings=True, batch_size=32)
+            np.savez(cache, frame_embeddings=embeddings, frame_times=np.array(times),
+                     interval=np.array(interval), duration=np.array(duration))
+            result = duration, interval, times, embeddings
+        timings['visual_index_seconds'] = round(time.perf_counter() - started, 3)
+        return result
+
+    started = time.perf_counter()
+    if visual and media_info['has_video']:
+        emit("Building transcript and visual indexes in parallel")
+        messages = Queue()
+        # Only the caller invokes progress: cancellation and job state updates stay serialized.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            speech = pool.submit(transcript_index, messages.put)
+            frames = pool.submit(visual_index, messages.put)
+            pending = {speech, frames}
+            while pending:
+                _, pending = wait(pending, timeout=.1, return_when=FIRST_COMPLETED)
+                while True:
+                    try:
+                        message = messages.get_nowait()
+                    except Empty:
+                        break
+                    emit(message)
+            transcript, segment_embeddings, transcription_cost = speech.result()
+            duration, interval, frame_times, frame_embeddings = frames.result()
+    else:
+        emit("Building transcript-first search index")
+        transcript, segment_embeddings, transcription_cost = transcript_index(emit)
+        duration, interval, frame_times = media_info['duration'], MIN_FRAME_INTERVAL, []
+        frame_embeddings = np.zeros((0, 1), dtype=np.float32)
+    timings['index_wall_seconds'] = round(time.perf_counter() - started, 3)
 
     return VideoIndex(
-        duration=duration,
-        frame_interval=interval,
-        frame_times=frame_times,
-        frame_embeddings=frame_embeddings,
-        transcript=transcript,
-        segment_embeddings=segment_embeddings,
-        encode_visual_query=encode_visual_query,
-        encode_text_query=encode_text_query,
-        chunks=build_chunks(transcript),
-        transcription_cost_usd=transcription_cost,
-        video_key=key,
+        duration=duration, has_video=media_info['has_video'], frame_interval=interval,
+        frame_times=frame_times, frame_embeddings=frame_embeddings,
+        transcript=transcript, segment_embeddings=segment_embeddings,
+        encode_visual_query=(lambda q: vs.visual_model.encode(q, normalize_embeddings=True)),
+        encode_text_query=(lambda q: vs.search_model.encode(q, normalize_embeddings=True)),
+        chunks=build_chunks(transcript), transcription_cost_usd=transcription_cost, video_key=key,
+        index_mode='multimodal' if frame_times else 'transcript-first', timings=timings,
     )

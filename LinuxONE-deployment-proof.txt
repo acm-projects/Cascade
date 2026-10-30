@@ -1,0 +1,18 @@
+FoodFit — LinuxONE deployment verification
+Verified directly over SSH on October 18, 2026.
+
+Server: 148.100.108.198
+Hostname: bgaitest
+Architecture: s390x (IBM Z / LinuxONE)
+Nginx website service: active
+FoodFit Python location API service: active
+Location API health response: {"status":"ok"}
+
+Commands verified:
+hostname
+uname -m
+systemctl is-active nginx foodfit-location
+curl -fsS http://127.0.0.1:8001/health
+
+Deployment description:
+The frontend is served by Nginx on IBM LinuxONE. The Python FastAPI location service also runs on LinuxONE. The heatmap displays precomputed ML predictions. ML execution on LinuxONE has not been verified. Browser access currently uses an SSH tunnel; public HTTP access has not been established.

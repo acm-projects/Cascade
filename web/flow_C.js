@@ -755,24 +755,49 @@
   async function initializeProjects() {
     const data = await apiJSON("/api/projects");
     const tiles = $("project-tiles");
-    if (!data.projects.length) tiles.textContent = "No saved projects yet.";
-    data.projects.forEach(item => {
-      const card=document.createElement('article');card.className='project-card';
-      const tile = document.createElement("a"); tile.className = "button project-tile";
-      tile.textContent = item.name; tile.href = "canvas_C.html?project=" + item.id;
+    function renderProjects() {
+      tiles.replaceChildren();
+      const query = $("project-search").value.trim().toLocaleLowerCase();
+      const matches = data.projects.filter(item => item.name.toLocaleLowerCase().includes(query));
+      if (!matches.length) tiles.textContent = query ? "No matching projects." : "No saved projects yet.";
+      for (const item of matches) {
+        const card = document.createElement("div"); card.className = "project-card";
+        const link = document.createElement("a"); link.className = "button";
+        link.textContent = item.name; link.href = "canvas_C.html?project=" + item.id;
+        const edited = document.createElement("p"); edited.className = "muted";
+        const minutes = Math.max(0, Math.floor((Date.now() / 1000 - (item.updated_at || item.created_at)) / 60));
+        edited.textContent = minutes < 1 ? "Edited just now" : minutes < 60 ? `Edited ${minutes} minutes ago`
+          : minutes < 1440 ? `Edited ${Math.floor(minutes / 60)} hours ago` : `Edited ${Math.floor(minutes / 1440)} days ago`;
+        const rename = document.createElement("button"); rename.type = "button"; rename.textContent = "Rename";
+        rename.setAttribute("aria-label", "Rename " + item.name);
+        rename.onclick = async () => {
+          const name = window.prompt("Project name", item.name);
+          if (name === null || name.trim() === item.name) return;
+          rename.disabled = true;
+          try {
+            const updated = await apiJSON("/api/projects/" + item.id, {method: "PATCH",
+              headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: name.trim()})});
+            Object.assign(item, updated);
+            data.projects.sort((a, b) => b.updated_at - a.updated_at);
+            renderProjects();
+          } catch (error) { setStatus(error.message); rename.disabled = false; }
+        };
       const remove=document.createElement('button');remove.type='button';remove.className='project-delete';remove.textContent='Delete';remove.setAttribute('aria-label','Delete project '+item.name);
       remove.onclick=async()=>{
         if(remove.disabled || !confirm('Delete “'+item.name+'”? Its saved prompts, generated clips and editor drafts will be removed from this project. This cannot be undone.')) return;
         remove.disabled=true;
-        try {const deleted=await apiJSON('/api/projects/'+item.id,{method:'DELETE'});card.remove();
+        try {const deleted=await apiJSON('/api/projects/'+item.id,{method:'DELETE'});data.projects.splice(data.projects.indexOf(item),1);renderProjects();
           document.querySelectorAll('#clip-library [data-job]').forEach(button=>{if(deleted.job_ids.includes(button.dataset.job))button.remove();});
           for(const storage of [localStorage,sessionStorage]) for(let i=storage.length-1;i>=0;i--) {const key=storage.key(i);if(key?.startsWith('cascade-') && (key.includes(item.id) || storage.getItem(key)===item.id)) storage.removeItem(key);}
           localStorage.setItem('cascade-deleted-project:'+userId,JSON.stringify({id:item.id,at:Date.now()}));
           setStatus('Project deleted.');if(!tiles.children.length)tiles.textContent='No saved projects yet.';
         } catch(error) {setStatus('Could not delete '+item.name+': '+error.message);remove.disabled=false;}
       };
-      card.append(tile,remove);tiles.appendChild(card);
-    });
+        card.append(link, edited, rename, remove); tiles.appendChild(card);
+      }
+    }
+    $("project-search").oninput = renderProjects;
+    renderProjects();
     const library = await apiJSON("/api/my-clips");
     for (const clip of library.clips) {
       const button = document.createElement("button"); button.type = "button";
@@ -793,6 +818,13 @@
 
   // Canvas page
   async function initializeCanvas() {
+    if ($('studio-root')) {
+      setStatus('');
+      const version = $('studio-root').dataset.studioBuild || String(Date.now());
+      const module = await import('/studio-assets/studio.js?v=' + encodeURIComponent(version));
+      window.cascadeStudio = await module.mountStudio($('studio-root'), {project, apiJSON, apiFetch, userId});
+      return;
+    }
     $("project-title").textContent =
       getProjectName();
 
@@ -1263,6 +1295,7 @@
       document.querySelectorAll('video,audio').forEach(media=>media.pause());
       // A cached document needs its Blob URLs and frozen timer when restored.
       if(event.persisted)return;
+      window.cascadeStudio?.destroy();
       clearInterval(historyPoll);
       mediaURLs.forEach(url => {
         URL.revokeObjectURL(url);

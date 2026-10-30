@@ -29,7 +29,7 @@ async function apiJSON(url, options={}) {
  return {duration:12,width:1280,height:720,cues:[{start:0,end:12,text:'Caption'}],warning:'',draft:responseDraft(key(url))};
 }
 function setup(search='?project=p') {
- const markup = require('node:child_process').execFileSync('python3',['-c',"from pathlib import Path; from backend.frontend import render_page; print(render_page('editor_C.html',Path('web')),end='')"],{encoding:'utf8'});
+ const markup = require('node:child_process').execFileSync(process.env.PYTHON || (process.platform==='win32' ? require('node:path').join(__dirname,'..','.venv','Scripts','python.exe') : 'python3'),['-c',"from pathlib import Path; from backend.frontend import render_page; print(render_page('editor_C.html',Path('web')),end='')"],{encoding:'utf8',env:{...process.env,PYTHONIOENCODING:'utf-8'}});
  const ids = [...markup.matchAll(/id="([^"]+)"/g)].map(m=>m[1]);
  const elements = Object.fromEntries(ids.map(id=>[id,new Element('div',id)]));
  for(const name of Object.keys(defaults)) { const e=elements['cap-'+name]; e.tagName='INPUT'; e.type=['enabled','bold'].includes(name)?'checkbox':name==='opacity'?'range':['size','thickness'].includes(name)?'number':'text'; }

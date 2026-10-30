@@ -1,0 +1,178 @@
+/* Captions tab. Colors come from theme.css; the shared control styles are in EditorControls.css. */
+.captions-tab {
+  gap: 14px;
+}
+
+.captions-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.captions-toggle input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-leaf);
+}
+
+/* Style | Text sub-tabs */
+.captions-views {
+  display: flex;
+  padding: 3px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-card);
+}
+
+.captions-view {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.captions-view.active {
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+
+/* Presets: three "Aa" cards */
+.captions-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.captions-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.captions-preset.active {
+  border-color: var(--color-leaf);
+  box-shadow: 0 0 0 2px var(--color-leaf);
+}
+
+.captions-preset-sample {
+  width: 100%;
+  padding: 4px 0;
+  border-radius: 4px;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.captions-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.captions-row .editor-control:first-child {
+  flex: 1;
+}
+
+.captions-bold {
+  padding-bottom: 4px;
+}
+
+/* Color swatches */
+.captions-swatches {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.captions-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.captions-swatch.active {
+  box-shadow: 0 0 0 2px var(--color-cream-card), 0 0 0 4px var(--color-leaf);
+}
+
+/* Text sub-tab: one row per caption line */
+.captions-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  margin: 0;
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.captions-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-cream-card) 85%, white);
+  cursor: pointer;
+}
+
+.captions-line.focused {
+  border-color: var(--color-leaf);
+  background: color-mix(in srgb, var(--color-leaf) 25%, var(--color-cream-card));
+}
+
+.captions-line-time {
+  flex-shrink: 0;
+  width: 34px;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.7;
+}
+
+.captions-line input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--color-wood-dark);
+  border-radius: 4px;
+  background: white;
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.captions-reset {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-plank);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}

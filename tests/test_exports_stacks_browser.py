@@ -1,6 +1,9 @@
 """Reference-inspired wave stacks, real edited media, browser interactions and ZIPs.
 Run against editor_browser_server.py. Auth/providers are fixtures, media is real.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,base64,json,urllib.request,zipfile
 from pathlib import Path
 from tests.test_editor_browser import Chrome

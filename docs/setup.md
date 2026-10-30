@@ -20,7 +20,17 @@ Configure `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and `CLERK_AUTHORIZED_PAR
 
 Clip generation preserves main’s agent pipeline: `DEEPGRAM_API_KEY` supplies transcription, and `LLM_PROVIDER=anthropic|openai` selects the generation, summaries and research provider. Set that provider’s key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`). Model choices remain those in `backend/cascade_llm/clients.py`. Missing credentials fail early at upload. CLIP/MiniLM embeddings can load at startup; `CASCADE_WARM_MODELS=0` disables warming.
 
-Editor chat independently uses the server-side OpenAI Responses API and `OPENAI_API_KEY`, with `OPENAI_EDITOR_MODEL` → `OPENAI_SCENE_MODEL` → `gpt-5.4-mini` selection. It does not switch to Anthropic with `LLM_PROVIDER`. The older scene helper remains for editor configuration/compatibility tests, not as the website’s generation engine. Historical `openai`/`qwen` generation requests are routed through the current agent. Direct speech/visual workers retain main’s Deepgram transcription and gain requested-count/follow-up handling. Research also needs `YOUTUBE_API_KEY`.
+Editor chat uses the same `backend/cascade_llm` structured-output layer as generation,
+and follows `LLM_PROVIDER=anthropic|openai`. Only the selected provider's key is required.
+Optional `CASCADE_EDITOR_PROVIDER=anthropic|openai` overrides chat's provider per call,
+without changing generation or concurrent requests. Model choices stay in
+`backend/cascade_llm/clients.py`; the old `OPENAI_EDITOR_MODEL` override is no longer
+used by editor chat. Missing credentials return 503; malformed AI responses return
+502 without applying edits. Proposal validation and allowed actions are unchanged.
+The older scene helper remains for compatibility, not as the website's generation
+engine. Historical `openai`/`qwen` generation requests use the current agent. Direct
+speech/visual workers retain Deepgram transcription and requested-count/follow-up
+handling. Research also needs `YOUTUBE_API_KEY`.
 
 Generation groups, requested counts (1–12), source reuse, parent-context expansion, retries and deletion remain owner-scoped. The agent retains its default four-clip behavior, with per-request limits for other counts. No duplicate clips are created to fill unavailable results. Pexels B-roll is available in the editor through its B-roll tab and validated chat actions; it does not change the generation pipeline.
 

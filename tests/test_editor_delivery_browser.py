@@ -1,6 +1,9 @@
 """Real Chrome/FFmpeg workflow. Auth, stock search, AI and trend provider are fixtures.
 Uses production editor, persistence, pointer gestures, drop handling and exports.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,base64,json,urllib.request
 from pathlib import Path
 from tests.test_editor_browser import Chrome

@@ -9,6 +9,8 @@ const steps = [
   { id: "export", number: 3, label: "Export" },
 ];
 
+const short = (id) => (id && id.length > 10 ? `${id.slice(0, 8)}…` : id);
+
 // /projects/<id>/studio|editor|export. While you're in an AI Studio session, the AI Studio link keeps it.
 function stepPath(projectId, stepId, sessionId) {
   const path = `/projects/${projectId}/${stepId}`;
@@ -67,9 +69,11 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
 
       {/* Only while running `npm run dev`: shows the ids read from the URL, so you can see routing work */}
       {import.meta.env.DEV && (
-        <span className="topnav-route" title="From the URL (useParams)">
-          project: {id}
-          {params.sessionId && <> · session: {params.sessionId}</>}
+        <span className="topnav-route"
+          title={`From the URL (useParams): project ${id}${params.sessionId ? `, session ${params.sessionId}` : ""}`}>
+          {/* Real ids are 32 characters, so show the start; hover for the full id */}
+          project: {short(id)}
+          {params.sessionId && <> · session: {short(params.sessionId)}</>}
         </span>
       )}
 

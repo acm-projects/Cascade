@@ -8,7 +8,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
-from backend import integration
+from backend.core import jobs as core_jobs
+from backend.core import auth
+from backend.services import projects_store
 from backend.generation import followup_windows
 from backend.openai_scene import Proposal, choose_clips
 from backend.video_search.selection import select_matches
@@ -19,17 +21,17 @@ class GenerationGroupsTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for context in [patch.object(app1, 'JOBS_DIR', self.root),
-                        patch.object(app1, 'verify_clerk_token', side_effect=lambda t:t),
+        for context in [patch.object(core_jobs, 'JOBS_DIR', self.root),
+                        patch.object(auth, 'verify_clerk_token', side_effect=lambda t:t),
                         patch.dict(os.environ, {'CASCADE_STORAGE':'local','OPENAI_API_KEY':'fixture','DEEPGRAM_API_KEY':'fixture','ANTHROPIC_API_KEY':'fixture','LLM_PROVIDER':'anthropic'}),
-                        patch.object(app1.worker, 'submit')]:
+                        patch.object(core_jobs.worker, 'submit')]:
             value=context.start();self.addCleanup(context.stop)
             if hasattr(value,'call_args_list'): self.worker=value
         self.client=TestClient(app1.app)
         self.headers={'Authorization':'Bearer groups-user'}
         self.project=self.client.post('/api/projects',headers=self.headers,json={'name':'First project'}).json()['id']
         self.other=self.client.post('/api/projects',headers=self.headers,json={'name':'Keep project'}).json()['id']
-        self.addCleanup(app1.jobs.clear)
+        self.addCleanup(core_jobs.jobs.clear)
 
     def upload(self,count=4, project=None):
         return self.client.post('/upload',headers=self.headers,data={'project_id':project or self.project,'search':'Interesting moments','engine':'openai','clip_count':count},files={'video':('original.mp4',b'original complete source','video/mp4')})
@@ -39,8 +41,8 @@ class GenerationGroupsTests(unittest.TestCase):
         for i in range(count):
             (self.root/jid/f'clip_{i+1}.mp4').write_bytes(b'generated')
             (self.root/jid/f'clip_{i+1}.vtt').write_text('WEBVTT\n\n00:00.000 --> 00:02.000\nParent transcript\n')
-        app1.save_json(self.root/jid/'results.json',{'clips':clips})
-        app1.jobs.pop(jid,None)
+        core_jobs.save_json(self.root/jid/'results.json',{'clips':clips})
+        core_jobs.jobs.pop(jid,None)
         return clips
 
     def generate(self,source,count=5,parent=None,index=0,request_id='request-1'):
@@ -51,9 +53,9 @@ class GenerationGroupsTests(unittest.TestCase):
     def groups(self):return self.client.get(f'/api/projects/{self.project}/generations',headers=self.headers).json()['groups']
 
     def test_counts_bounds_old_defaults_and_fifth_clip_routes(self):
-        for count in [0,-1,13,'5.5','invalid']:
+        for count in [0,-1,51,'5.5','invalid']:
             self.assertEqual(self.upload(count).status_code,422,count)
-        for count in [1,5,12]:
+        for count in [1,5,12,20,50]:
             response=self.upload(count);self.assertEqual(response.status_code,202,response.text)
             jid=response.json()['job_id'];self.done(jid,count)
             owner=json.loads((self.root/jid/'owner.json').read_text())
@@ -62,7 +64,7 @@ class GenerationGroupsTests(unittest.TestCase):
         self.assertEqual(self.client.get(f'/clips/{jid}/clip_5.mp4',headers=self.headers).status_code,200)
         self.assertEqual(self.client.post(f'/api/projects/{self.project}/saved-clips',headers=self.headers,json={'job_id':jid,'clip_index':4}).status_code,200)
         self.assertEqual(self.client.get(f'/clips/{jid}/clip_99.mp4',headers=self.headers).status_code,404)
-        for invalid in [0,13,5.5,True,'5']:
+        for invalid in [0,51,5.5,True,'5']:
             self.assertEqual(self.generate(jid,invalid).status_code,422)
 
     def test_ordinary_prompts_nested_followups_idempotency_and_reload(self):
@@ -80,7 +82,7 @@ class GenerationGroupsTests(unittest.TestCase):
         before=len(self.worker.call_args_list)
         self.assertEqual(self.generate(original,3,parent=child,index=1,request_id='child-request').json()['job_id'],grand)
         self.assertEqual(len(self.worker.call_args_list),before)
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
         groups=self.groups()
         self.assertEqual([len(g['clips']) for g in groups],[5,2,2,1])
         self.assertEqual(groups[-1]['parent_clip']['job_id'],child)
@@ -88,7 +90,7 @@ class GenerationGroupsTests(unittest.TestCase):
         self.assertEqual([g['order'] for g in groups],[1,2,3,4])
         # Existing editor metadata/persistence accepts clips across every group.
         from types import SimpleNamespace
-        with patch('backend.editor_backend.subprocess.run',return_value=SimpleNamespace(stdout=json.dumps({'format':{'duration':8},'streams':[{'width':640,'height':360}]}))):
+        with patch('backend.editor.validation.subprocess.run',return_value=SimpleNamespace(stdout=json.dumps({'format':{'duration':8},'streams':[{'width':640,'height':360}]}))):
             for jid,index in [(original,4),(ordinary,1),(child,0),(grand,0)]:
                 url=f'/api/projects/{self.project}/editor/{jid}/{index}'
                 response=self.client.get(url,headers=self.headers)
@@ -105,7 +107,7 @@ class GenerationGroupsTests(unittest.TestCase):
         self.assertEqual(self.client.delete(url,headers=foreign).status_code,404)
         self.assertEqual(self.client.get(url,headers=self.headers).status_code,200)
         # Shared source reference must prevent physical source removal.
-        owner_path=self.root/keep/'owner.json';owner=json.loads(owner_path.read_text());owner['source_job']=jid;app1.save_json(owner_path,owner)
+        owner_path=self.root/keep/'owner.json';owner=json.loads(owner_path.read_text());owner['source_job']=jid;core_jobs.save_json(owner_path,owner)
         response=self.client.delete(url,headers=self.headers);self.assertEqual(response.status_code,200,response.text)
         self.assertEqual(self.client.get(url,headers=self.headers).status_code,404)
         self.assertEqual(self.client.get(f'/api/projects/{self.other}',headers=self.headers).status_code,200)
@@ -169,7 +171,7 @@ class GenerationGroupsTests(unittest.TestCase):
     def test_retry_reuses_failed_group_and_context_without_duplicate_history(self):
         original=self.upload(5).json()['job_id'];self.done(original)
         child=self.generate(original,2,parent=original,index=1).json()['job_id']
-        integration.fail_feature(child,'Fixture provider failure')
+        projects_store.fail_feature(child,'Fixture provider failure')
         before=json.loads((self.root/child/'owner.json').read_text())
         url=f'/api/projects/{self.project}/generations/{child}/retry'
         self.assertEqual(self.client.post(url,headers={'Authorization':'Bearer stranger'},json={'request_id':'retry-1'}).status_code,404)
@@ -188,12 +190,12 @@ class GenerationGroupsTests(unittest.TestCase):
         self.assertFalse((self.root/child/'failure.json').exists())
         self.assertEqual(self.client.post(url,headers=self.headers,json={'request_id':'retry-2'}).status_code,202)
         self.assertEqual(len(self.worker.call_args_list),calls+1)  # Active retry cannot enqueue twice.
-        integration.fail_feature(child,'Second fixture failure')
+        projects_store.fail_feature(child,'Second fixture failure')
         self.assertEqual(self.client.post(url,headers=self.headers,json={'request_id':'retry-1'}).status_code,202)
         self.assertEqual(len(self.worker.call_args_list),calls+1)
         self.assertEqual(self.client.post(url,headers=self.headers,json={'request_id':'retry-2'}).status_code,202)
         self.assertEqual(len(self.worker.call_args_list),calls+2)
-        self.done(child,1);app1.jobs.clear()
+        self.done(child,1);core_jobs.jobs.clear()
         self.assertEqual(len(self.groups()),2)
         self.assertEqual(self.groups()[1]['state'],'done')
         self.assertEqual(self.client.post(url,headers=self.headers,json={'request_id':'retry-3'}).status_code,409)
@@ -212,8 +214,8 @@ class GenerationGroupsTests(unittest.TestCase):
         jid=self.upload(2).json()['job_id']
         path=self.root/jid/'owner.json';owner=json.loads(path.read_text())
         for key in ['created_at','history_id','creation_order']:owner.pop(key)
-        app1.save_json(path,owner)
-        integration.fail_feature(jid,'Legacy fixture failure')
+        core_jobs.save_json(path,owner)
+        projects_store.fail_feature(jid,'Legacy fixture failure')
         before=self.groups()[0]
         url=f'/api/projects/{self.project}/generations/{jid}/retry'
         self.assertEqual(self.client.post(url,headers=self.headers,json={'request_id':'legacy-retry'}).status_code,202)

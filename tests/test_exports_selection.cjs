@@ -29,7 +29,7 @@ async function initialize(selected,search='') {
     getComputedStyle:()=>({columnGap:'20'}),
     ResizeObserver:class {observe(){}},
     requestAnimationFrame(){},
-    window:{CascadeExportSelection:{read:()=>selected},
+    window:{CascadePostPreparation:class {},CascadeExportSelection:{read:()=>selected},
       CascadeClipNavigation:class {constructor(options){navigation=options;} active(){}},
       addEventListener(){}},
   };

@@ -5,19 +5,18 @@
   height: 100vh;
 }
 
-/* Grid: preview 1068 | settings 551, then the social row (232 tall) across both */
+/* Layout (like the old site's Exports page): clip list on the left | everything else on the right, scrolling */
 .export-body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1068fr 551fr;
-  grid-template-rows: 1fr calc(232 * var(--u));
-  column-gap: calc(42 * var(--u));
-  row-gap: calc(36 * var(--u));
-  padding: calc(23 * var(--u)) calc(42 * var(--u)) calc(48 * var(--u)) calc(25 * var(--u));
+  grid-template-columns: minmax(200px, 300fr) minmax(0, 1400fr);
+  column-gap: calc(36 * var(--u));
+  padding: calc(23 * var(--u)) calc(42 * var(--u)) 0 calc(25 * var(--u));
 }
 
-.export-preview,
+.export-tree,
+.export-stage,
 .export-settings,
 .export-social {
   min-height: 0;
@@ -26,8 +25,18 @@
   background: var(--panel-bg);
 }
 
-.export-preview {
-  overflow: hidden;
+.export-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(20 * var(--u));
+  overflow-y: auto;
+  padding-bottom: calc(48 * var(--u));
+}
+
+.export-main > * {
+  flex-shrink: 0; /* the column scrolls instead of squashing the panels */
 }
 
 /* Export settings */
@@ -84,9 +93,8 @@
   text-align: center;
 }
 
-/* Social posting row (spans both columns) */
+/* Social posting panel */
 .export-social {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: calc(14 * var(--u));
@@ -116,4 +124,300 @@
 .export-social-note {
   color: var(--color-text-muted);
   font-size: calc(20 * var(--u));
+}
+
+/* ---------- Connected export ---------- */
+.export-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+}
+
+/* Left: session > wave > clips, each with a checkbox for "Download selected" */
+.export-tree {
+  align-self: start;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: calc(20 * var(--u));
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.export-tree-row,
+.export-tree-clip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.export-tree-fold {
+  width: 18px;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.export-tree-children {
+  margin-left: 9px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--color-wood-dark) 30%, transparent);
+}
+
+.export-tree-clip-name {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.export-tree-clip-name.active {
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+
+/* Top buttons: Download this clip | Download selected clips (N) */
+.export-actions,
+.export-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.export-footer {
+  justify-content: center;
+}
+
+.export-actions .btn,
+.export-footer .btn,
+.export-pager .btn {
+  font-size: 15px;
+}
+
+/* The preview card: "▦ N clips", the player stacked like a deck, or every clip as a card */
+.export-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: calc(20 * var(--u)) calc(28 * var(--u)) calc(32 * var(--u));
+}
+
+.export-stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.export-stage .export-title {
+  font-size: calc(40 * var(--u));
+}
+
+.export-stack {
+  position: relative;
+  align-self: center;
+  width: min(100%, 760px);
+  margin: -10px 0 20px; /* a little higher, so the cards behind don't touch the panel's bottom edge */
+}
+
+/* Two cards peeking out behind the player when there's more than one clip */
+.export-stack.is-stacked::before,
+.export-stack.is-stacked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: calc(24 * var(--u));
+  background: var(--color-cream-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.export-stack.is-stacked::before {
+  transform: translate(-14px, 12px) rotate(-2.5deg);
+}
+
+.export-stack.is-stacked::after {
+  transform: translate(10px, 8px) rotate(1.5deg);
+}
+
+.export-player {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  height: min(52vh, 430px);
+  overflow: hidden;
+  border-radius: calc(24 * var(--u));
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-soft);
+}
+
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.export-grid-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.export-grid-card.active {
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+
+/* ← 1 of 4 → */
+.export-pager {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* One line about the clip on screen (or framing progress / problems) */
+.export-status {
+  padding: 10px 16px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.export-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.export-section-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--color-wood-text);
+}
+
+.export-summary {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-wood-text);
+}
+
+/* Posting row: post copy | YouTube | share */
+.export-social {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.8fr;
+  gap: var(--space-3);
+  padding: 14px 18px;
+  overflow-y: auto;
+}
+
+.export-post {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  color: var(--color-wood-text);
+}
+
+.export-post-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.export-post-field input,
+.export-post-field textarea,
+.export-post-field select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
+  color: var(--color-wood-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.export-post-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.export-post-actions .btn,
+.export-post .btn,
+.export-section .btn {
+  font-size: 14px;
+}
+
+.export-upload-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.export-upload-status.failed {
+  color: var(--color-plank);
+}
+
+.export-panel-loading {
+  display: grid;
+  place-items: center;
+}
+
+/* Keep the team's wood panels and type, but stack rather than clip on phones. */
+@media (max-width: 760px) {
+  .export { height: auto; min-height: 100dvh; }
+  .export-body { display: flex; flex-direction: column; gap: 16px; padding: 14px; }
+  .export-tree { max-height: 180px; flex-shrink: 0; }
+  .export-main { overflow: visible; gap: 16px; }
+  .export-social { grid-template-columns: minmax(0, 1fr); }
+  .export-settings { overflow: visible; }
+  .export-stage { padding: 16px; }
+  .export-stack { margin-top: 0; }
+  .export-player { height: 380px; }
+  .export-stage-head { flex-wrap: wrap; gap: 8px; }
+  .export-actions .btn { flex: 1 1 160px; white-space: normal; }
+  .export .topnav { height: auto; min-height: 70px; flex-wrap: wrap; gap: 10px; padding: 12px; margin: 10px 14px 0; }
+  .export .topnav-title { flex: 1; min-width: 0; }
+  .export .topnav-steps { position: static; order: 5; width: 100%; margin: 0; justify-content: space-between; }
+  .export .topnav-step { flex: 1; min-width: 0; width: auto; padding: 6px; gap: 5px; font-size: 16px; }
+  .export .topnav-route { display: none; }
 }

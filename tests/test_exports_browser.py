@@ -1,4 +1,7 @@
 """Real Chrome + FFmpeg workflow against editor_browser_server.py; no paid APIs."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import json
 import subprocess
@@ -75,7 +78,7 @@ async def main():
         await c.click('.wave-album .wave-rail-prev')
         await c.until("document.querySelector('#export-position').textContent==='2 of 3'")
         await c.click('#export-prev');await c.until("document.querySelector('#export-position').textContent==='1 of 3'&&!document.querySelector('#download-active').disabled")
-        await c.click('#export-youtube');assert await c.js("!document.querySelector('#youtube-setup').hidden&&document.querySelector('#youtube-setup').textContent.includes('not connected')")
+        assert await c.js("!document.querySelector('#export-youtube')&&document.querySelectorAll('.export-actions button').length===2")
         await c.until("!document.querySelectorAll('.export-preview-retry')[2].hidden",60)
         await c.js("cascadeFailPreview=false;document.querySelectorAll('.export-preview-retry')[2].click()")
         await c.until("document.querySelectorAll('.export-media-card video')[2].readyState>=2&&document.querySelectorAll('.export-preview-retry')[2].hidden",60)
@@ -116,6 +119,6 @@ async def main():
         screenshot=await c.call('Page.captureScreenshot',{'format':'png'})
         import base64
         (ARTIFACTS/'exports.png').write_bytes(base64.b64decode(screenshot['data']))
-        print('PASS: effects/history/restore, simplified UI, editor tree selection/refresh, exact three-card exports, playback/pause, arrows/keyboard/swipe, edited MP4 (square/4s/audio/B-roll), subset ZIP, failed-preview retry, honest YouTube setup; no JS exceptions.')
+        print('PASS: effects/history/restore, simplified UI, editor tree selection/refresh, exact three-card exports, playback/pause, arrows/keyboard/swipe, edited MP4 (square/4s/audio/B-roll), subset ZIP, failed-preview retry, social destinations confined to posting panel; no JS exceptions.')
 
 if __name__=='__main__':asyncio.run(main())

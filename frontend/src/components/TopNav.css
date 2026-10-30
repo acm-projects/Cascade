@@ -29,7 +29,7 @@
 }
 
 .topnav-name {
-  font-family: var(--font-display);
+  font-family: var(--font-title);
   font-size: calc(48 * var(--u));
 }
 

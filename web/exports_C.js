@@ -58,17 +58,17 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     group.position.textContent=(index+1)+' of '+group.rows.length;
   }
   function alignRail(group,index,behavior=reducedMotion()?'instant':'smooth'){
-    railReadout(group,index);
+    railReadout(group,index);group.railTarget=index;group.railTargetUntil=performance.now()+1500;
     group.cards.scrollTo({left:cardLeft(group,index),behavior});
   }
   function settleRail(group){
     if(!group.expanded||group.drag||group.animating)return;
-    const index=nearestCard(group);railReadout(group,index);
+    const index=nearestCard(group);if(group.railTarget!==undefined&&index!==group.railTarget&&performance.now()<group.railTargetUntil)return;group.railTarget=undefined;railReadout(group,index);
     if(rows[active]!==group.rows[index])show(rows.indexOf(group.rows[index]),{expand:false,rail:false});
   }
   function wireRail(group){
     const rail=group.cards;
-    for(const name of ['wheel','touchstart','pointerdown'])rail.addEventListener(name,()=>{if(group.animating)finishSpread(group);},{passive:true});
+    for(const name of ['wheel','touchstart','pointerdown'])rail.addEventListener(name,()=>{group.railTarget=undefined;if(group.animating)finishSpread(group);},{passive:true});
     group.previous.onclick=()=>show(rows.indexOf(group.rows[Math.max(0,(group.current||0)-1)]));
     group.next.onclick=()=>show(rows.indexOf(group.rows[Math.min(group.rows.length-1,(group.current||0)+1)]));
     rail.addEventListener('scroll',()=>{clearTimeout(group.scrollTimer);group.scrollTimer=setTimeout(()=>settleRail(group),160);},{passive:true});
@@ -103,7 +103,7 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     railReadout(group,0);
   }
   function applyPoster(row,blob,{edited=false}={}){
-    if(ended||(!edited&&row.editedPoster))return;
+    if(ended||row.coverURL||(!edited&&row.editedPoster))return;
     const previous=row.posterURL;
     row.posterURL=URL.createObjectURL(blob);row.video.poster=row.posterURL;
     row.editedPoster=edited;row.thumbnailRetry.hidden=true;
@@ -139,7 +139,7 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
       });
       try{
         const ready=wait('loadeddata');decoder.src=row.objectURL;await ready;if(ended)return;
-        const sought=wait('seeked');decoder.currentTime=Math.min(1,decoder.duration/2);await sought;if(ended)return;
+        const post=await postPreparation.record(row);const sought=wait('seeked');decoder.currentTime=Math.max(.001,Math.min(post.data.cover_time??Math.min(1,decoder.duration/2),decoder.duration-.01));await sought;if(ended)return;
         const canvas=document.createElement('canvas');const ratio=decoder.videoWidth/decoder.videoHeight;canvas.width=Math.round(Math.min(720,400*ratio));canvas.height=Math.round(canvas.width/ratio);
         const ctx=canvas.getContext('2d'),scale=Math.max(canvas.width/decoder.videoWidth,canvas.height/decoder.videoHeight);
         ctx.drawImage(decoder,(canvas.width-decoder.videoWidth*scale)/2,(canvas.height-decoder.videoHeight*scale)/2,decoder.videoWidth*scale,decoder.videoHeight*scale);
@@ -195,7 +195,7 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     expandWave(group,false);
   }
   function progress(message){$('export-progress').textContent=message;}
-  function lock(value){working=value;$('download-active').disabled=value||!rows[active].blob||ended;$('export-all').disabled=value||ended||!chosen.size;document.querySelectorAll('#exports-tree input,.export-card-check,.export-card-download,.wave-download').forEach(e=>e.disabled=value||ended);$('export-youtube').disabled=ended;}
+  function lock(value){working=value;$('download-active').disabled=value||!rows[active].blob||ended;$('export-all').disabled=value||ended||!chosen.size;document.querySelectorAll('#exports-tree input,.export-card-check,.export-card-download,.wave-download').forEach(e=>e.disabled=value||ended);}
   function url(row){return base+'/'+row.job_id+'/'+row.clip_index;}
   async function payload(row) {
     if(row.payload)return row.payload;
@@ -225,15 +225,15 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     return row.rendering;
   }
   function download(blob,name){if(ended)throw Error('Session ended.');const link=document.createElement('a'),objectURL=URL.createObjectURL(blob);link.href=objectURL;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(objectURL),30000);}
-  function filename(row){return 'cascade-session-'+(row.wave.session_number||1)+'-wave-'+(row.wave.wave_number||1)+'-clip-'+row.number+'.mp4';}
-  async function show(index,{expand=true,scroll=false,rail=true}={}) {
+  function filename(row){return 'cascade-session-'+(row.wave.session_number||1)+'-wave-'+(row.wave.wave_number||1)+'-clip-'+row.number+(row.media_kind==='audio'||row.clip_url?.endsWith('.mp3')?'.mp3':'.mp4');}
+  async function show(index,{expand=true,scroll=false,rail=true,syncPost=true}={}) {
     if(ended)return;
     rows[active].video.pause(); active=Math.max(0,Math.min(rows.length-1,index));
     rows.forEach((row,i)=>{
       row.card.dataset.active=String(i===active);row.video.controls=i===active;row.video.tabIndex=i===active?0:-1;
       if(i!==active)row.video.pause();
     });
-    const row=rows[active];railReadout(row.group,row.group.rows.indexOf(row));if(expand)expandWave(row.group,true);
+    const row=rows[active];if(syncPost&&postPreparation.openToken&&postPreparation.current?.row!==row)postPreparation.open(row,row.prepare,{scroll:false});railReadout(row.group,row.group.rows.indexOf(row));if(expand)expandWave(row.group,true);
     if(rail&&row.group.expanded)requestAnimationFrame(()=>alignRail(row.group,row.group.rows.indexOf(row)));
     if(scroll)requestAnimationFrame(()=>row.group.element.scrollIntoView({block:'nearest',behavior:reducedMotion()?'instant':'smooth'}));
     navigation?.active(row.job_id+':'+row.clip_index);$('export-position').textContent=(active+1)+' of '+rows.length;
@@ -247,6 +247,7 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     for(const neighbour of [rows[active-1],rows[active+1]].filter(Boolean))render(neighbour).catch(()=>{});
     if(row===rows[active]&&!working&&!ended)$('download-active').disabled=false;
   }
+  const postPreparation=new window.CascadePostPreparation({apiJSON,url,render,payload,filename,download:row=>downloadRow(row,{throwOnError:true}),userId,projectId:project.id});
   rows.forEach((row,i)=>{
     row.card=document.createElement('article');row.card.style.setProperty('--rail-index',row.group.rows.indexOf(row));row.card.style.setProperty('--rail-delay',Math.min(6,row.group.rows.indexOf(row))*25+'ms');row.card.className='export-media-card';row.card.setAttribute('aria-label','Selected clip '+(i+1));
     row.video=document.createElement('video');row.video.playsInline=true;row.video.preload='auto';row.video.setAttribute('aria-label',row.clip.title||'Clip '+row.number);
@@ -261,7 +262,9 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     row.retry=document.createElement('button');row.retry.type='button';row.retry.className='export-preview-retry';row.retry.textContent='Retry preview';row.retry.hidden=true;row.retry.onclick=()=>show(i);
     row.status=document.createElement('p');row.status.className='card-render-status';row.status.textContent='Edited preview';
     row.thumbnailRetry=document.createElement('button');row.thumbnailRetry.type='button';row.thumbnailRetry.className='export-thumbnail-retry';row.thumbnailRetry.textContent='Thumbnail unavailable · Retry';row.thumbnailRetry.hidden=true;row.thumbnailRetry.onclick=()=>loadThumbnail(row);
-    row.card.append(header,row.video,meta,row.status,row.thumbnailRetry,row.retry,single);row.group.cards.append(row.card);
+    const prepare=document.createElement('button');row.prepare=prepare;prepare.type='button';prepare.className='prepare-post';prepare.textContent='Prepare post';prepare.setAttribute('aria-controls','prepare-post-section');prepare.setAttribute('aria-expanded','false');prepare.onclick=event=>{event.stopPropagation();show(i,{syncPost:false});postPreparation.open(row,prepare);};
+    const delivery=document.createElement('div');delivery.className='export-card-delivery';delivery.append(single,prepare);
+    row.card.append(header,row.video,meta,row.status,row.thumbnailRetry,row.retry,delivery);row.group.cards.append(row.card);
   });
   for(const group of waves.values()){
     wireRail(group);
@@ -271,7 +274,7 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
   navigation=new window.CascadeClipNavigation({container:$('exports-tree'),selectable:true,selected:[...chosen],onSelection:keys=>{chosen=new Set(keys);for(const row of rows){const checked=chosen.has(row.job_id+':'+row.clip_index);row.check.checked=checked;row.card.classList.toggle('selected',checked);}$('export-all').textContent='Download selected clips ('+chosen.size+')';lock(working);},items:rows.map(row=>({...row,key:row.job_id+':'+row.clip_index,label:'Session '+row.wave.session_number+' Wave '+row.wave.wave_number+' Clip '+row.number})),onOpen:item=>show(rows.findIndex(row=>row.job_id===item.job_id&&row.clip_index===item.clip_index),{scroll:true})});
   $('export-prev').onclick=()=>show(active-1);$('export-next').onclick=()=>show(active+1);
   document.addEventListener('keydown',event=>{if(event.target.closest('input,textarea,select')||event.altKey||event.ctrlKey||event.metaKey)return;if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();show(active+(event.key==='ArrowRight'?1:-1));}});
-  async function downloadRow(row){if(working||ended)return;lock(true);progress('Preparing Clip '+row.number+'…');try{download(await render(row),filename(row));progress('Clip '+row.number+' downloaded.');}catch(error){progress('Download failed: '+error.message+' Click Download clip to retry.');}finally{lock(false);}}
+  async function downloadRow(row,{throwOnError=false}={}){if(working||ended){if(throwOnError)throw Error(ended?'Session ended. Sign in again.':'Another download is in progress. Try again when it finishes.');return;}lock(true);progress('Preparing Clip '+row.number+'…');try{download(await render(row),filename(row));progress('Clip '+row.number+' downloaded.');}catch(error){progress('Download failed: '+error.message+' Click Download clip to retry.');if(throwOnError)throw error;}finally{lock(false);}}
   $('download-active').onclick=()=>downloadRow(rows[active]);
   $('export-all').textContent='Download selected clips ('+chosen.size+')';
   rows.forEach(row=>row.card.classList.add('selected'));
@@ -287,8 +290,8 @@ window.CascadeExports={async initialize({project,userId,apiJSON,apiFetch,setStat
     }catch(error){progress('Download failed: '+error.message+' Use the download action to retry.');}finally{lock(false);}
   }
   $('export-all').onclick=()=>downloadSet(rows.filter(row=>chosen.has(row.job_id+':'+row.clip_index)));
-  $('export-youtube').onclick=()=>{$('youtube-setup').hidden=!$('youtube-setup').hidden;$('export-youtube').setAttribute('aria-expanded',String(!$('youtube-setup').hidden));};
-  function cleanup(){ended=true;for(const group of waves.values()){clearTimeout(group.scrollTimer);clearTimeout(group.spreadTimer);group.observer.disconnect();}rows.forEach(row=>{row.video.pause();row.video.removeAttribute('src');row.video.load();if(row.objectURL)URL.revokeObjectURL(row.objectURL);if(row.posterURL)URL.revokeObjectURL(row.posterURL);});lock(true);}
+
+  function cleanup(){ended=true;postPreparation.destroy();for(const group of waves.values()){clearTimeout(group.scrollTimer);clearTimeout(group.spreadTimer);group.observer.disconnect();}rows.forEach(row=>{row.video.pause();row.video.removeAttribute('src');row.video.load();if(row.objectURL)URL.revokeObjectURL(row.objectURL);if(row.posterURL)URL.revokeObjectURL(row.posterURL);});lock(true);}
   window.addEventListener('cascade:session-ended',cleanup);
   window.addEventListener('cascade:session-restored',()=>location.reload());
   window.addEventListener('pagehide',cleanup,{once:true});

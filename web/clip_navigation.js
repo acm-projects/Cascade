@@ -13,7 +13,7 @@ window.CascadeClipNavigation=class {
     };
     for(const item of items){const sid=item.wave.session_id||'session-'+(item.wave.session_number||1);if(!sessions.has(sid))sessions.set(sid,[]);sessions.get(sid).push(item);}
     for(const children of sessions.values()){
-      const session=group('Session '+(children[0].wave.session_number||1),container,children.map(i=>i.key));const waves=new Map();
+      const session=group(children[0].wave.session_name||'Session '+(children[0].wave.session_number||1),container,children.map(i=>i.key));const waves=new Map();
       for(const item of children){const wid=item.wave.wave_id||item.wave.job_id;if(!waves.has(wid))waves.set(wid,[]);waves.get(wid).push(item);}
       for(const clips of waves.values()){
         const wave=group('Wave '+(clips[0].wave.wave_number||1),session,clips.map(i=>i.key));wave.classList.add('clip-nav-wave');

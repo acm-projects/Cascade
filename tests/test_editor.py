@@ -14,7 +14,10 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import app1
-from backend import editor_backend as editor
+from backend.core import jobs as core_jobs
+from backend.core import media as core_media
+from backend.core import auth
+from backend import editor
 
 
 class EditorTests(unittest.TestCase):
@@ -30,7 +33,7 @@ class EditorTests(unittest.TestCase):
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.patches = [patch.object(app1, 'JOBS_DIR', Path(self.temp.name)), patch.object(app1, 'verify_clerk_token', side_effect=lambda token: token)]
+        self.patches = [patch.dict(os.environ, {'CASCADE_METADATA_STORE':'local'}), patch.object(core_jobs, 'JOBS_DIR', Path(self.temp.name)), patch.object(auth, 'verify_clerk_token', side_effect=lambda token: token)]
         for p in self.patches: p.start()
         self.client = TestClient(app1.app)
         self.headers = {'Authorization':'Bearer editor-user'}
@@ -42,24 +45,52 @@ class EditorTests(unittest.TestCase):
     def tearDown(self):
         for p in reversed(self.patches): p.stop()
         self.temp.cleanup()
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
 
     def job(self, count, jid, kind='generation', parent=None):
-        folder = app1.JOBS_DIR / jid
+        folder = core_jobs.JOBS_DIR / jid
         folder.mkdir()
-        app1.save_json(folder/'owner.json', {'user_id':'editor-user','project_id':self.pid,'kind':kind,'parent_job':parent})
+        core_jobs.save_json(folder/'owner.json', {'user_id':'editor-user','project_id':self.pid,'kind':kind,'parent_job':parent})
         clips = []
         for i in range(count):
             shutil.copyfile(self.fixture, folder/f'clip_{i+1}.mp4')
             (folder/f'clip_{i+1}.vtt').write_text('WEBVTT\n\n00:00.500 --> 00:02.500\nHello world\n\n')
             clips.append({'start':101,'end':104,'title':'Clip','clip_url':f'/clips/{jid}/clip_{i+1}.mp4','captions_url':f'/clips/{jid}/clip_{i+1}.vtt'})
-        app1.save_json(folder/'results.json',{'clips':clips})
+        core_jobs.save_json(folder/'results.json',{'clips':clips})
         return jid
 
     def get(self,url=None):
         result=self.client.get(url or self.url,headers=self.headers)
         self.assertEqual(result.status_code,200,result.text[:500])
         return result.json()
+
+    def test_post_metadata_is_separate_persistent_and_owner_checked(self):
+        before = self.get()
+        body = {'name':'A better name','caption':'Post copy','hashtags':['hello','#hello','world'], 'cover_time':1.25}
+        result = self.client.put(self.url+'/post', headers=self.headers, json=body)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['hashtags'], ['#hello','#world'])
+        self.assertEqual(self.get(self.url+'/post'), result.json())
+        self.assertEqual(self.get(), before)
+        self.assertNotEqual(self.client.get(self.url+'/post', headers={'Authorization':'Bearer someone-else'}).status_code, 200)
+        self.assertEqual(self.client.put(self.url+'/post', headers=self.headers, json={**body,'cover_time':-1}).status_code, 422)
+        self.assertEqual(self.client.put(self.url+'/post', headers=self.headers, json={**body,'hashtags':['x'*101]}).status_code, 422)
+        self.assertEqual(self.client.get(self.base+'/'+self.jid+'/1/post', headers=self.headers).status_code, 404)
+
+    def test_post_metadata_does_not_leak_between_jobs(self):
+        other = self.job(1, 'b'*32)
+        body = {'name':'Only this clip', 'caption':'Private copy', 'hashtags':[], 'cover_time':None}
+        self.client.put(self.url+'/post', headers=self.headers, json=body)
+        self.assertEqual(self.get(self.base+'/'+other+'/0/post')['name'], 'Clip')
+        self.assertEqual(self.get(self.base+'/'+other+'/0/post')['caption'], '')
+
+    def test_post_ai_unavailable_preserves_manual_metadata(self):
+        body = {'name':'Manual', 'caption':'Keep this', 'hashtags':['#manual'], 'cover_time':None}
+        self.client.put(self.url+'/post', headers=self.headers, json=body)
+        with patch.dict(os.environ, {'OPENAI_API_KEY':''}):
+            response = self.client.post(self.url+'/post/generate', headers=self.headers, json={'action':'rewrite','metadata':body})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.get(self.url+'/post'), body)
 
     def test_thumbnail_is_owner_checked_and_independent_of_exports(self):
         result=self.client.get(self.url+'/thumbnail',headers=self.headers)
@@ -72,7 +103,7 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(self.client.get(self.url+'/thumbnail',headers=self.headers).content,result.content)
         other=self.job(1,'b'*32)
         other_url=self.base+'/'+other+'/0/thumbnail'
-        other_source=app1.JOBS_DIR/other/'clip_1.mp4'
+        other_source=core_jobs.JOBS_DIR/other/'clip_1.mp4'
         subprocess.run(['ffmpeg','-v','error','-y','-f','lavfi','-i',
                         'color=c=red:s=320x180:d=1','-c:v','libx264',str(other_source)],check=True)
         other_result=self.client.get(other_url,headers=self.headers)
@@ -84,7 +115,7 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(self.client.get(other_url,headers=self.headers).content,result.content)
         self.assertIn(self.client.get(other_url,headers={'Authorization':'Bearer another-user'}).status_code,(403,404))
         self.assertEqual(self.client.get(self.base+'/'+other+'/99/thumbnail',headers=self.headers).status_code,404)
-        (app1.JOBS_DIR/other/'clip_1.mp4').unlink()
+        (core_jobs.JOBS_DIR/other/'clip_1.mp4').unlink()
         self.assertEqual(self.client.get(other_url,headers=self.headers).status_code,404)
 
     def test_effects_persist_validate_and_change_real_export(self):
@@ -130,7 +161,7 @@ class EditorTests(unittest.TestCase):
     def test_detailed_caption_chat_action_keeps_effects_and_history(self):
         state=editor.Edit(start=0,end=3,effects=editor.Effects(contrast=1.2))
         style=state.captions.model_copy(update={'font':'Georgia','size':60,'opacity':.5})
-        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
+        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'message':'Make the text larger with Georgia and a background','state':state.model_dump()})
         self.assertEqual(result.status_code,200)
         self.assertEqual(result.json()['state']['captions']['size'],60)
@@ -160,7 +191,7 @@ class EditorTests(unittest.TestCase):
         draft['chat']=[{'role':'user','text':'Make captions yellow'}]
         draft['updated_at']=123
         self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,200)
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
         self.assertEqual(self.get()['draft'],draft)
         other=self.get(self.base+'/'+'b'*32+'/1')['draft']
         self.assertEqual(other['state']['start'],0)
@@ -178,24 +209,24 @@ class EditorTests(unittest.TestCase):
             self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,422)
         draft=self.get()['draft']; draft['state']['captions']['color']='red; execute'
         self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,422)
-        with patch.object(app1,'save_json',side_effect=OSError('disk unavailable')):
+        with patch.object(core_jobs,'save_json',side_effect=OSError('disk unavailable')):
             client=TestClient(app1.app,raise_server_exceptions=False)
             self.assertEqual(client.put(self.url,headers=self.headers,json=self.get()['draft']).status_code,500)
 
     def test_chat_validated_transaction_provider_failure_and_no_key(self):
         state=self.get()['draft']['state']
         proposal=editor.Proposal(message='Trimmed one second and made captions yellow.', actions=[editor.Action(type='trim_first',seconds=1),editor.Action(type='caption_color',color='#ffff00')])
-        with patch.object(editor,'request_edit',return_value=proposal) as ai:
+        with patch.object(editor.ai,'request_edit',return_value=proposal) as ai:
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'trim and yellow','chat':[]})
             self.assertEqual(result.status_code,200,result.text)
             self.assertEqual(result.json()['state']['start'],1)
             self.assertEqual(result.json()['state']['captions']['color'],'#ffff00')
             self.assertEqual(ai.call_args.args[0]['transcript'][0]['start'],.5)
-        with patch.object(editor,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
+        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'bad'}).status_code,422)
-        with patch.dict(os.environ,{'OPENAI_API_KEY':''}):
+        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':'','CASCADE_EDITOR_PROVIDER':''}):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'}).status_code,503)
-        with patch.dict(os.environ,{'OPENAI_API_KEY':'mock'}), patch.object(editor.httpx,'post',side_effect=editor.httpx.ConnectError('private info')):
+        with patch.object(editor.ai,'structured_json',side_effect=RuntimeError('private info')):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'})
             self.assertEqual(result.status_code,502)
             self.assertNotIn('private info',result.text)
@@ -205,20 +236,18 @@ class EditorTests(unittest.TestCase):
     def test_ai_request_schema_and_response_validation(self):
         from types import SimpleNamespace
         valid = {'message':'Which part should I keep?', 'actions':[]}
-        mock_response = SimpleNamespace(status_code=200, json=lambda: {'status':'completed', 'output':[{'content':[{'type':'output_text','text':json.dumps(valid)}]}]})
-        with patch.dict(os.environ, {'OPENAI_API_KEY':'mock-key'}), patch.object(editor.httpx, 'post', return_value=mock_response) as post:
+        with patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data=valid)) as call:
             proposal = editor.request_edit({'request':'make it shorter'})
             self.assertEqual(proposal.actions, [])
-            payload = post.call_args.kwargs['json']
-            self.assertEqual(payload['text']['format']['type'], 'json_schema')
-            self.assertTrue(payload['text']['format']['strict'])
-            self.assertFalse(payload['store'])
-            self.assertNotIn('mock-key', json.dumps(payload))
-        invalid = SimpleNamespace(status_code=200, json=lambda: {'status':'completed', 'output':[{'content':[{'type':'output_text','text':'{"message":"ok","actions":[{"type":"shell"}]}'}]}]})
-        with patch.dict(os.environ, {'OPENAI_API_KEY':'mock-key'}), patch.object(editor.httpx, 'post', return_value=invalid):
+            schema=call.call_args.args[1]
+            self.assertFalse(schema['additionalProperties'])
+            self.assertEqual(schema['required'],list(schema['properties']))
+            self.assertIn('make it shorter',call.call_args.args[0])
+        with patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data={'message':'ok','actions':[{'type':'shell'}]})):
             with self.assertRaises(HTTPException) as error:
                 editor.request_edit({})
             self.assertEqual(error.exception.status_code,502)
+            self.assertEqual(error.exception.detail,'The editing AI returned an invalid response. Try rephrasing.')
         for actions, expected in [([editor.Action(type='keep_first',seconds=1)], (0,1)),
                                   ([editor.Action(type='trim_first',seconds=1), editor.Action(type='reset_trim')], (0,3))]:
             result=editor.apply_actions(editor.Edit(start=0,end=3),actions,3)
@@ -227,7 +256,7 @@ class EditorTests(unittest.TestCase):
     def test_vtt_entities_are_plain_text_without_mutating_manual_edits(self):
         text="Let's say <that> & \"again\"."
         path=Path(self.temp.name)/'escaped.vtt'
-        app1.write_captions(path,[{'start':100,'end':102,'text':text}],100,103)
+        core_media.write_captions(path,[{'start':100,'end':102,'text':text}],100,103)
         self.assertNotIn('&#x27;',path.read_text())
         cues=editor.parse_vtt(path.read_text())
         self.assertEqual(cues,[{'start':0,'end':2,'text':text}])
@@ -250,7 +279,7 @@ class EditorTests(unittest.TestCase):
         exported=Path(self.temp.name)/'exported.mp4'; exported.write_bytes(response.content)
         duration=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(exported)]))
         self.assertAlmostEqual(duration,1,delta=.1)
-        self.assertEqual((app1.JOBS_DIR/self.jid/'clip_1.mp4').read_bytes(),before)
+        self.assertEqual((core_jobs.JOBS_DIR/self.jid/'clip_1.mp4').read_bytes(),before)
         # Caption controls must affect encoded pixels, not merely metadata.
         state.captions.enabled=False
         clean=self.client.post(self.url+'/export',headers=self.headers,json=state.model_dump())

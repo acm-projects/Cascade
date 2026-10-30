@@ -4,8 +4,10 @@ import * as projects from "./projects";
 import * as generations from "./generations";
 import * as editor from "./editor";
 import * as features from "./features";
+import * as studio from "./studio";
+import * as posting from "./posting";
 
-const endpoints = { ...projects, ...generations, ...editor, ...features };
+const endpoints = { ...projects, ...generations, ...editor, ...features, ...studio, ...posting };
 
 // Every api function takes the sign-in token first: listProjects(token).
 // This hook hands you the same functions with the token already filled in, so in a component you write:
@@ -19,6 +21,7 @@ export default function useApi() {
   return useMemo(() => {
     const api = {};
     for (const [name, fn] of Object.entries(endpoints)) {
+      if (name === "audioAssetPath") continue;
       api[name] = async (...args) => fn(await getToken(), ...args);
     }
     return api;

@@ -1,4 +1,7 @@
 """Real thumbnails before edited rendering, retry and refresh across saves."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import base64
 import json

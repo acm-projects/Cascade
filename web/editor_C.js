@@ -145,7 +145,9 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
       .forEach(el => el.disabled = value);
     document.querySelectorAll('#editor-sessions button,#editor-sessions input').forEach(el => el.disabled = busy);
     timeline.setDisabled(value);
-    broll?.setLocked(value);
+    const audioOnly=info?.has_video===false;
+    broll?.setLocked(value||audioOnly);
+    if(audioOnly)document.querySelectorAll('#ratio-controls input,#ratio-controls select,#ratio-controls button,#effects-controls input,#effects-controls button,#ratio-tab,#broll-tab,#effects-tab').forEach(el=>el.disabled=true);
     $('undo').disabled = value || !history?.undoStack.length;
     $('redo').disabled = value || !history?.redoStack.length;
     if(history) { renderCaptionText(); renderFraming(); }
@@ -419,10 +421,11 @@ window.CascadeEditor = {async initialize({project, userId, apiJSON, apiFetch, se
   });
   $('project-title').textContent = project.name;
   setLocked(true);
-  const listing = await apiJSON(base), available = [];
+  const selectedOnly = new URLSearchParams(location.search).get('selection') === 'canvas';
+  const listing = await apiJSON(base + (selectedOnly ? '?selected_only=true' : '')), available = [];
   for(const [s,wave]of listing.sessions.entries())for(const [index,clip]of wave.clips.entries()) {
     const job=clip.job_id||wave.job_id,clipIndex=clip.clip_index??index;
-    available.push({job,index:clipIndex,key:job+':'+clipIndex,url:base+'/'+job+'/'+clipIndex,wave,clip,number:index+1,label:'Session '+(wave.session_number||1)+' · Wave '+(wave.wave_number||s+1)+' · Clip '+(index+1)});
+    available.push({job,index:clipIndex,key:job+':'+clipIndex,url:base+'/'+job+'/'+clipIndex,wave,clip,number:index+1,label:(wave.session_name||'Session '+(wave.session_number||1))+' · Wave '+(wave.wave_number||s+1)+' · Clip '+(index+1)});
   }
   const updateExports=(keys,persist=true)=>{
     const entries=keys.map(key=>available.find(item=>item.key===key)).filter(Boolean).map(item=>({job_id:item.job,clip_index:item.index}));

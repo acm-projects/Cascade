@@ -1,6 +1,9 @@
 """Real frontend bootstrap + authenticated routes with test-only Clerk lifecycle.
 Run auth_browser_server.py and isolated Chrome on debugging port 9333 first.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import json
 import urllib.request

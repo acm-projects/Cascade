@@ -1,0 +1,103 @@
+.editor-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.editor-controls:disabled {
+  opacity: 0.5;
+}
+
+.editor-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.editor-control b {
+  font-weight: 800;
+  color: var(--color-jungle-deep);
+}
+
+.editor-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-leaf);
+}
+
+.editor-control select {
+  padding: 4px 8px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+}
+
+.editor-control input[type="color"] {
+  width: 44px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.editor-control-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-control-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-leaf);
+}
+
+.editor-control-note {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.editor-choice-row,
+.editor-choice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor-choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.editor-choice {
+  padding: 6px 10px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.editor-choice.active {
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+.music-asset, .music-segment { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--color-wood-dark); border-radius: var(--radius-sm); }
+.music-asset small { font-size: 11px; opacity: .75; }
+.music-asset audio { width: 100%; min-width: 0; }
+.music-controls input[type=number], .reel-controls input[type=number] { max-width: 100%; padding: 5px 8px; border: 2px solid var(--color-wood-dark); border-radius: var(--radius-sm); background: var(--color-cream-card); color: inherit; }

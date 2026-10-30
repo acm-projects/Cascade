@@ -1,0 +1,8 @@
+{
+  "name": "cascade-studio",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "node build.mjs"},
+  "dependencies": {"@xyflow/react": "^12.9.0", "react": "19.2.0", "react-dom": "19.2.0"},
+  "devDependencies": {"esbuild": "^0.25.0"}
+}

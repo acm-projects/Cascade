@@ -1,6 +1,9 @@
 """Real CPU models, Chrome and FFmpeg; fixture auth/chat only are mocked.
 Start editor_browser_server with CASCADE_REFRAME_FIXTURES pointing at controlled media.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import base64
 import io

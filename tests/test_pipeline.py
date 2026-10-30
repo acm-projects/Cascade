@@ -10,29 +10,37 @@ import unittest
 from unittest.mock import Mock, patch
 
 import app1
+from backend.core import jobs as core_jobs
+from backend.core import storage as core_storage
+import backend.core.storage
 import numpy as np
 from starlette.datastructures import UploadFile
 
 
 class PipelineTests(unittest.TestCase):
+    def setUp(self):
+        mode = patch.dict(os.environ, {'CASCADE_METADATA_STORE': 'local'})
+        mode.start()
+        self.addCleanup(mode.stop)
+
 
 
     def test_local_storage_needs_no_aws_calls(self):
-        with patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}), patch.object(app1, 's3_client') as client:
-            self.assertEqual(app1.upload_clip_files(Path('unused'), 'job', 'clip.mp4', 'clip.vtt'), {'storage': 'local'})
+        with patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}), patch.object(backend.core.storage, 's3_client') as client:
+            self.assertEqual(core_storage.upload_clip_files(Path('unused'), 'job', 'clip.mp4', 'clip.vtt'), {'storage': 'local'})
             client.assert_not_called()
 
     def test_timeout_and_cancellation_errors_are_actionable(self):
-        self.assertIn('Timed out', app1.processing_error(TimeoutError(), 'analyzing visuals'))
-        self.assertIn('cancelled', app1.processing_error(app1.JobCancelled(), 'analyzing visuals'))
+        self.assertIn('Timed out', core_jobs.processing_error(TimeoutError(), 'analyzing visuals'))
+        self.assertIn('cancelled', core_jobs.processing_error(core_jobs.JobCancelled(), 'analyzing visuals'))
 
     def test_s3_credentials_are_checked_before_processing(self):
         session = Mock()
         session.get_credentials.return_value = None
         with patch.dict(os.environ, {'CASCADE_STORAGE': 's3', 'S3_BUCKET_NAME': 'test'}), \
-             patch.object(app1.boto3, 'Session', return_value=session):
-            with self.assertRaises(app1.HTTPException) as caught:
-                app1.validate_clip_storage()
+             patch.object(backend.core.storage.boto3, 'Session', return_value=session):
+            with self.assertRaises(core_jobs.HTTPException) as caught:
+                core_storage.validate_clip_storage()
         self.assertIn('AWS credentials are missing', caught.exception.detail)
 
 

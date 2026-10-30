@@ -1,7 +1,7 @@
 """Subject policy tests; real model/footage checks live in manual verification."""
 import unittest
 from backend import reframe
-from backend.editor_backend import Composition,composition_geometry,SubjectSelection
+from backend.editor import Composition,composition_geometry,SubjectSelection
 from backend.subject_tracking import context_classes
 from pydantic import ValidationError
 

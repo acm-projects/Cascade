@@ -103,3 +103,109 @@
 
 .export-actions {margin:0 0 18px}
 .wave-album-heading h3[hidden],.exports-navigation h2[hidden] {display:none}
+
+/* Posting sits below the gallery without changing the rail geometry. */
+.prepare-post {align-self:flex-start;margin:12px 12px 0;font-size:12px;padding:8px 12px;color:var(--teal);border-color:#52896e}
+.post-section {box-sizing:border-box;margin-top:24px;padding:24px;border:1px solid #36594a;border-radius:24px;background:#102b23;color:#ecf5ee;font-size:13px;scroll-margin-top:20px;min-width:0}
+.post-section[hidden] {display:none}
+.post-layout {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+.post-preview,.post-controls {min-width:0}
+.post-preview video {display:block;width:100%;max-height:560px;aspect-ratio:4/5;object-fit:contain;background:#06110d;border:1px solid #36594a;border-radius:16px}
+.post-identity {flex:1;min-width:0}
+.post-identity h2 {font-size:20px;margin:0 0 6px}
+.post-identity strong {display:block}
+.post-header {display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.post-thumb {width:64px;height:46px;object-fit:contain;border-radius:9px;background:#06110d}
+.post-header strong {overflow-wrap:anywhere}
+.post-header button {flex:none}
+.post-field {display:flex;flex-direction:column;gap:6px;margin:12px 0;color:#d4e9dd;font-weight:600}
+.post-section input,.post-section textarea {box-sizing:border-box;min-width:0;width:100%;background:#091e17;border:1px solid #36594a;border-radius:9px;padding:9px 10px;color:#ecf5ee;font:inherit}
+.post-section textarea {resize:vertical;min-height:76px;max-height:180px}
+.post-section button {font-size:12px;padding:8px 10px}
+.post-actions {display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+.post-actions>input {flex:1;width:110px}
+.post-note,.post-saving {font-size:12px;color:#a8c9b9;margin:6px 0;line-height:1.5}
+.post-note:empty {display:none}
+.post-saving {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.post-tags {display:flex;flex-wrap:wrap;gap:6px}
+.post-chip {display:flex;align-items:center;border:1px solid #52896e;border-radius:20px;background:#1c4033;max-width:100%}
+.post-chip input {width:112px;border:0;background:transparent;padding:6px 8px}
+.post-chip button {border:0;background:transparent;padding:4px 8px}
+.post-cover {margin:12px 0;padding:10px;background:#091e17;border-radius:12px}
+.post-cover[hidden] {display:none}
+.post-cover video {width:100%;height:150px;object-fit:contain}
+.post-cover input {padding:6px 0}
+.post-cover span {display:block}
+.post-enter {animation:post-open .18s ease-out}
+@keyframes post-open {from {opacity:0;translate:0 6px} to {opacity:1;translate:0 0}}
+@media(max-width:760px){.post-section{padding:18px}.post-layout{grid-template-columns:minmax(0,1fr);gap:20px}.post-preview video{aspect-ratio:16/9;max-height:420px}.post-header{flex-wrap:wrap}.post-header .post-thumb{display:none}}
+@media(prefers-reduced-motion:reduce){.post-enter{animation:none}}
+
+.export-card-delivery {display:flex;align-items:center;gap:8px;padding:12px;flex-wrap:wrap}
+.export-card-delivery .prepare-post,.export-card-delivery .export-card-download {margin:0}
+
+.post-field select {background:#10271e;color:#e8f6ed;border:1px solid #406653;border-radius:8px;padding:10px;font:inherit}
+.post-controls button:disabled {opacity:.5;cursor:not-allowed}
+
+/* Quiet post form and compact destination controls. */
+.post-section {background:#10251e;padding:28px}
+.post-header {margin-bottom:24px}
+.post-layout {grid-template-columns:minmax(0,.85fr) minmax(0,1fr);gap:36px}
+.post-preview video {aspect-ratio:auto;max-height:430px;min-height:220px}
+.post-field {margin:0 0 18px;gap:8px;font-size:13px;font-weight:500}
+.post-note {color:#9ab6a7}
+.post-tags:empty {display:none}
+.post-cover-toggle {margin:4px 0 0;background:transparent;border-color:#36594a}
+.post-cover {display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px 14px;align-items:center;margin:12px 0 0}
+.post-cover video {grid-row:1/4;width:120px;height:90px;border-radius:6px;background:#06110d}
+.post-cover input,.post-cover span,.post-cover button {grid-column:2}
+.post-cover button {justify-self:start}
+.post-destination {border-top:1px solid #36594a;margin-top:24px;padding-top:20px}
+.post-destination h3 {font-size:13px;font-weight:500;margin:0 0 12px}
+.post-platforms {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.post-platform {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:80px;padding:10px 4px!important;background:transparent;border:1px solid #36594a;border-radius:10px;color:#aec9b9}
+.post-platform[aria-pressed=true] {background:#204537;border-color:#91cfa9;color:#e5f8eb;box-shadow:0 0 0 1px #91cfa9}
+.post-platform-icon {display:flex}
+.post-platform small {font-size:9px;font-weight:400}
+.post-platform:focus-visible,.post-section button:focus-visible {outline:2px solid #9cd8b4;outline-offset:3px}
+.post-timing {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 22px;font-size:11px;color:#9ab6a7}
+.post-timing button {font-size:11px;border:0;padding:5px 8px;background:transparent}
+.post-timing button[aria-pressed=true] {background:#1b3b2e;color:#d4e9dd;border-radius:6px}
+.post-account {display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;margin-bottom:18px}
+.post-account>span {flex:1 1 180px;overflow-wrap:anywhere}
+.post-text-action {padding:5px!important;border:0;background:transparent;color:#aec9b9;text-decoration:underline;text-underline-offset:3px}
+.post-instagram {margin:0 0 18px}
+.post-instagram .post-note {margin:0 0 10px}
+.post-instagram-link {display:inline-block;font-size:12px;margin:10px}
+.post-destination>button {padding:10px 16px;background:#b9e887;color:#13291b;border-color:#b9e887;font-weight:600}
+.post-saving {margin-top:20px;font-size:11px}
+.post-account[hidden],.post-instagram[hidden],.post-field[hidden],.post-destination a[hidden],.post-section button[hidden] {display:none}
+@media(max-width:760px){.post-section{padding:20px 16px}.post-layout{grid-template-columns:minmax(0,1fr);gap:24px}.post-preview video{max-height:280px;min-height:0;aspect-ratio:16/9}.post-header{margin-bottom:18px}.post-platforms{gap:6px}.post-platform{font-size:11px!important}.post-cover{grid-template-columns:90px minmax(0,1fr)}.post-cover video{width:90px;height:80px}.post-timing{gap:5px}}
+
+/* Native YouTube scheduling, kept within the posting form. */
+.post-timing[hidden],.post-schedule[hidden],.post-schedule-management[hidden],.schedule-cancel-confirm[hidden],.schedule-popover[hidden],.schedule-zone[hidden] {display:none}
+.post-schedule {margin:-8px 0 20px;max-width:360px}
+.schedule-trigger {background:transparent;border-color:#486955;width:100%;text-align:left;color:#d4e9dd}
+.schedule-popover {margin-top:9px;padding:16px;background:#112e24;border:1px solid #40634f;border-radius:16px;box-shadow:0 12px 30px #0003}
+.schedule-month {display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.schedule-month strong {font-size:13px;font-weight:600}
+.schedule-month button {border:0;background:transparent;font-size:22px;width:32px;height:32px;padding:0}
+.schedule-calendar [role=row] {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
+.schedule-calendar [role=columnheader] {font-size:10px;color:#9ab6a7;padding:5px 0}
+.schedule-calendar button {border:0;border-radius:9px;aspect-ratio:1;background:transparent;padding:0;font-size:12px;font-variant-numeric:tabular-nums}
+.schedule-calendar button[aria-current=date] {box-shadow:inset 0 0 0 1px #638972}
+.schedule-calendar button[aria-selected=true] {background:#b9e887;color:#13291b;font-weight:700;box-shadow:none}
+.schedule-calendar button:disabled {opacity:.25}
+.schedule-clock {display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:8px;margin:14px 0 12px}
+.schedule-clock label,.schedule-zone {display:flex;flex-direction:column;gap:5px;color:#aec9b9;font-size:11px;min-width:0}
+.schedule-picker select {width:100%;min-width:0;padding:8px;border:1px solid #40634f;border-radius:8px;background:#0a2018;color:#e8f6ed;font:inherit;font-size:12px}
+.schedule-zone {margin:12px 0}
+.schedule-error {font-size:11px;line-height:1.5;color:#f4c79f;margin:8px 0}
+.schedule-error:empty {display:none}
+.schedule-summary {font-size:12px;line-height:1.6;color:#c6e8cd;margin:10px 0;overflow-wrap:anywhere}
+.schedule-done {display:block;margin-left:auto;background:#204537;border-color:#638972}
+.post-schedule-management {display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.schedule-cancel-confirm {flex:1 1 100%;border:1px solid #486955;border-radius:10px;padding:12px}
+.schedule-cancel-confirm p {margin-top:0}
+.schedule-cancel-confirm button {margin:4px 6px 0 0}
+@media(max-width:380px){.schedule-popover{padding:12px}.schedule-calendar [role=row]{gap:2px}}

@@ -167,3 +167,8 @@
   font-size: calc(18 * var(--u));
   opacity: 0.75;
 }
+
+.project-card:has(.project-card-popup) { z-index: 2; }
+.project-card-star { color: #80610b; }
+.project-card-open:disabled { cursor: default; }
+.project-card-dots:disabled { opacity: .6; cursor: wait; }

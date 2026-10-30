@@ -2,7 +2,7 @@
 import json,os,threading,time,unittest
 from pathlib import Path
 from unittest.mock import patch
-from backend import reframe,editor_backend as editor
+from backend import reframe, editor
 from tests import test_editor as fixture
 
 class AnalysisKeyTests(unittest.TestCase):
@@ -51,9 +51,10 @@ class JobCacheTests(unittest.TestCase):
    changed={**body,'composition':{'ratio':'1:1','mode':'fill'},'focus':'speaker'}
    cached=self.client.post(self.url+'/reframe',headers=self.headers,json=changed).json();self.assertTrue(cached['cache_hit']);self.assertEqual(cached['analysis_id'],first['analysis_id'])
    import app1
-   results=app1.JOBS_DIR/self.jid/'results.json';data=json.loads(results.read_text());data['unrelated_note']='metadata edit';results.write_text(json.dumps(data))
+   from backend.core import jobs as core_jobs
+   results=core_jobs.JOBS_DIR/self.jid/'results.json';data=json.loads(results.read_text());data['unrelated_note']='metadata edit';results.write_text(json.dumps(data))
    unchanged=self.client.post(self.url+'/reframe',headers=self.headers,json=body).json();self.assertEqual(unchanged['analysis_id'],first['analysis_id']);self.assertTrue(unchanged['cache_hit'])
-   source=app1.JOBS_DIR/self.jid/'clip_1.mp4';os.utime(source,ns=(source.stat().st_atime_ns,source.stat().st_mtime_ns+1000000))
+   source=core_jobs.JOBS_DIR/self.jid/'clip_1.mp4';os.utime(source,ns=(source.stat().st_atime_ns,source.stat().st_mtime_ns+1000000))
    invalid=self.client.get(self.url+'/reframe/'+first['analysis_id']+'/subjects',headers=self.headers)
    self.assertEqual(invalid.status_code,409)
    renewed=self.client.post(self.url+'/reframe',headers=self.headers,json=body).json();self.assertNotEqual(renewed['analysis_id'],first['analysis_id'])

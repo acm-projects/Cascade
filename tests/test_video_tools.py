@@ -14,7 +14,7 @@ class SubtitleBinaryTests(unittest.TestCase):
         def filters(command,**kwargs):
             return SimpleNamespace(stdout=' .. subtitles V->V Render subtitles' if 'ffmpeg-full' in command[0] else ' .. scale V->V Scale frames')
         with patch.dict(os.environ,{'CASCADE_FFMPEG':''}), patch.object(video_tools.shutil,'which',return_value='/opt/homebrew/bin/ffmpeg'), patch.object(video_tools.subprocess,'run',side_effect=filters):
-            self.assertEqual(video_tools.subtitle_ffmpeg(),'/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg')
+            self.assertEqual(os.path.normpath(video_tools.subtitle_ffmpeg()),os.path.normpath('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg'))
 
     def test_compatible_default_is_used_without_fallback(self):
         with patch.dict(os.environ,{'CASCADE_FFMPEG':''}), patch.object(video_tools.shutil,'which',return_value='/usr/bin/ffmpeg'), patch.object(video_tools.subprocess,'run',return_value=SimpleNamespace(stdout=' .. subtitles V->V Render subtitles')) as run:

@@ -3,3 +3,12 @@ PyJWT[crypto]
 boto3
 ollama
 httpx
+
+# Encrypted server-side social OAuth tokens
+cryptography>=43
+
+# IANA timezone database for native YouTube scheduling (zoneinfo fallback)
+tzdata
+
+# Neon metadata persistence from MLK
+psycopg2-binary
