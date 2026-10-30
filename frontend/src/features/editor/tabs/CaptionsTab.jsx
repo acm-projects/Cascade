@@ -73,6 +73,8 @@ function CaptionsTab({ state, info, change, patch, recordUndo, player, view, onV
       </div>
 
       <fieldset className="editor-controls" disabled={!captions.enabled}>
+        <label className="editor-control">Animation<select value={captions.animation || "none"} onChange={e => setStyle({ animation: e.target.value })}><option value="none">None</option><option value="pop">Pop in</option><option value="karaoke">Highlighted words (estimated timing)</option></select></label>
+        <label className="editor-control">Highlight color<input type="color" value={captions.highlight || "#ffdc39"} onChange={e => setStyle({ highlight: e.target.value })} /></label>
         {view === "Style" ? (
           <>
             <div className="editor-control">

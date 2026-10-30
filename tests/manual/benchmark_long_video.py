@@ -55,6 +55,8 @@ def main():
     else:
         source = args.source.resolve()
     import app1
+    from backend.core import jobs as core_jobs
+    from backend.routers import clips as clip_routes
     from backend.media import probe_media
     from backend.generation import reuse_source
     info = probe_media(source)
@@ -75,18 +77,18 @@ def main():
                 {'model': 'offline-fixture', 'selection_mode': 'mocked', 'selection_note': ''})
 
     started = time.perf_counter()
-    with patch.object(app1, 'JOBS_DIR', jobs), patch.dict(os.environ, {
+    with patch.object(core_jobs, 'JOBS_DIR', jobs), patch.dict(os.environ, {
         'CASCADE_STORAGE': 'local', 'CASCADE_METADATA_STORE': 'local', 'CASCADE_WARM_MODELS': '0'}):
-        app1.save_json(folder / 'owner.json', {'user_id': 'benchmark-fixture', 'user_folder': 'users',
+        core_jobs.save_json(folder / 'owner.json', {'user_id': 'benchmark-fixture', 'user_folder': 'users',
             'requested_clip_count': 4, 'source_job': job_id, 'media_kind': 'video'})
-        app1.jobs[job_id] = {'state': 'queued', 'clips': []}
-        with patch.object(app1, 'select_with_agent', side_effect=fixture_selection) if args.fixture else patch.dict({}, {}):
-            app1.process_upload(job_id, folder / 'source.video', args.prompt, 'both', 30)
+        core_jobs.jobs[job_id] = {'state': 'queued', 'clips': []}
+        with patch.object(clip_routes, 'select_with_agent', side_effect=fixture_selection) if args.fixture else patch.dict({}, {}):
+            clip_routes.process_upload(job_id, folder / 'source.video', args.prompt, 'both', 30)
         processing_seconds = round(time.perf_counter() - started, 3)
-        job = app1.jobs.pop(job_id)
+        job = core_jobs.jobs.pop(job_id)
         if job['state'] != 'done':
             raise RuntimeError(job.get('message', 'Generation failed'))
-        result = app1.load_json(folder / 'results.json')
+        result = core_jobs.load_json(folder / 'results.json')
         checks = []
         for i, clip in enumerate(result['clips'], 1):
             output = probe_media(folder / f'clip_{i}.mp4')

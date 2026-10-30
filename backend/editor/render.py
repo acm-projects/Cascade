@@ -67,18 +67,32 @@ def export_selected(pid: str, body: BatchExport, request: Request):
 
 
 def export(pid: str, jid: str, index: int, body: ExportInput, request: Request):
+    return _export(pid,jid,index,body,request)
+
+
+def _export(pid, jid, index, body, request, prepared=None):
     clip = selected(pid, jid, index, request.state.user_id)
-    info = details(jid, clip)
+    info = prepared[2] if prepared else details(jid, clip)
+    if prepared: body=ExportInput.model_validate(prepared[1].model_dump())
     validate_media_edit(body, info)
     stock=stock_store(pid,jid,index,request.state.user_id)
     stock.verify(body)
+    from .audio_assets import store
+    audio_store=store(pid,jid,index,request.state.user_id)
+    audio_store.verify(body)
+    if not prepared and (body.timeline or body.speed):
+        if body.overlays is not None: raise HTTPException(422,'Retimed Reel captions must use server rendering, without source-timed raster overlays.')
+        if info.get('has_video') is False: raise HTTPException(422,'Reel timeline retiming currently requires video.')
+        from .retiming import prepare
+        with media(jid,clip) as source, prepare(source,body,info,export_binary(False)) as prepared_source:
+            return _export(pid,jid,index,prepared_source[1],request,prepared_source)
     directory = tempfile.TemporaryDirectory(prefix='cascade-export-')
     try:
         folder = Path(directory.name)
         if info.get('has_video') is False:
             from .audio import render_audio
             with media(jid, clip) as source:
-                render_audio(source, folder, body, info['cues'])
+                render_audio(source, folder, body, info['cues'], audio_store)
             return FileResponse(folder/'edited.mp3', filename='cascade-edited.mp3', media_type='audio/mpeg', background=BackgroundTask(directory.cleanup))
         g=composition_geometry(info['width'],info['height'],body.composition)
         base_filter=composition_filter(g,body.composition)
@@ -109,12 +123,19 @@ def export(pid: str, jid: str, index: int, body: ExportInput, request: Request):
             else:
                 framing=f'scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x{body.composition.background[1:]}'
             at=begin-body.start; until=end-body.start
-            graph+=f';[{input_index}:v]{framing},setsar=1,setpts=PTS-STARTPTS+{at}/TB[stock{input_index}]'
+            blend=''
+            if segment.transition=='dissolve':
+                fade=min(segment.transition_duration,(end-begin)/3)
+                blend=f',format=yuva420p,fade=t=in:st=0:d={fade}:alpha=1,fade=t=out:st={end-begin-fade}:d={fade}:alpha=1'
+            graph+=f';[{input_index}:v]{framing},setsar=1,setpts=PTS-STARTPTS{blend},setpts=PTS+{at}/TB[stock{input_index}]'
             graph+=f";[{label}][stock{input_index}]overlay=eof_action=pass:repeatlast=0:enable='gte(t,{at})*lt(t,{until})'[main{input_index}]"
             label=f'main{input_index}'; input_index+=1
-        graph+=f';[{label}]{effects_filter(body.effects)}[effects]'
+        from .timeline_render import motion_filter, transition_filter, audio_graph
+        graph+=f';[{label}]{motion_filter(body,g["width"],g["height"])},{effects_filter(body.effects)}[effects]'
         label='effects'
-        needs_ass=body.overlays is None and body.captions.enabled and bool(info['cues'])
+        needs_ass=(body.overlays is None and body.captions.enabled and bool(info['cues'])) or bool(body.text_overlays)
+        if body.overlays is not None and (body.captions.animation!='none' or body.text_overlays):
+            raise HTTPException(422,'Animated captions/text require server rendering without raster overlays.')
         if body.overlays is not None:
             caption_inputs,caption_filters=raster_filters(folder,body.overlays,info['cues'],body,g['width'],g['height'])
             if caption_inputs:
@@ -122,14 +143,19 @@ def export(pid: str, jid: str, index: int, body: ExportInput, request: Request):
                 graph+=f';[{label}][{input_index}:v]overlay=0:0:format=auto[out]'
             else:
                 graph+=f';[{label}]null[out]'
+            if caption_inputs: input_index+=1
         elif needs_ass:
-            (folder/'captions.ass').write_text(make_ass(trimmed_cues(info['cues'],body),body.captions,g['width'],g['height']))
+            (folder/'captions.ass').write_text(make_ass(trimmed_cues(info['cues'],body) if body.captions.enabled else [],body.captions,g['width'],g['height'], body.text_overlays, body.start))
             graph+=f';[{label}]ass=captions.ass[out]'
         else:
             graph+=f';[{label}]null[out]'
         # Resize the completed composition, including captions and B-roll.
         graph = graph.replace('[out]', '[composed]')
-        graph += f";[composed]{resolution_filter(g['width'], g['height'], body.resolution)}[out]"
+        graph += f";[composed]{transition_filter(body)},{resolution_filter(g['width'], g['height'], body.resolution)}[out]"
+        audio_inputs,audio_filters,audio_label=audio_graph(body,info['cues'],audio_store,info['has_audio'],input_index)
+        extra_inputs.extend(audio_inputs)
+        if audio_filters: graph+=';'+';'.join(audio_filters)
+        audio_map=['-map',audio_label] if audio_label else []
         # Avoid OS argument limits for long crop trajectories. FFmpeg 7+ reads
         # option arguments from files; older releases use filter_complex_script.
         graph_args=['-filter_complex',graph]
@@ -138,9 +164,10 @@ def export(pid: str, jid: str, index: int, body: ExportInput, request: Request):
             help_text=subprocess.run([export_binary(needs_ass),'-hide_banner','-h','full'],capture_output=True,text=True,timeout=15,check=True).stdout
             option='-filter_complex_script' if '-filter_complex_script' in help_text else '-/filter_complex'
             graph_args=[option,str(folder/'filters.txt')]
-        with media(jid, clip) as source:
+        from contextlib import nullcontext
+        with (nullcontext(prepared[0]) if prepared else media(jid, clip)) as source:
             subprocess.run([export_binary(needs_ass), '-nostdin', '-v', 'error', '-y', '-ss', str(body.start), '-i', str(source.resolve()),
-                            *extra_inputs, '-t', str(body.end-body.start), *graph_args,'-map','[out]','-map','0:a?',
+                            *extra_inputs, '-t', str(body.end-body.start), *graph_args,'-map','[out]',*audio_map,
                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', str(folder/'edited.mp4')],
                            cwd=folder, capture_output=True, check=True, timeout=300)
         return FileResponse(folder/'edited.mp4', filename='cascade-edited.mp4', media_type='video/mp4', background=BackgroundTask(directory.cleanup))

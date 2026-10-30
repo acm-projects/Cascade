@@ -1,23 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 import Spinner from "../../components/ui/Spinner";
 import { formatTime } from "../../utils/time";
 import { clipMediaPath } from "./clips";
-import { activeCueIndex, dragFraming, effectsFilter, frameSize } from "./playerMath";
+import { dragFraming, frameSize } from "./playerMath";
 import "./ClipPlayer.css";
+import { timelineClock } from "./reelTiming";
 
 const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 4 / 3 };
-const POSITIONS = { top: "flex-start", middle: "center", bottom: "flex-end" };
-
-// "#000000" + opacity 0.5 -> "rgba(0, 0, 0, 0.5)"
-function withOpacity(hex, opacity) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${opacity})`;
-}
-
-// Live preview of one clip with its edits: plays only the trimmed part (looping, unless you turn it off),
-// in the chosen aspect-ratio frame, with the effects and captions drawn on top. The real render happens on Export.
-// Space plays/pauses (when you're not typing).
+// Live preview of one clip with its edits: plays only the trimmed part (looping), in the chosen
+// aspect-ratio frame, with the captions drawn on top. The real render happens on Export.
 //   clip  - { job_id, clip_index } ; info - { duration, width, height, cues } ; state - the draft
 //   controlRef - optional useRef() from the page: gets { seek(t), getTime(), isReady() } so the timeline
 //                can move the playhead and jump the video
@@ -28,6 +20,28 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const [url, setUrl] = useState(null);
+  const [rendered, setRendered] = useState(null);
+  const [rendering, setRendering] = useState(false);
+  const [renderError, setRenderError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const [view, setView] = useState("edited");
+  const clock = useMemo(() => timelineClock(state), [state]);
+  const showEdited = view === "edited" && !!rendered;
+  const advanced = true; // Edited always uses the same server renderer as MP4 export.
+  const snapshot = JSON.stringify(state);
+  useEffect(() => {
+    let active = true, objectUrl;
+    setRendered(null); setRenderError('');
+    if (!advanced) { setRendering(false); return; }
+    setRendering(true);
+    const timer = setTimeout(() => {
+      api.exportClip(projectId, clip.job_id, clip.clip_index, JSON.parse(snapshot)).then(blob => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob); setRendered(objectUrl);
+      }).catch(e => { if (active) setRenderError(e.message); }).finally(() => { if (active) setRendering(false); });
+    }, 900);
+    return () => { active = false; clearTimeout(timer); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [api, projectId, clip.job_id, clip.clip_index, snapshot, advanced, retry]);
   const [error, setError] = useState(null);
   const [time, setTime] = useState(state.start);
   const [playing, setPlaying] = useState(false);
@@ -68,16 +82,16 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
     if (!controlRef) return;
     controlRef.current = {
       seek: (t) => {
-        if (videoRef.current) videoRef.current.currentTime = t;
+        if (videoRef.current) videoRef.current.currentTime = showEdited ? clock.output(t) : t;
         setTime(t);
       },
-      getTime: () => videoRef.current?.currentTime ?? 0,
+      getTime: () => showEdited ? clock.source(videoRef.current?.currentTime ?? 0) : (videoRef.current?.currentTime ?? 0),
       isReady: () => Boolean(videoRef.current),
     };
     return () => {
       controlRef.current = null;
     };
-  }, [controlRef]);
+  }, [controlRef, showEdited, clock]);
 
   // Space = play / pause (but not while typing or when a button has focus: Space already "clicks" those)
   useEffect(() => {
@@ -96,19 +110,16 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   // Stay inside the trim: at the end, go back to the start (and keep playing only if Loop is on)
   function handleTimeUpdate() {
     const video = videoRef.current;
-    if (video.currentTime >= state.end) {
-      video.currentTime = state.start;
-      if (!loop) video.pause();
-    } else if (video.currentTime < state.start - 0.05) {
-      video.currentTime = state.start;
-    }
+    if (showEdited) { setTime(clock.source(video.currentTime)); return; }
+    if (view === "original") { setTime(video.currentTime); return; }
+    if (video.currentTime >= state.end || video.currentTime < state.start - 0.05) video.currentTime = state.start;
     setTime(video.currentTime);
   }
 
   // When the trim reaches the very end of the file, the browser stops the video by itself first
   function handleEnded() {
     const video = videoRef.current;
-    video.currentTime = state.start;
+    video.currentTime = showEdited || view === "original" ? 0 : state.start;
     if (loop) video.play();
   }
 
@@ -118,21 +129,20 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
       return;
     }
     const video = videoRef.current;
-    if (video.paused) video.play();
+    if (video.paused) video.play().catch(e => setRenderError(e.message));
     else video.pause();
   }
 
   if (error) return <div className="clip-player-message" role="alert">{error}</div>;
   if (!url) return <div className="clip-player-message"><Spinner label="Loading clip" /> Loading clip…</div>;
 
-  const { composition, captions } = state;
+  const { composition } = state;
   const audioOnly = info.has_video === false;
-  const ratio = audioOnly ? 16/9 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
-  const cueIndex = activeCueIndex(info.cues, time);
-  const caption = cueIndex >= 0 ? state.texts?.[cueIndex] ?? info.cues[cueIndex].text : null;
-  const outputHeight = Math.max(info.height, 1);
+  const ratio = view === "original" ? info.width / info.height : audioOnly ? 16/9 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
+  // The biggest frame of this shape that fits the space
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
-  const canDrag = Boolean(framing) && !audioOnly && composition.mode === "fill";
+
+  const canDrag = Boolean(framing) && !audioOnly && view === "edited" && composition.mode === "fill";
 
   // ---------- Drag to reposition (Fill) ----------
   function startDrag(event) {
@@ -164,6 +174,9 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
 
   return (
     <div className="clip-player">
+      <div className="editor-choice-row" role="tablist" aria-label="Preview version">
+        {['original', 'edited'].map(mode => <button key={mode} role="tab" aria-selected={view === mode} className={`editor-choice${view === mode ? ' active' : ''}`} onClick={() => { videoRef.current?.pause(); setView(mode); }}>{mode === 'original' ? 'Original' : 'Edited'}</button>)}
+      </div>
       <div ref={stageRef} className="clip-player-stage">
         <div className={`clip-player-frame${canDrag ? " can-drag" : ""}`}
           style={{ width: frameWidth, height: frameHeight, background: composition.background }}
@@ -171,52 +184,36 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
           onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
           {audioOnly ? <>
             <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>🎧 Audio recording</p>
-            <audio ref={videoRef} src={url} muted={muted} aria-label="Edited audio preview"
-              onLoadedMetadata={e => {e.target.currentTime=state.start;}}
-              onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
+            <audio muted={muted} onEnded={handleEnded} ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
+              onLoadedMetadata={e => {e.target.currentTime=showEdited || view === "original" ? 0 : state.start;}}
+              onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
           </> : <video
             ref={videoRef}
-            src={url}
+            src={showEdited ? rendered : url}
             playsInline
             muted={muted}
             className="clip-player-video"
             style={{
-              filter: effectsFilter(state.effects),
-              objectFit: composition.mode === "fill" ? "cover" : "contain",
+              objectFit: "contain",
               objectPosition: `${composition.x * 100}% ${composition.y * 100}%`,
             }}
-            onLoadedMetadata={(e) => (e.target.currentTime = state.start)}
+            onLoadedMetadata={(e) => (e.target.currentTime = showEdited || view === "original" ? 0 : state.start)}
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onClick={togglePlay}
           />}
-          {captions.enabled && caption && (
-            <div className="clip-player-captions" style={{ justifyContent: POSITIONS[captions.position] }}>
-              <span
-                style={{
-                  fontFamily: captions.font,
-                  fontSize: `${(captions.size * frameHeight) / outputHeight}px`,
-                  fontWeight: captions.bold ? 700 : 400,
-                  color: captions.color,
-                  background: withOpacity(captions.background, captions.opacity),
-                  WebkitTextStroke: `${(captions.thickness * frameHeight) / outputHeight}px ${captions.stroke}`,
-                  paintOrder: "stroke fill",
-                }}
-              >
-                {caption}
-              </span>
-            </div>
-          )}
+
         </div>
       </div>
+      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? 'Rendering edited preview… Original source shown until ready.' : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
           {playing ? "⏸" : "▶"}
         </button>
         <span className="clip-player-time">
-          {formatTime(Math.max(0, time - state.start))} / {formatTime(state.end - state.start)}
+          {formatTime(showEdited ? clock.output(time) : time)} / {formatTime(view === "original" ? info.duration : clock.duration)}
         </span>
         <button type="button" className="btn btn-small btn-ghost" onClick={() => setMuted((m) => !m)}
           aria-pressed={muted} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>

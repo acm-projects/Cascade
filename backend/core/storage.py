@@ -12,6 +12,7 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError
 from fastapi import HTTPException
 
+from backend.core import auth
 from backend.core.config import (
     DEFAULT_FOLDER,
     FAILURE_CACHE_SECONDS,
@@ -93,9 +94,6 @@ def public_clip(clip):
 
 
 def resolve_storage_folder(user_id):
-    # Auth stays in app1 until the next refactor; defer this import to avoid a cycle.
-    from app1 import clerk_profile
-
     with profile_cache_lock:
         entry = profile_cache.get(user_id)
 
@@ -115,7 +113,7 @@ def resolve_storage_folder(user_id):
     }
 
     try:
-        profile, problem = clerk_profile(user_id)
+        profile, problem = auth.clerk_profile(user_id)
     except Exception:
         traceback.print_exc()
 
@@ -175,7 +173,7 @@ def upload_clip_files(
     # Local media already uses the same ownership-checked /clips route.
     if uses_local_storage():
         return {"storage": "local"}
-    from app1 import load_json
+    from backend.core.jobs import load_json
     owner = load_json(folder / 'owner.json')
 
     user_folder = (

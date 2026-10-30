@@ -17,6 +17,8 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import app1
+from backend.core import jobs as core_jobs
+from backend.routers import clips as clip_routes
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('source', type=Path)
@@ -24,7 +26,7 @@ parser.add_argument('--keep', action='store_true')
 args = parser.parse_args()
 source = args.source.resolve()
 temporary = None if args.keep else tempfile.TemporaryDirectory()
-root = app1.JOBS_DIR if args.keep else Path(temporary.name)
+root = core_jobs.JOBS_DIR if args.keep else Path(temporary.name)
 job_id = uuid4().hex
 folder = root / job_id
 folder.mkdir()
@@ -35,16 +37,16 @@ except FileNotFoundError:
         raise SystemExit('--keep requires an existing owned source upload.')
     owner = {'user_id': 'local-smoke', 'user_folder': 'users'}
 search = 'Find four distinct funny moments. Include each joke or mishap setup and its payoff or reaction.'
-app1.save_json(folder / 'owner.json', {**owner, 'prompt': search, 'source_name': source.name})
+core_jobs.save_json(folder / 'owner.json', {**owner, 'prompt': search, 'source_name': source.name})
 shutil.copyfile(source, folder / 'source.video')
 transcript = source.parent / 'transcript.json'
 if transcript.is_file():
     shutil.copyfile(transcript, folder / 'transcript.json')
-app1.jobs[job_id] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
+core_jobs.jobs[job_id] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
 start = time.monotonic()
-with patch.object(app1, 'JOBS_DIR', root), patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}):
+with patch.object(core_jobs, 'JOBS_DIR', root), patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}):
     app1.process_openai_upload(job_id, folder / 'source.video', search, 'both', 30)
-result = app1.jobs.pop(job_id)
+result = core_jobs.jobs.pop(job_id)
 print(json.dumps({'job_id': job_id, 'state': result['state'], 'message': result['message'],
                   'elapsed_seconds': round(time.monotonic() - start, 1), 'clips': len(result['clips']),
                   'timings': result.get('timings'), 'usage': result.get('usage'),

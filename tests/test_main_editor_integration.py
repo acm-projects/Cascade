@@ -10,6 +10,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
+from backend.routers import clips as clip_routes
+from backend.core import jobs as core_jobs
+from backend.core import auth
 from backend import editor
 from backend.agent.tools import ToolBox
 
@@ -21,24 +24,24 @@ class MainEditorIntegrationTests(unittest.TestCase):
             subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=blue:s=160x120:r=12:d=40',
                             '-f','lavfi','-i','sine=frequency=440:duration=40','-c:v','libx264',
                             '-c:a','aac','-shortest',str(source)],check=True)
-            with patch.object(app1,'JOBS_DIR',root),patch.object(app1,'verify_clerk_token',side_effect=lambda token:token), \
+            with patch.object(core_jobs,'JOBS_DIR',root),patch.object(auth,'verify_clerk_token',side_effect=lambda token:token), \
                  patch.dict(os.environ,{'CASCADE_STORAGE':'local','CASCADE_WARM_MODELS':'0'}), \
-                 patch.object(app1,'requirements_error',return_value=None),patch.object(app1.worker,'submit') as submit:
+                 patch.object(clip_routes,'requirements_error',return_value=None),patch.object(core_jobs.worker,'submit') as submit:
                 client=TestClient(app1.app);headers={'Authorization':'Bearer merge-fixture'}
                 pid=client.post('/api/projects',headers=headers,json={'name':'Merged pipeline'}).json()['id']
                 response=client.post('/upload',headers=headers,data={'project_id':pid,'search':'Useful explanations','clip_count':5},
                                      files={'video':('source.mp4',source.read_bytes(),'video/mp4')})
                 self.assertEqual(response.status_code,202,response.text)
-                jid=response.json()['job_id'];self.assertIs(submit.call_args.args[0],app1.process_upload)
+                jid=response.json()['job_id'];self.assertIs(submit.call_args.args[0],clip_routes.process_upload)
                 def agent(path,duration,prompt,target,progress,stage,requested_count=4):
                     self.assertEqual(requested_count,5)
                     progress('Mocked agent selection; real parallel media renders')
                     return ([{'start':i*7.,'end':i*7.+5,'title':f'Moment {i}','explanation':'Fixture'} for i in range(5)],
                             [{'start':i*7.,'end':i*7.+4,'text':f'Caption {i}'} for i in range(5)],{'provider':'fixture','model':'mock','selection_note':''})
-                with patch.object(app1,'select_with_agent',side_effect=agent):
+                with patch.object(clip_routes,'select_with_agent',side_effect=agent):
                     submit.call_args.args[0](*submit.call_args.args[1:])
-                self.assertEqual(app1.jobs[jid]['state'],'done');self.assertEqual(len(app1.jobs[jid]['clips']),5)
-                self.assertEqual(app1.jobs[jid]['clips'][4]['clip_id'],jid+':4')
+                self.assertEqual(core_jobs.jobs[jid]['state'],'done');self.assertEqual(len(core_jobs.jobs[jid]['clips']),5)
+                self.assertEqual(core_jobs.jobs[jid]['clips'][4]['clip_id'],jid+':4')
                 url=f'/api/projects/{pid}/editor/{jid}/4'
                 info=client.get(url,headers=headers).json();state=info['draft']['state']
                 self.assertIn('Caption 4',info['cues'][0]['text'])
@@ -63,7 +66,7 @@ class MainEditorIntegrationTests(unittest.TestCase):
                 self.assertEqual((root/jid/'clip_5.mp4').read_bytes(),original)
                 self.assertEqual(client.get(url,headers={'Authorization':'Bearer another-user'}).status_code,404)
                 self.assertEqual(state['broll'],[])  # Existing clips gain an empty stock track.
-            app1.jobs.clear()
+            core_jobs.jobs.clear()
 
     def test_agent_count_is_per_request_and_defaults_stay_four(self):
         five=ToolBox(SimpleNamespace(duration=200),Path('fixture.mp4'),target_clips=5)

@@ -18,3 +18,12 @@ test("clips without a session name go in Main session", () => {
 test("no clips gives an empty list", () => {
   assert.deepEqual(exportTree([]), []);
 });
+
+test("independent sessions with the same editable name keep their own waves", () => {
+  const tree = exportTree([
+    { ...clip("My session", "a", 0), studioSessionId: "first" },
+    { ...clip("My session", "b", 0), studioSessionId: "second" },
+  ]);
+  assert.equal(tree.length, 2);
+  assert.deepEqual(tree.map(s => [s.id, s.waves[0].id]), [["first", "a"], ["second", "b"]]);
+});

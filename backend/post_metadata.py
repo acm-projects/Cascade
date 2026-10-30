@@ -1,4 +1,5 @@
 """Posting copy is owner-scoped metadata, independent of video edit drafts."""
+from backend.core import jobs as job_service
 import json
 import os
 from typing import Literal
@@ -70,7 +71,7 @@ def register(app, integration, selected, details):
         with integration.lock:
             file = path(pid, jid, index, request.state.user_id)
             file.parent.mkdir(parents=True, exist_ok=True)
-            integration.host.save_json(file, body.model_dump())
+            job_service.save_json(file, body.model_dump())
         return body.model_dump()
 
     @app.post('/api/projects/{pid}/editor/{jid}/{index}/post/generate')

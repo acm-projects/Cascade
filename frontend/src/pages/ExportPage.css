@@ -10,7 +10,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(200px, 300fr) 1400fr;
+  grid-template-columns: minmax(200px, 300fr) minmax(0, 1400fr);
   column-gap: calc(36 * var(--u));
   padding: calc(23 * var(--u)) calc(42 * var(--u)) 0 calc(25 * var(--u));
 }
@@ -26,6 +26,7 @@
 }
 
 .export-main {
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -399,4 +400,24 @@
 .export-panel-loading {
   display: grid;
   place-items: center;
+}
+
+/* Keep the team's wood panels and type, but stack rather than clip on phones. */
+@media (max-width: 760px) {
+  .export { height: auto; min-height: 100dvh; }
+  .export-body { display: flex; flex-direction: column; gap: 16px; padding: 14px; }
+  .export-tree { max-height: 180px; flex-shrink: 0; }
+  .export-main { overflow: visible; gap: 16px; }
+  .export-social { grid-template-columns: minmax(0, 1fr); }
+  .export-settings { overflow: visible; }
+  .export-stage { padding: 16px; }
+  .export-stack { margin-top: 0; }
+  .export-player { height: 380px; }
+  .export-stage-head { flex-wrap: wrap; gap: 8px; }
+  .export-actions .btn { flex: 1 1 160px; white-space: normal; }
+  .export .topnav { height: auto; min-height: 70px; flex-wrap: wrap; gap: 10px; padding: 12px; margin: 10px 14px 0; }
+  .export .topnav-title { flex: 1; min-width: 0; }
+  .export .topnav-steps { position: static; order: 5; width: 100%; margin: 0; justify-content: space-between; }
+  .export .topnav-step { flex: 1; min-width: 0; width: auto; padding: 6px; gap: 5px; font-size: 16px; }
+  .export .topnav-route { display: none; }
 }

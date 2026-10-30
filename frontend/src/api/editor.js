@@ -15,6 +15,16 @@ function clipPath(projectId, jobId, index) {
   return `/api/projects/${encodeURIComponent(projectId)}/editor/${encodeURIComponent(jobId)}/${index}`;
 }
 
+export function getTrends(token, projectId, jobId, index, researchId) {
+  return apiFetch(clipPath(projectId, jobId, index) + '/trends' + (researchId ? `?research_id=${encodeURIComponent(researchId)}` : ''), { token });
+}
+export function analyzeTrends(token, projectId, jobId, index, body) {
+  return apiFetch(clipPath(projectId, jobId, index) + '/trends', { token, method: 'POST', body });
+}
+export function applyTrends(token, projectId, jobId, index, body) {
+  return apiFetch(clipPath(projectId, jobId, index) + '/trends/apply', { token, method: 'POST', body });
+}
+
 /**
  * GET /api/projects/{projectId}/editor[?selected_only=true]
  * The clips you can edit, grouped by the AI Studio session ("wave") they came from.
@@ -94,4 +104,25 @@ export function startReframe(token, projectId, jobId, index, body) {
  */
 export function getReframe(token, projectId, jobId, index, analysisId) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/reframe/${encodeURIComponent(analysisId)}`, { token });
+}
+
+export function listAudioAssets(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/audio`, { token });
+}
+export function uploadAudioAsset(token, projectId, jobId, index, file, kind = 'music') {
+  const form = new FormData(); form.append('audio', file); form.append('name', file.name); form.append('kind', kind);
+  return apiFetch(`${clipPath(projectId, jobId, index)}/audio`, { token, method: 'POST', form });
+}
+export function audioAssetPath(projectId, jobId, index, assetId) {
+  return `${clipPath(projectId, jobId, index)}/audio/${encodeURIComponent(assetId)}/media`;
+}
+
+/** Search only through the owner-checked backend; provider keys stay server-side. */
+export function searchBroll(token, projectId, jobId, index, query, page = 1) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/broll/search?${new URLSearchParams({ query, page })}`, { token });
+}
+
+export function getBrollMedia(token, projectId, jobId, index, assetId, kind = "media") {
+  const suffix = kind === "thumbnail" ? "thumbnail" : "media";
+  return apiFetch(`${clipPath(projectId, jobId, index)}/broll/${encodeURIComponent(assetId)}/${suffix}`, { token });
 }

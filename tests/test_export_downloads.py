@@ -9,6 +9,7 @@ from pathlib import Path
 from tests.test_editor import EditorTests
 from backend.editor import resolution_filter
 import app1
+from backend.core import jobs as core_jobs
 
 
 class ExportDownloadsTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class ExportDownloadsTests(unittest.TestCase):
         return json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams', '-show_format', '-of', 'json', str(path)]))
 
     def test_resolution_and_trim_are_rendered_without_upscaling(self):
-        path = app1.JOBS_DIR/self.jid/'clip_1.mp4'
+        path = core_jobs.JOBS_DIR/self.jid/'clip_1.mp4'
         for dimensions, expected in [('1920x1080', (1280,720)), ('1080x1920', (720,1280))]:
             subprocess.run(['ffmpeg','-v','error','-y','-f','lavfi','-i',f'testsrc=size={dimensions}:rate=5:duration=2',
                             '-c:v','libx264','-pix_fmt','yuv420p',str(path)],check=True)

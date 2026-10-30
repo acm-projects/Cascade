@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
@@ -12,13 +12,17 @@ import { clipKey, flattenClips } from "../features/editor/clips";
 import useClipDraft from "../features/editor/useClipDraft";
 import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
+import BrollPanel from "../features/editor/BrollPanel";
 import Timeline from "../features/editor/Timeline";
 import { TrimControls } from "../features/editor/EditorControls";
 import AspectTab from "../features/editor/tabs/AspectTab";
 import CaptionsTab from "../features/editor/tabs/CaptionsTab";
 import { describeChanges } from "../features/editor/chatChanges";
 
-const panelTabs = ["Trim", "Captions", "Aspect Ratio", "Chat"];
+import ReelControls from "../features/editor/ReelControls";
+import TrendsModal from "../features/editor/TrendsModal";
+import MusicControls from "../features/editor/MusicControls";
+const panelTabs = ["Trim", "Captions", "Trends", "Aspect Ratio", "Music", "Reel", "Chat"];
 const saveLabels = { saved: "✓ Saved", saving: "Saving…", error: "⚠ Not saved" };
 // Ready-made requests shown while the Chat tab is empty
 const chatSuggestions = [
@@ -35,6 +39,9 @@ function EditorPage() {
   const [error, setError] = useState(null);
   const [currentKey, setCurrentKey] = useState(null);
   const [projectName, setProjectName] = useState(null);
+  const flushCurrent = useRef(null);
+  const registerFlush = useCallback(value => { flushCurrent.current = value; }, []);
+  const toast = useToast();
 
   useEffect(() => {
     let active = true;
@@ -63,7 +70,7 @@ function EditorPage() {
         {clips?.map((clip, index) => (
           <button key={clipKey(clip)} type="button"
             className={`editor-media-item${clipKey(clip) === currentKey ? " active" : ""}`}
-            onClick={() => setCurrentKey(clipKey(clip))} title={clip.title}>
+            onClick={async () => { try { await flushCurrent.current?.(); setCurrentKey(clipKey(clip)); } catch(e) { toast.show(e.message, "error"); } }} title={clip.title}>
             {index + 1}. {clip.title || "Clip"}
             <span>{clip.sessionName ? `${clip.sessionName} · ` : ""}{formatTime(clip.end - clip.start)}</span>
           </button>
@@ -91,67 +98,57 @@ function EditorPage() {
         <div className="editor-empty">{body}</div>
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar}
-          onExport={() => navigate(`/projects/${projectId}/export`)} />
+          registerFlush={registerFlush} onExport={() => navigate(`/projects/${projectId}/export`)} />
       )}
     </div>
   );
 }
 
 // Everything for the clip being edited. It has key={clip key}, so switching clips loads that clip's own draft.
-function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
+function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
   const api = useApi();
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [panelTab, setPanelTab] = useState("Trim");
+  const [trendsOpen, setTrendsOpen] = useState(false);
+  const [chatChanges, setChatChanges] = useState({});
+  const [chatNote, setChatNote] = useState(null);
   const [thinking, setThinking] = useState(false);
+  const [brollOpen, setBrollOpen] = useState(false);
+  const [brollSearch, setBrollSearch] = useState(null);
+  const [selectedSegment, setSelectedSegment] = useState(null);
+  const selectBroll = useCallback(id => setSelectedSegment(id), []);
   const [focusedCue, setFocusedCue] = useState(null); // caption line clicked on the timeline (for the Captions tab)
   const [captionsView, setCaptionsView] = useState("Style"); // the Captions tab's sub-tab: "Style" | "Text"
   const player = useRef(null); // the ClipPlayer's remote control: seek(t), getTime()
-  const { info, state, change, undo, redo } = draft;
+  const { info, state, change } = draft;
+  const latestState = useRef(state);
+  useEffect(() => { latestState.current = state; });
+  const selectedBroll = state?.broll?.some(s => s.id === selectedSegment) ? selectedSegment : null;
+  useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
 
-  // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z = redo (text boxes keep their own undo)
-  useEffect(() => {
-    function handleKey(event) {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
-      if (event.target.closest?.("input:not([type]), input[type=text], textarea, [contenteditable]")) return;
-      event.preventDefault();
-      if (event.shiftKey) redo();
-      else undo();
-    }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [undo, redo]);
-
-  // The Chat tab's extras that aren't saved with the draft: what each AI reply changed, and app notes
-  const [chatChanges, setChatChanges] = useState({}); // { [message index]: ["Trim 3.0–30.0 s", …] }
-  const [chatNote, setChatNote] = useState(null);
-  const latestState = useRef(state);
-  useEffect(() => {
-    latestState.current = state;
-  });
-
-  // "Make the captions yellow": the backend's editor AI returns a new edit + a reply.
-  // The new edit goes in as ONE undo step, so Cmd+Z takes back the whole AI change.
-  async function sendChat(message) {
+  // "Make the captions yellow": the backend's editor AI returns a new edit + a reply
+  async function sendChat(message, research = {}) {
     const history = draft.chat;
     const sent = state;
     draft.setChat([...history, { role: "user", text: message }]);
     setChatNote(null);
     setThinking(true);
     try {
-      const result = await api.sendEditorChat(projectId, clip.job_id, clip.clip_index,
-        { state: sent, chat: history.slice(-20), message });
-      if (latestState.current !== sent) {
-        toast.show("The AI's edit replaced changes you made while it was working. Undo to get them back.");
-      }
+      const result = await api.sendEditorChat(projectId, clip.job_id, clip.clip_index, { state, chat: history, message, ...research,
+        result_ids: (brollSearch?.results || []).map(a => a.id), selected_segment: selectedBroll });
+      if (latestState.current !== sent) toast.show("The AI edit replaced changes made while it was working. Undo to restore them.");
       change(result.state);
+      setChatChanges(all => ({ ...all, [history.length + 1]: describeChanges(sent, result.state) }));
+      if (result.broll_search) { setBrollSearch(result.broll_search); setBrollOpen(true); }
       draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: result.message }]);
-      setChatChanges((all) => ({ ...all, [history.length + 1]: describeChanges(sent, result.state) }));
+      return result;
     } catch (err) {
       draft.setChat(history);
-      if (err.status === 503) setChatNote(err.message); // the editing AI isn't set up on the server
+      if (err.status === 503) setChatNote(err.message);
       else toast.show(err.message, "error");
+      if (research.research_id) throw err;
     } finally {
       setThinking(false);
     }
@@ -172,11 +169,19 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
           </span>
         )}
         {framing.status === "error" && <span className="editor-save editor-save-error" role="alert">⚠ {framing.message}</span>}
-        <button type="button" className="btn btn-small btn-primary editor-export" onClick={onExport}>Go to Export →</button>
+        <button type="button" className="btn btn-small btn-primary editor-export" onClick={async () => { try { await draft.flush(); onExport(); } catch(e) { toast.show(e.message, "error"); } }}>Go to Export →</button>
       </div>
 
-      <div className="editor-body">
-        {sidebar}
+      <div className={`editor-body${brollOpen ? " broll-open" : ""}`}>
+        <div className="editor-left-column">
+          <nav className="editor-tool-rail" aria-label="Editor tools">
+            <button className="btn btn-small" type="button" aria-pressed={brollOpen} disabled={!state || info?.has_video === false}
+              onClick={() => setBrollOpen(open => !open)}>B-roll</button>
+          </nav>
+          {brollOpen && state ? <BrollPanel projectId={projectId} clip={clip} state={state} duration={info.duration}
+            player={player} change={change} search={brollSearch} onSearch={setBrollSearch} selectedId={selectedBroll}
+            onSelect={selectBroll} onClose={() => setBrollOpen(false)} disabled={thinking} /> : sidebar}
+        </div>
 
         <main className="editor-center">
           <section className="editor-preview">
@@ -193,6 +198,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
             <section className="editor-timeline" aria-label="Timeline">
               <Timeline duration={info.duration} cues={info.cues} state={state} player={player}
                 change={change} patch={draft.patch} recordUndo={draft.recordUndo}
+                selectedBroll={selectedBroll} onSelectBroll={selectBroll} disabled={thinking}
                 focusedCue={focusedCue} onCueClick={(index) => {
                   setFocusedCue(index);
                   setPanelTab("Captions");
@@ -209,7 +215,9 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
               <button key={tab} type="button" className={`editor-panel-tab${tab === panelTab ? " active" : ""}`}
                 disabled={info?.has_video === false && tab === 'Aspect Ratio'}
                 title={info?.has_video === false && tab === 'Aspect Ratio' ? 'Audio recordings have no video framing' : undefined}
-                onClick={() => setPanelTab(tab)}>{tab}</button>
+                aria-haspopup={tab === 'Trends' ? 'dialog' : undefined}
+                aria-expanded={tab === 'Trends' ? trendsOpen : undefined}
+                onClick={() => tab === 'Trends' ? setTrendsOpen(true) : setPanelTab(tab)}>{tab}</button>
             ))}
           </div>
           <div className="editor-panel-content">
@@ -223,14 +231,22 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport }) {
                 focusedCue={focusedCue} onFocusCue={setFocusedCue} />
             ) : panelTab === "Aspect Ratio" ? (
               <AspectTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo} />
+            ) : panelTab === "Reel" ? (
+              <ReelControls state={state} change={change} onApply={sendChat} thinking={thinking} />
+            ) : panelTab === "Music" ? (
+              <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
             ) : (
               <ChatBox messages={chatMessages} onSend={sendChat} disabled={thinking} typing={thinking}
                 quickActions={draft.chat.length === 0 ? chatSuggestions : []}
-                placeholder={thinking ? "Editing…" : "e.g. cut the first 2 seconds, make captions yellow"} />
+                placeholder={thinking ? "Editing…" : "e.g. add dramatic music, a punch-in on the reaction, and relevant B-roll"} />
             )}
           </div>
         </aside>
       </div>
+      {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} disabled={thinking}
+        onClose={() => setTrendsOpen(false)} onApply={(research_id, selection) => sendChat('Apply selected edits from YouTube research.', { research_id, ...(Array.isArray(selection) ? { suggestions: selection } : { suggestion: selection }) })}>
+        <div className="export-post-actions"><button className="editor-choice" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo</button><button className="editor-choice" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</button><small>{draft.saveStatus}</small></div>
+      </TrendsModal>}
     </>
   );
 }

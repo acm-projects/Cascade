@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
@@ -17,6 +17,7 @@ import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
 import { isAudioClip } from '../utils/media';
+import TrendsModal from '../features/editor/TrendsModal';
 import { exportTree } from "../features/export/exportTree";
 
 // Built from the Figma "Export" wireframe (node 557:2263), connected to backend/editor_backend.py
@@ -32,6 +33,9 @@ function ExportPage() {
   const [inZip, setInZip] = useState([]);       // clip keys to put in the ZIP
   const [settings, setSettings] = useState({resolution: "original", includeCaptions: true});
   const downloads = useDownloads(api, projectId, projectName, settings);
+  const activeFlush = useRef(null);
+  const registerFlush = useCallback(fn => { activeFlush.current = fn; }, []);
+  const toast = useToast();
 
   useEffect(() => {
     let active = true;
@@ -54,7 +58,15 @@ function ExportPage() {
   const tree = useMemo(() => exportTree(clips ?? []), [clips]);
   const picked = clips?.filter((clip) => inZip.includes(clipKey(clip))) ?? [];
 
-  const downloadZip = () => downloads.downloadSelected(picked);
+  const downloadZip = async () => {
+    try { await activeFlush.current?.(); await downloads.downloadSelected(clips.filter(clip => inZip.includes(clipKey(clip)))); }
+    catch (err) { toast.show(err.message, 'error'); }
+  };
+
+  async function pickClip(key) {
+    try { await activeFlush.current?.(); setCurrentKey(key); }
+    catch (err) { toast.show(err.message, "error"); }
+  }
 
   // Checkboxes: one clip, or every clip in a wave/session at once
   const allIn = (list) => list.every((clip) => inZip.includes(clipKey(clip)));
@@ -84,7 +96,7 @@ function ExportPage() {
             {tree.map((session) => {
               const sessionClips = session.waves.flatMap((wave) => wave.clips);
               return (
-                <TreeGroup key={session.name} label={session.name} checked={allIn(sessionClips)}
+                <TreeGroup key={session.id} label={session.name} checked={allIn(sessionClips)}
                   onCheck={() => toggleGroup(sessionClips)}>
                   {session.waves.map((wave) => (
                     <TreeGroup key={wave.id} label={wave.name} title={wave.prompt} checked={allIn(wave.clips)}
@@ -96,7 +108,7 @@ function ExportPage() {
                             <input type="checkbox" checked={inZip.includes(key)} onChange={() => toggleGroup([clip])}
                               aria-label={`Include clip ${clips.indexOf(clip) + 1} in the download`} />
                             <button type="button" className={`export-tree-clip-name${key === currentKey ? " active" : ""}`}
-                              onClick={() => setCurrentKey(key)} title={clip.title}>
+                              onClick={() => pickClip(key)} title={clip.title}>
                               Clip {clips.indexOf(clip) + 1}
                             </button>
                           </div>
@@ -109,8 +121,8 @@ function ExportPage() {
             })}
           </aside>
 
-          <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads}
-            clips={clips} picked={picked} onPick={setCurrentKey} onDownloadSelected={downloadZip}
+          <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads} registerFlush={registerFlush}
+            clips={clips} picked={picked} onPick={pickClip} onDownloadSelected={downloadZip}
             clipNumber={clips.indexOf(current) + 1}
             settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)}/>}
             onEdit={() => navigate(`/projects/${projectId}/editor`)}
@@ -139,9 +151,19 @@ function TreeGroup({ label, title, checked, onCheck, children }) {
 }
 
 // Everything right of the list, for the clip on screen. key={clip key}, so it follows the chosen clip.
-function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, onEdit, onProjects, downloads, clipNumber, settingsPanel }) {
+function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, onEdit, onProjects, downloads, clipNumber, settingsPanel, registerFlush }) {
   const toast = useToast();
-  const { info, state, error, patch } = useClipDraft(projectId, clip); // only patch()ed by framing below
+  const draft = useClipDraft(projectId, clip);
+  const [trendsOpen, setTrendsOpen] = useState(false);
+  const { info, state, error, patch } = draft;
+  useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
+  const api = useApi();
+  async function applyResearch(research_id, suggestion) {
+    const result = await api.applyTrends(projectId, clip.job_id, clip.clip_index, { state, research_id, ...(Array.isArray(suggestion) ? { suggestions: suggestion } : { suggestion }) });
+    draft.change(result.state);
+    draft.setChat([...draft.chat, { role: 'user', text: 'Apply suggested edits from YouTube research.' }, { role: 'assistant', text: result.message }]);
+    return result;
+  }
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
   const framing = useAutoFraming(projectId, clip, state, info, patch);
   const rendering = downloads.working;
@@ -149,8 +171,11 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   const [post, setPost] = useState(null);
   const [expanded, setExpanded] = useState(false); // "Expand clips": every clip as a small card
   async function downloadMp4() {
-    const result = await downloads.downloadOne(clip, clipNumber);
-    if(result) setRendered(new File([result.blob], result.filename, {type: result.blob.type}));
+    try {
+      await draft.flush();
+      const result = await downloads.downloadOne(clip, clipNumber);
+      if(result) setRendered(new File([result.blob], result.filename, {type: result.blob.type}));
+    } catch (err) { toast.show(err.message, 'error'); }
   }
 
   // Instagram/TikTok/etc. have no upload API for us, so hand the file to the phone/computer's share sheet
@@ -227,6 +252,10 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
 
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
+        {state && !isAudioClip(clip) && <div className="export-post"><Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends · YouTube research</Button></div>}
+        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onApply={applyResearch} onClose={() => setTrendsOpen(false)}>
+          <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</Button><small>{draft.saveStatus}</small></div>
+        </TrendsModal>}
         {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
         <div className="export-post">
           <h3 className="export-social-title">{isAudioClip(clip) ? '🎧 Share audio' : '📱 Instagram, TikTok & more'}</h3>
@@ -240,7 +269,7 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
       </section>
 
       <div className="export-footer">
-        <Button size="sm" onClick={onEdit}>← Back to editor</Button>
+        <Button size="sm" onClick={async () => { try { await draft.flush(); onEdit(); } catch (err) { toast.show(err.message, "error"); } }}>← Back to editor</Button>
         <Button variant="primary" size="sm" onClick={onProjects}>Back to projects →</Button>
       </div>
     </main>

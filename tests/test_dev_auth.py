@@ -7,6 +7,9 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import app1
+from backend import main as app_main
+from backend.core import jobs as core_jobs
+from backend.core import auth
 
 
 class DevAuthTests(unittest.TestCase):
@@ -16,20 +19,20 @@ class DevAuthTests(unittest.TestCase):
         self.addCleanup(environment.stop)
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        jobs = patch.object(app1, 'JOBS_DIR', Path(temp.name))
+        jobs = patch.object(core_jobs, 'JOBS_DIR', Path(temp.name))
         jobs.start()
         self.addCleanup(jobs.stop)
         self.client = TestClient(app1.app)
         self.addCleanup(self.client.close)
 
     def test_flag_off_requires_login(self):
-        with patch.object(app1, 'DEV_AUTH', False):
+        with patch.object(auth, 'DEV_AUTH', False):
             self.assertEqual(self.client.get('/api/projects').status_code, 401)
 
     def test_local_dev_projects_and_session_without_clerk(self):
-        with patch.object(app1, 'DEV_AUTH', True), patch.object(
-            app1, 'clerk_configuration', side_effect=AssertionError('Clerk called')
-        ), patch.object(app1, 'verify_clerk_token') as verify:
+        with patch.object(auth, 'DEV_AUTH', True), patch.object(
+            auth, 'clerk_configuration', side_effect=AssertionError('Clerk called')
+        ), patch.object(auth, 'verify_clerk_token') as verify:
             response = self.client.get('/api/projects')
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json(), {'projects': []})
@@ -41,8 +44,8 @@ class DevAuthTests(unittest.TestCase):
             verify.assert_not_called()
 
     def test_bad_credentials_are_still_rejected(self):
-        with patch.object(app1, 'DEV_AUTH', True), patch.object(
-            app1, 'verify_clerk_token', side_effect=HTTPException(401, 'Invalid token')
+        with patch.object(auth, 'DEV_AUTH', True), patch.object(
+            auth, 'verify_clerk_token', side_effect=HTTPException(401, 'Invalid token')
         ) as verify:
             for headers in ({'Authorization': 'Bearer invalid'},
                             {'Cookie': '__session=invalid'}):
@@ -55,14 +58,14 @@ class DevAuthTests(unittest.TestCase):
                     self.assertEqual(self.client.get('/api/projects', headers=headers).status_code, 401)
 
     def test_real_identity_is_preserved(self):
-        with patch.object(app1, 'DEV_AUTH', True), patch.object(
-            app1, 'verify_clerk_token', return_value='real-user'
+        with patch.object(auth, 'DEV_AUTH', True), patch.object(
+            auth, 'verify_clerk_token', return_value='real-user'
         ):
             response = self.client.get('/api/session', headers={'Authorization': 'Bearer valid'})
             self.assertEqual(response.json(), {'user_id': 'real-user'})
 
     def test_remote_peer_cannot_spoof_local_headers(self):
-        with patch.object(app1, 'DEV_AUTH', True), TestClient(
+        with patch.object(auth, 'DEV_AUTH', True), TestClient(
             app1.app, client=('203.0.113.5', 1234)
         ) as client, patch.dict('os.environ', {'CASCADE_WARM_MODELS': '0', 'CASCADE_METADATA_STORE': 'local'}):
             response = client.get('/api/projects', headers={
@@ -71,34 +74,34 @@ class DevAuthTests(unittest.TestCase):
             self.assertEqual(response.status_code, 401)
 
     def test_local_peer_allowlist(self):
-        with patch.object(app1, 'DEV_AUTH', True):
-            for host in app1.LOCAL_HOSTS:
+        with patch.object(auth, 'DEV_AUTH', True):
+            for host in auth.LOCAL_HOSTS:
                 with self.subTest(host=host), TestClient(app1.app, client=(host, 1234)) as client:
                     self.assertEqual(client.get('/api/session').json()['user_id'], 'dev-user')
 
     def test_dev_mode_keeps_origin_check(self):
-        with patch.object(app1, 'DEV_AUTH', True):
+        with patch.object(auth, 'DEV_AUTH', True):
             self.assertEqual(self.client.get('/api/projects', headers={
                 'Origin': 'https://untrusted.example'
             }).status_code, 403)
 
     def test_auth_config_preserves_clerk_when_disabled_or_remote(self):
-        with patch.object(app1, 'clerk_configuration', return_value=('pk_test', 'clerk.example')):
-            with patch.object(app1, 'DEV_AUTH', False):
+        with patch.object(auth, 'clerk_configuration', return_value=('pk_test', 'clerk.example')):
+            with patch.object(auth, 'DEV_AUTH', False):
                 self.assertEqual(self.client.get('/api/auth-config').json(), {
                     'dev_auth': False, 'publishable_key': 'pk_test', 'domain': 'clerk.example'
                 })
-            with patch.object(app1, 'DEV_AUTH', True), TestClient(
+            with patch.object(auth, 'DEV_AUTH', True), TestClient(
                 app1.app, client=('203.0.113.5', 1234)
             ) as client:
                 self.assertFalse(client.get('/api/auth-config').json()['dev_auth'])
 
     def test_startup_warns_only_when_enabled(self):
         for enabled in (False, True):
-            with self.subTest(enabled=enabled), patch.object(app1, 'DEV_AUTH', enabled), patch.dict(
+            with self.subTest(enabled=enabled), patch.object(auth, 'DEV_AUTH', enabled), patch.dict(
                 'os.environ', {'CASCADE_WARM_MODELS': '0', 'CASCADE_METADATA_STORE': 'local'}
             ), patch('builtins.print') as output:
-                app1.start_model_warmup()
+                app_main.start_model_warmup()
                 self.assertEqual(output.call_count, int(enabled))
                 if enabled:
                     self.assertIn('never use this in production', output.call_args.args[0])

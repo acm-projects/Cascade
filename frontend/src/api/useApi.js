@@ -21,6 +21,7 @@ export default function useApi() {
   return useMemo(() => {
     const api = {};
     for (const [name, fn] of Object.entries(endpoints)) {
+      if (name === "audioAssetPath") continue;
       api[name] = async (...args) => fn(await getToken(), ...args);
     }
     return api;

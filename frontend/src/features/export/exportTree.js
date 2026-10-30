@@ -5,8 +5,9 @@ export function exportTree(clips) {
   const sessions = [];
   for (const clip of clips) {
     const name = clip.studioSession || "Main session";
-    let session = sessions.find((s) => s.name === name);
-    if (!session) sessions.push((session = { name, waves: [] }));
+    const id = clip.studioSessionId || `legacy:${name}`;
+    let session = sessions.find((s) => s.id === id);
+    if (!session) sessions.push((session = { id, name, waves: [] }));
     let wave = session.waves.find((w) => w.id === clip.waveId);
     if (!wave) {
       wave = { id: clip.waveId, name: `Wave ${session.waves.length + 1}`, prompt: clip.wavePrompt, clips: [] };

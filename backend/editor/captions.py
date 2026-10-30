@@ -51,10 +51,11 @@ def raster_filters(folder, overlays, cues, state, width, height, base_filter="nu
     return ['-f','concat','-safe','0','-i','overlays.txt'], ['-filter_complex',f'[0:v]{base_filter}[base];[base][1:v]overlay=0:0:format=auto[v]','-map','[v]','-map','0:a?']
 
 
-def make_ass(cues, style, width, height):
+def make_ass(cues, style, width, height, overlays=(), trim_start=0):
     def color(hex_color, opacity=1):
         r, g, b = hex_color[1:3], hex_color[3:5], hex_color[5:7]
         return f'&H{round((1-opacity)*255):02X}{b}{g}{r}'
+    def override_color(value): return '&H'+value[5:7]+value[3:5]+value[1:3]+'&'
     def stamp(seconds):
         cs = round(seconds*100)
         return f'{cs//360000}:{cs//6000%60:02}:{cs//100%60:02}.{cs%100:02}'
@@ -77,10 +78,40 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
     if style.opacity:
         header += style_line('Background', color(style.color, 0), color(style.background, style.opacity), 3, 3)
     header += '[Events]\nFormat: Layer, Start, End, Style, Text\n'
+    if style.max_words:
+        chunks=[]
+        for cue in cues:
+            words=cue['text'].split();count=max(1,len(words))
+            for i in range(0,len(words),style.max_words):
+                finish=min(count,i+style.max_words)
+                chunks.append({**cue,'start':cue['start']+(cue['end']-cue['start'])*i/count,'end':cue['start']+(cue['end']-cue['start'])*finish/count,'text':' '.join(words[i:finish])})
+        cues=chunks
     for cue in cues:
         # Neutralize ASS tags and line-break escapes from transcript data.
         text = cue['text'].replace('\\', '').replace('{', '').replace('}', '').replace('\n', r'\N')
+        if style.animation=='karaoke':
+            words=text.split()
+            step=max(1,round((cue['end']-cue['start'])*100/max(1,len(words))))
+            text=' '.join(r'{\k'+str(step)+'}'+word for word in words)
+            text=r'{\1c'+override_color(style.highlight)+r'\2c'+override_color(style.color)+'}'+text
+        elif style.animation=='pop':
+            import re
+            keywords={w.casefold() for w in style.emphasis}
+            tokens=[]
+            for word in text.split():
+                if re.sub(r'[^\w]', '', word).casefold() in keywords:
+                    tokens.append(r'{\1c'+override_color(style.highlight)+'}'+word+r'{\1c'+override_color(style.color)+'}')
+                else:tokens.append(word)
+            text=r'{\fscx92\fscy92\t(0,100,\fscx100\fscy100)}'+' '.join(tokens)
         if style.opacity:
             header += f"Dialogue: 0,{stamp(cue['start'])},{stamp(cue['end'])},Background,{text}\n"
         header += f"Dialogue: 1,{stamp(cue['start'])},{stamp(cue['end'])},Default,{text}\n"
+    for overlay in overlays:
+        start=max(trim_start,overlay.start);end=overlay.start+overlay.duration
+        if end<=start:continue
+        text=overlay.text.replace('\\','').replace('{','').replace('}','').replace('\n',r'\N')
+        position={'top':8,'middle':5,'bottom':2}[overlay.position]
+        tags=rf'{{\an{position}\fs{overlay.size*height/720}\1c{override_color(overlay.color)}}}'
+        if overlay.animate:tags+=r'{\fad(100,120)\fscx85\fscy85\t(0,120,\fscx100\fscy100)}'
+        header+=f'Dialogue: 2,{stamp(start-trim_start)},{stamp(end-trim_start)},Default,{tags}{text}\n'
     return header

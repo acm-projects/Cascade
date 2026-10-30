@@ -23,8 +23,26 @@ export default function useClipDraft(projectId, clip) {
   const [saveStatus, setSaveStatus] = useState("saved");
   const loaded = useRef(false);    // don't save the draft we just loaded straight back
   const saveCount = useRef(0);
-  const pending = useRef(null);    // { state, chat } waiting for the autosave timer, or null
-  const sending = useRef(0);       // saves sent but not answered yet
+  const pending = useRef(null);
+  const queue = useRef(Promise.resolve());
+  const persist = useCallback((body) => {
+    const next = queue.current.catch(() => {}).then(() => api.saveDraft(projectId, clip.job_id, clip.clip_index, body));
+    queue.current = next;
+    return next;
+  }, [api, projectId, clip.job_id, clip.clip_index]);
+  const flush = useCallback(async () => {
+    const body = pending.current;
+    if (body) {
+      setSaveStatus('saving');
+      try { await persist(body); if (pending.current === body) { pending.current = null; setSaveStatus('saved'); } }
+      catch (e) { setSaveStatus('error'); throw e; }
+    } else await queue.current;
+  }, [persist]);
+  useEffect(() => {
+    function warn(event) { if (pending.current) { event.preventDefault(); event.returnValue = ''; } }
+    window.addEventListener('beforeunload', warn);
+    return () => { window.removeEventListener('beforeunload', warn); if (pending.current) persist(pending.current).catch(() => {}); };
+  }, [persist]);
 
   useEffect(() => {
     let active = true;
@@ -42,15 +60,6 @@ export default function useClipDraft(projectId, clip) {
     };
   }, [api, projectId, clip.job_id, clip.clip_index]);
 
-  // Send one save to the backend
-  const send = useCallback((edits) => {
-    sending.current += 1;
-    return api.saveDraft(projectId, clip.job_id, clip.clip_index, { ...edits, updated_at: Math.floor(Date.now() / 1000) })
-      .finally(() => {
-        sending.current -= 1;
-      });
-  }, [api, projectId, clip.job_id, clip.clip_index]);
-
   // Auto-save a moment after the last change
   const state = history.present;
   useEffect(() => {
@@ -60,33 +69,18 @@ export default function useClipDraft(projectId, clip) {
       return;
     }
     const thisSave = ++saveCount.current;
-    pending.current = { state, chat };
+    setSaveStatus("saving");
+    pending.current = { state, chat, updated_at: Math.floor(Date.now() / 1000) };
     const timer = setTimeout(() => {
-      pending.current = null;
+      const body = pending.current;
+      if (!body) return;
       setSaveStatus("saving");
-      send({ state, chat })
-        .then(() => thisSave === saveCount.current && setSaveStatus("saved"))
+      persist(body)
+        .then(() => { if (thisSave === saveCount.current) { pending.current = null; setSaveStatus("saved"); } })
         .catch(() => thisSave === saveCount.current && setSaveStatus("error"));
     }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [state, chat, send]);
-
-  // Switching clips closes this editor before the timer goes off: send the waiting save right away
-  // so the last change isn't lost.
-  useEffect(() => () => {
-    if (pending.current) send(pending.current).catch(() => {});
-  }, [send]);
-
-  // Closing the tab while something isn't saved yet: let the browser ask "Leave site?"
-  useEffect(() => {
-    function warn(event) {
-      if (!pending.current && !sending.current) return;
-      event.preventDefault();
-      event.returnValue = "";
-    }
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, []);
+  }, [state, chat, persist]);
 
   const change = useCallback((next) => {
     setHistory(({ past, present }) => {
@@ -125,6 +119,6 @@ export default function useClipDraft(projectId, clip) {
   return {
     info, error, state, change, patch, recordUndo, undo, redo,
     canUndo: history.past.length > 0, canRedo: history.future.length > 0,
-    chat, setChat, saveStatus,
+    chat, setChat, saveStatus, flush,
   };
 }

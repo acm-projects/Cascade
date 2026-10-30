@@ -41,8 +41,8 @@ class ReframeExportTests(unittest.TestCase):
     get=fixture.EditorTests.get
 
     def test_saved_motion_real_ffmpeg_and_owner_scope(self):
-        from backend import integration
-        folder=integration.project_dir('editor-user')/'editor'/self.pid/'reframe'/(self.jid+'-0');folder.mkdir(parents=True)
+        from backend.services import projects_store
+        folder=projects_store.project_dir('editor-user')/'editor'/self.pid/'reframe'/(self.jid+'-0');folder.mkdir(parents=True)
         analysis={'version':reframe.VERSION,'width':320,'height':180,'duration':3,'has_audio':True,'frames':[{'t':i/25,'audio':True,'faces':[{'id':1,'box':[.1+i/75*.6,.2,.1,.2],'score':.99}]} for i in range(75)]}
         ident='f'*32;(folder/(ident+'.json')).write_text(json.dumps({'status':'ready','analysis':analysis}))
         draft=self.get()['draft'];draft['state']['reframe']={'enabled':True,'focus':'speaker','analysis_id':ident};draft['state']['composition'].update(mode='fill',ratio='9:16');draft['state']['captions']['enabled']=False

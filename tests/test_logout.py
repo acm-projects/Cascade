@@ -6,17 +6,19 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import app1
+from backend.core import jobs as core_jobs
+from backend.core import auth
 
 class LogoutTests(unittest.TestCase):
     def test_cookie_fallback_cleared_without_removing_projects_or_drafts(self):
-        with tempfile.TemporaryDirectory() as folder,patch.object(app1,'JOBS_DIR',Path(folder)), \
-             patch.object(app1,'verify_clerk_token',return_value='logout-user'), \
-             patch.object(app1,'authorized_parties',return_value=['http://testserver']):
+        with tempfile.TemporaryDirectory() as folder,patch.object(core_jobs,'JOBS_DIR',Path(folder)), \
+             patch.object(auth,'verify_clerk_token',return_value='logout-user'), \
+             patch.object(auth,'authorized_parties',return_value=['http://testserver']):
             client=TestClient(app1.app)
             client.cookies.set('__session','fixture-token',domain='testserver.local',path='/')
             pid=client.post('/api/projects',json={'name':'Preserve my project'}).json()['id']
-            from backend import integration
-            draft=integration.project_dir('logout-user')/'editor'/pid/'fixture.json'
+            from backend.services import projects_store
+            draft=projects_store.project_dir('logout-user')/'editor'/pid/'fixture.json'
             draft.parent.mkdir(parents=True);draft.write_text('{"saved":"draft"}')
             # MLK records the Clerk user on the first authenticated session check.
             self.assertEqual(client.get('/api/session').status_code,200)

@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
+from backend.core import config as service_config
+from backend.core import auth
 from backend import frontend
 
 
@@ -26,9 +28,9 @@ class Document(HTMLParser):
 
 class FrontendViewsTests(unittest.TestCase):
     def test_one_html_file_and_isolated_view_per_legacy_route(self):
-        self.assertEqual(list(app1.FRONTEND_DIR.glob('*.html')),[app1.FRONTEND_DIR/'index.html'])
+        self.assertEqual(list(service_config.FRONTEND_DIR.glob('*.html')),[service_config.FRONTEND_DIR/'index.html'])
         # Legacy root pages may remain for compatibility; only the web template is served.
-        self.assertEqual(app1.FRONTEND_DIR,app1.PROJECT_DIR/'web')
+        self.assertEqual(service_config.FRONTEND_DIR,service_config.PROJECT_DIR/'web')
         with TestClient(app1.app) as client:
             for filename,view in frontend.PAGES.items():
                 response=client.get('/'+filename)
@@ -48,23 +50,23 @@ class FrontendViewsTests(unittest.TestCase):
             self.assertEqual(client.get('/settings').text,client.get('/settings_C.html').text)
 
     def test_legacy_fallback_is_preserved_without_serving_template_configuration(self):
-        source=(app1.FRONTEND_DIR/'index.html').read_text(encoding='utf-8')
+        source=(service_config.FRONTEND_DIR/'index.html').read_text(encoding='utf-8')
         expected=re.search(r'legacy_clerk_publishable_key\s*=\s*"([^"]+)"',source).group(1)
         with patch.dict(os.environ,{'CLERK_PUBLISHABLE_KEY':''}):
-            self.assertEqual(app1.clerk_configuration()[0],expected)
+            self.assertEqual(auth.clerk_configuration()[0],expected)
         with TestClient(app1.app) as client:
             for filename in frontend.PAGES:
                 self.assertNotIn('legacy_clerk_publishable_key',client.get('/'+filename).text)
 
     def test_unknown_views_cannot_render_template_source(self):
         for name in ['../.env','login.html','index.html?view=editor','arbitrary']:
-            with self.assertRaises(ValueError):frontend.render_page(name,app1.FRONTEND_DIR)
+            with self.assertRaises(ValueError):frontend.render_page(name,service_config.FRONTEND_DIR)
 
     def test_studio_html_versions_loader_and_bundle(self):
         response = TestClient(app1.app).get('/canvas_C.html')
         version = re.search(r'data-studio-build="([0-9a-f]{16})"', response.text).group(1)
         self.assertIn('flow_C.js?studio=' + version, response.text)
         self.assertIn('/studio-assets/studio.css?v=' + version, response.text)
-        script = (app1.FRONTEND_DIR / 'flow_C.js').read_text(encoding='utf-8')
+        script = (service_config.FRONTEND_DIR / 'flow_C.js').read_text(encoding='utf-8')
         self.assertIn('dataset.studioBuild', script)
         self.assertIn("studio.js?v=", script)

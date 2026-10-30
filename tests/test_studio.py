@@ -8,7 +8,11 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import app1
-from backend import studio, integration
+from backend.routers import clips as clip_routes
+from backend.core import jobs as core_jobs
+from backend.core import auth
+from backend import studio
+from backend.services import projects_store
 from backend.generation import contextual_prompt, followup_windows, options
 
 
@@ -16,11 +20,11 @@ class StudioTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        for context in [patch.object(app1, 'JOBS_DIR', Path(temp.name)),
-                        patch.object(app1, 'verify_clerk_token', side_effect=lambda token: token),
+        for context in [patch.object(core_jobs, 'JOBS_DIR', Path(temp.name)),
+                        patch.object(auth, 'verify_clerk_token', side_effect=lambda token: token),
                         patch.dict(os.environ, {'CASCADE_METADATA_STORE': 'local', 'CASCADE_STORAGE': 'local'}),
-                        patch.object(app1, 'requirements_error', return_value=None),
-                        patch.object(app1.worker, 'submit')]:
+                        patch.object(clip_routes, 'requirements_error', return_value=None),
+                        patch.object(core_jobs.worker, 'submit')]:
             value = context.start()
             self.addCleanup(context.stop)
         self.client = TestClient(app1.app)
@@ -29,25 +33,25 @@ class StudioTests(unittest.TestCase):
         self.pid = self.client.post('/api/projects', headers=self.headers, json={'name': 'Studio'}).json()['id']
         self.base = '/api/projects/' + self.pid + '/studio'
         self.jid = 'a' * 32
-        folder = app1.JOBS_DIR / self.jid
+        folder = core_jobs.JOBS_DIR / self.jid
         folder.mkdir()
         (folder / 'source.video').write_bytes(b'original-source')
-        app1.save_json(folder / 'owner.json', {'user_id': 'studio-user', 'project_id': self.pid,
+        core_jobs.save_json(folder / 'owner.json', {'user_id': 'studio-user', 'project_id': self.pid,
             'kind': 'generation', 'source_job': self.jid, 'prompt': 'Funny moments', 'created_at': 1,
             'requested_clip_count': 4, 'engine': 'agent'})
-        app1.save_json(folder / 'results.json', {'clips': [{'start': i*10., 'end': (i+1)*10.,
+        core_jobs.save_json(folder / 'results.json', {'clips': [{'start': i*10., 'end': (i+1)*10.,
             'title': 'Moment ' + str(i+1), 'explanation': 'A surprise and reaction',
             'clip_url': f'/clips/{self.jid}/clip_{i+1}.mp4'} for i in range(4)]})
         self.sid = self.client.get(self.base, headers=self.headers).json()['sessions'][0]['id']
-        self.addCleanup(app1.jobs.clear)
+        self.addCleanup(core_jobs.jobs.clear)
 
     def ref(self, index=0):
         return {'job_id': self.jid, 'clip_index': index}
 
     def test_finished_prefix_can_be_selected_while_later_clips_render(self):
-        result = app1.load_json(app1.JOBS_DIR / self.jid / 'results.json')
-        (app1.JOBS_DIR / self.jid / 'results.json').unlink()
-        app1.jobs[self.jid] = {'state': 'processing', 'clips': result['clips'][:1], 'ready_clip_count': 1}
+        result = core_jobs.load_json(core_jobs.JOBS_DIR / self.jid / 'results.json')
+        (core_jobs.JOBS_DIR / self.jid / 'results.json').unlink()
+        core_jobs.jobs[self.jid] = {'state': 'processing', 'clips': result['clips'][:1], 'ready_clip_count': 1}
         response = self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': [self.ref()]})
         self.assertEqual(response.status_code, 200, response.text)
         response = self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': [self.ref(1)]})
@@ -58,12 +62,12 @@ class StudioTests(unittest.TestCase):
         url = self.base + '/sessions/' + self.sid + '/generate'
         response = self.client.post(url, headers=self.headers, json=payload)
         self.assertEqual(response.status_code, 202, response.text)
-        owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / response.json()['job_id'] / 'owner.json')
         self.assertEqual(owner['exclude_windows'], [[30., 40.], [20., 30.], [10., 20.], [0., 10.]])
-        project = integration.require_project(self.pid, 'studio-user')
+        project = projects_store.require_project(self.pid, 'studio-user')
         from backend.services.sessions import session_clip_windows
         project['studio']['sessions'].append({'id': 'other', 'job_ids': []})
-        self.assertEqual(session_clip_windows(project, 'other', app1, integration, 'studio-user'), [])
+        self.assertEqual(session_clip_windows(project, 'other', core_jobs, projects_store, 'studio-user'), [])
 
     def test_expansion_skips_exclusion_but_similar_and_multi_reference_do_not(self):
         for prompt, refs, expected in [('Expand this moment', [self.ref()], False),
@@ -71,26 +75,26 @@ class StudioTests(unittest.TestCase):
                                        ('Expand these moments', [self.ref(), self.ref(1)], True)]:
             raw = json.dumps({'session_id': self.sid, 'generation': {
                 'prompt': prompt, 'references': refs, 'request_id': 'expansion-test'}})
-            context = studio.prepare_upload(app1, integration, self.pid, 'studio-user', raw)
+            context = studio.prepare_upload(self.pid, 'studio-user', raw)
             self.assertEqual(bool(context['exclude_windows']), expected)
 
     def test_session_exclusion_is_capped_newest_first_and_skips_incomplete_results(self):
         from backend.services.sessions import session_clip_windows
-        folder = app1.JOBS_DIR / self.jid
-        app1.save_json(folder / 'results.json', {'clips': [{'start': i * 10., 'end': i * 10. + 8} for i in range(80)]})
-        project = integration.require_project(self.pid, 'studio-user')
-        windows = session_clip_windows(project, self.sid, app1, integration, 'studio-user')
+        folder = core_jobs.JOBS_DIR / self.jid
+        core_jobs.save_json(folder / 'results.json', {'clips': [{'start': i * 10., 'end': i * 10. + 8} for i in range(80)]})
+        project = projects_store.require_project(self.pid, 'studio-user')
+        windows = session_clip_windows(project, self.sid, core_jobs, projects_store, 'studio-user')
         self.assertEqual(len(windows), 60)
         self.assertEqual(windows[0], [790., 798.])
-        app1.save_json(folder / 'results.json', {'state': 'processing', 'clips': [{'start': 0, 'end': 10}]})
-        self.assertEqual(session_clip_windows(project, self.sid, app1, integration, 'studio-user'), [])
+        core_jobs.save_json(folder / 'results.json', {'state': 'processing', 'clips': [{'start': 0, 'end': 10}]})
+        self.assertEqual(session_clip_windows(project, self.sid, core_jobs, projects_store, 'studio-user'), [])
 
     def test_legacy_generations_and_session_state_survive_reload(self):
         url = self.base + '/sessions/' + self.sid + '/state'
         patch_data = {'references': [self.ref(3)], 'positions': {'clip:' + self.jid + ':3': {'x': 900, 'y': 90}},
                       'viewport': {'x': 10, 'y': 20, 'zoom': .8}}
         self.assertEqual(self.client.patch(url, headers=self.headers, json=patch_data).status_code, 200)
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
         result = self.client.get(self.base, headers=self.headers).json()['sessions'][0]
         self.assertEqual(result['references'], [self.ref(3)])
         self.assertEqual(result['viewport']['zoom'], .8)
@@ -106,10 +110,10 @@ class StudioTests(unittest.TestCase):
         first = self.client.post(url, headers=self.headers, json=payload)
         self.assertEqual(first.status_code, 202, first.text)
         jid = first.json()['job_id']
-        owner = app1.load_json(app1.JOBS_DIR / jid / 'owner.json')
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / jid / 'owner.json')
         self.assertEqual(len(owner['parent_clips']), 2)
         self.assertEqual(owner['studio_session_id'], self.sid)
-        count, context = options(app1.JOBS_DIR / jid)
+        count, context = options(core_jobs.JOBS_DIR / jid)
         self.assertEqual(count, 3)
         self.assertEqual(len(context['references']), 2)
         self.assertIn('ALL these references', contextual_prompt('Find more', context))
@@ -117,7 +121,7 @@ class StudioTests(unittest.TestCase):
         self.assertIsNone(owner['studio_revision_of'])
         again = self.client.post(url, headers=self.headers, json=payload)
         self.assertEqual(again.json()['job_id'], jid)
-        self.assertEqual(app1.worker.submit.call_count, 1)
+        self.assertEqual(core_jobs.worker.submit.call_count, 1)
         state = self.client.get(self.base, headers=self.headers).json()
         self.assertEqual(len(state['sessions']), 1)
         self.assertIn(jid, state['sessions'][0]['job_ids'])
@@ -133,7 +137,7 @@ class StudioTests(unittest.TestCase):
         response = self.client.post(self.base + '/sessions/' + new['id'] + '/generate', headers=self.headers,
             json={'prompt': 'More like that', 'references': [self.ref()], 'request_id': 'bad-ref'})
         self.assertEqual(response.status_code, 400)
-        app1.worker.submit.assert_not_called()
+        core_jobs.worker.submit.assert_not_called()
 
     def test_first_upload_binds_the_session_without_creating_an_extra_session(self):
         pid = self.client.post('/api/projects', headers=self.headers, json={'name': 'Fresh'}).json()['id']
@@ -160,7 +164,7 @@ class StudioTests(unittest.TestCase):
             files={'video':('interview.mp4', b'different-interview-footage', 'video/mp4')})
         self.assertEqual(response.status_code, 202, response.text)
         jid = response.json()['job_id']
-        self.assertEqual((app1.JOBS_DIR/jid/'source.video').read_bytes(), b'different-interview-footage')
+        self.assertEqual((core_jobs.JOBS_DIR/jid/'source.video').read_bytes(), b'different-interview-footage')
         state = self.client.get(self.base, headers=self.headers).json()
         by_id = {session['id']:session for session in state['sessions']}
         self.assertEqual(len(by_id), 2)
@@ -169,12 +173,12 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(by_id[self.sid], original)
 
     def test_old_empty_inherited_sessions_become_uploadable(self):
-        from backend import integration
-        path = integration.project_dir('studio-user')/(self.pid+'.json')
-        project = app1.load_json(path)
+        from backend.services import projects_store
+        path = projects_store.project_dir('studio-user')/(self.pid+'.json')
+        project = core_jobs.load_json(path)
         stale = studio._session('Old inherited session', self.jid)
         project['studio']['sessions'].append(stale)
-        app1.save_json(path, project)
+        core_jobs.save_json(path, project)
         state = self.client.get(self.base, headers=self.headers).json()
         self.assertIsNone(next(s for s in state['sessions'] if s['id']==stale['id'])['source_job'])
         self.assertEqual(next(s for s in state['sessions'] if s['id']==self.sid)['source_job'], self.jid)
@@ -184,7 +188,7 @@ class StudioTests(unittest.TestCase):
             data={'prompt':'Find insights', 'request_id':'wrong-source'},
             files={'video':('new.mp4', b'new-footage', 'video/mp4')})
         self.assertEqual(response.status_code, 400)
-        app1.worker.submit.assert_not_called()
+        core_jobs.worker.submit.assert_not_called()
 
     def test_editor_handoff_limits_listing_to_checked_clips(self):
         selected = [self.ref(0), self.ref(3)]
@@ -205,7 +209,7 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.json(), second.json())
         self.assertEqual(discuss.call_count, 1)
-        app1.worker.submit.assert_not_called()
+        core_jobs.worker.submit.assert_not_called()
         messages = self.client.get(self.base, headers=self.headers).json()['sessions'][0]['messages']
         self.assertEqual(messages[-1]['text'], 'The contrast creates surprise.')
 
@@ -219,13 +223,13 @@ class StudioTests(unittest.TestCase):
             json={'prompt': 'More like clip four', 'references': [self.ref(3)], 'request_id': 'nested-first'})
         self.assertEqual(generated.status_code, 202)
         child = generated.json()['job_id']
-        app1.save_json(app1.JOBS_DIR / child / 'results.json', {'clips': [
+        core_jobs.save_json(core_jobs.JOBS_DIR / child / 'results.json', {'clips': [
             {'start': 40., 'end': 50., 'title': 'New related moment', 'clip_url': f'/clips/{child}/clip_1.mp4'}]})
         combined = [self.ref(0), {'job_id': child, 'clip_index': 0}]
         response = self.client.post(self.base + '/sessions/' + self.sid + '/generate', headers=self.headers,
             json={'prompt': 'Blend their emotional effect', 'references': combined, 'request_id': 'nested-combined'})
         self.assertEqual(response.status_code, 202)
-        owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / response.json()['job_id'] / 'owner.json')
         self.assertEqual([r['job_id'] for r in owner['parent_clips']], [self.jid, child])
         self.assertEqual(owner['source_job'], self.jid)
         self.assertEqual(self.client.put(self.base + '/editor-selection', headers=self.headers,
@@ -240,13 +244,13 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(next(s for s in restored['sessions'] if s['id'] == another['id'])['job_ids'], [])
 
     def test_single_checked_reference_supplies_context_for_short_funny_prompt(self):
-        captions = app1.JOBS_DIR / self.jid / 'clip_2.vtt'
+        captions = core_jobs.JOBS_DIR / self.jid / 'clip_2.vtt'
         captions.write_text('WEBVTT\n\n00:00.000 --> 00:04.000\nBedroom wrestling surprise\n', encoding='utf-8')
         response = self.client.post(self.base + '/sessions/' + self.sid + '/generate', headers=self.headers,
             json={'prompt': 'funnier moments', 'references': [self.ref(1)], 'request_id': 'similar-bedroom'})
         self.assertEqual(response.status_code, 202, response.text)
         jid = response.json()['job_id']
-        count, context = options(app1.JOBS_DIR / jid)
+        count, context = options(core_jobs.JOBS_DIR / jid)
         self.assertEqual(context['job_id'], self.jid)
         self.assertEqual(context['clip_index'], 1)
         self.assertEqual(context['reference_mode'], 'similar')
@@ -266,7 +270,7 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(followup_windows(choices, ref, "Don't expand, find funny moments", 60, 30, 4), [choices[1]])
 
     def test_followup_keeps_parent_and_records_same_session_branch(self):
-        path = app1.JOBS_DIR / self.jid / 'results.json'
+        path = core_jobs.JOBS_DIR / self.jid / 'results.json'
         original = path.read_bytes()
         body = {'prompt': 'More funny clips with this same feel, different footage is fine',
                 'references': [self.ref(1)], 'operation': 'revise', 'request_id': 'revise-selected'}
@@ -274,7 +278,7 @@ class StudioTests(unittest.TestCase):
         response = self.client.post(url, headers=self.headers, json=body)
         self.assertEqual(response.status_code, 202, response.text)
         jid = response.json()['job_id']
-        owner = app1.load_json(app1.JOBS_DIR / jid / 'owner.json')
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / jid / 'owner.json')
         self.assertIsNone(owner['studio_revision_of'])
         self.assertEqual(owner['parent_clips'][0]['clip_index'], 1)
         self.assertEqual(owner['source_job'], self.jid)
@@ -282,7 +286,7 @@ class StudioTests(unittest.TestCase):
         self.assertNotIn('clip_revisions', session)
         self.assertEqual(path.read_bytes(), original)
         self.assertEqual(self.client.post(url, headers=self.headers, json=body).json()['job_id'], jid)
-        self.assertEqual(app1.worker.submit.call_count, 1)
+        self.assertEqual(core_jobs.worker.submit.call_count, 1)
         listing = self.client.get('/api/projects/' + self.pid + '/generations', headers=self.headers).json()['groups']
         self.assertIsNone(next(g for g in listing if g['job_id'] == jid)['studio_revision_of'])
 
@@ -292,7 +296,7 @@ class StudioTests(unittest.TestCase):
             response = self.client.post(url, headers=self.headers, json={
                 'prompt': 'Similar clips', 'references': refs, 'operation': 'revise', 'request_id': 'invalid-revision'})
             self.assertEqual(response.status_code, 400)
-        app1.worker.submit.assert_not_called()
+        core_jobs.worker.submit.assert_not_called()
 
     def test_old_client_editor_check_focuses_clip_and_missing_operation_revises(self):
         self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': [self.ref(2)]})
@@ -301,7 +305,7 @@ class StudioTests(unittest.TestCase):
         response = self.client.post(self.base + '/sessions/' + self.sid + '/generate', headers=self.headers,
             json={'prompt': 'find similar clips to the selected one', 'references': [], 'request_id': 'old-client'})
         self.assertEqual(response.status_code, 202, response.text)
-        owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / response.json()['job_id'] / 'owner.json')
         self.assertIsNone(owner['studio_revision_of'])
         self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': []})
         session = self.client.get(self.base, headers=self.headers).json()['sessions'][0]
@@ -312,13 +316,13 @@ class StudioTests(unittest.TestCase):
             json={'prompt': 'find similar clips to the selected one', 'references': [], 'request_id': 'missing-selected'})
         self.assertEqual(response.status_code, 400)
         self.assertIn('No new generation was started', response.json()['detail'])
-        app1.worker.submit.assert_not_called()
+        core_jobs.worker.submit.assert_not_called()
 
     def test_legacy_single_explicit_reference_creates_branch(self):
         response = self.client.post(self.base + '/sessions/' + self.sid + '/generate', headers=self.headers,
             json={'prompt': 'funnier', 'references': [self.ref(1)], 'request_id': 'legacy-single'})
         self.assertEqual(response.status_code, 202)
-        owner = app1.load_json(app1.JOBS_DIR / response.json()['job_id'] / 'owner.json')
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / response.json()['job_id'] / 'owner.json')
         self.assertIsNone(owner['studio_revision_of'])
 
     def test_shared_selection_drives_ai_editor_and_survives_reload(self):
@@ -328,18 +332,18 @@ class StudioTests(unittest.TestCase):
         state = self.client.get(self.base, headers=self.headers).json()
         self.assertEqual(state['editor_clips'], selected)
         self.assertEqual(state['sessions'][0]['references'], selected)
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
         self.assertEqual(self.client.get(self.base, headers=self.headers).json()['editor_clips'], selected)
         response = self.client.post(self.base + '/sessions/' + self.sid + '/generate', headers=self.headers,
             json={'prompt': 'more like the selected clips', 'references': [], 'request_id': 'shared-pair'})
         self.assertEqual(response.status_code, 202, response.text)
         jid = response.json()['job_id']
-        owner = app1.load_json(app1.JOBS_DIR / jid / 'owner.json')
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / jid / 'owner.json')
         self.assertEqual(owner['studio_revision_targets'], [])
         self.assertEqual(len(owner['parent_clips']), 2)
         clips = [{'start': 41.+i*3, 'end': 43.+i*3, 'title': f'New {i}',
                   'clip_url': f'/clips/{jid}/clip_{i+1}.mp4'} for i in range(4)]
-        app1.save_json(app1.JOBS_DIR / jid / 'results.json', {'clips': clips})
+        core_jobs.save_json(core_jobs.JOBS_DIR / jid / 'results.json', {'clips': clips})
         state = self.client.get(self.base, headers=self.headers).json()
         self.assertEqual(state['editor_clips'], selected)
         self.assertEqual(state['sessions'][0]['references'], state['editor_clips'])
@@ -357,7 +361,7 @@ class StudioTests(unittest.TestCase):
             data={'prompt': 'A different mood', 'request_id': 'other-wave'},
             files={'video': ('other.mp4', b'other-source-video', 'video/mp4')})
         jid = response.json()['job_id']
-        app1.save_json(app1.JOBS_DIR / jid / 'results.json', {'clips': [
+        core_jobs.save_json(core_jobs.JOBS_DIR / jid / 'results.json', {'clips': [
             {'start': 50., 'end': 55., 'title': 'Other session clip', 'clip_url': f'/clips/{jid}/clip_1.mp4'}]})
         selected = [self.ref(0), {'job_id': jid, 'clip_index': 0}]
         self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': selected})
@@ -373,6 +377,6 @@ class StudioTests(unittest.TestCase):
             json={'prompt': 'similar clips', 'references': [self.ref(0)], 'operation': 'revise', 'request_id': 'uncheck-pending'})
         jid = response.json()['job_id']
         self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': []})
-        app1.save_json(app1.JOBS_DIR / jid / 'results.json', {'clips': [
+        core_jobs.save_json(core_jobs.JOBS_DIR / jid / 'results.json', {'clips': [
             {'start': 42., 'end': 48., 'title': 'Updated', 'clip_url': f'/clips/{jid}/clip_1.mp4'}]})
         self.assertEqual(self.client.get(self.base, headers=self.headers).json()['editor_clips'], [])

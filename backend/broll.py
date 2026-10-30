@@ -42,6 +42,8 @@ class Segment(BaseModel):
     duration: float = Field(ge=.05)
     offset: float = Field(default=0, ge=0)
     mode: Literal['fit', 'fill'] = 'fill'
+    transition: Literal['cut', 'dissolve'] = 'cut'
+    transition_duration: float = Field(default=.12, ge=.02, le=.4)
 
 
 def validate_segments(segments, duration):

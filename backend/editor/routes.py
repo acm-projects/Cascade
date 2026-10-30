@@ -6,11 +6,19 @@ from .reframe import start_reframe, reframe_status, subjects_at, reframe_plan
 from .render import export_selected, export
 from .media_routes import get_thumbnail, get_media
 from .chat import chat
+from .audio_assets import list_assets, upload_asset, asset_media
+from .trends import start as start_trends, latest as get_trends, apply_result
 
 router = APIRouter(prefix="/api/projects/{pid}/editor")
+router.add_api_route('/{jid}/{index}/trends', start_trends, methods=['POST'], status_code=202)
+router.add_api_route('/{jid}/{index}/trends', get_trends, methods=['GET'])
+router.add_api_route('/{jid}/{index}/trends/apply', apply_result, methods=['POST'])
 router.add_api_route('/{jid}/{index}/broll/search', stock_search, methods=['GET'])
 router.add_api_route('/{jid}/{index}/broll/{asset_id}/media', stock_media, methods=['GET'])
 router.add_api_route('/{jid}/{index}/broll/{asset_id}/thumbnail', stock_thumbnail, methods=['GET'])
+router.add_api_route('/{jid}/{index}/audio', list_assets, methods=['GET'])
+router.add_api_route('/{jid}/{index}/audio', upload_asset, methods=['POST'])
+router.add_api_route('/{jid}/{index}/audio/{asset_id}/media', asset_media, methods=['GET'])
 router.add_api_route('', editor_index, methods=['GET'])
 router.add_api_route('/{jid}/{index}/reframe', start_reframe, methods=['POST'])
 router.add_api_route('/{jid}/{index}/reframe/{analysis_id}', reframe_status, methods=['GET'])

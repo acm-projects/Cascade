@@ -15,6 +15,11 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import app1
+from backend import main as app_main
+from backend.routers import clips as clip_routes
+from backend.core import jobs as core_jobs
+from backend.core import media as core_media
+from backend.core import auth
 from backend.agent.website import SelectionError
 from backend.cascade_llm import LLMConfigError
 from backend.cascade_stt import TranscriptionError
@@ -47,9 +52,9 @@ class AgentEngineTests(unittest.TestCase):
         os.environ.pop('CASCADE_JOB_TIMEOUT', None)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.directory = patch.object(app1, 'JOBS_DIR', self.root)
+        self.directory = patch.object(core_jobs, 'JOBS_DIR', self.root)
         self.directory.start()
-        self.auth = patch.object(app1, 'verify_clerk_token', side_effect=lambda token: token)
+        self.auth = patch.object(auth, 'verify_clerk_token', side_effect=lambda token: token)
         self.auth.start()
         self.client = TestClient(app1.app)
         self.headers = {'Authorization': 'Bearer ' + USER}
@@ -58,24 +63,24 @@ class AgentEngineTests(unittest.TestCase):
         self.source = self.folder / 'source.video'
         subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=160x120:r=10:d=40',
                         '-c:v', 'libx264', '-f', 'mp4', str(self.source)], check=True, timeout=30)
-        app1.save_json(self.folder / 'owner.json', {'user_id': USER, 'user_folder': 'users'})
-        app1.jobs[JOB] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
+        core_jobs.save_json(self.folder / 'owner.json', {'user_id': USER, 'user_folder': 'users'})
+        core_jobs.jobs[JOB] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
 
     def tearDown(self):
-        app1.jobs.pop(JOB, None)
+        core_jobs.jobs.pop(JOB, None)
         self.env.stop()
         self.auth.stop()
         self.directory.stop()
         self.temp.cleanup()
 
     def run_job(self, select, search='four funny clips', target=15):
-        with patch.object(app1, 'select_with_agent', side_effect=select):
-            app1.process_upload(JOB, self.source, search, 'both', target)
-        return app1.jobs[JOB]
+        with patch.object(clip_routes, 'select_with_agent', side_effect=select):
+            clip_routes.process_upload(JOB, self.source, search, 'both', target)
+        return core_jobs.jobs[JOB]
 
     # ------------------------------------------------------------------ the happy path
     def test_playable_prefix_is_published_before_the_batch_finishes(self):
-        original = app1.update_job
+        original = core_jobs.update_job
         published = []
         def capture(job_id, **fields):
             result = original(job_id, **fields)
@@ -83,16 +88,16 @@ class AgentEngineTests(unittest.TestCase):
                 self.assertFalse((self.folder / 'results.json').exists())
                 published.append([clip['clip_id'] for clip in fields['clips']])
             return result
-        with patch.object(app1, 'update_job', side_effect=capture):
+        with patch.object(core_jobs, 'update_job', side_effect=capture):
             self.assertEqual(self.run_job(fake_agent({}))['state'], 'done')
         self.assertTrue(published)
         for clips in published:
             self.assertEqual(clips, [f'{JOB}:{i}' for i in range(len(clips))])
-        self.assertIn('first_clip_ready_seconds', app1.load_json(self.folder / 'results.json'))
+        self.assertIn('first_clip_ready_seconds', core_jobs.load_json(self.folder / 'results.json'))
     def test_session_exclusions_survive_post_selection_transforms_and_persist(self):
-        owner = app1.load_json(self.folder / 'owner.json')
+        owner = core_jobs.load_json(self.folder / 'owner.json')
         owner['exclude_windows'] = [[2., 11.]]
-        app1.save_json(self.folder / 'owner.json', owner)
+        core_jobs.save_json(self.folder / 'owner.json', owner)
         select = fake_agent({})
         received = {}
         def stub(*args, **kwargs):
@@ -104,7 +109,7 @@ class AgentEngineTests(unittest.TestCase):
         self.assertEqual(job['state'], 'done')
         self.assertEqual(len(job['clips']), 3)
         self.assertIn('3 new clips; others were already in this session', job['selection_note'])
-        saved = app1.load_json(self.folder / 'results.json')
+        saved = core_jobs.load_json(self.folder / 'results.json')
         self.assertEqual(saved['intent'], 'general')
         self.assertTrue(all(clip['start'] >= 11 for clip in saved['clips']))
 
@@ -144,7 +149,7 @@ class AgentEngineTests(unittest.TestCase):
         # the page polls /api/features/<job>; it must carry the steps while running AND after a restart
         live = self.client.get('/api/features/' + JOB, headers=self.headers).json()
         self.assertEqual(live['steps_log'], job['steps_log'])
-        app1.jobs.clear()
+        core_jobs.jobs.clear()
         restored = self.client.get('/api/features/' + JOB, headers=self.headers).json()
         self.assertEqual((restored['state'], restored['steps_log']), ('done', job['steps_log']))
         self.assertEqual(self.client.get('/jobs/' + JOB, headers=self.headers).json()['steps_log'], job['steps_log'])
@@ -152,23 +157,23 @@ class AgentEngineTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/features/' + JOB, headers={'Authorization': 'Bearer user-b'}).status_code, 404)
 
     def test_the_step_log_is_capped(self):
-        many = tuple(f'step {i}' for i in range(app1.MAX_STEPS + 50))
+        many = tuple(f'step {i}' for i in range(clip_routes.MAX_STEPS + 50))
         job = self.run_job(fake_agent({}, steps=many))
         self.assertEqual(job['state'], 'done')
-        self.assertLessEqual(len(job['steps_log']), app1.MAX_STEPS)
+        self.assertLessEqual(len(job['steps_log']), clip_routes.MAX_STEPS)
         self.assertIn('Saving clip 4/4...', job['steps_log'])  # the newest steps are the ones kept
         self.assertNotIn('step 0', job['steps_log'])         # the oldest were dropped
 
     # ------------------------------------------------------------------ time limit
     def test_there_is_no_default_time_limit_but_an_optional_safety_net(self):
         ticks = iter([0.0] + [5000.0] * 10000)  # the job "takes" over an hour
-        with patch.object(app1.time, 'monotonic', side_effect=lambda: next(ticks)):
+        with patch.object(clip_routes.time, 'monotonic', side_effect=lambda: next(ticks)):
             job = self.run_job(fake_agent({}))
         self.assertEqual(job['state'], 'done')  # the old 900s default would have stopped this
 
-        app1.jobs[JOB] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
+        core_jobs.jobs[JOB] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
         ticks = iter([0.0] + [5000.0] * 10000)
-        with patch.object(app1.time, 'monotonic', side_effect=lambda: next(ticks)), \
+        with patch.object(clip_routes.time, 'monotonic', side_effect=lambda: next(ticks)), \
              patch.dict(os.environ, {'CASCADE_JOB_TIMEOUT': '900'}):
             job = self.run_job(fake_agent({}))
         self.assertEqual(job['state'], 'error')
@@ -180,7 +185,7 @@ class AgentEngineTests(unittest.TestCase):
 
         def select(video_path, duration, search, target, progress, stage):
             progress('Agent turn 1/8')
-            app1.jobs[JOB]['cancel_requested'] = True  # the user clicks "Stop processing"
+            core_jobs.jobs[JOB]['cancel_requested'] = True  # the user clicks "Stop processing"
             progress('Tool call: search_video(...)')
             reached.append('past the stop')            # must never run
             return [], [], {}
@@ -196,7 +201,7 @@ class AgentEngineTests(unittest.TestCase):
         for error in (TranscriptionError('Deepgram rejected the API key (check DEEPGRAM_API_KEY in .env).'),
                       LLMConfigError("ANTHROPIC_API_KEY is not set (LLM_PROVIDER is 'anthropic')."),
                       SelectionError('The agent could not pick any clips.')):
-            self.assertEqual(app1.processing_error(error, 'selecting'), str(error))
+            self.assertEqual(core_jobs.processing_error(error, 'selecting'), str(error))
 
     def test_provider_http_errors_become_actionable_without_leaking_details(self):
         class ApiError(Exception):
@@ -205,11 +210,11 @@ class AgentEngineTests(unittest.TestCase):
                 self.status_code = status
 
         for status, needle in ((401, 'rejected the API key'), (403, 'rejected the API key'), (429, 'rate limiting')):
-            message = app1.processing_error(ApiError(status), 'selecting')
+            message = core_jobs.processing_error(ApiError(status), 'selecting')
             self.assertIn(needle, message)
             self.assertNotIn('sk-secret', message)
         # a validation error from our own code keeps its own status and text
-        self.assertEqual(app1.processing_error(app1.HTTPException(401, 'Please sign in again.'), 'x'), 'Please sign in again.')
+        self.assertEqual(core_jobs.processing_error(core_jobs.HTTPException(401, 'Please sign in again.'), 'x'), 'Please sign in again.')
 
     def test_unexpected_errors_are_generic_and_never_show_internals(self):
         def select(*args):
@@ -226,15 +231,15 @@ class AgentEngineTests(unittest.TestCase):
     # ------------------------------------------------------------------ parallel rendering and step timings
     def test_render_worker_counts_follow_the_machine(self):
         for cores, clips, workers, threads in ((2, 4, 1, 2), (4, 4, 2, 2), (8, 4, 4, 2), (16, 4, 4, 4), (32, 2, 2, 16), (None, 4, 1, 1)):
-            with patch.object(app1.os, 'cpu_count', return_value=cores):
-                self.assertEqual(app1.render_workers(clips), workers, (cores, clips))
-                self.assertEqual(app1.encoder_threads(workers), threads, (cores, clips))
+            with patch.object(core_media.os, 'cpu_count', return_value=cores):
+                self.assertEqual(core_media.render_workers(clips), workers, (cores, clips))
+                self.assertEqual(core_media.encoder_threads(workers), threads, (cores, clips))
 
     def test_clips_render_in_parallel_but_come_back_in_rank_order(self):
         import threading
         import time as clock
         lock, running, peak = threading.Lock(), [0], [0]
-        real = app1.render_clip
+        real = core_media.render_clip
 
         def slow_render(video_path, selection, output_path, threads):
             with lock:
@@ -247,7 +252,7 @@ class AgentEngineTests(unittest.TestCase):
                 with lock:
                     running[0] -= 1
 
-        with patch.object(app1.os, 'cpu_count', return_value=8), patch.object(app1, 'render_clip', side_effect=slow_render):
+        with patch.object(core_media.os, 'cpu_count', return_value=8), patch.object(core_media, 'render_clip', side_effect=slow_render):
             job = self.run_job(fake_agent({}))
         self.assertEqual(job['state'], 'done')
         self.assertGreater(peak[0], 1)  # more than one encode ran at once
@@ -258,7 +263,7 @@ class AgentEngineTests(unittest.TestCase):
         def broken(video_path, selection, output_path, threads):
             raise RuntimeError('ffmpeg exploded at /secret/path with key sk-secret-123')
 
-        with patch.object(app1, 'render_clip', side_effect=broken):
+        with patch.object(core_media, 'render_clip', side_effect=broken):
             job = self.run_job(fake_agent({}))
         self.assertEqual(job['state'], 'error')
         self.assertNotIn('sk-secret', job['message'])
@@ -270,19 +275,19 @@ class AgentEngineTests(unittest.TestCase):
         self.assertEqual(job['steps_elapsed'], sorted(job['steps_elapsed']))  # never goes backwards
         saved = json.loads((self.folder / 'results.json').read_text())
         self.assertEqual(saved['steps_elapsed'], job['steps_elapsed'])
-        restored = (app1.jobs.clear(), self.client.get('/api/features/' + JOB, headers=self.headers).json())[1]
+        restored = (core_jobs.jobs.clear(), self.client.get('/api/features/' + JOB, headers=self.headers).json())[1]
         self.assertEqual(restored['steps_elapsed'], job['steps_elapsed'])
 
     def test_model_warmup_can_be_switched_off_and_never_breaks_startup(self):
-        with patch.object(app1.threading, 'Thread') as thread:
+        with patch.object(app_main.threading, 'Thread') as thread:
             with patch.dict(os.environ, {'CASCADE_WARM_MODELS': '0'}):
-                app1.start_model_warmup()
+                app_main.start_model_warmup()
             thread.assert_not_called()
             with patch.dict(os.environ, {'CASCADE_WARM_MODELS': '1'}):
-                app1.start_model_warmup()
+                app_main.start_model_warmup()
             thread.assert_called_once()
         with patch('backend.video_search.router.load_models', side_effect=RuntimeError('no model files')):
-            app1.warm_models()  # a failed warm-up is logged, not raised
+            app_main.warm_models()  # a failed warm-up is logged, not raised
 
 
 if __name__ == '__main__':

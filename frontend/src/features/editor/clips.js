@@ -15,7 +15,8 @@ export function flattenClips(index) {
   return index.sessions.flatMap((session) =>
     session.clips.map((clip) => ({
       ...clip, sessionName: session.session_name || session.prompt,
-      studioSession: session.session_name, waveId: session.job_id, wavePrompt: session.prompt,
+      studioSession: session.session_name, studioSessionId: session.session_id,
+      waveId: session.job_id, wavePrompt: session.prompt,
     })));
 }
 

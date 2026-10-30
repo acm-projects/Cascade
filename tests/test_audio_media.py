@@ -14,6 +14,10 @@ import numpy as np
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
 import app1
+from backend.routers import clips as clip_routes
+from backend.core import jobs as core_jobs
+from backend.core import storage as core_storage
+from backend.core import auth
 from backend.media import probe_media, normalize_media, validate_filename
 from backend.agent import index as indexing
 from backend.agent.tools import ToolBox
@@ -38,13 +42,13 @@ class AudioMediaTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for context in [patch.object(app1,'JOBS_DIR',self.root),
+        for context in [patch.object(core_jobs,'JOBS_DIR',self.root),
                         patch.dict(os.environ,{'CASCADE_METADATA_STORE':'local','CASCADE_STORAGE':'local'}),
-                        patch.object(app1,'verify_clerk_token',side_effect=lambda token:token),
-                        patch.object(app1,'requirements_error',return_value=None),
-                        patch.object(app1.worker,'submit')]:
+                        patch.object(auth,'verify_clerk_token',side_effect=lambda token:token),
+                        patch.object(clip_routes,'requirements_error',return_value=None),
+                        patch.object(core_jobs.worker,'submit')]:
             context.start();self.addCleanup(context.stop)
-        self.addCleanup(app1.jobs.clear)
+        self.addCleanup(core_jobs.jobs.clear)
         self.client=TestClient(app1.app);self.addCleanup(self.client.close)
         self.headers={'Authorization':'Bearer audio-user'}
         self.pid=self.client.post('/api/projects',headers=self.headers,json={'name':'Audio test'}).json()['id']
@@ -57,10 +61,10 @@ class AudioMediaTests(unittest.TestCase):
         jid=response.json()['job_id']
         transcript=[{'start':0,'end':3,'text':'An insightful podcast moment','speaker':0}]
         picks=[{'start':.5,'end':2.5,'title':'Insight','explanation':'A useful takeaway'}]
-        with patch.object(app1,'select_with_agent',return_value=(picks,transcript,{})):
-            app1.process_upload(jid,self.root/jid/'source.video','Find an insightful moment','both',15)
-        self.assertEqual(app1.jobs[jid]['state'],'done',app1.jobs[jid])
-        return jid,app1.jobs[jid]['clips'][0]
+        with patch.object(clip_routes,'select_with_agent',return_value=(picks,transcript,{})):
+            clip_routes.process_upload(jid,self.root/jid/'source.video','Find an insightful moment','both',15)
+        self.assertEqual(core_jobs.jobs[jid]['state'],'done',core_jobs.jobs[jid])
+        return jid,core_jobs.jobs[jid]['clips'][0]
 
     def test_mp3_podcast_through_generation_editor_and_native_exports(self):
         jid,clip=self.generate(self.audio)
@@ -134,11 +138,11 @@ class AudioMediaTests(unittest.TestCase):
         response=self.client.post('/upload',headers=self.headers,data={'project_id':self.pid,'search':'test'},
             files={'video':('broken.mp3',b'not actual audio','audio/mpeg')})
         jid=response.json()['job_id']
-        with patch.object(app1,'select_with_agent') as ai:
-            app1.process_upload(jid,self.root/jid/'source.video','test','both',15)
+        with patch.object(clip_routes,'select_with_agent') as ai:
+            clip_routes.process_upload(jid,self.root/jid/'source.video','test','both',15)
             ai.assert_not_called()
-        self.assertEqual(app1.jobs[jid]['state'],'error')
-        self.assertIn('corrupted',app1.jobs[jid]['message'])
+        self.assertEqual(core_jobs.jobs[jid]['state'],'error')
+        self.assertIn('corrupted',core_jobs.jobs[jid]['message'])
 
     def test_audio_index_and_agent_tools_never_extract_frames(self):
         cache=self.root/'cache';cache.mkdir()
@@ -161,7 +165,7 @@ class AudioMediaTests(unittest.TestCase):
 
     def test_s3_audio_content_types_and_owner_scoped_source_backup(self):
         jid,clip=self.generate(self.audio)
-        owner=app1.load_json(self.root/jid/'owner.json');owner['user_folder']='users'
+        owner=core_jobs.load_json(self.root/jid/'owner.json');owner['user_folder']='users'
         client=MagicMock()
         with patch.object(storage,'uses_local_storage',return_value=False),patch.object(storage,'s3_bucket',return_value='bucket'),patch.object(storage,'s3_client',return_value=client):
             source=storage.upload_source_media(self.root/jid,jid,owner)
@@ -170,12 +174,12 @@ class AudioMediaTests(unittest.TestCase):
             storage.upload_clip_files(self.root/jid,jid,'clip_1.mp3','clip_1.vtt')
             self.assertEqual(client.upload_file.call_args_list[-2].kwargs['ExtraArgs']['ContentType'],'audio/mpeg')
         # Same metadata adapter backs local fixtures and Neon JSON records; no new table.
-        self.assertEqual(app1.load_json(self.root/jid/'owner.json')['media_kind'],'audio')
+        self.assertEqual(core_jobs.load_json(self.root/jid/'owner.json')['media_kind'],'audio')
         owner.update(source)
-        app1.save_json(self.root/jid/'owner.json',owner)
+        core_jobs.save_json(self.root/jid/'owner.json',owner)
         (self.root/jid/'source.video').unlink()
         client.download_file.side_effect=lambda bucket,key,target: Path(target).write_bytes(self.audio.read_bytes())
-        with patch.object(app1,'s3_client',return_value=client):
+        with patch.object(core_storage,'s3_client',return_value=client):
             url=f'/api/projects/{self.pid}/source/{jid}'
             self.assertEqual(self.client.get(url,headers={'Authorization':'Bearer other'}).status_code,404)
             client.download_file.assert_not_called()

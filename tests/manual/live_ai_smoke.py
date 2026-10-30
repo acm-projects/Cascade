@@ -13,6 +13,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import app1
+from backend.core import jobs as core_jobs
+from backend.routers import clips as clip_routes
 original = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
 
 with tempfile.TemporaryDirectory() as directory:
@@ -30,12 +32,12 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240:r=10:d=4',
                         '-c:v', 'libx264', '-f', 'mp4', str(source)], check=True, timeout=30)
     (folder / 'owner.json').write_text(json.dumps({'user_id': 'local-smoke', 'user_folder': 'users'}))
-    app1.jobs[job_id] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
+    core_jobs.jobs[job_id] = {'state': 'queued', 'message': 'Waiting', 'clips': []}
     start = time.monotonic()
-    with patch.object(app1, 'JOBS_DIR', root), patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}):
+    with patch.object(core_jobs, 'JOBS_DIR', root), patch.dict(os.environ, {'CASCADE_STORAGE': 'local'}):
         search = json.loads((original.parent / 'owner.json').read_text()).get('prompt', 'Find an interesting scene') if original else 'Find the blue screen'
-        app1.process_upload(job_id, source, search, 'both' if original else 'visual', 30 if original else 15)
-    result = app1.jobs.pop(job_id)
+        clip_routes.process_upload(job_id, source, search, 'both' if original else 'visual', 30 if original else 15)
+    result = core_jobs.jobs.pop(job_id)
     print(json.dumps({'elapsed_seconds': round(time.monotonic() - start, 1),
                       'state': result['state'], 'message': result['message'], 'clips': len(result['clips'])}))
     assert result['state'] == 'done', result['message']

@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from backend import broll as stocklib
 from .runtime import jobs_dir, metadata_exists, s3_client
-from backend.integration import project_dir, selected_clip
+from backend.services.projects_store import project_dir, selected_clip
 
 def selected(pid, jid, index, user):
     if index < 0:
