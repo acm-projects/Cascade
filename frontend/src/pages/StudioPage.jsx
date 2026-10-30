@@ -11,6 +11,7 @@ import SessionBar from "../features/studio/SessionBar";
 import ChatPanel from "../features/studio/ChatPanel";
 import StudioCanvas from "../features/studio/StudioCanvas";
 import MediaPreview from "../features/studio/MediaPreview";
+import ReferenceChips from "../features/studio/ReferenceChips";
 import { isSupportedMedia } from '../utils/media';
 import useStudioData from "../features/studio/useStudioData";
 import { nodeTypes } from "../features/studio/nodes";
@@ -47,6 +48,8 @@ function StudioPage() {
   const [preview, setPreview] = useState(null);         // the "watch it big" pop-up: { ref } for a clip, or { path | file, title }
   const [draft, setDraft] = useState("");               // the chat box text
   const [sending, setSending] = useState(false);
+  const [leftOut, setLeftOut] = useState([]);           // picked clips switched off (chips) for the next prompt
+  const [highlighted, setHighlighted] = useState(null); // the clip whose chip is hovered: it glows on the canvas
   // Re-sending the exact same prompt after a network hiccup reuses its request id, so the
   // backend never starts (and charges for) a second job
   const submission = useRef(null);
@@ -54,9 +57,14 @@ function StudioPage() {
   // useMemo: these only change when the backend data does, so the canvas isn't rebuilt every render
   const session = useMemo(() => studio?.sessions.find((s) => s.id === sessionId) ?? null, [studio, sessionId]);
   const editorClips = useMemo(() => studio?.editor_clips ?? [], [studio]);
-  const references = useMemo(
+  const picked = useMemo(
     () => (session ? editorClips.filter((ref) => session.job_ids.includes(ref.job_id)) : []),
     [session, editorClips]
+  );
+  // The picked clips that guide the next prompt: all of them, minus the chips you switched off
+  const references = useMemo(
+    () => picked.filter((ref) => !leftOut.some((item) => sameRef(item, ref))),
+    [picked, leftOut]
   );
   const sourceName = session ? groups.find((g) => g.job_id === session.source_job)?.source_name : undefined;
 
@@ -109,8 +117,8 @@ function StudioPage() {
   const actions = useMemo(() => ({
     editorClips, pendingFile, sourceName,
     onChooseFile: chooseFile, onPreviewSource: previewSource, onToggle: toggleClip,
-    onPreview: previewClip, onStop: stop, onRetry: retry, onReuse: setDraft,
-  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry]);
+    onPreview: previewClip, onStop: stop, onRetry: retry, onReuse: setDraft, highlighted,
+  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry, highlighted]);
 
   const graph = useMemo(
     () => (session ? buildGraph(session, groups, actions) : { nodes: [], edges: [] }),
@@ -172,6 +180,7 @@ function StudioPage() {
         if (location.state?.file) navigate(location.pathname, { replace: true, state: null }); // a reload won't bring it back
       }
       submission.current = null;
+      setLeftOut([]); // the next prompt starts with every picked clip switched on again
       await refresh();
       return true;
     } catch (err) {
@@ -271,6 +280,14 @@ function StudioPage() {
     };
   }
 
+  // One chip per picked clip of this session, named like its box on the canvas ("P1 · Clip 2")
+  const chips = picked.map((ref) => {
+    const node = graph.nodes.find((n) => n.type === "clip" && sameRef(n.data.ref, ref));
+    return { ref, label: node ? `P${node.data.number} · Clip ${node.data.label}` : "Clip", title: node?.data.clip.title };
+  });
+  const toggleChip = (ref) => setLeftOut((list) =>
+    list.some((item) => sameRef(item, ref)) ? list.filter((item) => !sameRef(item, ref)) : [...list, ref]);
+
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
   let note;
   if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
@@ -299,7 +316,8 @@ function StudioPage() {
       </SessionBar>
 
       <div className="studio-body">
-        <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note} />
+        <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note}
+          chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
         <div className="studio-canvas-frame">
           <StudioCanvas nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onDropFile={chooseFile} onNodeDragStop={savePosition} />

@@ -122,3 +122,33 @@
   font-size: 12px;
   opacity: 0.75;
 }
+
+/* Picked clips that guide the next prompt (ReferenceChips) */
+.reference-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reference-chip {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 10px;
+  border: 1px solid var(--color-wood-dark);
+  border-radius: 999px;
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.reference-chip.is-on {
+  border-color: var(--color-leaf);
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+  opacity: 1;
+}

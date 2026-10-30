@@ -12,7 +12,8 @@ const MAX_CLIPS = 12;
 //   disabled         - true while waiting for an answer
 //   text, onTextChange - optional: let the page fill the box (e.g. "Reuse prompt")
 //   note             - optional line under the box (e.g. "2 picked clips will guide this prompt")
-function ChatPanel({ messages, onSend, disabled = false, text: controlledText, onTextChange, note }) {
+//   chips            - optional things shown just above the box (the ReferenceChips)
+function ChatPanel({ messages, onSend, disabled = false, text: controlledText, onTextChange, note, chips }) {
   const [ownText, setOwnText] = useState("");
   const text = controlledText ?? ownText;
   const setText = onTextChange ?? setOwnText;
@@ -61,6 +62,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
       </div>
 
       <form className="chat-panel-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        {chips}
         <textarea
           className="chat-panel-input"
           rows={3}
