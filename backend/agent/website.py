@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
@@ -17,6 +18,9 @@ from typing import Any, Callable
 from backend.cascade_llm import LLMConfigError, make_client, selected_model, selected_provider
 
 from .agent import run_agent
+from .intent import classify_request
+from .fast_selection import MAX_TRANSCRIPT_CHARS, MAX_BATCH_CLIPS, run_transcript_selection
+from .chunks import format_transcript
 from .index import build_index
 from .summaries import ensure_summaries
 from .tools import MAX_CLIP_SECONDS, TARGET_CLIPS, ToolBox
@@ -28,6 +32,13 @@ logger = logging.getLogger("cascade_agent")
 WEBSITE_MIN_CLIP_SECONDS = 8.0
 WEBSITE_MAX_CLIP_FACTOR = 1.5
 MAX_EXPLANATION_CHARS = 700
+
+
+def transcript_first_request(prompt: str) -> bool:
+    """Spoken/topic searches can avoid the full CLIP index; inspection still uses real frames."""
+    if re.search(r'\b(visual|visually|fight|fighting|fall|falls|chase|explosion|dance|action|scene|footage)\b|on screen', prompt, re.I):
+        return False
+    return bool(re.search(r'\b(said|says|speech|transcript|talk|talks|discuss|discusses|explain|explains|explanation|interview|documentary|history|historical|healthcare|news|topic)\b', prompt, re.I))
 
 
 class SelectionError(Exception):
@@ -72,6 +83,9 @@ def select_with_agent(
     progress: Callable[[str], None],
     stage: Callable[[str], Any],
     requested_count: int = TARGET_CLIPS,
+    exclude_windows: list | None = None,
+    request_prompt: str | None = None,
+    references: list | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Run the agent on a video. Returns (clips, transcript, metadata).
 
@@ -88,14 +102,22 @@ def select_with_agent(
     # Frames and the temporary MP3 live in a scratch folder, never in the job's folder; the index
     # itself (embeddings, transcript) is cached by file hash for follow-up prompts.
     with tempfile.TemporaryDirectory(prefix="agent_index_") as scratch:
-        index = build_index(video_path, Path(scratch), progress=progress)
+        speech_first = transcript_first_request(request_prompt if request_prompt is not None else search)
+        index = build_index(video_path, Path(scratch), progress=progress, **({'visual': False} if speech_first else {}))
 
-    stage("Transcript summaries")
-    ensure_summaries(index, progress=progress)
+    fast_batch = (speech_first and bool(index.transcript) and requested_count <= MAX_BATCH_CLIPS
+                  and len(format_transcript(index.transcript)) <= MAX_TRANSCRIPT_CHARS)
+    if not fast_batch:
+        stage("Transcript summaries")
+        ensure_summaries(index, progress=progress)
 
     stage("AI agent selection")
-    toolbox = ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len, target_clips=requested_count)
-    result = run_agent(toolbox, search, progress=progress, target_seconds=target)
+    intent = classify_request(request_prompt if request_prompt is not None else search)
+    toolbox = ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len,
+                      target_clips=requested_count, intent=intent, exclude_windows=exclude_windows,
+                      references=references, require_count=True)
+    result = (run_transcript_selection(toolbox, search, progress) if fast_batch else
+              run_agent(toolbox, search, progress=progress, target_seconds=target))
 
     clips = []
     for pick in result["suggestions"]:
@@ -108,10 +130,15 @@ def select_with_agent(
                 "end": min(pick["end"], duration),
                 "title": pick["title"],
                 "explanation": explanation[:MAX_EXPLANATION_CHARS],
+                **({'reference_matches': pick['reference_matches']} if pick.get('reference_matches') else {}),
             }
         )
 
     metadata = {
+        "intent": intent,
+        "index_mode": getattr(index, 'index_mode', 'multimodal'),
+        "index_timings": getattr(index, 'timings', {}),
+        "selection_mode": result.get('selection_mode', 'tool-agent'),
         "provider": selected_provider(),
         "model": selected_model(),
         "selection_note": _selection_note(result, len(clips), requested_count),
@@ -119,4 +146,10 @@ def select_with_agent(
         "candidates_considered": result["candidates_considered"],
         "agent_iterations": result["iterations"],
     }
+    if exclude_windows and len(clips) < requested_count:
+        metadata['selection_note'] = (f"Found {len(clips)} new clips; others were already in this session. "
+                                      + metadata['selection_note'])
+    if len(references or []) > 1 and len(clips) < requested_count:
+        metadata['selection_note'] = (f'Found {len(clips)} of {requested_count} requested combined matches. '
+            'The remaining candidates did not form distinct new moments matching all selected references.')
     return clips, index.transcript, metadata

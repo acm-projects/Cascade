@@ -6,10 +6,11 @@ import woodPill from "../assets/figma/wood-pill.png";
 import woodGreen from "../assets/figma/wood-green-btn.png";
 import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
-import { useProject } from "../context/ProjectContext";
+import { useProject } from "../context/projectContextValue";
 import useApi from "../api/useApi";
 import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
 import ProjectCard from "../components/ProjectCard";
+import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
@@ -48,6 +49,7 @@ function ProjectsPage() {
   const [error, setError] = useState(null);
 
   // Bulk deletion only runs after the user confirms the Trash dialog.
+  const [creatingNew, setCreatingNew] = useState(false);
   const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
   const [updating, setUpdating] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -84,16 +86,16 @@ function ProjectsPage() {
     setSearchParams(id === "all" ? {} : { view: id });
   }
 
-  // Creates a real (empty) project on the backend and opens its AI Studio, where you pick the video.
-  // TEMPORARY until the "New Project" pop-up (ticket 2.6) lets you name it first.
-  async function handleNewProject() {
-    try {
-      const created = await api.createProject("Untitled project");
-      openProject(created);
-      navigate(`/projects/${created.id}/studio`);
-    } catch (err) {
-      toast.show(`Couldn't create a project: ${err.message}`, "error");
-    }
+  function handleNewProject() {
+    setCreatingNew(true);
+  }
+
+  // From the New Project pop-up: create the project, then open its AI Studio. A picked video goes along
+  // and uploads there with the first prompt.
+  async function createProject(name, file) {
+    const created = await api.createProject(name);
+    openProject(created);
+    navigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined });
   }
 
   function handleOpen(project) {
@@ -243,6 +245,7 @@ function ProjectsPage() {
         </main>
       </div>
 
+      {creatingNew && <NewProjectModal onClose={() => setCreatingNew(false)} onCreate={createProject} />}
       {emptyTrashOpen && (
         <Modal title="Empty trash?" onClose={() => !deleting && setEmptyTrashOpen(false)}>
           <p className="projects-delete-text">

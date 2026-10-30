@@ -1,6 +1,9 @@
 """Horizontal branch/history Chrome checks against project_browser_server.py.
 Selection and identity are mocked; HTTP persistence, media cuts and playback are real.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import base64
 import json

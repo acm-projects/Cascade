@@ -3,6 +3,7 @@ import useApi from "../../api/useApi";
 import Spinner from "../../components/ui/Spinner";
 import { formatTime } from "../../utils/time";
 import { clipMediaPath } from "./clips";
+import { dragFraming, frameSize } from "./playerMath";
 import "./ClipPlayer.css";
 import { timelineClock } from "./reelTiming";
 
@@ -12,7 +13,9 @@ const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 
 //   clip  - { job_id, clip_index } ; info - { duration, width, height, cues } ; state - the draft
 //   controlRef - optional useRef() from the page: gets { seek(t), getTime(), isReady() } so the timeline
 //                can move the playhead and jump the video
-function ClipPlayer({ projectId, clip, info, state, controlRef }) {
+//   framing    - optional { patch, recordUndo } from useClipDraft: in Fill mode you can then drag the video
+//                to choose what stays in the frame (one undo step per drag)
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -42,6 +45,10 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   const [error, setError] = useState(null);
   const [time, setTime] = useState(state.start);
   const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [loop, setLoop] = useState(true);
+  const drag = useRef(null);        // the Fill-mode drag in progress
+  const justDragged = useRef(false); // so letting go after a drag doesn't also play/pause
   const [stage, setStage] = useState({ width: 0, height: 0 });
 
   // Download the clip with the sign-in token (videos can't send it themselves)
@@ -86,7 +93,21 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
     };
   }, [controlRef, showEdited, clock]);
 
-  // Stay inside the trim: jump back to the start when the end is reached
+  // Space = play / pause (but not while typing or when a button has focus: Space already "clicks" those)
+  useEffect(() => {
+    function handleKey(event) {
+      if (event.key !== " " || event.target.closest?.("input, textarea, select, button, [contenteditable]")) return;
+      const video = videoRef.current;
+      if (!video) return;
+      event.preventDefault();
+      if (video.paused) video.play();
+      else video.pause();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  // Stay inside the trim: at the end, go back to the start (and keep playing only if Loop is on)
   function handleTimeUpdate() {
     const video = videoRef.current;
     if (showEdited) { setTime(clock.source(video.currentTime)); return; }
@@ -95,7 +116,18 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
     setTime(video.currentTime);
   }
 
+  // When the trim reaches the very end of the file, the browser stops the video by itself first
+  function handleEnded() {
+    const video = videoRef.current;
+    video.currentTime = showEdited || view === "original" ? 0 : state.start;
+    if (loop) video.play();
+  }
+
   function togglePlay() {
+    if (justDragged.current) {
+      justDragged.current = false;
+      return;
+    }
     const video = videoRef.current;
     if (video.paused) video.play().catch(e => setRenderError(e.message));
     else video.pause();
@@ -108,8 +140,37 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
   const audioOnly = info.has_video === false;
   const ratio = view === "original" ? info.width / info.height : audioOnly ? 16/9 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
   // The biggest frame of this shape that fits the space
-  const frameWidth = Math.min(stage.width, stage.height * ratio);
-  const frameHeight = frameWidth / ratio;
+  const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
+
+  const canDrag = Boolean(framing) && !audioOnly && view === "edited" && composition.mode === "fill";
+
+  // ---------- Drag to reposition (Fill) ----------
+  function startDrag(event) {
+    if (!canDrag || event.button !== 0) return;
+    drag.current = { x: event.clientX, y: event.clientY, from: { x: composition.x, y: composition.y }, before: state, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event) {
+    const current = drag.current;
+    if (!current) return;
+    const dx = event.clientX - current.x;
+    const dy = event.clientY - current.y;
+    if (!current.moved && Math.hypot(dx, dy) < 4) return; // a small wobble is still a click
+    current.moved = true;
+    const video = videoRef.current;
+    const next = dragFraming(current.from, dx, dy, { width: frameWidth, height: frameHeight },
+      { width: video.videoWidth, height: video.videoHeight });
+    framing.patch((s) => ({ ...s, composition: { ...s.composition, ...next } }));
+  }
+
+  function endDrag() {
+    const current = drag.current;
+    drag.current = null;
+    if (!current?.moved) return;
+    framing.recordUndo(current.before);
+    justDragged.current = true;
+  }
 
   return (
     <div className="clip-player">
@@ -117,16 +178,20 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
         {['original', 'edited'].map(mode => <button key={mode} role="tab" aria-selected={view === mode} className={`editor-choice${view === mode ? ' active' : ''}`} onClick={() => { videoRef.current?.pause(); setView(mode); }}>{mode === 'original' ? 'Original' : 'Edited'}</button>)}
       </div>
       <div ref={stageRef} className="clip-player-stage">
-        <div className="clip-player-frame" style={{ width: frameWidth, height: frameHeight, background: composition.background }}>
+        <div className={`clip-player-frame${canDrag ? " can-drag" : ""}`}
+          style={{ width: frameWidth, height: frameHeight, background: composition.background }}
+          title={canDrag ? "Drag to choose what stays in the frame" : undefined}
+          onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
           {audioOnly ? <>
             <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>🎧 Audio recording</p>
-            <audio ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
+            <audio muted={muted} onEnded={handleEnded} ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
               onLoadedMetadata={e => {e.target.currentTime=showEdited || view === "original" ? 0 : state.start;}}
               onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
           </> : <video
             ref={videoRef}
             src={showEdited ? rendered : url}
             playsInline
+            muted={muted}
             className="clip-player-video"
             style={{
               objectFit: "contain",
@@ -134,6 +199,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
             }}
             onLoadedMetadata={(e) => (e.target.currentTime = showEdited || view === "original" ? 0 : state.start)}
             onTimeUpdate={handleTimeUpdate}
+            onEnded={handleEnded}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onClick={togglePlay}
@@ -149,6 +215,14 @@ function ClipPlayer({ projectId, clip, info, state, controlRef }) {
         <span className="clip-player-time">
           {formatTime(showEdited ? clock.output(time) : time)} / {formatTime(view === "original" ? info.duration : clock.duration)}
         </span>
+        <button type="button" className="btn btn-small btn-ghost" onClick={() => setMuted((m) => !m)}
+          aria-pressed={muted} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>
+          {muted ? "🔇" : "🔊"}
+        </button>
+        <button type="button" className={`btn btn-small btn-ghost clip-player-loop${loop ? " active" : ""}`}
+          onClick={() => setLoop((l) => !l)} aria-pressed={loop} title={loop ? "Looping: on" : "Looping: off"}>
+          🔁 Loop
+        </button>
       </div>
     </div>
   );

@@ -1,4 +1,7 @@
 """Isolated Chrome fixture checks for posting metadata and the in-flow preparation section. No paid AI calls."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,base64,json,urllib.request,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))

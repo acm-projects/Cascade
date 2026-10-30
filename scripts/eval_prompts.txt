@@ -1,0 +1,12 @@
+# Five general searches
+Find funny moments.
+Find sad moments.
+Find the most interesting highlights.
+Find surprising moments.
+Find the best emotional moments.
+# Five specific searches (adapt these to your source for a useful evaluation)
+Find where the teddy bear fights the guy.
+Find the part where the speaker explains the lunar reactor.
+Find when they discuss ice at the Moon's poles.
+Find the quote "we need our own GPS".
+Find where the speaker compares nuclear and solar power.

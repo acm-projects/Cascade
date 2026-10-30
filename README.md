@@ -1,5 +1,11 @@
 # Cascade
 
+[![CI](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml/badge.svg)](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml)
+
+For the React app, run the backend below and `cd frontend && npm ci && npm run dev`
+in a second terminal, then open http://localhost:5173. Port 8000 still serves the
+legacy website while migration ticket CAS-57 is deferred. See [CI checks](docs/ci.md).
+
 Cascade turns uploaded videos into searchable clips and provides project management, research, caption styling, and a nondestructive video editor. The current website uses FastAPI and Clerk authentication. Generation uses the existing clip agent, Deepgram transcription, configurable AI provider, and parallel video rendering. Editor chat independently uses OpenAI.
 
 Start from the repository root:

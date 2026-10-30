@@ -79,6 +79,40 @@ class AgentEngineTests(unittest.TestCase):
         return core_jobs.jobs[JOB]
 
     # ------------------------------------------------------------------ the happy path
+    def test_playable_prefix_is_published_before_the_batch_finishes(self):
+        original = core_jobs.update_job
+        published = []
+        def capture(job_id, **fields):
+            result = original(job_id, **fields)
+            if fields.get('ready_clip_count'):
+                self.assertFalse((self.folder / 'results.json').exists())
+                published.append([clip['clip_id'] for clip in fields['clips']])
+            return result
+        with patch.object(core_jobs, 'update_job', side_effect=capture):
+            self.assertEqual(self.run_job(fake_agent({}))['state'], 'done')
+        self.assertTrue(published)
+        for clips in published:
+            self.assertEqual(clips, [f'{JOB}:{i}' for i in range(len(clips))])
+        self.assertIn('first_clip_ready_seconds', core_jobs.load_json(self.folder / 'results.json'))
+    def test_session_exclusions_survive_post_selection_transforms_and_persist(self):
+        owner = core_jobs.load_json(self.folder / 'owner.json')
+        owner['exclude_windows'] = [[2., 11.]]
+        core_jobs.save_json(self.folder / 'owner.json', owner)
+        select = fake_agent({})
+        received = {}
+        def stub(*args, **kwargs):
+            received.update(kwargs)
+            clips, transcript, metadata = select(*args)
+            return clips, transcript, {**metadata, 'intent': 'general'}
+        job = self.run_job(stub)
+        self.assertEqual(received['exclude_windows'], [[2., 11.]])
+        self.assertEqual(job['state'], 'done')
+        self.assertEqual(len(job['clips']), 3)
+        self.assertIn('3 new clips; others were already in this session', job['selection_note'])
+        saved = core_jobs.load_json(self.folder / 'results.json')
+        self.assertEqual(saved['intent'], 'general')
+        self.assertTrue(all(clip['start'] >= 11 for clip in saved['clips']))
+
     def test_job_cuts_four_real_clips_with_titles_captions_and_a_step_log(self):
         record = {}
         job = self.run_job(fake_agent(record))

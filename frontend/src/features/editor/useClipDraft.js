@@ -72,8 +72,10 @@ export default function useClipDraft(projectId, clip) {
     setSaveStatus("saving");
     pending.current = { state, chat, updated_at: Math.floor(Date.now() / 1000) };
     const timer = setTimeout(() => {
+      const body = pending.current;
+      if (!body) return;
       setSaveStatus("saving");
-      persist(pending.current)
+      persist(body)
         .then(() => { if (thisSave === saveCount.current) { pending.current = null; setSaveStatus("saved"); } })
         .catch(() => thisSave === saveCount.current && setSaveStatus("error"));
     }, SAVE_DELAY_MS);

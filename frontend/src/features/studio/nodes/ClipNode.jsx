@@ -9,26 +9,36 @@ import { sameRef } from "../graph";
 //   data.label      - "2", or "2.1" after a "more like this" update replaced it
 //   data.number     - which prompt it came from
 //   data.revision   - a "more like this" update still running/failed for this slot (or null)
-//   data.editorClips, data.onToggle(ref), data.onPreview(clip), data.onRetry(jobId)
+//   data.highlighted - the ref whose chip is hovered in the chat (that clip glows)
+//   data.editorClips, data.onToggle(ref), data.onPreview(clip, ref), data.onRetry(jobId)
 function ClipNode({ data }) {
-  const { clip, ref, label, number, revision, editorClips, onToggle, onPreview, onRetry } = data;
+  const { clip, ref, label, number, revision, editorClips, highlighted, onToggle, onPreview, onRetry, referenceLabels = [] } = data;
   const selected = editorClips.some((item) => sameRef(item, ref));
   const updating = revision && ["queued", "processing"].includes(revision.state);
 
   return (
-    <div className={`studio-node studio-clip-node${selected ? " is-selected" : ""}`}>
+    <div className={`studio-node studio-clip-node${selected ? " is-selected" : ""}${highlighted && sameRef(highlighted, ref) ? " is-highlighted" : ""}`}>
       <Handle type="target" position={Position.Left} />
       <div className="studio-clip-head">
         <span>P{number} · Clip {label}</span>
         <span>{formatTime(clip.end - clip.start)}</span>
       </div>
-      <button type="button" className="studio-poster nodrag nopan" onClick={() => onPreview(clip)}
+      <button type="button" className="studio-poster nodrag nopan" onClick={() => onPreview(clip, ref)}
         aria-label={`Preview ${clip.title || "clip"}`}>
         <span className="studio-poster-play">▶</span>
         <span>{formatTime(clip.start)} – {formatTime(clip.end)}</span>
       </button>
       <strong className="studio-clip-title" title={clip.title}>{clip.title || "A moment from your video"}</strong>
+      {referenceLabels.length > 1 && <span className="studio-combination-badge">
+        Context from {referenceLabels.map(parent => `Clip ${parent.label}`).join(' + ')}
+      </span>}
       {clip.explanation && <span className="studio-clip-why" title={clip.explanation}>{clip.explanation}</span>}
+      {clip.reference_matches?.length > 1 && <details className="studio-blend-details nodrag nopan">
+        <summary>How this combines the clips</summary>
+        {clip.reference_matches.map(match => <p key={match.reference}>
+          <b>Clip {referenceLabels[match.reference - 1]?.label || match.reference}:</b> {match.explanation}
+        </p>)}
+      </details>}
       {revision && (
         <span className="studio-clip-revision" role="status">
           {updating ? "Finding similar moments…" : revision.state === "error" ? "Update failed. Your clip is kept." : "No new matches. Your clip is kept."}

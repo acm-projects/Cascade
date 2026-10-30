@@ -1,6 +1,9 @@
 """Real Chrome UI with project_browser_server.py. Selection/identity are fixtures;
 HTTP persistence, original-source cutting, playable media and editor are real.
 """
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio
 import json
 import time

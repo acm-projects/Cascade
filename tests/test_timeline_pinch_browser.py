@@ -1,4 +1,7 @@
 """Browser input checks for cursor-anchored trackpad zoom and native scrolling."""
+
+from browser_support import require_browser_tests
+require_browser_tests()
 import asyncio,json,urllib.request
 from tests.test_editor_browser import Chrome
 

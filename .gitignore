@@ -31,3 +31,5 @@ studio-ui/node_modules/
 .pytest_cache/
 .coverage
 htmlcov/
+.test-tmp/
+cascade-*.log

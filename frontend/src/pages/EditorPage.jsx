@@ -14,13 +14,20 @@ import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
 import BrollPanel from "../features/editor/BrollPanel";
 import Timeline from "../features/editor/Timeline";
-import { CaptionControls, RatioControls, TrimControls } from "../features/editor/EditorControls";
+import { TrimControls } from "../features/editor/EditorControls";
+import AspectTab from "../features/editor/tabs/AspectTab";
+import CaptionsTab from "../features/editor/tabs/CaptionsTab";
+import { describeChanges } from "../features/editor/chatChanges";
 
 import ReelControls from "../features/editor/ReelControls";
 import TrendsModal from "../features/editor/TrendsModal";
 import MusicControls from "../features/editor/MusicControls";
 const panelTabs = ["Trim", "Captions", "Trends", "Aspect Ratio", "Music", "Reel", "Chat"];
 const saveLabels = { saved: "✓ Saved", saving: "Saving…", error: "⚠ Not saved" };
+// Ready-made requests shown while the Chat tab is empty
+const chatSuggestions = [
+  "Remove the first 2 seconds", "Make captions bigger and yellow", "Move captions to the top", "Turn captions off",
+].map((prompt) => ({ label: prompt, prompt }));
 
 // Built from the Figma "Editor" wireframe (node 560:2716), connected to backend/editor_backend.py.
 // Shows the clips picked in AI Studio; every edit is saved to the backend automatically.
@@ -104,14 +111,19 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
   const draft = useClipDraft(projectId, clip);
   const [panelTab, setPanelTab] = useState("Trim");
   const [trendsOpen, setTrendsOpen] = useState(false);
+  const [chatChanges, setChatChanges] = useState({});
+  const [chatNote, setChatNote] = useState(null);
   const [thinking, setThinking] = useState(false);
   const [brollOpen, setBrollOpen] = useState(false);
   const [brollSearch, setBrollSearch] = useState(null);
   const [selectedSegment, setSelectedSegment] = useState(null);
   const selectBroll = useCallback(id => setSelectedSegment(id), []);
   const [focusedCue, setFocusedCue] = useState(null); // caption line clicked on the timeline (for the Captions tab)
+  const [captionsView, setCaptionsView] = useState("Style"); // the Captions tab's sub-tab: "Style" | "Text"
   const player = useRef(null); // the ClipPlayer's remote control: seek(t), getTime()
   const { info, state, change } = draft;
+  const latestState = useRef(state);
+  useEffect(() => { latestState.current = state; });
   const selectedBroll = state?.broll?.some(s => s.id === selectedSegment) ? selectedSegment : null;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
@@ -119,23 +131,31 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
   // "Make the captions yellow": the backend's editor AI returns a new edit + a reply
   async function sendChat(message, research = {}) {
     const history = draft.chat;
+    const sent = state;
     draft.setChat([...history, { role: "user", text: message }]);
+    setChatNote(null);
     setThinking(true);
     try {
       const result = await api.sendEditorChat(projectId, clip.job_id, clip.clip_index, { state, chat: history, message, ...research,
         result_ids: (brollSearch?.results || []).map(a => a.id), selected_segment: selectedBroll });
+      if (latestState.current !== sent) toast.show("The AI edit replaced changes made while it was working. Undo to restore them.");
       change(result.state);
+      setChatChanges(all => ({ ...all, [history.length + 1]: describeChanges(sent, result.state) }));
       if (result.broll_search) { setBrollSearch(result.broll_search); setBrollOpen(true); }
       draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: result.message }]);
       return result;
     } catch (err) {
       draft.setChat(history);
-      toast.show(err.message, "error");
+      if (err.status === 503) setChatNote(err.message);
+      else toast.show(err.message, "error");
       if (research.research_id) throw err;
     } finally {
       setThinking(false);
     }
   }
+
+  const chatMessages = draft.chat.map((message, index) => ({ ...message, changes: chatChanges[index] }));
+  if (chatNote) chatMessages.push({ role: "system", text: chatNote });
 
   return (
     <>
@@ -168,7 +188,8 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
             {draft.error ? (
               <EmptyState icon="🌧️" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
-              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} />
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
             ) : (
               <div className="editor-loading"><Spinner label="Loading clip" /></div>
             )}
@@ -181,6 +202,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
                 focusedCue={focusedCue} onCueClick={(index) => {
                   setFocusedCue(index);
                   setPanelTab("Captions");
+                  setCaptionsView("Text");
                 }} />
             </section>
           )}
@@ -204,15 +226,18 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
             ) : panelTab === "Trim" ? (
               <TrimControls state={state} duration={info.duration} change={change} />
             ) : panelTab === "Captions" ? (
-              <CaptionControls state={state} change={change} burnedIn={info.burned_in} />
+              <CaptionsTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo}
+                player={player} view={captionsView} onView={setCaptionsView}
+                focusedCue={focusedCue} onFocusCue={setFocusedCue} />
             ) : panelTab === "Aspect Ratio" ? (
-              <RatioControls state={state} change={change} />
+              <AspectTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo} />
             ) : panelTab === "Reel" ? (
               <ReelControls state={state} change={change} onApply={sendChat} thinking={thinking} />
             ) : panelTab === "Music" ? (
               <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
             ) : (
-              <ChatBox messages={draft.chat} onSend={sendChat} disabled={thinking}
+              <ChatBox messages={chatMessages} onSend={sendChat} disabled={thinking} typing={thinking}
+                quickActions={draft.chat.length === 0 ? chatSuggestions : []}
                 placeholder={thinking ? "Editing…" : "e.g. add dramatic music, a punch-in on the reaction, and relevant B-roll"} />
             )}
           </div>
