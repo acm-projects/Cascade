@@ -1,4 +1,4 @@
-> CAS-9 removes the legacy root Flask service, simulation, HTML copies, standalone scripts, compatibility shims, sample prototypes, old setup documents, and sample JSON output. The active entry point is `app1.py`; page URL aliases render from `web/index.html`. The notes below describe an earlier editor-branch cleanup and its historical validation.
+> CAS-9 removes the legacy root Flask service, simulation, HTML copies, standalone scripts, compatibility shims, sample prototypes, old setup documents, and sample JSON output. The active entry point is `app1.py`; page URL aliases render from `frontend/legacy/web/index.html`. The notes below describe an earlier editor-branch cleanup and its historical validation.
 
 CAS-9 reference audit found no active imports of the removed root scripts or shims. Existing tests already import `backend.integration` and `backend.pipeline_timing`. Page names in routes, links and tests are URL aliases, not reads of the deleted root HTML files. Generation JSON references in `app1.py` point into job folders, which are retained.
 
@@ -12,7 +12,7 @@ Checkpoint: `dd3b7c2` (Save editor updates and mutli-clip fixes before cleanup).
 
 ## Organization
 
-- Moved the seven active HTML pages and seven shared/editor assets into `web/`, without changing any of their contents or public URLs.
+- Moved the seven active HTML pages and seven shared/editor assets into `frontend/legacy/web/`, without changing any of their contents or public URLs.
 - Moved integration, editor backend, scene analysis, timing and FFmpeg helpers into `backend/`; updated static and lazy imports and test patch targets. Kept `app1.py` and the existing startup command.
 - Grouped editor documentation and historical multi-clip findings under `docs/`. Replaced stale setup instructions with `docs/setup.md` and the root README; corrected research-package startup documentation.
 - Moved four opt-in smoke scripts to `tests/manual/`. Kept regression tests and browser fixtures under `tests/`. Added a public URL/asset contract check and safe configuration template.

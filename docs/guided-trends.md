@@ -53,7 +53,7 @@ Validation commands:
 npm --prefix frontend test
 npm --prefix frontend run lint
 npm --prefix frontend run build
-CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest tests.test_guided_trends -q
+CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest tests.application.test_guided_trends -q
 ```
 
 The existing startup/API/OAuth configuration is unchanged. All work stays local and

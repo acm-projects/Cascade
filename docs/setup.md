@@ -5,14 +5,20 @@ Run all commands from the repository root. Use Python 3.11 or newer and a virtua
 Copy `.env.example` to `.env` only for a new setup. Never overwrite an existing configuration. The server loads the root `.env`; keys stay on the server. Start with:
 
 ```sh
-uvicorn app1:app --reload --host 127.0.0.1 --port 8000
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. `app1:app` is the application entry point. Pages and assets are served from a whitelist in `app1.py`; moving them into `web/` does not change their public URLs. Do not expose the repository as a public static directory.
+In a second terminal, run `npm --prefix frontend ci` once and then
+`npm --prefix frontend run dev`. Open http://127.0.0.1:5173 for the current React
+app. Port 8000 provides the API and retained legacy website. `backend.main:app`
+is the composition root; `app1:app` remains a compatibility entry point. Legacy
+assets are whitelisted in `backend/core/config.py` and served from
+`frontend/legacy/web/` without changing their public URLs. Do not expose the
+repository as a public static directory.
 
 ## Authentication and storage
 
-Configure `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and `CLERK_AUTHORIZED_PARTIES` for the local origins you use. The consolidated `web/index.html` template retains the original publishable-key fallback when no environment key is set; root `login.html` is superseded. Only the selected view is rendered, and the fallback template declaration is not emitted into the page. Production requests still require Clerk authentication and ownership checks.
+Configure `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and `CLERK_AUTHORIZED_PARTIES` for the local origins you use. The consolidated `frontend/legacy/web/index.html` template retains the original publishable-key fallback when no environment key is set; root `login.html` is superseded. Only the selected view is rendered, and the fallback template declaration is not emitted into the page. Production requests still require Clerk authentication and ownership checks.
 
 `CASCADE_STORAGE=local` keeps media locally. `auto` selects S3 when configured; `s3` requires `S3_BUCKET_NAME`, region and AWS credentials. Existing local source files are needed for editing and exports even when generated delivery uses S3. Preserve the complete `video_jobs/` directory: it includes uploads, transcripts, results, owner metadata, projects, settings and editor drafts. Project/editor persistence is owner-scoped atomic JSON; cleanup introduced no schema migration. Do not delete root JSON records or `outputs/` simply because they are outside the active jobs directory.
 
