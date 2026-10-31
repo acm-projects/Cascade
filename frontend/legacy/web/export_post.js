@@ -81,9 +81,9 @@ window.CascadePostPreparation=class {
     const icons={download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',youtube:'<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 6 3-6 3z"/>',instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17 7h.01"/>',linkedin:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 10v7m0-10h.01M11 17v-7m0 3c0-4 6-4 6 0v4"/>'};
     rec.deliveryStatus ||= {};let destination=rec.destination||'download';const platformButtons=new Map();
     for(const [value,label] of [['download','Download'],['youtube','YouTube'],['instagram','Instagram'],['linkedin','LinkedIn']]){
-      const b=button('',()=>{destination=value;rec.destination=value;updateAction();});b.className='post-platform';b.dataset.destination=value;b.setAttribute('aria-label',label+(value==='linkedin'?' · Coming soon':''));
+      const b=button('',()=>{destination=value;rec.destination=value;updateAction();});b.className='post-platform';b.dataset.destination=value;b.setAttribute('aria-label',label);
       const icon=el('span','post-platform-icon');icon.setAttribute('aria-hidden','true');icon.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+icons[value]+'</svg>';
-      b.append(icon,el('span','',label));if(value==='linkedin'){b.disabled=true;b.append(el('small','','Coming soon'));}platformButtons.set(value,b);platforms.append(b);
+      b.append(icon,el('span','',label));platformButtons.set(value,b);platforms.append(b);
     }
     rec.timing ||= 'now';rec.scheduleDraft ||= {};let editingSchedule=false;
     const timing=el('div','post-timing');timing.setAttribute('role','group');timing.setAttribute('aria-label','YouTube timing');
@@ -94,6 +94,16 @@ window.CascadePostPreparation=class {
     const account=el('div','post-account'),accountStatus=el('span','','Checking YouTube connection…');
     const socialBase='/api/projects/'+encodeURIComponent(this.projectId)+'/social/youtube';let connected=false,canSchedule=false,checking=false;
     const isCurrent=()=>this.openToken===token;
+    const linkedin=el('div','post-linkedin'),liAccount=el('p','post-note','Checking LinkedIn connection…'),liStatus=el('p','post-note');liStatus.setAttribute('role','status');
+    const liBase='/api/projects/'+encodeURIComponent(this.projectId)+'/social/linkedin',liPublish=this.url(row)+'/publish/linkedin';
+    let liConnection=null,liBusy=false;rec.linkedin ||= {status:'Ready'};
+    const liView=el('a','post-instagram-link','Open on LinkedIn');liView.target='_blank';liView.rel='noopener';liView.hidden=true;
+    const liUpdate=()=>{const data=rec.linkedin,active=['Rendering','Uploading','Processing','Publishing'].includes(data.status);liAccount.textContent=liConnection?.connected?'Connected: '+liConnection.profile:liConnection?.error||'Connect your LinkedIn personal profile.';liSubmit.disabled=!liConnection?.connected||liBusy||active||!!rec.loadFailed||!!data.video||!!data.post_attempted||data.status==='Published';liConnect.disabled=liBusy||active||liConnection?.configured===false;liStatus.textContent=(data.status==='Ready'?'':data.status)+(data.error?': '+data.error:'');liView.hidden=!data.url;if(data.url)liView.href=data.url;};
+    const liPoll=async()=>{try{const data=await this.apiJSON(liPublish);if(!isCurrent())return;rec.linkedin=data;liUpdate();if(['Rendering','Uploading','Processing','Publishing'].includes(data.status))setTimeout(()=>{if(isCurrent())liPoll();},3000);}catch(error){if(isCurrent())liStatus.textContent=error.message;}};
+    const liRefresh=async()=>{try{const data=await this.apiJSON(liBase);if(!isCurrent())return;liConnection=data;liUpdate();}catch(error){if(isCurrent())liAccount.textContent=error.message;}};
+    const liConnect=button('Connect LinkedIn',async()=>{const popup=window.open('about:blank','_blank');if(!popup){liStatus.textContent='Allow popups for Cascade, then connect LinkedIn again.';return;}popup.opener=null;try{const data=await this.apiJSON(liBase+'/connect',{method:'POST'});popup.location.href=data.url;}catch(error){popup.close();if(isCurrent())liStatus.textContent=error.message;}});
+    const liSubmit=button('Publish to LinkedIn',async()=>{if(liSubmit.disabled)return;liBusy=true;rec.localBusy=true;liUpdate();updateAction();try{if(rec.linkedin.status==='Failed'&&!rec.linkedin.video&&!rec.linkedin.post_attempted)rec.linkedinSubmission=null;rec.linkedinSubmission ||= crypto.randomUUID();const edit=await this.payload(row);if(!isCurrent())return;const data=await this.apiJSON(liPublish,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:rec.data.name,caption:rec.data.caption,hashtags:[...rec.data.hashtags],edit,submission_id:rec.linkedinSubmission})});if(!isCurrent())return;rec.linkedin=data;liUpdate();if(['Rendering','Uploading','Processing','Publishing'].includes(data.status))liPoll();}catch(error){if(isCurrent())liStatus.textContent=error.message;}finally{liBusy=false;rec.localBusy=false;if(isCurrent()){liUpdate();updateAction();}}});
+    const liActions=el('div','post-actions');liActions.append(liConnect,button('Refresh connection',liRefresh));linkedin.append(liAccount,liActions,el('p','post-note','Publish the edited video as a public post on your personal profile.'),liSubmit,liStatus,liView);destinationSection.append(linkedin);liUpdate();liRefresh();liPoll();
     const refresh=async()=>{if(checking)return;checking=true;refreshButton.disabled=true;try{const data=await this.apiJSON(socialBase);if(!isCurrent())return;connected=data.connected;canSchedule=!!data.can_schedule;accountStatus.textContent=connected?'Connected: '+data.channel:'Connect your YouTube channel.';if(connected&&!canSchedule)accountStatus.textContent+=' Reconnect to enable scheduling.';}catch(error){if(!isCurrent())return;accountStatus.textContent=error.message;}finally{checking=false;if(isCurrent()){refreshButton.disabled=false;updateAction();}}};
     const connect=button('Connect YouTube',async()=>{
       // Reserve a tab during the click, before awaiting the authenticated request.
@@ -133,13 +143,14 @@ window.CascadePostPreparation=class {
       const youtube=destination==='youtube',scheduled=rec.timing==='schedule',data=youtube?rec.youtube:null,hasVideo=!!data?.video_id;
       const needsReconnect=/reconnect|authorization expired|revoked/i.test(data?.error||'');
       const busy=!!rec.localBusy||(youtube&&['Rendering','Uploading','Processing','Verifying'].includes(data?.status));
-      for(const [value,b] of platformButtons){b.setAttribute('aria-pressed',String(value===destination));b.disabled=value==='linkedin'||!!rec.localBusy||!!rec.loadFailed;}
+      for(const [value,b] of platformButtons){b.setAttribute('aria-pressed',String(value===destination));b.disabled=!!rec.localBusy||!!rec.loadFailed;}
       timing.hidden=!youtube;now.setAttribute('aria-pressed',String(!scheduled));later.setAttribute('aria-pressed',String(scheduled));now.disabled=later.disabled=busy;
       scheduleWrap.hidden=!youtube||!scheduled||(hasVideo&&!editingSchedule);picker.setDisabled(busy);scheduleNote.textContent=hasVideo?'Your existing upload becomes public on YouTube at the selected time.':'Your video uploads now and becomes public on YouTube at the selected time.';scheduleHelp.textContent=hasVideo?'Changing the schedule keeps the uploaded video and post text. Choose a time at least 30 minutes from now.':'Uploads stay Private until processing finishes and YouTube confirms the schedule. Allow at least 30 minutes; long videos may need more time.';
+      linkedin.hidden=destination!=='linkedin';
       account.hidden=!youtube;connect.hidden=connected&&!needsReconnect&&(!scheduled||canSchedule);connect.textContent=needsReconnect?'Reconnect YouTube':connected&&scheduled&&!canSchedule?'Reconnect for scheduling':'Connect YouTube';privacy.parentElement.hidden=!youtube||scheduled;privacy.disabled=busy||!!rec.loadFailed;instagram.hidden=destination!=='instagram';
       manualInstagram.hidden=!rec.shareFile;manualInstagram.disabled=busy||!!rec.loadFailed;instagramNote.textContent=rec.shareFile?'Choose Instagram in your device’s share sheet and finish posting there. Instagram may not appear or retain the caption; copy it if needed.':'On Instagram, click Create and select your downloaded video.';
       submit.textContent=youtube?(scheduled?(hasVideo?'Save schedule':'Schedule on YouTube'):'Publish'):destination==='instagram'?(rec.shareFile?'Share video…':shareAPI.available()&&!rec.shareChecked?'Preparing video…':'Download & Open Instagram'):'Download MP4';
-      submit.hidden=youtube&&hasVideo&&!editingSchedule;
+      submit.hidden=destination==='linkedin'||(youtube&&hasVideo&&!editingSchedule);
       submit.disabled=busy||!!rec.loadFailed||(destination==='instagram'&&shareAPI.available()&&!rec.shareChecked)||(youtube&&(!connected||(data?.upload_attempted&&!hasVideo)||(scheduled&&(!canSchedule||!picker.valid))||(!scheduled&&(hasVideo||data?.status==='Published'))));
       const confirmed=data?.status==='Scheduled'&&data.schedule;
       publishStatus.textContent=youtube?(confirmed?'Scheduled for '+window.CascadeScheduleTime.format(data.schedule)+'.':data?.status==='Ready'?'':data?.status||'')+(data?.error?': '+data.error:'')+(data?.message?' '+data.message:''):(rec.deliveryStatus[destination]||'');
@@ -172,7 +183,7 @@ window.CascadePostPreparation=class {
             if(['Rendering','Uploading','Processing','Verifying'].includes(data.status))rec.schedulePoll?.();
           }
         }
-      }catch(error){if(target==='youtube')rec.youtube={...rec.youtube,status:rec.youtube?.video_id?rec.youtube.status:'Failed',error:error.message};else rec.deliveryStatus[target]='Download failed: '+error.message;if(target==='youtube'&&rec.timing==='schedule'&&/time|timezone|clocks|minutes|buffer/i.test(error.message)){editingSchedule=true;picker.timeError.textContent=error.message;}}
+      }catch(error){if(target==='youtube'){rec.submissionId=null;rec.schedulePoll?.();}if(target==='youtube')rec.youtube={...rec.youtube,status:rec.youtube?.video_id?rec.youtube.status:'Failed',error:error.message};else rec.deliveryStatus[target]='Download failed: '+error.message;if(target==='youtube'&&rec.timing==='schedule'&&/time|timezone|clocks|minutes|buffer/i.test(error.message)){editingSchedule=true;picker.timeError.textContent=error.message;}}
       finally{rec.localBusy=false;rec.refreshUI?.();}
     });
     const openInstagram=el('a','post-instagram-link','Open Instagram');openInstagram.href='https://www.instagram.com/';openInstagram.target='_blank';openInstagram.rel='noopener';openInstagram.hidden=!rec.instagramReady;instagram.append(openInstagram);

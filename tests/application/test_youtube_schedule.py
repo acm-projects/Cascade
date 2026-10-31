@@ -78,12 +78,12 @@ class NativeScheduleTests(unittest.TestCase):
         body=self.body()
         with patch.object(social,'start_worker') as worker:
             first=self.client.post(self.base,json=body);second=self.client.post(self.base,json=body)
-        self.assertEqual(first.status_code,200);self.assertEqual(worker.call_count,1);self.assertEqual(first.json(),second.json())
+        self.assertEqual(first.status_code,202);self.assertEqual(worker.call_count,1);self.assertEqual(first.json(),second.json())
         stored=social.read('publish',self.key)
         self.assertEqual(stored['snapshot']['edit']['marker'],'saved-edits');self.assertEqual(stored['snapshot']['hashtags'],['#tag']);self.assertEqual(stored['channel_id'],'channel1')
         self.assertNotIn('snapshot',first.json())
         body['schedule']['local_datetime']='2000-01-01T00:00'
-        self.assertEqual(self.client.post(self.base,json=body).status_code,200)
+        self.assertEqual(self.client.post(self.base,json=body).status_code,202)
     def test_initial_upload_private_then_native_schedule_after_processing(self):
         remote=MagicMock();remote.post.return_value=httpx.Response(200,headers={'location':'https://www.googleapis.com/upload/session'},json={});remote.put.return_value=httpx.Response(200,json={'id':'v1'})
         def run_upload_only(target,args):
@@ -139,7 +139,7 @@ class NativeScheduleTests(unittest.TestCase):
         refreshed=httpx.Response(200,json={'access_token':'renewed-access','expires_in':3600})
         with patch.object(social.httpx,'post',return_value=refreshed),patch.object(social,'start_worker'):
             result=self.client.post(self.base,json=self.body())
-        self.assertEqual(result.status_code,200)
+        self.assertEqual(result.status_code,202)
         saved=social.read('connection','owner')
         self.assertEqual(saved['channel_id'],'channel1')
         self.assertEqual(json.loads(Fernet(social.config()[3].encode()).decrypt(saved['token'].encode()))['access_token'],'renewed-access')

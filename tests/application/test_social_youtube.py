@@ -128,7 +128,7 @@ class SocialTests(unittest.TestCase):
         with patch.object(social,'credentials',return_value='access'), patch.object(social,'start_worker') as thread:
             first=self.client.post(self.base,json=body)
             second=self.client.post(self.base,json=body)
-            self.assertEqual(first.status_code,200)
+            self.assertEqual(first.status_code,202)
             self.assertEqual(first.json(),second.json())
             self.assertEqual(thread.call_count,1)
             self.assertEqual(thread.call_args.args[1][2].privacy,'private')
@@ -148,7 +148,8 @@ class SocialTests(unittest.TestCase):
         social.register(app,SimpleNamespace(require_project=lambda *a:None),lambda *a:None,render,Edit)
         client=TestClient(app)
         remote=MagicMock()
-        remote.post.return_value.headers={'location':'https://www.googleapis.com/upload/session'}
+        import httpx
+        remote.post.return_value=httpx.Response(200,headers={'location':'https://www.googleapis.com/upload/session'})
         remote.put.return_value.json.return_value={'id':'video123'}
         with patch.object(social,'credentials',return_value='access'), patch.object(social.httpx,'Client') as http, patch.object(social,'start_worker',side_effect=lambda target,args:target(*args)):
             http.return_value.__enter__.return_value=remote
@@ -158,6 +159,88 @@ class SocialTests(unittest.TestCase):
         self.assertEqual(record['url'],'https://www.youtube.com/watch?v=video123')
         self.assertEqual(remote.post.call_args.kwargs['json']['status']['privacyStatus'],'private')
         render.assert_called_once();cleanup.assert_called_once()
+
+    def test_empty_session_response_regression_and_safe_provider_errors(self):
+        import httpx
+        session = httpx.Response(200, headers={'location': 'https://www.googleapis.com/upload/session'})
+        # Previous code raises JSONDecodeError here, before any media is sent.
+        with self.assertRaises(ValueError):
+            session.json()
+        self.assertIsNone(social.youtube_data(session, 'upload initialization', expect_json=False))
+        for reason, hint in [('quotaExceeded', 'quota'), ('insufficientPermissions', 'Reconnect'), ('SERVICE_DISABLED', 'Enable YouTube Data API')]:
+            response = self.google_response(403, {'error': {'message': 'PRIVATE_SECRET', 'errors': [{'reason': reason}]}})
+            with self.assertLogs(social.logger, level='WARNING') as logs, self.assertRaises(HTTPException) as error:
+                social.youtube_data(response, 'upload initialization', expect_json=False)
+            self.assertIn(reason, error.exception.detail)
+            self.assertIn(hint, error.exception.detail)
+            self.assertNotIn('PRIVATE_SECRET', str(logs.output) + error.exception.detail)
+
+    def test_exception_diagnostic_excludes_message_and_paths(self):
+        try:
+            raise ValueError('PRIVATE_TOKEN https://provider/upload?secret=PRIVATE_SECRET')
+        except ValueError as exc:
+            kind, frames = social.exception_diagnostic(exc)
+        self.assertEqual(kind, 'ValueError')
+        self.assertNotIn('PRIVATE', frames)
+        self.assertNotIn('/Users/', frames)
+
+    def test_internal_exception_is_specific_without_exposing_values(self):
+        app=FastAPI()
+        @app.middleware('http')
+        async def auth(request,next):
+            request.state.user_id='owner'
+            return await next(request)
+        def broken_render(*args):
+            raise TypeError('PRIVATE_TOKEN https://provider/upload?secret=PRIVATE_SECRET')
+        social.register(app,SimpleNamespace(require_project=lambda *a:None),lambda *a:None,broken_render,Edit)
+        with patch.object(social,'credentials',return_value='access'), patch.object(social,'start_worker',side_effect=lambda target,args:target(*args)), self.assertLogs(social.logger,level='WARNING') as logs:
+            response=TestClient(app).post(self.base,json={'title':'Title','edit':{},'submission_id':str(uuid.uuid4())})
+        self.assertEqual(response.status_code,502)
+        self.assertIn('rendering (TypeError)',response.json()['detail'])
+        self.assertIn('exception_type=TypeError',' '.join(logs.output))
+        self.assertNotIn('PRIVATE',response.text+' '.join(logs.output))
+
+    def test_provider_rejection_reaches_status_without_sending_media(self):
+        from unittest.mock import MagicMock
+        from fastapi.responses import FileResponse
+        from starlette.background import BackgroundTask
+        media=Path(self.temp.name)/'render.mp4';media.write_bytes(b'rendered')
+        cleanup=MagicMock()
+        app=FastAPI()
+        @app.middleware('http')
+        async def auth(request,next):
+            request.state.user_id='owner'
+            return await next(request)
+        social.register(app,SimpleNamespace(require_project=lambda *a:None),lambda *a:None,
+                        lambda *a:FileResponse(media,background=BackgroundTask(cleanup)),Edit)
+        remote=MagicMock()
+        remote.post.return_value=self.google_response(403,{'error':{'message':'PRIVATE_ACCESS PRIVATE_REFRESH','errors':[{'reason':'quotaExceeded'}]}})
+        body={'title':'Title','edit':{},'submission_id':str(uuid.uuid4())}
+        with patch.object(social,'credentials',return_value='PRIVATE_ACCESS'), patch.object(social.httpx,'Client') as http, patch.object(social,'start_worker',side_effect=lambda target,args:target(*args)), self.assertLogs(social.logger,level='WARNING') as logs:
+            http.return_value.__enter__.return_value=remote
+            response=TestClient(app).post(self.base,json=body)
+        self.assertEqual(response.status_code,502)
+        self.assertIn('quotaExceeded',response.json()['detail'])
+        self.assertIn('upload initialization',response.json()['detail'])
+        self.assertFalse(response.json()['upload_attempted'])
+        remote.put.assert_not_called();cleanup.assert_called_once()
+        result=TestClient(app).get(self.base).json()
+        self.assertEqual(result['error'],response.json()['detail'])
+        for secret in ('PRIVATE_ACCESS','PRIVATE_REFRESH'):
+            self.assertNotIn(secret,response.text+' '.join(logs.output))
+
+    def test_worker_failure_has_stage_diagnostic_and_post_failure_status(self):
+        body={'title':'Title','edit':{},'submission_id':str(uuid.uuid4())}
+        with patch.object(social,'credentials',return_value='access'), patch.object(social,'start_worker',side_effect=lambda target,args:target(*args)), self.assertLogs(social.logger,level='WARNING') as logs:
+            response=self.client.post(self.base,json=body)
+            repeat=self.client.post(self.base,json=body)
+        self.assertEqual(response.status_code,502)
+        self.assertEqual(repeat.status_code,502)
+        self.assertIn('render',response.json()['detail'])
+        self.assertIn('Diagnostic:',response.json()['detail'])
+        self.assertIn('step=rendering category=http_error exception_type=HTTPException',' '.join(logs.output))
+        self.assertIn('social_youtube.py:', ' '.join(logs.output))
+        self.assertFalse(response.json()['upload_attempted'])
 
     def test_upload_failure_is_persisted(self):
         with patch.object(social,'credentials',return_value='access'):

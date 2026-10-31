@@ -59,6 +59,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
 
   async function publish() {
     // Same submission id if you press again after a hiccup: the backend never uploads twice
+    if (upload?.status === "Failed" && !upload.upload_attempted) submission.current = null;
     submission.current = submission.current ?? crypto.randomUUID();
     setBusy(true);
     try {
@@ -71,7 +72,11 @@ function YouTubePanel({ projectId, clip, post, state }) {
         edit: state,
       });
       setUpload(result);
+      if (result.status === "Failed" && !result.upload_attempted) submission.current = null;
     } catch (err) {
+      setUpload({ status: "Failed", error: err.message });
+      // The backend retains its ambiguity guard; fresh ids only retry pre-transfer failures.
+      submission.current = null;
       toast.show(err.message, "error");
     } finally {
       setBusy(false);
@@ -84,8 +89,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
   } else if (connection.error) {
     content = (
       <p className="export-social-note">
-        YouTube isn't set up on this server yet. Add <code>GOOGLE_YOUTUBE_CLIENT_ID</code> and{" "}
-        <code>GOOGLE_YOUTUBE_CLIENT_SECRET</code> to <code>.env</code> (ask Manila), then restart the backend.
+        {connection.error.message}
       </p>
     );
   } else if (!connection.connected) {
@@ -107,7 +111,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
             <option value="public">Public</option>
           </select>
         </label>
-        <Button size="sm" variant="primary" onClick={publish} disabled={busy || working || !state}>
+        <Button size="sm" variant="primary" onClick={publish} disabled={busy || working || !state || !!upload?.upload_attempted || !!upload?.video_id}>
           {busy ? "Starting…" : "Upload to YouTube"}
         </Button>
       </>

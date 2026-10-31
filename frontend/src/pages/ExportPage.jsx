@@ -16,6 +16,7 @@ import useDownloads from "../features/export/useDownloads";
 import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
+import LinkedInPanel from "../features/export/LinkedInPanel";
 import { isAudioClip } from '../utils/media';
 import TrendsModal from '../features/editor/TrendsModal';
 import { exportTree } from "../features/export/exportTree";
@@ -257,6 +258,7 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
           <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</Button><small>{draft.saveStatus}</small></div>
         </TrendsModal>}
         {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
+        {!isAudioClip(clip) && <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />}
         <div className="export-post">
           <h3 className="export-social-title">{isAudioClip(clip) ? '🎧 Share audio' : '📱 Instagram, TikTok & more'}</h3>
           <p className="export-social-note">
