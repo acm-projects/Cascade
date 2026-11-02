@@ -98,7 +98,8 @@ def ensure(pid, user):
     project = projects_store.require_project(pid, user)
     studio = project.setdefault('studio', {'sessions': [], 'active_session_id': None, 'editor_clips': []})
     changed = False
-    assigned = {jid for session in studio['sessions'] for jid in session['job_ids']}
+    # Generations from deleted sessions stay hidden instead of being regrouped into a new session.
+    assigned = {jid for session in studio['sessions'] for jid in session['job_ids']} | set(studio.get('deleted_jobs', []))
     # Older generations remain visible, grouped by their original source.
     for job in reversed(projects_store.project_jobs(pid, user)):
         if job['kind'] != 'generation' or job['job_id'] in assigned:
@@ -280,6 +281,28 @@ def rename_session(pid: str, sid: str, body: SessionInput, request: Request):
         session['name'] = body.name.strip()
         save(project, request.state.user_id)
         return session
+
+
+@router.delete('/sessions/{sid}')
+def delete_session(pid: str, sid: str, request: Request):
+    """Remove a session from the Studio. Its generations are hidden (kept on disk), and its picked clips are unpicked."""
+    with projects_store.lock:
+        user = request.state.user_id
+        project = ensure(pid, user)
+        studio = project['studio']
+        session = session_for(project, sid)
+        if len(studio['sessions']) == 1:
+            raise HTTPException(409, "You can't delete the only session. Create another one first.")
+        with job_service.jobs_lock:
+            if any(job_service.jobs.get(j, {}).get('state') in ('queued', 'processing') for j in session['job_ids']):
+                raise HTTPException(409, 'Stop or wait for the clips this session is finding, then delete it.')
+        studio['sessions'].remove(session)
+        studio['deleted_jobs'] = sorted(set(studio.get('deleted_jobs', [])) | set(session['job_ids']))
+        set_selection(studio, [r for r in studio.get('editor_clips', []) if r['job_id'] not in session['job_ids']])
+        if studio.get('active_session_id') == sid:
+            studio['active_session_id'] = studio['sessions'][0]['id']
+        save(project, user)
+        return {'deleted': sid, 'active_session_id': studio['active_session_id']}
 
 
 @router.patch('/sessions/{sid}/state')

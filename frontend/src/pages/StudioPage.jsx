@@ -225,6 +225,19 @@ function StudioPage() {
     }
   }
 
+  // Delete the session on screen, then go to the one the backend makes active
+  async function deleteSession() {
+    try {
+      const result = await api.deleteStudioSession(projectId, session.id);
+      setChatFocus(null); setLeftOut([]); setHighlighted(null);
+      setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
+      await refresh();
+      navigate(`/projects/${projectId}/studio/${result.active_session_id}`, { replace: true });
+    } catch (err) {
+      toast.show(err.message, "error"); // e.g. "Stop or wait for the clips this session is finding…"
+    }
+  }
+
   async function renameSession(name) {
     try {
       await api.renameStudioSession(projectId, session.id, name);
@@ -323,7 +336,7 @@ function StudioPage() {
     <div className="studio leaf-page">
       {topNav}
       <SessionBar sessions={studio.sessions} activeId={session.id}
-        onSwitch={switchSession} onCreate={createSession} onRename={renameSession}>
+        onSwitch={switchSession} onCreate={createSession} onRename={renameSession} onDelete={deleteSession}>
         {clipTotal > 0 && <span>{editorClips.length} of {plural(clipTotal, "clip")} picked</span>}
         <button type="button" className="btn btn-small" aria-pressed={showHistory}
           onClick={() => setShowHistory(value => !value)}

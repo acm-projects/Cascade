@@ -89,6 +89,25 @@ class StudioTests(unittest.TestCase):
         core_jobs.save_json(folder / 'results.json', {'state': 'processing', 'clips': [{'start': 0, 'end': 10}]})
         self.assertEqual(session_clip_windows(project, self.sid, core_jobs, projects_store, 'studio-user'), [])
 
+    def test_delete_session_hides_its_generations_and_unpicks_its_clips(self):
+        other = self.client.post(self.base + '/sessions', headers=self.headers, json={'name': 'Sad'}).json()
+        self.client.put(self.base + '/editor-selection', headers=self.headers, json={'clips': [self.ref(1)]})
+        response = self.client.delete(self.base + '/sessions/' + self.sid, headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['active_session_id'], other['id'])
+        state = self.client.get(self.base, headers=self.headers).json()  # reload must not bring it back
+        self.assertEqual([s['id'] for s in state['sessions']], [other['id']])
+        self.assertEqual(state['editor_clips'], [])
+        self.assertEqual(self.client.delete(self.base + '/sessions/' + self.sid, headers=self.headers).status_code, 404)
+        self.assertEqual(self.client.delete(self.base + '/sessions/' + other['id'], headers=self.other).status_code, 404)
+
+    def test_delete_session_refuses_the_last_one_and_running_jobs(self):
+        self.assertEqual(self.client.delete(self.base + '/sessions/' + self.sid, headers=self.headers).status_code, 409)
+        self.client.post(self.base + '/sessions', headers=self.headers, json={'name': 'Sad'})
+        core_jobs.jobs[self.jid] = {'state': 'processing'}
+        self.assertEqual(self.client.delete(self.base + '/sessions/' + self.sid, headers=self.headers).status_code, 409)
+        self.assertEqual(len(self.client.get(self.base, headers=self.headers).json()['sessions']), 2)
+
     def test_legacy_generations_and_session_state_survive_reload(self):
         url = self.base + '/sessions/' + self.sid + '/state'
         patch_data = {'references': [self.ref(3)], 'positions': {'clip:' + self.jid + ':3': {'x': 900, 'y': 90}},

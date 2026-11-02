@@ -42,6 +42,16 @@ export function renameStudioSession(token, projectId, sessionId, name) {
 }
 
 /**
+ * DELETE .../studio/sessions/{sessionId}
+ * Removes the session from the Studio (its clips are hidden and unpicked). 409 for the only session
+ * or while it's still finding clips.
+ * @returns {Promise<{ deleted: string, active_session_id: string }>}
+ */
+export function deleteStudioSession(token, projectId, sessionId) {
+  return apiFetch(`${studioPath(projectId)}/sessions/${encodeURIComponent(sessionId)}`, { token, method: "DELETE" });
+}
+
+/**
  * PATCH .../studio/sessions/{sessionId}/state - save where boxes were dragged (and/or the zoom).
  * body: { positions?: { "source:<job>" | "generation:<job>" | "clip:<job>:<index>": { x, y } }, viewport?: { x, y, zoom } }
  * Only ids that exist in this session are accepted. Also marks the session as active.
