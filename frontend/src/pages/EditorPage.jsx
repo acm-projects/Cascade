@@ -20,7 +20,7 @@ import { describeChanges } from "../features/editor/chatChanges";
 
 import TrendsModal from "../features/editor/TrendsModal";
 import MusicControls from "../features/editor/MusicControls";
-const panelTabs = ["Captions", "Trends", "Aspect Ratio", "Music", "Chat"];
+const panelTabs = ["Captions", "Aspect Ratio", "Music", "Chat"];
 const saveLabels = { saved: "✓ Saved", saving: "Saving…", error: "⚠ Not saved" };
 // Ready-made requests shown while the Chat tab is empty
 const chatSuggestions = [
@@ -155,6 +155,27 @@ function ClipWorkspace({ projectId, clip, clipTabs, onExport, registerFlush }) {
 
   return (
     <>
+      <div className={`editor-body${brollOpen ? " broll-open" : ""}`}>
+        {brollOpen && state && <div className="editor-left-column">
+          <BrollPanel projectId={projectId} clip={clip} state={state} duration={info.duration}
+            player={player} change={change} search={brollSearch} onSearch={setBrollSearch} selectedId={selectedBroll}
+            onSelect={selectBroll} onClose={() => setBrollOpen(false)} disabled={thinking} />
+        </div>}
+
+        <main className="editor-center">
+          <div className="editor-preview-row">
+          <section className="editor-preview">
+            {draft.error ? (
+              <EmptyState icon="🌧️" title="Couldn't load this clip" text={draft.error.message} />
+            ) : info && state ? (
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+                onOpenTrends={() => setTrendsOpen(true)} trendsOpen={trendsOpen}
+                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
+            ) : (
+              <div className="editor-loading"><Spinner label="Loading clip" /></div>
+            )}
+          </section>
+          <div className="editor-preview-actions">
       <div className="editor-tools">
         <button className="btn btn-small" type="button" aria-pressed={brollOpen} disabled={!state || info?.has_video === false}
           onClick={() => setBrollOpen(open => !open)}>B-roll</button>
@@ -169,26 +190,10 @@ function ClipWorkspace({ projectId, clip, clipTabs, onExport, registerFlush }) {
         {framing.status === "error" && <span className="editor-save editor-save-error" role="alert">⚠ {framing.message}</span>}
         <button type="button" className="btn btn-small btn-primary editor-export" onClick={async () => { try { await draft.flush(); onExport(); } catch(e) { toast.show(e.message, "error"); } }}>Go to Export →</button>
       </div>
-
-      <div className={`editor-body${brollOpen ? " broll-open" : ""}`}>
-        {brollOpen && state && <div className="editor-left-column">
-          <BrollPanel projectId={projectId} clip={clip} state={state} duration={info.duration}
-            player={player} change={change} search={brollSearch} onSearch={setBrollSearch} selectedId={selectedBroll}
-            onSelect={selectBroll} onClose={() => setBrollOpen(false)} disabled={thinking} />
-        </div>}
-
-        <main className="editor-center">
           {clipTabs}
-          <section className="editor-preview">
-            {draft.error ? (
-              <EmptyState icon="🌧️" title="Couldn't load this clip" text={draft.error.message} />
-            ) : info && state ? (
-              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
-                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
-            ) : (
-              <div className="editor-loading"><Spinner label="Loading clip" /></div>
-            )}
-          </section>
+          </div>
+          </div>
+
           {info && state && (
             <section className="editor-timeline" aria-label="Timeline">
               <Timeline duration={info.duration} cues={info.cues} state={state} player={player}
@@ -207,7 +212,7 @@ function ClipWorkspace({ projectId, clip, clipTabs, onExport, registerFlush }) {
         <aside className="editor-panel">
           <div className="editor-panel-tabs">
             {panelTabs.map((tab) => (
-              <button key={tab} type="button" className={`editor-panel-tab${tab === panelTab ? " active" : ""}`}
+              <button key={tab} type="button" className={`editor-panel-tab${tab === 'Trends' ? " editor-trends-button" : ""}${tab === panelTab ? " active" : ""}`}
                 disabled={info?.has_video === false && tab === 'Aspect Ratio'}
                 title={info?.has_video === false && tab === 'Aspect Ratio' ? 'Audio recordings have no video framing' : undefined}
                 aria-haspopup={tab === 'Trends' ? 'dialog' : undefined}

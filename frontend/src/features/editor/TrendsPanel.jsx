@@ -31,8 +31,8 @@ export default function TrendsPanel({ projectId, clip, state, info, preview, flu
   const [tab, setTab] = useState('Overview'), [target, setTarget] = useState(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [activity, setActivity] = useState('');
   const [selected, setSelected] = useState([]), [statuses, setStatuses] = useState({}), [report, setReport] = useState('');
-  const [speaking, setSpeaking] = useState(false), [now, setNow] = useState(() => Date.now());
-  const alive = useRef(true), speech = useRef(null), cards = useRef(new Map()), scrollArea = useRef(null);
+  const [now, setNow] = useState(() => Date.now());
+  const alive = useRef(true), cards = useRef(new Map()), scrollArea = useRef(null);
   const analysis = record?.result ? record : previous || record;
   const view = viewData(analysis, state, info), { result, references, suggestions } = view;
   const receipt = record?.applications?.findLast(a => same(a.edit_state, state));
@@ -49,7 +49,7 @@ export default function TrendsPanel({ projectId, clip, state, info, preview, flu
   useEffect(() => {
     alive.current = true; let cancelled = false;
     api.getTrends(projectId, clip.job_id, clip.clip_index).then(data => { if (!cancelled) accept(data); }).catch(e => !cancelled && setError(e.message));
-    return () => { cancelled = true; alive.current = false; if (speech.current) window.speechSynthesis?.cancel(); };
+    return () => { cancelled = true; alive.current = false; };
   }, [api, projectId, clip.job_id, clip.clip_index]);
   useEffect(() => {
     if (record?.status !== 'running') return;
@@ -93,19 +93,11 @@ export default function TrendsPanel({ projectId, clip, state, info, preview, flu
     catch (e) { if (alive.current) setError(e.message); }
     finally { if (alive.current) setBusy(false); }
   }
-  function stop() { window.speechSynthesis?.cancel(); setSpeaking(false); }
-  function read() {
-    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { setError('Read aloud is unavailable. The fox’s explanation is shown as text.'); return; }
-    stop(); const line = new SpeechSynthesisUtterance(concise(guideText, 380, 3));
-    const voices = window.speechSynthesis.getVoices(); if (voices.length) line.voice = voices.find(v => v.lang.startsWith('en')) || voices[0];
-    line.onend = () => alive.current && setSpeaking(false); line.onerror = () => { if (alive.current) { setSpeaking(false); setError('Speech playback is unavailable. Read the fox’s explanation instead.'); } };
-    speech.current = line; setSpeaking(true); window.speechSynthesis.speak(line);
-  }
   const failures = [...(record?.failures || []), ...(result.failures || [])];
   const showResult = !!analysis?.result || references.length > 0;
   return <div className="trends-workspace">
     <aside className="trends-preview-stack">{preview}
-      <div className="trends-guide" aria-label="Fox editing guide"><span aria-hidden="true">🦊</span><div><strong>A little direction</strong><p>{concise(guideText, 300, 3)}</p><button className="editor-choice" onClick={read} disabled={speaking}>Read aloud</button>{speaking && <button className="editor-choice" onClick={stop}>Stop</button>}</div></div>
+      <div className="trends-guide" aria-label="Fox editing guide"><span aria-hidden="true">🦊</span><div><strong>A little direction</strong><p>{concise(guideText, 300, 3)}</p></div></div>
       <p className="trends-scope">YouTube-based research · Your clip changes only when you apply an edit.</p>
     </aside>
     <section className="trends-main" aria-label="Clip analysis">

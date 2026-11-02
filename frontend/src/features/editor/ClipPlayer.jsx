@@ -15,7 +15,7 @@ const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 
 //                can move the playhead and jump the video
 //   framing    - optional { patch, recordUndo } from useClipDraft: in Fill mode you can then drag the video
 //                to choose what stays in the frame (one undo step per drag)
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenTrends, trendsOpen }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -173,9 +173,13 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   }
 
   return (
-    <div className="clip-player">
-      <div className="editor-choice-row" role="tablist" aria-label="Preview version">
+    <div className="clip-player" style={{ "--preview-ratio": ratio || 16 / 9 }}>
+      <div className="editor-choice-row">
+        <div className="editor-choice-row" role="tablist" aria-label="Preview version">
         {['original', 'edited'].map(mode => <button key={mode} role="tab" aria-selected={view === mode} className={`editor-choice${view === mode ? ' active' : ''}`} onClick={() => { videoRef.current?.pause(); setView(mode); }}>{mode === 'original' ? 'Original' : 'Edited'}</button>)}
+        </div>
+        {onOpenTrends && <button type="button" className="editor-choice clip-player-trends"
+          aria-haspopup="dialog" aria-expanded={trendsOpen} onClick={onOpenTrends}>Trends</button>}
       </div>
       <div ref={stageRef} className="clip-player-stage">
         <div className={`clip-player-frame${canDrag ? " can-drag" : ""}`}
@@ -217,11 +221,16 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
         </span>
         <button type="button" className="btn btn-small btn-ghost" onClick={() => setMuted((m) => !m)}
           aria-pressed={muted} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>
-          {muted ? "🔇" : "🔊"}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4V5Z" fill="currentColor" stroke="none" />
+            {muted ? <path d="m16 9 5 6m0-6-5 6" /> : <><path d="M15 8a6 6 0 0 1 0 8" /><path d="M18 5a10 10 0 0 1 0 14" /></>}
+          </svg>
         </button>
         <button type="button" className={`btn btn-small btn-ghost clip-player-loop${loop ? " active" : ""}`}
-          onClick={() => setLoop((l) => !l)} aria-pressed={loop} title={loop ? "Looping: on" : "Looping: off"}>
-          🔁 Loop
+          onClick={() => setLoop((l) => !l)} aria-pressed={loop} aria-label={loop ? "Turn looping off" : "Turn looping on"} title={loop ? "Looping: on" : "Looping: off"}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3" />
+          </svg>
         </button>
       </div>
     </div>

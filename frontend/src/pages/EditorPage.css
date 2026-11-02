@@ -1,5 +1,14 @@
 /* Sizes are Figma pixels: calc(N * var(--u)) */
 .editor {
+  --wood-cream: none;
+  --wood-green: none;
+  --color-cream-card: #d4ece7;
+  --panel-bg: #d4ece7;
+  --editor-corner: 12px;
+  --panel-radius: var(--editor-corner);
+  --radius-sm: var(--editor-corner);
+  --radius-md: var(--editor-corner);
+  --radius-lg: var(--editor-corner);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -14,7 +23,7 @@
   background: #74B7BA;
 }
 
-.editor :is(.btn-primary, .editor-choice.active, .editor-ratio.active, .editor-panel-tab.active, .editor-clip-tab.active, .topnav-step.active) {
+.editor :is(.btn-primary, .editor-choice.active, .editor-ratio.active, .editor-clip-tab.active, .topnav-step.active) {
   background: #569B9E;
 }
 
@@ -24,7 +33,7 @@
   align-items: center;
   gap: calc(14 * var(--u));
   height: calc(87 * var(--u));
-  margin: calc(20 * var(--u)) calc(24 * var(--u)) 0;
+  margin: 0;
   padding: 0 calc(24 * var(--u));
   border: var(--panel-border);
   border-radius: var(--panel-radius);
@@ -36,13 +45,16 @@
   margin-left: auto;                     /* push to the right */
 }
 
-/* ---------- Three columns: sidebar 241 | center | panel 349 ---------- */
-.editor-body {
+/* Preview on the left, clip controls and inspector on the right, timeline below. */
+.editor .editor-body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) calc(349 * var(--u));
-  gap: calc(24 * var(--u));
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+  grid-template-rows: auto minmax(200px, 1fr) auto;
+  grid-template-areas: "preview actions" "preview panel" "timeline timeline";
+  gap: 12px;
+  overflow-y: auto;
   padding: calc(20 * var(--u)) calc(24 * var(--u)) calc(24 * var(--u));
 }
 
@@ -55,8 +67,8 @@
   flex-shrink: 0;
   overflow-x: auto;
   padding: 4px;
-  border: 2px solid var(--color-lake-ink);
-  border-radius: var(--radius-md);
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
   background: #D4ECE7;
 }
 .editor-clip-tab {
@@ -82,21 +94,82 @@
 .editor-clip-tab-duration { flex-shrink: 0; font-size: 11px; opacity: 0.7; }
 /* Center column: preview (597 tall) and timeline (224 tall) */
 .editor-center {
-  min-width: 0;
+  display: contents;
+}
+
+.editor-preview-row {
+  display: contents;
+}
+
+.editor-preview-actions {
+  grid-area: actions;
   display: flex;
   flex-direction: column;
-  gap: calc(24 * var(--u));
-  min-height: 0;
+  gap: 12px;
+  min-width: 0;
+}
+
+.editor-preview-actions .editor-tools {
+  height: auto;
+  min-height: 56px;
+  flex-wrap: wrap;
+  padding: 12px;
+}
+
+.editor .editor-body > .editor-left-column {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 12px;
+  width: min(360px, calc(100% - 24px));
+  z-index: 10;
+}
+
+.editor-center > .editor-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #d4ece7;
+}
+
+@media (max-width: 760px) {
+  .editor .editor-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 380px auto minmax(280px, auto) auto;
+    grid-template-areas: "preview" "actions" "panel" "timeline";
+  }
 }
 
 .editor-preview {
+  grid-area: preview;
+  align-self: stretch;
   position: relative;
-  flex: 1;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: min(280px, 100%);
   min-height: 0;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
   background: #D4ECE7;
   overflow: hidden;
+}
+
+.editor-preview .clip-player {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+}
+
+.editor-preview .clip-player-stage {
+  flex: 1;
+  min-height: 0;
+  width: calc(100% - 24px);
+  margin: 0 12px;
+  padding: 0;
+}
+
+.editor-preview .clip-player-bar {
+  flex-wrap: wrap;
 }
 
 .editor-caption {
@@ -113,8 +186,11 @@
 }
 
 .editor-timeline {
+  grid-area: timeline;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  margin-top: 0;
   gap: calc(12 * var(--u));
   height: calc(224 * var(--u));
   padding: calc(16 * var(--u));
@@ -159,6 +235,8 @@
 
 /* Right panel: Chat / Captions / Aspect Ratio */
 .editor-panel {
+  grid-area: panel;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -169,27 +247,50 @@
 }
 
 .editor-panel-tabs {
-  display: flex;
-  flex-wrap: wrap;            /* 4 tabs don't fit on one line in the narrow panel */
-  gap: calc(12 * var(--u));
-  padding: calc(17 * var(--u)) calc(18 * var(--u)) 0;
-  border-bottom: 1px solid rgba(65, 52, 20, 0.25);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px 12px 0;
+  border-bottom: 2px solid #406c69;
 }
 
 .editor-panel-tab {
-  padding-bottom: calc(8 * var(--u));
-  border: none;
-  border-bottom: 3px solid transparent;
-  background: none;
-  font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: calc(24 * var(--u));
-  white-space: nowrap;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 4px;
+  border: 1px solid #406c69;
+  border-radius: 10px 10px 0 0;
+  border-bottom: 0;
+  color: #173d35;
+  font: 700 clamp(10px, 0.95vw, 14px) var(--font-ui);
   cursor: pointer;
 }
 
 .editor-panel-tab.active {
-  border-bottom-color: var(--color-wood-dark);
+  border-color: #173d35;
+  box-shadow: inset 0 0 0 1px #173d35;
+}
+
+.editor-panel-tab.editor-trends-button {
+  align-self: center;
+  margin-bottom: 8px;
+  border: 1px solid #406c69;
+  border-radius: 8px;
+}
+
+.editor button:not(.captions-swatch):not(.editor-panel-tab),
+.editor .topnav-step,
+.editor .clip-player-frame,
+.editor .captions-views,
+.editor .captions-preset,
+.editor .captions-line,
+.editor .music-asset,
+.editor .music-segment {
+  border-radius: var(--editor-corner);
+}
+
+.editor .editor-panel-tab {
+  border-radius: var(--editor-corner) var(--editor-corner) 0 0;
 }
 
 .editor-panel-content {
@@ -197,6 +298,30 @@
   min-height: 0;
   overflow-y: auto;            /* long tabs (like Captions) scroll inside the panel */
   padding: calc(18 * var(--u));
+}
+
+.editor, .editor * {
+  scrollbar-width: thin;
+  scrollbar-color: #74b7ba #d4ece7;
+}
+
+.editor::-webkit-scrollbar, .editor *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.editor::-webkit-scrollbar-track, .editor *::-webkit-scrollbar-track {
+  background: #d4ece7;
+}
+
+.editor::-webkit-scrollbar-thumb, .editor *::-webkit-scrollbar-thumb {
+  background: #74b7ba;
+  border: 2px solid #d4ece7;
+  border-radius: 999px;
+}
+
+.editor::-webkit-scrollbar-thumb:hover, .editor *::-webkit-scrollbar-thumb:hover {
+  background: #569b9e;
 }
 
 .editor-option {

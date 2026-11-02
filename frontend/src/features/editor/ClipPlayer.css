@@ -11,6 +11,10 @@
   padding: 12px 12px 0;
 }
 
+.clip-player-trends {
+  margin-left: auto;
+}
+
 /* The stage centers a frame of the chosen aspect ratio inside whatever space there is */
 .clip-player-stage {
   flex: 1;
