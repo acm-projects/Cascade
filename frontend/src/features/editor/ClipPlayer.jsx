@@ -21,7 +21,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   const stageRef = useRef(null);
   const [url, setUrl] = useState(null);
   const [rendered, setRendered] = useState(null);
-  const [rendering, setRendering] = useState(false);
+  const [, setRendering] = useState(false);
   const [renderError, setRenderError] = useState('');
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
@@ -207,7 +207,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
 
         </div>
       </div>
-      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? 'Rendering edited preview… Original source shown until ready.' : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
+      {renderError && <div className="editor-control-note"><span role="alert">{renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
           {playing ? "⏸" : "▶"}

@@ -5,6 +5,19 @@
   height: 100vh;
 }
 
+.editor.leaf-page {
+  background: #203C32;
+
+}
+
+.editor :is(.btn, .editor-choice, .editor-ratio, .editor-panel-tab, .editor-clip-tab, .topnav-step) {
+  background: #74B7BA;
+}
+
+.editor :is(.btn-primary, .editor-choice.active, .editor-ratio.active, .editor-panel-tab.active, .editor-clip-tab.active, .topnav-step.active) {
+  background: #569B9E;
+}
+
 /* ---------- Tool strip: 87 tall ---------- */
 .editor-tools {
   display: flex;
@@ -15,7 +28,7 @@
   padding: 0 calc(24 * var(--u));
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  background: var(--panel-bg);
+  background: #D4ECE7;
   flex-shrink: 0;
 }
 
@@ -28,81 +41,48 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: calc(241 * var(--u)) 1fr calc(349 * var(--u));
+  grid-template-columns: minmax(0, 1fr) calc(349 * var(--u));
   gap: calc(24 * var(--u));
   padding: calc(20 * var(--u)) calc(24 * var(--u)) calc(24 * var(--u));
 }
 
-/* Left sidebar */
-.editor-sidebar {
+/* Compact picked-clip switcher above the preview. */
+.editor-clip-tabs {
   display: flex;
-  flex-direction: column;
-  gap: calc(8 * var(--u));
-  min-height: 0;
-  padding: calc(16 * var(--u));
-  border: var(--panel-border);
-  border-radius: var(--panel-radius);
-  background: var(--panel-bg);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-shrink: 0;
+  overflow-x: auto;
+  padding: 4px;
+  border: 2px solid var(--color-lake-ink);
+  border-radius: var(--radius-md);
+  background: #D4ECE7;
 }
-
-.editor-sidebar-tab {
-  padding: calc(8 * var(--u)) calc(12 * var(--u));
-  border: none;
-  border-radius: calc(10 * var(--u));
+.editor-clip-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  max-width: 240px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
-  font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: calc(22 * var(--u));
-  text-align: left;
+  color: var(--color-wood-text);
+  font: 600 13px var(--font-ui);
   cursor: pointer;
 }
-
-.editor-sidebar-tab.active {
+.editor-clip-tab:hover { background: rgba(62, 123, 79, 0.12); }
+.editor-clip-tab.active {
+  border-color: var(--color-accent);
   background: rgba(62, 123, 79, 0.22);
 }
-
-.editor-sidebar-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: calc(8 * var(--u));
-  margin-top: calc(12 * var(--u));
-  padding-top: calc(12 * var(--u));
-  border-top: 1px solid rgba(0, 0, 0, 0.2);
-}
-
-.editor-media-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: calc(8 * var(--u)) calc(12 * var(--u));
-  border: 2px solid transparent;
-  border-radius: calc(10 * var(--u));
-  background: rgba(255, 252, 240, 0.85);
-  font-family: var(--font-heading);
-  font-size: calc(20 * var(--u));
-  cursor: pointer;
-}
-
-.editor-media-item span {
-  color: var(--color-text-muted);
-  font-family: var(--font-body);
-  font-size: calc(16 * var(--u));
-}
-
-.editor-media-item.active {
-  border-color: var(--color-accent);
-}
-
-.editor-coming-soon {
-  color: var(--color-text-muted);
-  font-size: calc(18 * var(--u));
-}
-
+.editor-clip-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-clip-tab-duration { flex-shrink: 0; font-size: 11px; opacity: 0.7; }
 /* Center column: preview (597 tall) and timeline (224 tall) */
 .editor-center {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: calc(24 * var(--u));
@@ -115,7 +95,7 @@
   min-height: 0;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  background: var(--panel-bg);
+  background: #D4ECE7;
   overflow: hidden;
 }
 
@@ -140,7 +120,7 @@
   padding: calc(16 * var(--u));
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  background: var(--panel-bg);
+  background: #D4ECE7;
   flex-shrink: 0;
 }
 
@@ -184,7 +164,7 @@
   min-height: 0;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  background: var(--panel-bg);
+  background: #D4ECE7;
   overflow: hidden;
 }
 
