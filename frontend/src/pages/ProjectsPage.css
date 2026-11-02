@@ -40,21 +40,24 @@
   display: flex;
 }
 
-/* Left sidebar: 396 wide, with the thick black line on its right edge */
+/* Left sidebar: 396 wide */
 .projects-sidebar {
   display: flex;
   flex-direction: column;
   gap: calc(14 * var(--u));
   width: calc(396 * var(--u));
   padding: calc(251 * var(--u)) 0 0 calc(34 * var(--u));
-  border-right: max(4px, calc(8 * var(--u))) solid black;
   flex-shrink: 0;
 }
 
 /* Wooden pill buttons: 294 x 72 */
 .projects-filter {
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
   width: calc(294 * var(--u));
   height: calc(72 * var(--u));
+  padding: 0 calc(24 * var(--u));
   border: none;
   background-color: transparent;
   background-size: 100% 100%;
@@ -64,6 +67,13 @@
   font-size: calc(32 * var(--u));
   cursor: pointer;
   transition: scale 0.15s, filter 0.15s;
+}
+
+/* Icon on the left, then the label (text is left-aligned) */
+.projects-filter-icon {
+  width: calc(36 * var(--u));
+  font-size: calc(28 * var(--u));
+  text-align: center;
 }
 
 .projects-filter:hover {

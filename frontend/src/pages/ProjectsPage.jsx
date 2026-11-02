@@ -18,12 +18,13 @@ import Modal from "../components/ui/Modal";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 
+// icon: an emoji for now (easy to swap for a drawn icon later)
 const views = [
-  { id: "all", label: "All Projects" },
-  { id: "recent", label: "Recents" },
-  { id: "favorites", label: "Favorites" },
-  { id: "archives", label: "Archives" },
-  { id: "trash", label: "Trash" },
+  { id: "all", label: "All Projects", icon: "📁" },
+  { id: "recent", label: "Recents", icon: "🕒" },
+  { id: "favorites", label: "Favorites", icon: "⭐" },
+  { id: "archives", label: "Archives", icon: "📦" },
+  { id: "trash", label: "Trash", icon: "🗑️" },
 ];
 
 const emptyViews = {
@@ -204,6 +205,7 @@ function ProjectsPage() {
               aria-current={v.id === view.id ? "page" : undefined}
               onClick={() => chooseView(v.id)}
             >
+              <span className="projects-filter-icon" aria-hidden="true">{v.icon}</span>
               {v.label}
             </button>
           ))}
