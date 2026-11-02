@@ -6,7 +6,6 @@
   background-size: cover;
   background-position: center;
   background-color: var(--color-leaf-mist);
-  overflow: clip; /* the New Project parrot waits off-screen; don't let it make the page scroll sideways */
 }
 
 /* ---------- Green top bar (Figma: 119 tall, dark green gradient) ---------- */
@@ -184,9 +183,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* same 94 gap as before, but most of it inside the scroll area so the card monkeys' heads aren't cut off */
-  margin-top: calc(24 * var(--u));
-  padding-top: calc(70 * var(--u));
+  margin-top: calc(94 * var(--u));
   padding-bottom: calc(40 * var(--u));
 }
 
