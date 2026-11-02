@@ -1,5 +1,7 @@
 # Cascade
 
+**New here? Start with [Getting started](docs/GETTING_STARTED.md)** — install, `.env`, running both servers, and troubleshooting.
+
 [![CI](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml/badge.svg)](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml)
 
 For the React app, run the backend below and `cd frontend && npm ci && npm run dev`
