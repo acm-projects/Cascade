@@ -1,0 +1,72 @@
+/* The monkey peeks over the top edge of the wrapped card (see Monkey.jsx) */
+.monkey-spot {
+  position: relative;
+}
+
+/* the card sits in front of the monkey's head */
+.monkey-spot > :not(.monkey-head):not(.monkey-paws) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Head: hidden behind the card, slides up on hover */
+.monkey-head {
+  position: absolute;
+  left: 14%;
+  bottom: calc(100% - 14px);        /* chin tucked just behind the card's top edge */
+  width: calc(96 * var(--u));
+  min-width: 56px;
+  aspect-ratio: 80 / 64;
+  z-index: 0;
+  pointer-events: none;
+  transform: translateY(100%);       /* fully behind the card */
+  transition: transform 0.25s ease-in;
+}
+
+/* Paws: in front, gripping the edge right under the head */
+.monkey-paws {
+  position: absolute;
+  left: 14%;
+  bottom: calc(100% - 9px);
+  width: calc(96 * var(--u));
+  min-width: 56px;
+  aspect-ratio: 80 / 14;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+/* Hover (or Tab to the card): pop up with a little bounce, paws grab a moment later */
+.monkey-spot:hover .monkey-head,
+.monkey-spot:focus-within .monkey-head {
+  transform: none;
+  transition: transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.monkey-spot:hover .monkey-paws,
+.monkey-spot:focus-within .monkey-paws {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.15s 0.12s, transform 0.2s 0.12s;
+}
+
+/* "Reduce motion": just fade in and out, no popping */
+@media (prefers-reduced-motion: reduce) {
+  .monkey-head,
+  .monkey-spot:hover .monkey-head,
+  .monkey-spot:focus-within .monkey-head {
+    transform: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .monkey-spot:hover .monkey-head,
+  .monkey-spot:focus-within .monkey-head {
+    opacity: 1;
+  }
+  .monkey-paws,
+  .monkey-spot:hover .monkey-paws {
+    transform: none;
+  }
+}

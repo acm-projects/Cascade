@@ -11,6 +11,7 @@ import useApi from "../api/useApi";
 import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
+import Parrot from "../components/Parrot";
 import UserAvatar from "../components/UserAvatar";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
@@ -232,14 +233,17 @@ function ProjectsPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </label>
-              <button
-                type="button"
-                className="projects-new"
-                style={{ backgroundImage: `url(${woodGreen})` }}
-                onClick={handleNewProject}
-              >
-                + New Project
-              </button>
+              {/* Hover it: a parrot flies in and lands on top (just for fun) */}
+              <Parrot>
+                <button
+                  type="button"
+                  className="projects-new"
+                  style={{ backgroundImage: `url(${woodGreen})` }}
+                  onClick={handleNewProject}
+                >
+                  + New Project
+                </button>
+              </Parrot>
             </div>
           </div>
 

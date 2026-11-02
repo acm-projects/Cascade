@@ -1,0 +1,60 @@
+/* The parrot sits on top of the wrapped button (see Parrot.jsx) */
+.parrot-perch {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Away: up and off to the top right, small and invisible. Flying away takes 0.6s. */
+.parrot {
+  position: absolute;
+  right: 12%;
+  bottom: 100%;
+  width: calc(70 * var(--u));
+  min-width: 40px;
+  aspect-ratio: 1;
+  pointer-events: none;           /* never gets in the way of clicking */
+  opacity: 0;
+  transform: translate(180px, -160px) rotate(-20deg) scale(0.7);
+  transition: transform 0.6s ease-in, opacity 0.6s ease-in;
+}
+
+/* Landed: swoops in over 0.7s with a little overshoot */
+.parrot-perch:hover .parrot,
+.parrot-perch:focus-within .parrot {
+  opacity: 1;
+  /* down by the space under its feet (10/64 of the drawing), so the feet stand on the top edge at any size
+     and the tail hangs over the front */
+  transform: translateY(calc(15% + 5px));
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.3, 1.15), opacity 0.2s ease-out;
+}
+
+/* Wings flap the whole time it's flying away... */
+.parrot-wing {
+  transform-origin: 31px 29px;    /* the shoulder */
+  animation: parrot-flap 0.16s ease-in-out infinite alternate;
+}
+
+/* ...and for 4 beats while landing, then stay folded */
+.parrot-perch:hover .parrot-wing,
+.parrot-perch:focus-within .parrot-wing {
+  animation: parrot-flap 0.16s ease-in-out 4 alternate;
+}
+
+@keyframes parrot-flap {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-55deg); }
+}
+
+/* People who turn on "reduce motion" just see it fade in and out, no flying or flapping */
+@media (prefers-reduced-motion: reduce) {
+  .parrot,
+  .parrot-perch:hover .parrot,
+  .parrot-perch:focus-within .parrot {
+    transform: translateY(calc(15% + 5px));
+    transition: opacity 0.2s;
+  }
+  .parrot-wing,
+  .parrot-perch:hover .parrot-wing {
+    animation: none;
+  }
+}
