@@ -20,28 +20,31 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const [url, setUrl] = useState(null);
-  const [rendered, setRendered] = useState(null);
-  const [rendering, setRendering] = useState(false);
-  const [renderError, setRenderError] = useState('');
+  const [render, setRender] = useState(null); // { key, url } or { key, error } for the last finished server render
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
   const clock = useMemo(() => timelineClock(state), [state]);
-  const showEdited = view === "edited" && !!rendered;
   const advanced = true; // Edited always uses the same server renderer as MP4 export.
   const snapshot = JSON.stringify(state);
+  // The render for the current edit (+ retry count). An older render's result is ignored, so
+  // "rendering" is simply: the last finished render isn't this one yet.
+  const renderKey = `${retry}:${snapshot}`;
+  const current = render?.key === renderKey ? render : null;
+  const rendered = current?.url ?? null;
+  const renderError = current?.error ?? '';
+  const rendering = advanced && !current;
+  const showEdited = view === "edited" && !!rendered;
   useEffect(() => {
+    if (!advanced) return;
     let active = true, objectUrl;
-    setRendered(null); setRenderError('');
-    if (!advanced) { setRendering(false); return; }
-    setRendering(true);
     const timer = setTimeout(() => {
       api.exportClip(projectId, clip.job_id, clip.clip_index, JSON.parse(snapshot)).then(blob => {
         if (!active) return;
-        objectUrl = URL.createObjectURL(blob); setRendered(objectUrl);
-      }).catch(e => { if (active) setRenderError(e.message); }).finally(() => { if (active) setRendering(false); });
+        objectUrl = URL.createObjectURL(blob); setRender({ key: renderKey, url: objectUrl });
+      }).catch(e => { if (active) setRender({ key: renderKey, error: e.message }); });
     }, 900);
     return () => { active = false; clearTimeout(timer); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [api, projectId, clip.job_id, clip.clip_index, snapshot, advanced, retry]);
+  }, [api, projectId, clip.job_id, clip.clip_index, snapshot, advanced, renderKey]);
   const [error, setError] = useState(null);
   const [time, setTime] = useState(state.start);
   const [playing, setPlaying] = useState(false);

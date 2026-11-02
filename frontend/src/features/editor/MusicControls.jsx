@@ -21,11 +21,12 @@ export default function MusicControls({ projectId, clip, state, duration, change
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
-  const reload = useCallback(() => {
-    setLoading(true); setError('');
-    return api.listAudioAssets(projectId, clip.job_id, clip.clip_index).then(data => setAssets(data.assets)).catch(e => setError(e.message)).finally(() => setLoading(false));
-  }, [api, projectId, clip.job_id, clip.clip_index]);
-  useEffect(() => { reload(); }, [reload]);
+  // Fetch the track list. The first load uses the initial "loading" state; Retry switches it back on first.
+  const load = useCallback(() =>
+    api.listAudioAssets(projectId, clip.job_id, clip.clip_index).then(data => setAssets(data.assets)).catch(e => setError(e.message)).finally(() => setLoading(false)),
+  [api, projectId, clip.job_id, clip.clip_index]);
+  const reload = () => { setLoading(true); setError(''); load(); };
+  useEffect(() => { load(); }, [load]);
   const segments = state.audio || [];
   function add(asset) {
     const start = state.start;
