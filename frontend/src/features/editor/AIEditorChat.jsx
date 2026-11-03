@@ -21,12 +21,15 @@ function engineLine(status) {
 export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, clip, result, status }) {
   const analysis = result?.analysis;
   const occ = status?.provider === 'openchatcut';
+  // A used-up Gemini quota does not lock the chat: "Edit this video" falls back to the local model,
+  // and requests that need Gemini come back as a visible NOT APPLIED note.
   const placeholder = typing
     ? (occ ? 'Planning with one free Gemini request, then applying with OpenChatCut…' : 'Analyzing footage and planning edits…')
+    : status?.quota?.exhausted ? 'Gemini quota used up — "Edit this video" still works with the local model…'
     : 'Describe the edit, or refine the last change…';
   return <div className="ai-editor-chat">
     <ChatBox title="AI Editor" subtitle="Plans and applies real timeline edits. Preview shows the rendered result."
-      messages={messages} onSend={onSend} disabled={disabled || status?.quota?.exhausted} typing={typing}
+      messages={messages} onSend={onSend} disabled={disabled} typing={typing}
       tag={clip.title || 'Selected clip'} quickActions={suggestions} placeholder={placeholder} />
     {onClear && <button type="button" className="editor-choice ai-editor-clear" onClick={onClear} disabled={typing || !messages.length}>
       Clear chat history
