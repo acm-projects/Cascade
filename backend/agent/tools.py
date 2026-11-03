@@ -12,6 +12,7 @@ import base64
 import json
 import math
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
@@ -262,9 +263,17 @@ class ToolBox:
         n = OVERVIEW_FRAMES if getattr(idx, "has_video", True) else 0
         if not getattr(idx, "has_video", True):
             blocks[0]["text"] += "\nAudio-only recording: use speech search and transcript tools. No visual frames exist. Rank highlights by what is said and its context."
-        for i in range(n):
-            t = idx.duration * (i + 0.5) / n
-            jpeg = self.frame_grabber(self.video_path, t)
+        blocks += self._frame_blocks([idx.duration * (i + 0.5) / n for i in range(n)])
+        return blocks, False
+
+    def _frame_blocks(self, times: list[float]) -> list[dict[str, Any]]:
+        """Grab frames concurrently (each is its own ffmpeg process); blocks stay in time order."""
+        if not times:
+            return []
+        with ThreadPoolExecutor(max_workers=len(times)) as pool:
+            jpegs = list(pool.map(lambda t: self.frame_grabber(self.video_path, t), times))
+        blocks: list[dict[str, Any]] = []
+        for t, jpeg in zip(times, jpegs):
             blocks.append({"type": "text", "text": f"Frame at {t:.1f}s:"})
             blocks.append(
                 {
@@ -276,7 +285,7 @@ class ToolBox:
                     },
                 }
             )
-        return blocks, False
+        return blocks
 
     def _outline_text(self, header: str) -> str:
         parts = [
@@ -353,21 +362,7 @@ class ToolBox:
                 f"Invalid range. Need 0 <= start < end <= {self.index.duration:.1f}s."
             ), True
         n = max(1, min(int(num_frames), MAX_INSPECT_FRAMES)) if getattr(self.index, "has_video", True) else 0
-        blocks: list[dict[str, Any]] = []
-        for i in range(n):
-            t = start + (end - start) * (i + 0.5) / n
-            jpeg = self.frame_grabber(self.video_path, t)
-            blocks.append({"type": "text", "text": f"Frame at {t:.1f}s:"})
-            blocks.append(
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": base64.b64encode(jpeg).decode("utf-8"),
-                    },
-                }
-            )
+        blocks = self._frame_blocks([start + (end - start) * (i + 0.5) / n for i in range(n)])
         spoken = self.index.transcript_between(start, end) or "(no speech in this range)"
         blocks.append({"type": "text", "text": f"Transcript {start:.1f}s-{end:.1f}s: {spoken}"})
         return blocks, False

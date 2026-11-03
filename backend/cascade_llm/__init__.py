@@ -1,6 +1,6 @@
 """LLM layer shared by the agent, the transcript summarizer and the Trends tab.
 
-LLM_PROVIDER=anthropic (default) or openai picks the provider for everything; the model is fixed
+LLM_PROVIDER=openai (default) or anthropic picks the provider for everything; the model is fixed
 per provider. See clients.py. conversation.py is the agent loop's wire format per provider and
 structured.py is the "prompt in, schema-shaped JSON out" call.
 """

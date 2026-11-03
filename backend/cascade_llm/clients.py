@@ -1,7 +1,7 @@
 """Which LLM every call site uses, plus client creation and pricing.
 
 ONE setting chooses the provider for everything (the agent, the transcript summaries and the
-Trends tab):  LLM_PROVIDER=anthropic (default) or openai.  The model is fixed per provider
+Trends tab):  LLM_PROVIDER=openai (default) or anthropic.  The model is fixed per provider
 (MODELS below) - there are no per-feature model settings and no model names to edit in .env.
 """
 
@@ -26,8 +26,8 @@ MODELS: dict[str, str] = {
 
 
 def selected_provider() -> str:
-    """The provider chosen by LLM_PROVIDER, read at call time (default: anthropic)."""
-    value = os.environ.get("LLM_PROVIDER", "").strip().lower() or ANTHROPIC
+    """The provider chosen by LLM_PROVIDER, read at call time (default: openai)."""
+    value = os.environ.get("LLM_PROVIDER", "").strip().lower() or OPENAI
     if value not in MODELS:
         raise LLMConfigError(f"LLM_PROVIDER must be 'anthropic' or 'openai' (got '{value}').")
     return value

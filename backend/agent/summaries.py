@@ -115,21 +115,34 @@ def ensure_summaries(
 ) -> None:
     """Fill index.chunk_summaries / index.summary_usage when the transcript is long.
 
-    Short transcripts need no condensing, so this is a no-op for them.
+    Short transcripts need no condensing, so this is a no-op for them; so is an index that
+    build_index already summarized.
     """
-    emit = progress or (lambda msg: None)
-    if not is_long_transcript(index.transcript):
+    if index.chunk_summaries:
         return
+    result = summarize_transcript(index.transcript, progress, client, chunks=index.chunks)
+    if result:
+        index.chunk_summaries, index.summary_usage = result
 
-    chunks = index.chunks or build_chunks(index.transcript)
-    cache = _cache_path(index.transcript)
+
+def summarize_transcript(
+    transcript: list[dict[str, Any]],
+    progress: Callable[[str], None] | None = None,
+    client: Any = None,
+    chunks: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    """(chunk_summaries, summary_usage) for a long transcript, or None for a short one."""
+    emit = progress or (lambda msg: None)
+    if not is_long_transcript(transcript):
+        return None
+
+    chunks = chunks or build_chunks(transcript)
+    cache = _cache_path(transcript)
     if cache.exists():
         cached = json.loads(cache.read_text())
-        index.chunk_summaries = cached["chunks"]
-        index.summary_usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0,
-                               "cost_known": True, "cached": True}
         emit("Loaded transcript summaries from cache")
-        return
+        return cached["chunks"], {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0,
+                                  "cost_known": True, "cached": True}
 
     client = client or make_client()  # raises if the selected provider's key is missing
     emit(f"Summarizing transcript in {len(chunks)} chunks")
@@ -140,7 +153,7 @@ def ensure_summaries(
     cost = 0.0
     cost_known = True
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(summarize_chunk, client, c, index.transcript): c for c in chunks}
+        futures = {pool.submit(summarize_chunk, client, c, transcript): c for c in chunks}
         for done, future in enumerate(as_completed(futures), start=1):
             chunk = futures[future]
             try:
@@ -172,10 +185,9 @@ def ensure_summaries(
             }
         )
 
-    index.chunk_summaries = ordered
-    index.summary_usage = {"input_tokens": in_tok, "output_tokens": out_tok,
-                           "cost_usd": cost, "cost_known": cost_known, "cached": False}
     if not errors:  # never cache a partial result
         cache.write_text(json.dumps({"chunks": ordered}))
     else:
         emit(f"{len(errors)} chunk summaries failed; continuing without them")
+    return ordered, {"input_tokens": in_tok, "output_tokens": out_tok,
+                     "cost_usd": cost, "cost_known": cost_known, "cached": False}

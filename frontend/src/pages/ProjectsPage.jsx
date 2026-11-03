@@ -90,12 +90,12 @@ function ProjectsPage() {
     setCreatingNew(true);
   }
 
-  // From the New Project pop-up: create the project, then open its AI Studio. A picked video goes along
-  // and uploads there with the first prompt.
-  async function createProject(name, file) {
-    const created = await api.createProject(name);
+  // From the New Project pop-up: upload the project's video (analysis starts on the backend right
+  // away), then open its AI Studio, which shows the analysis progress.
+  async function createProject(name, file, onProgress) {
+    const created = await api.createProjectWithVideo(name, file, onProgress);
     openProject(created);
-    navigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined });
+    navigate(`/projects/${created.id}/studio`);
   }
 
   function handleOpen(project) {

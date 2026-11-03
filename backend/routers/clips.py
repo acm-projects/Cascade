@@ -1,5 +1,5 @@
 """Authenticated upload, generation progress, and clip playback routes."""
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 from uuid import uuid4
 import hashlib
@@ -20,6 +20,19 @@ from backend.pipeline_timing import StageTimer
 
 router = APIRouter()
 MAX_STEPS = 400  # the step log shown on the website is capped
+
+
+def timed(function, *args):
+    """Run function(*args) and return how many seconds it took (shown in the step log)."""
+    started = time.monotonic()
+    function(*args)
+    return time.monotonic() - started
+
+
+def check_cancelled(job_id):
+    with job_service.jobs_lock:
+        if job_service.jobs[job_id].get('cancel_requested'):
+            raise job_service.JobCancelled()
 
 
 def process_upload(
@@ -61,6 +74,23 @@ def process_upload(
             state="processing",
         )
 
+        # Projects created with their video are analysed once, up front (backend/indexing.py).
+        # A prompt sent before that finishes waits here, then picks clips from that analysis.
+        project_index = None
+        source_job = job_service.load_json(folder/'owner.json').get('source_job', job_id)
+        if source_job != job_id and job_service.load_json(job_service.JOBS_DIR/source_job/'owner.json').get('kind') == 'source':
+            from backend import indexing
+            if indexing.status(source_job).get('state') != 'done':
+                timer.start('Waiting for video analysis')
+                progress('Waiting for video analysis...')
+                indexing.wait_ready(source_job, lambda: check_cancelled(job_id))
+                # The source may have been re-encoded meanwhile: cut from the finished file.
+                from backend.generation import reuse_source
+                video_path.unlink()
+                reuse_source(job_service.JOBS_DIR/source_job/'source.video', video_path)
+            progress('Loading the video analysis')  # instant once warm; slow only right after a server restart
+            project_index = indexing.load(source_job)
+
         progress("Reading uploaded audio..." if job_service.load_json(folder/"owner.json").get("media_kind") == "audio" else "Reading uploaded video...")
         timer.start('Video inspection')
         from backend.media import probe_media, normalize_media
@@ -69,8 +99,12 @@ def process_upload(
         owner = job_service.load_json(folder/'owner.json')
         owner.update(media_info)
         from backend.core.storage import upload_source_media
+        # The source backup is not needed for selection, so it uploads while the agent runs.
+        source_upload = None
         if owner.get('source_job', job_id) == job_id and not owner.get('source_s3_key'):
-            owner.update(upload_source_media(folder, job_id, owner))
+            upload_pool = ThreadPoolExecutor(max_workers=1)
+            source_upload = upload_pool.submit(upload_source_media, folder, job_id, dict(owner))
+            upload_pool.shutdown(wait=False)
         job_service.save_json(folder/'owner.json', owner)
         suffix = '.mp4' if media_info['has_video'] else '.mp3'
         job_service.update_job(job_id, media_kind=media_info['media_kind'])
@@ -82,7 +116,11 @@ def process_upload(
             **({'requested_count':requested_count} if requested_count!=4 else {}),
             **({'exclude_windows': owner['exclude_windows']} if owner.get('exclude_windows') else {}),
             **({'references': owner['parent_clips']} if len(owner.get('parent_clips', [])) > 1 else {}),
-            **({'request_prompt': original_search} if parent_context else {}))
+            **({'request_prompt': original_search} if parent_context else {}),
+            **({'index': project_index} if project_index is not None else {}))
+        if source_upload:
+            owner.update(source_upload.result())  # an upload failure still fails the job, as before
+            job_service.save_json(folder/'owner.json', owner)
         selected = followup_windows(selected, parent_context, original_search, duration, target, requested_count)
         if owner.get('exclude_windows'):
             before_exclusion = len(selected)
@@ -106,52 +144,77 @@ def process_upload(
         )
 
         total = len(selected)
+        for clip in selected:
+            # The Studio thumbnail's time (a third of the way in); the frame is made ahead, below.
+            clip['thumbnail_at'] = round(clip['start'] + (clip['end'] - clip['start']) / 3, 1)
+        # Publish the picks now: the Studio plays them from the source while each file is rendered.
+        job_service.update_job(job_id, planned_clips=[
+            {key: clip[key] for key in ('start', 'end', 'title', 'explanation', 'reference_matches', 'thumbnail_at') if key in clip}
+            for clip in selected])
+        if media_info['has_video']:
+            from backend.routers.projects import prepare_frames
+            prepare_frames(job_service.JOBS_DIR / owner.get('source_job', job_id) / 'source.video',
+                           [clip['thumbnail_at'] for clip in selected])
         workers = media_service.render_workers(total)
         threads = media_service.encoder_threads(workers)
         timer.start('Video rendering and storage')
         results = {}
 
-        # Encoding runs in parallel (CPU only); captions and storage happen on this thread as each
-        # clip finishes, so uploads overlap with the encodes still running. Progress, cancel and the
-        # optional job timeout are only ever checked here, never from the encoder threads.
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {}
+        # Encoding runs in parallel (CPU only), and so do uploads (network): one slow upload never holds
+        # up the others. Progress, cancel and the optional job timeout are only ever checked on this
+        # thread, never from the encoder or upload threads.
+        with ThreadPoolExecutor(max_workers=workers) as pool, ThreadPoolExecutor(max_workers=4) as uploads:
+            cuts, saves = {}, {}
             for number, selection in enumerate(selected, start=1):
                 progress(f"Cutting clip {number}/{total}...")
                 filename = f"clip_{number}{suffix}"
-                futures[pool.submit(media_service.render_clip, video_path, selection, folder / filename, threads)] = number
+                cuts[pool.submit(timed, media_service.render_clip, video_path, selection, folder / filename, threads)] = number
+            pending = set(cuts)
             try:
-                for future in as_completed(futures):
-                    number = futures[future]
-                    future.result()
-                    selection = selected[number - 1]
-                    filename = f"clip_{number}{suffix}"
-                    captions_filename = f"clip_{number}.vtt"
-                    media_service.write_captions(folder / captions_filename, transcript, selection["start"], selection["end"])
-                    progress(f"Saving clip {number}/{total}...")
-                    storage = storage_service.upload_clip_files(folder, job_id, filename, captions_filename)
-                    results[number] = {
-                        **selection,
-                        "clip_id": f"{job_id}:{number-1}",
-                        "media_kind": media_info["media_kind"],
-                        "has_video": media_info["has_video"],
-                        **storage,
-                        "clip_url": f"/clips/{job_id}/{filename}",
-                        "captions_url": f"/clips/{job_id}/{captions_filename}",
-                    }
-                    ready = []
-                    for index in range(1, total + 1):
-                        if index not in results: break
-                        ready.append(storage_service.public_clip(results[index]))
-                    if ready and 'first_clip_ready_seconds' not in metadata:
-                        metadata['first_clip_ready_seconds'] = round(time.monotonic() - started, 3)
-                    job_service.update_job(job_id, clips=ready, ready_clip_count=len(ready), requested_clip_count=requested_count)
+                while pending:
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        if future in cuts:
+                            number = cuts[future]
+                            cut_seconds = future.result()
+                            selection = selected[number - 1]
+                            captions_filename = f"clip_{number}.vtt"
+                            media_service.write_captions(folder / captions_filename, transcript, selection["start"], selection["end"])
+                            progress(f"Clip {number}/{total} cut in {cut_seconds:.1f}s ({selection['end'] - selection['start']:.0f}s of video)")
+                            progress(f"Saving clip {number}/{total}...")
+                            upload = uploads.submit(storage_service.upload_clip_files, folder, job_id,
+                                                    f"clip_{number}{suffix}", captions_filename)
+                            saves[upload] = number
+                            pending.add(upload)
+                            continue
+                        number = saves[future]
+                        storage = future.result()
+                        selection = selected[number - 1]
+                        filename = f"clip_{number}{suffix}"
+                        captions_filename = f"clip_{number}.vtt"
+                        results[number] = {
+                            **selection,
+                            "clip_id": f"{job_id}:{number-1}",
+                            "media_kind": media_info["media_kind"],
+                            "has_video": media_info["has_video"],
+                            **storage,
+                            "clip_url": f"/clips/{job_id}/{filename}",
+                            "captions_url": f"/clips/{job_id}/{captions_filename}",
+                        }
+                        ready = []
+                        for index in range(1, total + 1):
+                            if index not in results: break
+                            ready.append(storage_service.public_clip(results[index]))
+                        if ready and 'first_clip_ready_seconds' not in metadata:
+                            metadata['first_clip_ready_seconds'] = round(time.monotonic() - started, 3)
+                        job_service.update_job(job_id, clips=ready, ready_clip_count=len(ready), requested_clip_count=requested_count)
             except BaseException:
-                for future in futures:
-                    future.cancel()  # clips not started yet are skipped; running encodes finish on their own
+                for future in [*cuts, *saves]:
+                    future.cancel()  # work not started yet is skipped; running encodes/uploads finish on their own
                 raise
 
         clips = [results[number] for number in sorted(results)]
+        progress(f"{len(clips)} clip(s) ready")
 
         timings = timer.finish()
         job_service.save_json(
@@ -343,13 +406,10 @@ def upload_video(
                     ),
                 },
             )
-            # Reuse only analysis from the same verified account and project.
-            for previous in job_service.metadata_paths('*/owner.json'):
-                if previous.parent == folder:
-                    continue
-                try:
-                    owner = job_service.load_json(previous)
-                except (OSError, ValueError):
+            # Reuse only analysis from the same verified account and project. One query for this
+            # user's jobs (with Neon, a per-job read was one network round trip per job).
+            for previous, owner in job_service.metadata_documents('*/owner.json', request.state.user_id):
+                if previous.parent == folder or not isinstance(owner, dict):
                     continue
                 if (owner.get('user_id') == request.state.user_id and owner.get('project_id') == project_id
                         and owner.get('video_sha256') == fingerprint.hexdigest()):

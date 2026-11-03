@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, apiUpload } from "./client";
 
 // Projects: backend/routers/projects.py and backend/routers/generations.py
 // A project looks like: { id, name, user_id, created_at (unix seconds), saved_clips: [{ job_id, clip_index }] }
@@ -17,6 +17,26 @@ export function listProjects(token) {
  */
 export function createProject(token, name) {
   return apiFetch("/api/projects", { token, method: "POST", body: { name } });
+}
+
+/**
+ * POST /api/projects/with-video   multipart: name, video
+ * One project = one video. The backend saves it and starts analysing it straight away.
+ * onProgress(percent) is called while the video uploads.
+ * @returns {Promise<Project & { source_job: string }>} status 201
+ */
+export function createProjectWithVideo(token, name, video, onProgress) {
+  const form = new FormData();
+  form.append("name", name);
+  form.append("video", video);
+  return apiUpload("/api/projects/with-video", { token, form, onProgress });
+}
+
+/**
+ * POST /api/projects/{projectId}/reindex  - analyse the project's video again (after a failure)
+ */
+export function reindexProject(token, projectId) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/reindex`, { token, method: "POST" });
 }
 
 /**

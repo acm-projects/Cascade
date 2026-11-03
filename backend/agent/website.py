@@ -12,16 +12,18 @@ import logging
 import os
 import re
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
 from backend.cascade_llm import LLMConfigError, make_client, selected_model, selected_provider
 
 from .agent import run_agent
-from .intent import classify_request
+from .intent import classify_request, heuristic_intent
 from .fast_selection import MAX_TRANSCRIPT_CHARS, MAX_BATCH_CLIPS, run_transcript_selection
 from .chunks import format_transcript
 from .index import build_index
+from .moment_selection import run_moment_selection
 from .summaries import ensure_summaries
 from .tools import MAX_CLIP_SECONDS, TARGET_CLIPS, ToolBox
 
@@ -86,6 +88,7 @@ def select_with_agent(
     exclude_windows: list | None = None,
     request_prompt: str | None = None,
     references: list | None = None,
+    index: Any = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Run the agent on a video. Returns (clips, transcript, metadata).
 
@@ -98,26 +101,54 @@ def select_with_agent(
     min_len = min(WEBSITE_MIN_CLIP_SECONDS, duration)
     max_len = min(MAX_CLIP_SECONDS, max(min_len, target * WEBSITE_MAX_CLIP_FACTOR))
 
-    stage("Transcript and search index")
-    # Frames and the temporary MP3 live in a scratch folder, never in the job's folder; the index
-    # itself (embeddings, transcript) is cached by file hash for follow-up prompts.
-    with tempfile.TemporaryDirectory(prefix="agent_index_") as scratch:
-        speech_first = transcript_first_request(request_prompt if request_prompt is not None else search)
-        index = build_index(video_path, Path(scratch), progress=progress, **({'visual': False} if speech_first else {}))
+    raw_prompt = request_prompt if request_prompt is not None else search
+    speech_first = transcript_first_request(raw_prompt)
+    # A project analysed at creation (backend/indexing.py) passes its index, moment cards included.
+    # Moment selection classifies the request inside its own call; the other paths classify it here,
+    # in parallel with indexing.
+    moments = bool(getattr(index, 'moments', None))
+    intent_pool = ThreadPoolExecutor(max_workers=1)
+    intent_future = intent_pool.submit(heuristic_intent if moments else classify_request, raw_prompt)
+    intent_pool.shutdown(wait=False)
+    if index is None:
+        stage("Transcript and search index")
+        # Frames and the temporary MP3 live in a scratch folder, never in the job's folder; the index
+        # itself (embeddings, transcript) is cached by file hash for follow-up prompts.
+        with tempfile.TemporaryDirectory(prefix="agent_index_") as scratch:
+            # The visual path always uses the agent, which needs summaries: build them alongside CLIP.
+            index = build_index(video_path, Path(scratch), progress=progress,
+                                **({'visual': False} if speech_first else {'summarize': True}))
 
-    fast_batch = (speech_first and bool(index.transcript) and requested_count <= MAX_BATCH_CLIPS
+    fast_batch = (not moments and speech_first and bool(index.transcript) and requested_count <= MAX_BATCH_CLIPS
                   and len(format_transcript(index.transcript)) <= MAX_TRANSCRIPT_CHARS)
-    if not fast_batch:
+    if not fast_batch and not moments:
         stage("Transcript summaries")
         ensure_summaries(index, progress=progress)
 
     stage("AI agent selection")
-    intent = classify_request(request_prompt if request_prompt is not None else search)
-    toolbox = ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len,
-                      target_clips=requested_count, intent=intent, exclude_windows=exclude_windows,
-                      references=references, require_count=True)
-    result = (run_transcript_selection(toolbox, search, progress) if fast_batch else
-              run_agent(toolbox, search, progress=progress, target_seconds=target))
+    intent = intent_future.result()  # classify_request never raises: it falls back to a heuristic
+
+    def toolbox():
+        return ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len,
+                       target_clips=requested_count, intent=intent, exclude_windows=exclude_windows,
+                       references=references, require_count=True)
+    result = None
+    if moments:
+        box = toolbox()
+        try:
+            result = run_moment_selection(box, search, progress)
+            intent = box.intent  # the selection call's own classification
+        except Exception as error:
+            from backend.core.jobs import JobCancelled  # imported here: backend.core.jobs imports this module
+            if isinstance(error, (JobCancelled, TimeoutError)):  # a stop or the time limit ends the job
+                raise
+            logger.exception("Moment selection failed; falling back to the agent")
+            progress("Moment selection failed; searching with the agent instead (slower)")
+            ensure_summaries(index, progress=progress)
+            result = None
+    if result is None:
+        result = (run_transcript_selection(toolbox(), search, progress) if fast_batch else
+                  run_agent(toolbox(), search, progress=progress, target_seconds=target))
 
     clips = []
     for pick in result["suggestions"]:

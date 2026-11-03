@@ -221,6 +221,25 @@ def upload_clip_files(
     }
 
 
+def upload_index_files(folder, job_id, owner, names):
+    """Back up a project's video analysis so another laptop can load it without re-analysing."""
+    prefix = f"{safe_folder_name(owner.get('user_folder')) or DEFAULT_FOLDER}/{owner['user_id']}/jobs/{job_id}/index"
+    bucket, client = s3_bucket(), s3_client()
+    keys = {}
+    for name in names:
+        keys[name] = f"{prefix}/{name}"
+        client.upload_file(str(folder / 'index' / name), bucket, keys[name])
+    return {'index_s3_bucket': bucket, 'index_s3_keys': keys}
+
+
+def download_index_files(owner, target):
+    target.mkdir(parents=True, exist_ok=True)
+    for name, key in owner['index_s3_keys'].items():
+        temporary = target / (name + '.download')
+        s3_client().download_file(owner['index_s3_bucket'], key, str(temporary))
+        temporary.replace(target / name)
+
+
 def upload_source_media(folder, job_id, owner):
     """Back up normalized sources alongside clips; retain local sources for editing."""
     if uses_local_storage():

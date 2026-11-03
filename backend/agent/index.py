@@ -165,8 +165,12 @@ def build_index(
     progress: Callable[[str], None] | None = None,
     *,
     visual: bool = True,
+    summarize: bool = False,
 ) -> VideoIndex:
-    """Build independent transcript/visual indexes concurrently; callbacks stay on the caller thread."""
+    """Build independent transcript/visual indexes concurrently; callbacks stay on the caller thread.
+
+    `summarize` also condenses a long transcript (summaries.py) on the transcript thread, so the
+    summary calls overlap frame sampling and CLIP instead of waiting for them."""
     from PIL import Image
     from backend.video_search import router as vs
     from backend.media import probe_media
@@ -198,6 +202,16 @@ def build_index(
             np.save(segemb_path, embeddings)
         timings['transcript_index_seconds'] = round(time.perf_counter() - started, 3)
         return transcript, embeddings, cost
+
+    def transcript_and_summaries(report):
+        from .summaries import summarize_transcript  # summaries imports this module
+        transcript, embeddings, cost = transcript_index(report)
+        if not summarize:
+            return transcript, embeddings, cost, None
+        started = time.perf_counter()
+        summaries = summarize_transcript(transcript, report)
+        timings['summaries_seconds'] = round(time.perf_counter() - started, 3)
+        return transcript, embeddings, cost, summaries
 
     def visual_index(report):
         started = time.perf_counter()
@@ -231,7 +245,7 @@ def build_index(
         messages = Queue()
         # Only the caller invokes progress: cancellation and job state updates stay serialized.
         with ThreadPoolExecutor(max_workers=2) as pool:
-            speech = pool.submit(transcript_index, messages.put)
+            speech = pool.submit(transcript_and_summaries, messages.put)
             frames = pool.submit(visual_index, messages.put)
             pending = {speech, frames}
             while pending:
@@ -242,14 +256,16 @@ def build_index(
                     except Empty:
                         break
                     emit(message)
-            transcript, segment_embeddings, transcription_cost = speech.result()
+            transcript, segment_embeddings, transcription_cost, summaries = speech.result()
             duration, interval, frame_times, frame_embeddings = frames.result()
     else:
         emit("Building transcript-first search index")
         transcript, segment_embeddings, transcription_cost = transcript_index(emit)
+        summaries = None  # the caller summarizes only if its selection path needs it
         duration, interval, frame_times = media_info['duration'], MIN_FRAME_INTERVAL, []
         frame_embeddings = np.zeros((0, 1), dtype=np.float32)
     timings['index_wall_seconds'] = round(time.perf_counter() - started, 3)
+    chunk_summaries, summary_usage = summaries or ([], {})
 
     return VideoIndex(
         duration=duration, has_video=media_info['has_video'], frame_interval=interval,
@@ -259,4 +275,5 @@ def build_index(
         encode_text_query=(lambda q: vs.search_model.encode(q, normalize_embeddings=True)),
         chunks=build_chunks(transcript), transcription_cost_usd=transcription_cost, video_key=key,
         index_mode='multimodal' if frame_times else 'transcript-first', timings=timings,
+        chunk_summaries=chunk_summaries, summary_usage=summary_usage,
     )

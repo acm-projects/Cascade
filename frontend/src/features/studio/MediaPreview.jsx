@@ -3,6 +3,7 @@ import Modal from "../../components/ui/Modal";
 import Spinner from "../../components/ui/Spinner";
 import useApi from "../../api/useApi";
 import { formatTime } from "../../utils/time";
+import SourceRangePlayer from "./SourceRangePlayer";
 
 // Watch a clip (or the original video) big, in a pop-up.
 //   item - { title, path } for a video on the server, or { title, file } for one picked but not uploaded yet
@@ -15,10 +16,11 @@ function MediaPreview({ item, clip, onClose }) {
   const api = useApi();
   const [loaded, setLoaded] = useState(null); // { key, url, audio } for the video that finished downloading
   const [error, setError] = useState(null);
-  const { path, file } = item;
+  const { path, file, range } = item;
   const key = path ?? file?.name;
 
   useEffect(() => {
+    if (range) return undefined; // a source range streams in SourceRangePlayer: nothing to download
     let active = true;
     let objectUrl = null;
     const load = file ? Promise.resolve(file) : api.getMedia(path);
@@ -33,7 +35,7 @@ function MediaPreview({ item, clip, onClose }) {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [api, path, file, key]);
+  }, [api, path, file, key, range]);
 
   // ← / → between clips (not while the video's own controls have focus: there the arrows seek)
   const onPrevious = clip?.onPrevious;
@@ -53,7 +55,9 @@ function MediaPreview({ item, clip, onClose }) {
 
   return (
     <Modal title={item.title} onClose={onClose} wide>
-      {failed ? (
+      {range ? (
+        <SourceRangePlayer src={path} start={range.start} end={range.end} audio={item.audio} />
+      ) : failed ? (
         <p role="alert">{failed}</p>
       ) : media ? (
         media.audio ? <audio aria-label="Audio preview" src={media.url} controls autoPlay style={{ width: "100%" }} />
@@ -80,10 +84,16 @@ function MediaPreview({ item, clip, onClose }) {
             <button type="button" className="btn btn-small" onClick={onPrevious} disabled={!onPrevious}
               aria-label="Previous clip" title="Previous clip (←)">←</button>
             <span className="studio-preview-count">Clip {clip.position}</span>
-            <button type="button" className={`btn btn-small ${clip.picked ? "" : "btn-primary"}`} onClick={clip.onTogglePick}
-              title="Picked clips go to the Editor and guide your next prompt">
-              {clip.picked ? "Picked ✓ (unpick)" : "Pick clip"}
-            </button>
+            {clip.finalizing ? (
+              <button type="button" className="btn btn-small" disabled title="You can pick it as soon as its file is ready">
+                Finalizing…
+              </button>
+            ) : (
+              <button type="button" className={`btn btn-small ${clip.picked ? "" : "btn-primary"}`} onClick={clip.onTogglePick}
+                title="Picked clips go to the Editor and guide your next prompt">
+                {clip.picked ? "Picked ✓ (unpick)" : "Pick clip"}
+              </button>
+            )}
             <button type="button" className="btn btn-small" onClick={onNext} disabled={!onNext}
               aria-label="Next clip" title="Next clip (→)">→</button>
           </div>

@@ -12,6 +12,7 @@ import ChatPanel from "../features/studio/ChatPanel";
 import StudioCanvas from "../features/studio/StudioCanvas";
 import MediaPreview from "../features/studio/MediaPreview";
 import ReferenceChips from "../features/studio/ReferenceChips";
+import IndexStatus from "../features/studio/IndexStatus";
 import { isSupportedMedia } from '../utils/media';
 import useStudioData from "../features/studio/useStudioData";
 import { nodeTypes } from "../features/studio/nodes";
@@ -23,7 +24,7 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // What the assistant "says" about a generation in the chat
 function generationStatus(group) {
-  if (isRunning(group)) return group.message || "Finding your moments…";
+  if (isRunning(group)) return "Finding your moments…"; // the live step shows in GenerationProgress
   if (group.state === "error") return group.message || "That request failed. Use Retry on the canvas.";
   if (group.parent_clips?.length && !group.clips.length) return "No new matches. Your previous clip is kept.";
   const found = group.parent_clips?.length > 1
@@ -74,7 +75,10 @@ function StudioPage() {
     () => picked.filter((ref) => !leftOut.some((item) => sameRef(item, ref))),
     [picked, leftOut]
   );
-  const sourceName = session ? groups.find((g) => g.job_id === session.source_job)?.source_name : undefined;
+  const sourceName = session
+    ? groups.find((g) => g.job_id === session.source_job)?.source_name
+      ?? (session.source_job === studio.project?.source_job ? studio.project.source_name : undefined)
+    : undefined;
 
   // ---------- What the canvas boxes can do ----------
   const chooseFile = useCallback((file) => {
@@ -122,12 +126,17 @@ function StudioPage() {
     api.retryGeneration(projectId, jobId, crypto.randomUUID()).then(refresh).catch((err) => toast.show(err.message, "error"));
   }, [api, projectId, refresh, toast]);
 
+  // Poster stills: a frame of the source video (t in seconds; none = the server picks one near the start)
+  const frameUrl = useCallback((job, t) => job
+    ? `/api/projects/${projectId}/source/${job}/frame${t === undefined ? "" : `?t=${Math.max(0, t).toFixed(1)}`}`
+    : null, [projectId]);
+
   const actions = useMemo(() => ({
-    editorClips, pendingFile, sourceName,
+    editorClips, pendingFile, sourceName, frameUrl,
     onChooseFile: chooseFile, onPreviewSource: previewSource, onToggle: toggleClip,
     onPreview: previewClip, onStop: stop, onRetry: retry, onReuse: setDraft, highlighted,
     onFocusPrompt: focusPrompt,
-  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry, highlighted, focusPrompt]);
+  }), [editorClips, pendingFile, sourceName, frameUrl, chooseFile, previewSource, toggleClip, previewClip, stop, retry, highlighted, focusPrompt]);
 
 
   const graph = useMemo(
@@ -282,14 +291,22 @@ function StudioPage() {
     const clip = group?.clips[index];
     if (!clip) return { item: { title: "Clip", path: "" } };
     const go = (i) => () => setPreview({ ref: { job_id: group.job_id, clip_index: i } });
+    // Studio always plays the clip's part of the original video (streamed, starts at once, and never
+    // restarts when the rendered file arrives: smart cut copies those same frames). The rendered file
+    // is what the Editor and Export use.
+    const item = group.source_job
+      ? { title: clip.title || "Clip", path: `/api/projects/${projectId}/source/${group.source_job}`,
+          range: { start: clip.start, end: clip.end }, audio: group.media_kind === "audio" }
+      : { title: clip.title || "Clip", path: clip.clip_url };
     return {
-      item: { title: clip.title || "Clip", path: clip.clip_url },
+      item,
       clip: {
         start: clip.start, end: clip.end, explanation: clip.explanation, prompt: group.prompt,
         referenceMatches: clip.reference_matches,
         referenceLabels: graph.nodes.find(node => node.id === `clip:${shown.ref.job_id}:${index}`)?.data.referenceLabels,
         position: `${index + 1} of ${group.clips.length}`,
         picked: editorClips.some((item) => sameRef(item, shown.ref)),
+        finalizing: Boolean(clip.preview),
         onTogglePick: () => toggleClip(shown.ref),
         onPrevious: index > 0 ? go(index - 1) : undefined,
         onNext: index < group.clips.length - 1 ? go(index + 1) : undefined,
@@ -310,6 +327,11 @@ function StudioPage() {
   if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
   else if (references.length) note = `${plural(references.length, "picked clip")} will guide this prompt: new clips branch from them and keep the originals.`;
   else if (!session.source_job) note = pendingFile ? `“${pendingFile.name}” uploads when you send your first prompt.` : "Choose audio or video on the canvas, then describe the clips you want.";
+  // The video analysis: its progress while running (over other notes), its timing summary once done.
+  if (studio.index && (studio.index.state !== "done" || !note)) {
+    const retryIndex = () => api.reindexProject(projectId).then(refresh).catch((err) => toast.show(err.message, "error"));
+    note = <IndexStatus index={studio.index} onRetry={retryIndex} />;
+  }
   if (uploadProgress !== null) {
     note = (
       <span className="studio-upload">

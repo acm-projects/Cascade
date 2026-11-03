@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import useApi from "../../api/useApi";
+import { withPreviewClips } from "./graph";
 
 const POLL_MS = 2400;
 const isRunning = (group) => ["queued", "processing"].includes(group.state);
@@ -25,7 +26,7 @@ export default function useStudioData(projectId) {
       .then(([document, listing]) => {
         if (thisLoad !== loadCount.current) return; // a newer refresh already answered
         setStudio(document);
-        setGroups(listing.groups);
+        setGroups(listing.groups.map(withPreviewClips));
         setError(null);
       })
       .catch((err) => {
@@ -37,13 +38,14 @@ export default function useStudioData(projectId) {
     refresh();
   }, [refresh]);
 
-  // Keep asking "is it done yet?" only while something is still being generated
-  const running = groups.some(isRunning);
+  // Keep asking "is it done yet?" only while something is still being generated (or the
+  // project's video is still being analysed)
+  const running = groups.some(isRunning) || (studio?.index ? isRunning(studio.index) : false);
   useEffect(() => {
     if (!running) return;
     const timer = setTimeout(refresh, POLL_MS);
     return () => clearTimeout(timer);
-  }, [running, groups, refresh]);
+  }, [running, groups, studio, refresh]);
 
   return { studio, setStudio, groups, error, refresh };
 }

@@ -67,6 +67,92 @@
 .chat-generation-actions {display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
 .chat-generation-actions .btn {font-size:12px;}
 .chat-reference-context {display:flex;flex-direction:column;gap:4px;margin-top:10px;font-size:12px;}
+
+/* Generation progress inside the assistant bubble (GenerationProgress.jsx) */
+.generation-progress {
+  margin-top: 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  white-space: normal;      /* the bubble keeps line breaks; this block doesn't need to */
+}
+
+/* A bubble with progress takes its full allowed width, so a short status line can't shrink the
+   bar (and a fixed min-width can't push it past the bubble in a narrow column). */
+.chat-bubble:has(.generation-progress) { width: 85%; }
+
+.generation-progress-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+
+.generation-progress-stage {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-wood-dark) 18%, transparent);
+}
+
+.generation-progress-stage span {
+  display: block;
+  height: 100%;
+  background: var(--color-jungle-deep);
+}
+
+/* The running stage: a soft pulse so it reads as live even when its count can't move */
+.generation-progress-stage.is-active {
+  background: color-mix(in srgb, var(--color-leaf) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .generation-progress-stage span { transition: width 400ms ease-out; }
+  .generation-progress-stage.is-active { animation: generation-progress-pulse 1.6s ease-in-out infinite; }
+}
+
+@keyframes generation-progress-pulse {
+  50% { background: color-mix(in srgb, var(--color-leaf) 75%, transparent); }
+}
+
+.generation-progress-stage-name { margin-top: 6px; }
+
+.generation-progress-now {
+  margin-top: 2px;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-progress-time {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.generation-progress-steps { margin-top: 6px; }
+
+.generation-progress-steps summary {
+  cursor: pointer;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.generation-progress-steps ol {
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.generation-progress-steps li {
+  display: grid;
+  grid-template-columns: 3.2em 1fr;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
 .chat-panel-form {
   display: flex;
   flex-direction: column;
@@ -156,3 +242,16 @@
   color: var(--color-jungle-deep);
   opacity: 1;
 }
+
+/* Where the time went: per-step durations, the slowest step and a summary when finished */
+.generation-progress-took { opacity: 0.7; }
+
+.generation-progress-steps li.is-slowest,
+.generation-progress-summary .is-slowest {
+  font-weight: 700;
+  color: var(--color-plank);
+}
+
+.generation-progress-steps li.is-slowest .generation-progress-took { opacity: 1; }
+
+.generation-progress-summary { margin-top: 6px; }

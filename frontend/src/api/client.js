@@ -69,6 +69,16 @@ export function apiUpload(path, { token, form, onProgress }) {
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
     };
+    // A backend restart mid-request can leave the response never arriving: give up instead of hanging.
+    // Saving a large video takes a while after the last byte, so allow minutes, not seconds.
+    let stalled;
+    xhr.upload.onload = () => {
+      stalled = setTimeout(() => {
+        xhr.abort();
+        reject(new ApiError(0, "The server never answered after the upload. Send again to retry."));
+      }, 3 * 60 * 1000);
+    };
+    xhr.onloadend = () => clearTimeout(stalled);
     xhr.onload = () => {
       let data = null;
       try {

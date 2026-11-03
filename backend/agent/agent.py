@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import copy
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable
 
 from backend.cascade_llm import ToolResult, call_cost, make_conversation, selected_model
@@ -27,6 +28,7 @@ logger = logging.getLogger("cascade_agent")
 # Working turns after the forced overview turn.
 MAX_ITERATIONS = 8
 TARGET_SUGGESTIONS = TARGET_CLIPS  # final clips returned (set in tools.py)
+READ_ONLY_TOOLS = {"search_video", "inspect_clip", "read_transcript"}
 
 SYSTEM_PROMPT = f"""You find the {TARGET_SUGGESTIONS} best clips of a whole video for a given category (e.g. "funny", "interesting"). They must be the best of the ENTIRE video and spread out through it - not four moments from the same stretch.
 
@@ -187,22 +189,28 @@ def run_agent(
             return False
 
         offered = {t["name"] for t in tools}
-        results = []
-        for call in turn.tool_calls:
-            emit(f"Tool call: {call.name}({_short_args(call.input)})")
-            if call.error:
-                # The arguments were not valid JSON: tell the model instead of guessing.
-                content = [{"type": "text", "text": call.error}]
-                is_error = True
-            elif call.name not in offered:
-                # The model asked for a tool it was not given this turn (it can still see earlier
-                # calls in the history). Never run it.
-                content = [{"type": "text", "text": f"Tool '{call.name}' is not available this turn. "
-                            f"Available: {', '.join(sorted(offered))}."}]
-                is_error = True
-            else:
-                content, is_error = toolbox.call(call.name, call.input)
-            results.append(ToolResult(call.id, content, is_error))
+        outcomes = []
+        # Read-only tools (searches, frame grabs) run concurrently; candidate/ranking tools change
+        # the toolbox, so they run here in the model's order. Progress is only emitted on this thread.
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for call in turn.tool_calls:
+                emit(f"Tool call: {call.name}({_short_args(call.input)})")
+                if call.error:
+                    # The arguments were not valid JSON: tell the model instead of guessing.
+                    outcomes.append(([{"type": "text", "text": call.error}], True))
+                elif call.name not in offered:
+                    # The model asked for a tool it was not given this turn (it can still see earlier
+                    # calls in the history). Never run it.
+                    outcomes.append(([{"type": "text", "text": f"Tool '{call.name}' is not available this turn. "
+                                      f"Available: {', '.join(sorted(offered))}."}], True))
+                elif call.name in READ_ONLY_TOOLS:
+                    outcomes.append(pool.submit(toolbox.call, call.name, call.input))
+                else:
+                    outcomes.append(toolbox.call(call.name, call.input))
+        results = [
+            ToolResult(call.id, *(outcome.result() if isinstance(outcome, Future) else outcome))
+            for call, outcome in zip(turn.tool_calls, outcomes)
+        ]
         conv.add_tool_results(results)
         return True
 
