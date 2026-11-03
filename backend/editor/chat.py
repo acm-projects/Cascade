@@ -23,6 +23,11 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     from .execution import execute
     audio_store = store(pid,jid,index,request.state.user_id)
     audio_store.verify(body.state)
+    # Open edit requests and notes on a pending storyboard: plan beats first, render on "render".
+    from . import storyboard_chat
+    pending=storyboard_chat.wants(body,info,request.state.user_id,pid,jid,index)
+    if pending:
+        return storyboard_chat.turn(pid,jid,index,request.state.user_id,clip,body,info,stock,audio_store,pending)
     from .context import scene_hints, footage_frames
     hints=scene_hints(jid,clip) if info.get('has_video') else {}
     from .reel import is_reel_request,hook_candidates
@@ -33,8 +38,7 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     from .style_requests import parse_request, proposal_for
     style_request=parse_request(body.message) if info.get('has_video',True) and not body.research_id else None
     from .style_requests import wants_director
-    from .style_profile import chat_links
-    director_request=not style_request and info.get('has_video',True) and not body.research_id and (wants_director(body.message) or bool(chat_links(body.message)))
+    director_request=not style_request and info.get('has_video',True) and not body.research_id and wants_director(body.message)
     wants_trends=not style_request and not director_request and ai.editor_provider() not in ai.LOCAL_ANALYSIS and bool(re.search(r'flashy|crazy|tiktok|trend[- ]informed',body.message,re.I) and re.search(r'make|edit|apply|create',body.message,re.I))
     research_report=[]
     if body.research_id or wants_trends:

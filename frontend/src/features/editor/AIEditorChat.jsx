@@ -18,19 +18,39 @@ function engineLine(status) {
     (quota ? ` · ${quota.exhausted ? 'daily free quota used up' : `${quota.used} of ${quota.limit} free requests used by Cascade today`} · resets ${quota.resets}` : '');
 }
 
+// The storyboard Claude proposed: nothing renders until "Render". Notes go through the chat box.
+function Storyboard({ board, onSend, disabled }) {
+  return <section className="ai-storyboard" aria-label="Storyboard">
+    <header><b>Storyboard · {board.title || "edit"}</b><small>{board.planner}</small></header>
+    <ol className="ai-storyboard-beats">{board.beats.map(beat => <li key={beat.n} className={beat.keep ? "" : "cut"}>
+      {board.thumbnails[beat.n] && <img alt="" src={`data:image/jpeg;base64,${board.thumbnails[beat.n]}`} />}
+      <span className="ai-storyboard-n">Beat {beat.n}</span>
+      {!beat.keep && <em>cut</em>}
+      {beat.caption && <q>{beat.caption}</q>}
+      {beat.emphasis && <strong>{beat.emphasis.toUpperCase()}</strong>}
+      <small>{[beat.zoom !== "none" && `${beat.zoom} zoom`, beat.broll && `B-roll: ${beat.broll}`, beat.effect !== "none" && beat.effect,
+        beat.sfx !== "none" && beat.sfx].filter(Boolean).join(" · ")}</small>
+    </li>)}</ol>
+    <div className="ai-storyboard-actions">
+      <button type="button" className="editor-choice" disabled={disabled} onClick={() => onSend("render")}>Render</button>
+      <button type="button" className="editor-choice" disabled={disabled} onClick={() => onSend("discard")}>Discard</button>
+      <small>Or type a note: “beat 3 caption should say …”, “tighter cut”, “bigger captions”.</small>
+    </div>
+  </section>;
+}
+
 export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, clip, result, status }) {
   const analysis = result?.analysis;
-  const occ = status?.provider === 'openchatcut';
-  // A used-up Gemini quota does not lock the chat: "Edit this video" falls back to the local model,
-  // and requests that need Gemini come back as a visible NOT APPLIED note.
+  // A used-up Gemini quota does not lock the chat: storyboards are planned with Claude (or the local
+  // model), and requests that need Gemini come back as a visible NOT APPLIED note.
   const placeholder = typing
-    ? (occ ? 'Planning with one free Gemini request, then applying with OpenChatCut…' : 'Analyzing footage and planning edits…')
-    : status?.quota?.exhausted ? 'Gemini quota used up — "Edit this video" still works with the local model…'
+    ? 'Planning the storyboard with Claude (your Claude plan)…'
     : 'Describe the edit, or refine the last change…';
   return <div className="ai-editor-chat">
     <ChatBox title="AI Editor" subtitle="Plans and applies real timeline edits. Preview shows the rendered result."
       messages={messages} onSend={onSend} disabled={disabled} typing={typing}
       tag={clip.title || 'Selected clip'} quickActions={suggestions} placeholder={placeholder} />
+    {result?.storyboard && <Storyboard board={result.storyboard} onSend={onSend} disabled={disabled} />}
     {onClear && <button type="button" className="editor-choice ai-editor-clear" onClick={onClear} disabled={typing || !messages.length}>
       Clear chat history
     </button>}

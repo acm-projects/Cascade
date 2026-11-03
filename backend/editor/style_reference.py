@@ -1,6 +1,6 @@
 """Measure the user's own reference reels (uploaded files or public links) and turn them into a
 StyleProfile: pacing from real cut detection, look from sampled-frame color statistics, and the
-rest chosen by one free Gemini request (local Ollama vision model second, measured defaults last).
+rest chosen by Claude through the user's Claude subscription (local Ollama vision model second, measured defaults last).
 
 Downloads use yt-dlp at low resolution; nothing here calls a paid provider.
 """
@@ -149,13 +149,11 @@ def choose(refs, frames):
     context = {'references': [r.model_dump() for r in refs]}
     sheet = contact_sheet(frames[:16])
     try:
-        from . import gemini_planner
-        if not gemini_planner.configured(): raise HTTPException(503, 'Gemini free tier is not configured.')
-        parts = [gemini_planner.text_part('Measurements (data):\n'+json.dumps(context))]
-        if sheet: parts.append(gemini_planner.image_part(sheet))
-        return ProfileChoices.model_validate(gemini_planner.generate_json(SYSTEM, parts, None, max_output_tokens=2048)), 'Gemini free tier'
+        from . import claude_code
+        images = [('references.jpg', base64.b64decode(sheet))] if sheet else []
+        return ProfileChoices.model_validate(claude_code.ask(SYSTEM, 'Measurements (data):\n'+json.dumps(context), images)), 'Claude (your Claude subscription)'
     except (HTTPException, ValueError) as exc:
-        LOG.info('style profile gemini unavailable: %s', getattr(exc, 'detail', exc))
+        LOG.info('style profile claude unavailable: %s', getattr(exc, 'detail', exc))
     try:
         from .director import _local
         sampled = [{'data': f, 'at': 0.0} for f in frames[:12]]

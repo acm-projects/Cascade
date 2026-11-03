@@ -60,7 +60,7 @@ class MyStyleTests(unittest.TestCase):
         from backend.editor import style_reference
         fast = ReferenceInfo(label='a', duration=15, cuts_per_minute=60, flash_bursts=4, saturation=.5, accent='#ff2020')
         slow = ReferenceInfo(label='b', duration=30, cuts_per_minute=4, mono=.9)
-        with patch('backend.editor.gemini_planner.configured', return_value=False), \
+        with patch('backend.editor.claude_code.ask', side_effect=HTTPException(503)), \
                 patch('backend.editor.director._local', side_effect=OSError()):
             choices, how = style_reference.choose([fast, fast, slow], [])
         self.assertEqual((choices.pacing, choices.accent, choices.transitions, how[:12]), ('fast', '#ff2020', 'flash', 'measurements'))

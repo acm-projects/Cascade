@@ -83,7 +83,8 @@ def extras(state, plan, events, audio_store, hook_text):
 
 
 def hook_text(plan, info, state):
-    """A short hook line: the strongest spoken phrase near the start, else the top emphasis word."""
+    """A short hook line: the storyboard's, else the strongest spoken phrase near the start, else the top emphasis word."""
+    if plan.hook: return plan.hook
     cues = [q for q in info.get('cues', []) if state.start <= q['start'] < min(state.end, state.start+12)]
     for q in cues:
         text = q['text'].strip().rstrip('.,')
