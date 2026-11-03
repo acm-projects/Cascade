@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./ChatPanel.css";
 import leafCream from "../../assets/icons/leaf-cream.svg";
 import { MAX_CLIPS, requestedClipCount } from './clipCount';
+import GenerationProgress from "./GenerationProgress.jsx";
 
 const MIN_CLIPS = 1;
 
@@ -81,6 +82,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
             tabIndex={message.role === 'user' && message.jobId ? -1 : undefined}
             className={`chat-bubble chat-bubble-${message.role}${message.role === 'user' && message.jobId && focusRequest?.jobId === message.jobId ? ' chat-bubble-focused' : ''}`}>
             {message.text}
+            {message.group && <GenerationProgress group={message.group} />}
             {message.group?.parent_clips?.length > 1 && <div className="chat-reference-context">
               <b>Combined references</b>
               {message.group.parent_clips.map((reference, index) => <span key={index}>
@@ -125,7 +127,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
             Send
           </button>
         </div>
-        {note && <p className="chat-panel-note">{note}</p>}
+        {note && <div className="chat-panel-note">{note}</div>}
         {countError && <p role="alert">{countError}</p>}
       </form>
     </section>

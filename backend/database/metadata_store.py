@@ -1,4 +1,5 @@
 """Neon-backed JSON metadata; media and model caches remain on disk/S3."""
+import copy
 import json
 import logging
 import hashlib
@@ -6,6 +7,7 @@ import os
 import re
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -15,7 +17,56 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 MIGRATIONS = Path(__file__).parent / 'migrations'
+MISSING = object()
+# Per-request read cache (request_cache()). One request often loads the same project and job
+# records many times; with Neon each load is a network round trip. Callers always get copies, so
+# editing what they read never changes the cache; this store's own writes keep it current.
+_request_cache = ContextVar('metadata_request_cache', default=None)
+
+
+@contextmanager
+def request_cache():
+    token = _request_cache.set({'records': {}, 'queries': {}})
+    try:
+        yield
+    finally:
+        _request_cache.reset(token)
+
+
+def _cached(key):
+    cache = _request_cache.get()
+    if cache is None or key is None or key not in cache['records']:
+        return None
+    hit = cache['records'][key]
+    if hit is MISSING:
+        raise FileNotFoundError('Metadata record not found')
+    return copy.deepcopy(hit)
+
+
+def _remember(key, data):
+    cache = _request_cache.get()
+    if cache is not None and key is not None:
+        cache['records'][key] = MISSING if data is MISSING else copy.deepcopy(data)
+
+
+def _forget(key):
+    cache = _request_cache.get()
+    if cache is not None:
+        cache['records'].pop(key, None)
+
+
+def _changed(key):
+    """After a write: list queries may differ now, and saving a job's owner/results also touches its
+    project's updated_at in SQL, so cached projects are dropped too."""
+    cache = _request_cache.get()
+    if cache is None:
+        return
+    cache['queries'].clear()
+    if key and key.split('/')[-1] in {'owner.json', 'results.json'}:
+        for cached in [k for k in cache['records'] if k.startswith('projects/')]:
+            del cache['records'][cached]
 JOB_FILES = {'owner.json', 'results.json', 'progress.json', 'failure.json'}
+IDLE_CHECK_SECONDS = 30  # re-check a pooled connection only after it sat idle this long
 
 
 class MetadataStore:
@@ -25,6 +76,7 @@ class MetadataStore:
         self.pool = None
         self.init_lock = Lock()
         self.connection_slots = BoundedSemaphore(8)
+        self.last_used = {}  # id(pooled connection) -> monotonic time its last operation finished
 
     def key(self, path):
         try:
@@ -52,22 +104,28 @@ class MetadataStore:
             if not acquired:
                 raise HTTPException(503, 'Database is busy. Please retry shortly.')
             from psycopg2 import OperationalError, InterfaceError
-            # Neon can close an idle socket while the pool still considers it open.
-            # Reconnect only before giving a connection to an operation; never replay writes.
+            # Neon can close an idle socket while the pool still considers it open. Check a
+            # connection (and set its timeouts, which last for the session) only when it is new or
+            # has sat idle: every check is an extra network round trip. Never replay writes.
             for attempt in range(2):
                 try:
                     conn = self.pool.getconn()
-                    with conn.cursor() as cur:
-                        cur.execute("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '5s'; SELECT 1")
+                    last_used = self.last_used.get(id(conn))
+                    if last_used is None or time.monotonic() - last_used > IDLE_CHECK_SECONDS:
+                        with conn.cursor() as cur:
+                            cur.execute("SET statement_timeout = '10s'; SET lock_timeout = '5s'; SELECT 1")
+                        conn.commit()  # keeps the session settings even if the next operation rolls back
                     break
                 except (OperationalError, InterfaceError):
                     if conn is not None:
+                        self.last_used.pop(id(conn), None)
                         self.pool.putconn(conn, close=True)
                         conn = None
                     if attempt:
                         raise
             with conn:
                 yield conn
+            self.last_used[id(conn)] = time.monotonic()
         except HTTPException:
             raise
         except Exception as error:
@@ -78,6 +136,8 @@ class MetadataStore:
         finally:
             try:
                 if conn is not None:
+                    if conn.closed:
+                        self.last_used.pop(id(conn), None)
                     self.pool.putconn(conn, close=bool(conn.closed))
             finally:
                 if acquired:
@@ -125,11 +185,16 @@ class MetadataStore:
     def read(self, path):
         key = self.key(path)
         if self.database_url and key:
+            hit = _cached(key)  # local files are read directly: that is already instant
+            if hit is not None:
+                return hit
             with self.connection() as conn, conn.cursor() as cur:
                 cur.execute('SELECT payload FROM cascade_app.records WHERE key = %s', (key,))
                 row = cur.fetchone()
             if row is None:
+                _remember(key, MISSING)
                 raise FileNotFoundError('Metadata record not found')
+            _remember(key, row[0])
             return row[0]
         return json.loads(Path(path).read_text(encoding='utf-8'))
 
@@ -148,11 +213,26 @@ class MetadataStore:
         if not self.database_url:
             return {path: self.read(path) for path in paths if path.is_file()}
         keys = {self.key(path): path for path in paths if self.key(path)}
-        if not keys:
-            return {}
+        found, missing = {}, []
+        for key, path in keys.items():
+            try:
+                hit = _cached(key)
+            except FileNotFoundError:
+                continue
+            if hit is None:
+                missing.append(key)
+            else:
+                found[path] = hit
+        if not missing:
+            return found
         with self.connection() as conn, conn.cursor() as cur:
-            cur.execute('SELECT key, payload FROM cascade_app.records WHERE key = ANY(%s)', (list(keys),))
-            return {keys[key]: data for key, data in cur.fetchall()}
+            cur.execute('SELECT key, payload FROM cascade_app.records WHERE key = ANY(%s)', (missing,))
+            rows = dict(cur.fetchall())
+        for key in missing:
+            _remember(key, rows.get(key, MISSING))
+            if key in rows:
+                found[keys[key]] = rows[key]
+        return found
 
     def write(self, path, data, *, import_only=False):
         from psycopg2.extras import Json
@@ -175,6 +255,11 @@ class MetadataStore:
                           AND p.payload->>'id' = o.payload->>'project_id'
                           AND p.payload->>'user_id' = o.payload->>'user_id'""",
                         (time.time(), key.split('/')[0] + '/owner.json'))
+            if import_only:
+                _forget(key)  # an existing record may have been kept instead
+            else:
+                _remember(key, data)
+            _changed(key)
             # Neon is authoritative. A failed local cache must not undo a committed save.
             if not import_only:
                 try:
@@ -204,8 +289,11 @@ class MetadataStore:
                     WHERE key = %s AND payload->>'user_id' = %s RETURNING payload""",
                     (Json(patch), self.key(path), user_id))
                 row = cur.fetchone()
+            _changed(None)
             if row is None:
+                _forget(self.key(path))
                 raise HTTPException(404, 'Project not found.')
+            _remember(self.key(path), row[0])
             return row[0]
         data = self.read(path)
         if data.get('user_id') != user_id:
@@ -219,12 +307,18 @@ class MetadataStore:
         if self.database_url and key:
             with self.connection() as conn, conn.cursor() as cur:
                 cur.execute('DELETE FROM cascade_app.records WHERE key = %s', (key,))
+            _remember(key, MISSING)
+            _changed(key)
         Path(path).unlink(missing_ok=True)
 
     def delete_project_metadata(self, path, user_id, job_ids, referenced):
         if not self.database_url:
             return
         from psycopg2.extras import Json
+        cache = _request_cache.get()
+        if cache is not None:  # many records change at once: start this request's cache over
+            cache['records'].clear()
+            cache['queries'].clear()
         with self.connection() as conn, conn.cursor() as cur:
             cur.execute("DELETE FROM cascade_app.records WHERE key = %s AND payload->>'user_id' = %s",
                         (self.key(path), user_id))
@@ -250,6 +344,9 @@ class MetadataStore:
             rows = [(path, self.read(path)) for path in self.root.glob(pattern)]
             return [(path, data) for path, data in rows if user_id is None or data.get('user_id') == user_id]
         # SQL narrows the prefix; the regex makes '*' match one path component only.
+        cache = _request_cache.get()
+        if cache is not None and (pattern, user_id) in cache['queries']:
+            return copy.deepcopy(cache['queries'][(pattern, user_id)])
         prefix = pattern.split('*', 1)[0].replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
         regex = re.compile('^' + re.escape(pattern).replace(r'\*', '[^/]*') + '$')
         with self.connection() as conn, conn.cursor() as cur:
@@ -259,7 +356,12 @@ class MetadataStore:
                 query += " AND payload->>'user_id' = %s"
                 args.append(user_id)
             cur.execute(query, args)
-            return [(self.root / key, data) for key, data in cur.fetchall() if regex.fullmatch(key)]
+            rows = [(self.root / key, data) for key, data in cur.fetchall() if regex.fullmatch(key)]
+        if cache is not None:
+            cache['queries'][(pattern, user_id)] = copy.deepcopy(rows)
+            for path, data in rows:
+                _remember(self.key(path), data)
+        return rows
 
     def paths(self, pattern):
         return [path for path, data in self.documents(pattern)]
@@ -281,6 +383,8 @@ class MetadataStore:
                 WHERE key = %s AND payload->>'user_id' = %s
                   AND NOT COALESCE(payload->'saved_clips', '[]'::jsonb) @> %s::jsonb""",
                 (Json([entry]), Json(time.time()), self.key(path), user_id, Json([entry])))
+        _forget(self.key(path))
+        _changed(None)
 
 
 @lru_cache(maxsize=8)

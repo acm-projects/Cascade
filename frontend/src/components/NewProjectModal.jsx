@@ -14,10 +14,9 @@ function fileSize(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-// The "+ New Project" pop-up: name the project and (optionally) pick its video.
-// The video uploads in AI Studio together with your first prompt (that's how the backend works),
-// where a progress bar shows how far along it is.
-//   onCreate(name, file) - creates the project; throws to show an error here
+// The "+ New Project" pop-up: name the project and pick its video (required: one project = one
+// video). The video uploads here; the backend starts analysing it as soon as it arrives.
+//   onCreate(name, file, onProgress) - creates the project; throws to show an error here
 //   onClose()
 function NewProjectModal({ onCreate, onClose }) {
   const [name, setName] = useState("");
@@ -25,6 +24,7 @@ function NewProjectModal({ onCreate, onClose }) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [uploaded, setUploaded] = useState(0); // percent of the video sent
   const fileInput = useRef(null);
 
   function choose(picked) {
@@ -43,10 +43,15 @@ function NewProjectModal({ onCreate, onClose }) {
       setError("Give your project a name.");
       return;
     }
+    if (!file) {
+      setError("Choose the video for this project.");
+      return;
+    }
     setCreating(true);
+    setUploaded(0);
     setError(null);
     try {
-      await onCreate(name.trim(), file);
+      await onCreate(name.trim(), file, setUploaded);
     } catch (err) {
       setError(`Couldn't create the project: ${err.message}`);
       setCreating(false);
@@ -86,7 +91,7 @@ function NewProjectModal({ onCreate, onClose }) {
           ) : (
             <>
               <strong>Drag a video here or click to browse</strong>
-              <span>Optional: you can also pick it in AI Studio</span>
+              <span>Each project works on one video</span>
             </>
           )}
           <input ref={fileInput} type="file" accept={MEDIA_ACCEPT} hidden
@@ -95,6 +100,12 @@ function NewProjectModal({ onCreate, onClose }) {
 
         {file?.size > BIG_FILE && (
           <p className="new-project-warning">This file is over 2 GB, so uploading may take a while.</p>
+        )}
+        {creating && (
+          <div className="new-project-upload">
+            <progress max={100} value={uploaded} aria-label="Video upload" />
+            <span>{uploaded < 100 ? `Uploading video… ${uploaded}%` : "Saving video…"}</span>
+          </div>
         )}
         {error && <p className="new-project-error" role="alert">{error}</p>}
 

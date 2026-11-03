@@ -1,5 +1,6 @@
 import { Handle, Position } from "@xyflow/react";
 import { MEDIA_ACCEPT } from '../../../utils/media';
+import PosterImage from "./PosterImage";
 
 // The video box on the left of the canvas.
 // No video yet: pick one (click the box, or drop a file anywhere on the canvas). It uploads with your first prompt.
@@ -10,7 +11,7 @@ import { MEDIA_ACCEPT } from '../../../utils/media';
 //   data.onPreviewSource  - watch the video
 // "nodrag" on the clickable parts stops React Flow from treating a click as dragging the box.
 function SourceNode({ data }) {
-  const { session, sourceName, pendingFile, onChooseFile, onPreviewSource } = data;
+  const { session, sourceName, pendingFile, onChooseFile, onPreviewSource, frameUrl } = data;
   const hasVideo = Boolean(session.source_job || pendingFile);
 
   return (
@@ -19,6 +20,7 @@ function SourceNode({ data }) {
       {session.source_job ? (
         <>
           <button type="button" className="studio-poster nodrag nopan" onClick={onPreviewSource}>
+            <PosterImage src={frameUrl?.(session.source_job)} />
             <span className="studio-poster-play">▶</span>
             <span>Preview original</span>
           </button>

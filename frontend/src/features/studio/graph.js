@@ -1,6 +1,14 @@
 export const clipKey = ref => `${ref.job_id}:${ref.clip_index}`;
 export const sameRef = (a,b) => clipKey(a) === clipKey(b);
 
+// While a generation renders, the backend already knows its picks (planned_clips): show all of them
+// now, each a preview that plays from the original video until its own file is ready (same order).
+export function withPreviewClips(group) {
+  const running = ['queued', 'processing'].includes(group.state);
+  if (!running || !group.planned_clips?.length) return group;
+  return {...group, clips: group.planned_clips.map((planned, i) => group.clips[i] ?? {...planned, preview: true})};
+}
+
 const groupReferences = group => group.parent_clips?.length ? group.parent_clips
   : group.parent_clip?.job_id ? [group.parent_clip]
   : group.studio_revision_of ? [group.studio_revision_of] : [];
@@ -71,7 +79,8 @@ export function buildGraph(session, groups, actions) {
       const ref={job_id:group.job_id,clip_index:index},id='clip:'+clipKey(ref);
       const pos=position(id,{x:900+depth*1050,y:top+index*300});
       placed.set(clipKey(ref),pos);
-      nodes.push({id,type:'clip',position:pos,data:{clip,ref,label:String(++clipNumber),number:number+1,referenceLabels,...actions}});
+      nodes.push({id,type:'clip',position:pos,data:{clip,ref,label:String(++clipNumber),number:number+1,referenceLabels,
+        sourceJob:group.source_job||session.source_job,...actions}});
       for(const source of showHub?[hubId]:refs.map(r=>'clip:'+clipKey(r)))
         edges.push({id:source+'>'+id,source,target:id,type:'vine',style:{stroke:'#719d87',strokeWidth:1.7}});
     }

@@ -58,15 +58,15 @@ Project metadata is shared through Neon. Original source videos still require th
 ### AI agent selection
 
 **The clip agent is the default search method.** Set `LLM_PROVIDER` in `.env` to choose the AI model for
-everything that uses one: `anthropic` (the default, Claude Haiku 5.5) or `openai` (gpt-6-luna). The models
+everything that uses one: `openai` (the default, gpt-6-luna) or `anthropic` (Claude Haiku 5.5). The models
 are fixed in code, so there are no model names to edit. Put the matching key in `.env` and add
 `DEEPGRAM_API_KEY`; a missing key is reported at upload, not minutes into a job. Keys are read when a job
 starts, so a new key applies to the next run.
 
 ```dotenv
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=your_key_here
-# or: LLM_PROVIDER=openai and OPENAI_API_KEY=your_key_here
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your_key_here
+# or: LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY=your_key_here
 DEEPGRAM_API_KEY=your_key_here
 ```
 
@@ -195,7 +195,7 @@ Keep your existing `.env` and AWS credentials. Configure the following locally i
 - `CLERK_SECRET_KEY` for account lookup.
 - `CLERK_AUTHORIZED_PARTIES=http://127.0.0.1:8000,http://localhost:8000`, or retain your existing allowed origins and use a matching host/port in the browser.
 - `S3_BUCKET_NAME`, `AWS_DEFAULT_REGION` (default `us-east-2`), and AWS credentials through your existing AWS configuration or environment. The existing account-specific S3 prefix remains unchanged. The identity needs access to upload/read generated clips and captions.
-- AI and transcription: `DEEPGRAM_API_KEY`, `LLM_PROVIDER` (`anthropic` by default, or `openai`), and the matching `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`.
+- AI and transcription: `DEEPGRAM_API_KEY`, `LLM_PROVIDER` (`openai` by default, or `anthropic`), and the matching `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`.
 - Research only: `YOUTUBE_API_KEY` with YouTube Data API v3 enabled (it also uses the AI model above).
 - Optional: `CASCADE_CAPTION_FONT` set to an existing font file if automatic OS font discovery is unsuitable.
 

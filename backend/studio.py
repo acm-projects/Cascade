@@ -118,8 +118,13 @@ def ensure(pid, user):
         studio['sessions'].append(_session('Main session'))
         changed = True
     for session in studio['sessions']:
+        # One video per project: every session works on the project's source.
+        if project.get('source_job'):
+            if session.get('source_job') != project['source_job']:
+                session['source_job'] = project['source_job']
+                changed = True
         # Repair empty sessions created by older clients that inherited a video.
-        if not session['job_ids'] and session.get('source_job'):
+        elif not session['job_ids'] and session.get('source_job'):
             session['source_job'] = None
             changed = True
     if not studio.get('active_session_id'):
@@ -250,7 +255,25 @@ router = APIRouter(prefix="/api/projects/{pid}/studio")
 def get_studio(pid: str, request: Request):
     with projects_store.lock:
         project = ensure(pid, request.state.user_id)
-        return {'project': {'id': project['id'], 'name': project['name']}, **project['studio']}
+        return {'project': {'id': project['id'], 'name': project['name'], 'source_job': project.get('source_job'),
+                            'source_name': project.get('source_name')},
+                'index': index_status(project), **project['studio']}
+
+
+def index_status(project):
+    """The project video's analysis progress for the Studio widget; None for older projects."""
+    from backend import indexing
+    source = project.get('source_job')
+    if not source:
+        return None
+    status = indexing.status(source)
+    if status.get('state') == 'done':
+        indexing.warm(source)  # load it into memory now, so the first prompt doesn't wait for it
+    owner = job_service.load_json(job_service.JOBS_DIR / source / 'owner.json')
+    keys = ('state', 'message', 'timing_stage', 'timings', 'index_timings', 'started_at', 'updated_at', 'moment_count')
+    return {**{key: status.get(key) for key in keys}, 'steps_log': status.get('steps_log') or [],
+            'steps_elapsed': status.get('steps_elapsed') or [],
+            'duration': owner.get('duration'), 'media_kind': owner.get('media_kind')}
 
 
 @router.post('/sessions', status_code=201)
@@ -263,7 +286,7 @@ def create_session(pid: str, body: SessionInput, request: Request):
         name = body.name.strip()
         if not name:
             raise HTTPException(400, 'Enter a session name.')
-        session = _session(name)
+        session = _session(name, project.get('source_job'))
         project['studio']['sessions'].append(session)
         project['studio']['active_session_id'] = session['id']
         save(project, user)

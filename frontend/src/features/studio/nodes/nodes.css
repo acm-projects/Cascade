@@ -258,3 +258,45 @@
 .studio-clip-node.is-highlighted {
   box-shadow: 0 0 0 6px color-mix(in srgb, #ffd400 70%, transparent), var(--shadow-soft);
 }
+
+/* A clip the AI picked whose file is still rendering (it previews from the original video) */
+.studio-clip-select.is-finalizing {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* A still from the video fills the poster; the ▶ and its text sit on top (PosterImage.jsx) */
+.studio-poster {
+  position: relative;
+  overflow: hidden;
+}
+
+.studio-poster-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.studio-poster:has(.studio-poster-image)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 45%, rgb(0 0 0 / 0.55));
+  pointer-events: none;
+}
+
+.studio-poster > :not(.studio-poster-image) {
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.7);
+}
+
+.studio-poster-image { opacity: 0; }
+.studio-poster-image.is-loaded { opacity: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .studio-poster-image { transition: opacity 180ms ease-out; }
+}

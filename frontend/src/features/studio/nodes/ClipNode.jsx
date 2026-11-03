@@ -1,10 +1,12 @@
 import { Handle, Position } from "@xyflow/react";
 import { formatTime } from "../../../utils/time";
 import { sameRef } from "../graph";
+import PosterImage from "./PosterImage";
 
 // One clip the AI found. Check it to (1) guide the next prompt ("more like this") and
 // (2) take it to the Editor. ▶ opens it big.
-//   data.clip       - { title, explanation, start, end, clip_url }
+//   data.clip       - { title, explanation, start, end, clip_url }, or { ..., preview: true } while
+//                     its file renders (no clip_url yet: it plays from the original video)
 //   data.ref        - { job_id, clip_index } (which clip this is, for the backend)
 //   data.label      - "2", or "2.1" after a "more like this" update replaced it
 //   data.number     - which prompt it came from
@@ -12,7 +14,8 @@ import { sameRef } from "../graph";
 //   data.highlighted - the ref whose chip is hovered in the chat (that clip glows)
 //   data.editorClips, data.onToggle(ref), data.onPreview(clip, ref), data.onRetry(jobId)
 function ClipNode({ data }) {
-  const { clip, ref, label, number, revision, editorClips, highlighted, onToggle, onPreview, onRetry, referenceLabels = [] } = data;
+  const { clip, ref, label, number, revision, editorClips, highlighted, onToggle, onPreview, onRetry, referenceLabels = [],
+    sourceJob, frameUrl } = data;
   const selected = editorClips.some((item) => sameRef(item, ref));
   const updating = revision && ["queued", "processing"].includes(revision.state);
 
@@ -25,6 +28,8 @@ function ClipNode({ data }) {
       </div>
       <button type="button" className="studio-poster nodrag nopan" onClick={() => onPreview(clip, ref)}
         aria-label={`Preview ${clip.title || "clip"}`}>
+        {/* a third of the way in (the backend picks it and makes the frame ahead); older clips: computed here */}
+        <PosterImage src={frameUrl?.(sourceJob, clip.thumbnail_at ?? clip.start + (clip.end - clip.start) / 3)} />
         <span className="studio-poster-play">▶</span>
         <span>{formatTime(clip.start)} – {formatTime(clip.end)}</span>
       </button>
@@ -47,11 +52,16 @@ function ClipNode({ data }) {
           )}
         </span>
       )}
-      <label className="studio-clip-select nodrag nopan">
-        <input type="checkbox" checked={selected} onChange={() => onToggle(ref)}
-          aria-label={`Pick prompt ${number} clip ${label}: ${clip.title || "clip"}`} />
-        {selected ? "Picked ✓" : "Pick clip"}
-      </label>
+      {clip.preview ? (
+        // Picked by the AI, file still rendering: ▶ plays it from the original video meanwhile
+        <span className="studio-clip-select is-finalizing" role="status">Finalizing… (preview ready)</span>
+      ) : (
+        <label className="studio-clip-select nodrag nopan">
+          <input type="checkbox" checked={selected} onChange={() => onToggle(ref)}
+            aria-label={`Pick prompt ${number} clip ${label}: ${clip.title || "clip"}`} />
+          {selected ? "Picked ✓" : "Pick clip"}
+        </label>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   );

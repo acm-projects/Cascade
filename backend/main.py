@@ -13,6 +13,15 @@ from backend.routers.editor_setup import include_editor
 
 app = FastAPI()
 app.middleware("http")(auth.authenticate_request)
+
+
+@app.middleware("http")
+async def metadata_read_cache(request, call_next):
+    """Each metadata record is fetched from Neon at most once per request (see request_cache).
+    Background jobs and threads started by a request do not inherit it, so they always read fresh."""
+    from backend.database.metadata_store import request_cache
+    with request_cache():
+        return await call_next(request)
 app.include_router(pages.router)
 app.include_router(clips.router)
 

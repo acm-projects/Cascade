@@ -1,6 +1,7 @@
 """Background job state, ownership checks, metadata persistence, and public errors."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
+from threading import Event, Lock, Thread
+import logging
 import re
 import subprocess
 import time
@@ -94,8 +95,44 @@ def update_job(job_id, **changes):
         job["updated_at"] = now
         snapshot = dict(job)
     folder = JOBS_DIR / job_id
-    if folder.is_dir():
-        save_json(folder / "progress.json", snapshot)
+    if not folder.is_dir():
+        return
+    if snapshot.get("state") in ("done", "error"):
+        with progress_write_lock:  # the final state is saved now, and nothing older can land after it
+            with pending_lock:
+                pending_progress.pop(job_id, None)
+            save_json(folder / "progress.json", snapshot)
+    else:
+        # Live progress is saved by a background thread (newest snapshot per job), so a job never
+        # waits on a database round trip between its steps. The UI reads live progress from memory.
+        with pending_lock:
+            pending_progress[job_id] = snapshot
+        progress_wanted.set()
+
+
+pending_progress = {}  # job id -> newest progress snapshot not yet saved
+pending_lock = Lock()
+progress_write_lock = Lock()  # held while a progress.json is written, so writes never reorder
+progress_wanted = Event()
+
+
+def save_pending_progress():
+    while True:
+        progress_wanted.wait()
+        progress_wanted.clear()
+        while True:
+            with progress_write_lock:
+                with pending_lock:
+                    if not pending_progress:
+                        break
+                    job_id, snapshot = pending_progress.popitem()
+                try:
+                    save_json(JOBS_DIR / job_id / "progress.json", snapshot)
+                except Exception:
+                    logging.getLogger(__name__).exception("Could not save progress for job %s", job_id)
+
+
+Thread(target=save_pending_progress, name="progress-writer", daemon=True).start()
 
 
 class JobCancelled(Exception):
