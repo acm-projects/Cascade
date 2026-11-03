@@ -15,7 +15,7 @@ const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 
 //                can move the playhead and jump the video
 //   framing    - optional { patch, recordUndo } from useClipDraft: in Fill mode you can then drag the video
 //                to choose what stays in the frame (one undo step per drag)
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -25,7 +25,19 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
   const [renderError, setRenderError] = useState('');
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
+  const [cutout, setCutout] = useState(null);
   const clock = useMemo(() => timelineClock(state), [state]);
+  const styled = Boolean(state.stylize?.events?.length);
+  // Fan-edit previews first compute subject cutouts locally; show that progress while rendering.
+  useEffect(() => {
+    if (!rendering || !styled) return;
+    let active = true;
+    const poll = () => api.getStyleProgress(projectId, clip.job_id, clip.clip_index)
+      .then(p => { if (active) setCutout(p?.total ? p : null); }).catch(() => {});
+    const timer = setInterval(poll, 2000);
+    const first = setTimeout(poll, 0);
+    return () => { active = false; clearInterval(timer); clearTimeout(first); setCutout(null); };
+  }, [api, projectId, clip.job_id, clip.clip_index, rendering, styled]);
   const showEdited = view === "edited" && !!rendered;
   const advanced = true; // Edited always uses the same server renderer as MP4 export.
   const snapshot = JSON.stringify(state);
@@ -77,6 +89,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
     return () => observer.disconnect();
   }, [url]);
 
+  useEffect(() => { onSourceMedia?.(url); }, [url, onSourceMedia]);
+
   // The "remote control" the timeline uses
   useEffect(() => {
     if (!controlRef) return;
@@ -87,6 +101,12 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
       },
       getTime: () => showEdited ? clock.source(videoRef.current?.currentTime ?? 0) : (videoRef.current?.currentTime ?? 0),
       isReady: () => Boolean(videoRef.current),
+      isPlaying: () => Boolean(videoRef.current && !videoRef.current.paused),
+      togglePlay: () => {
+        const video = videoRef.current;
+        if (!video) return;
+        if (video.paused) video.play().catch(() => {}); else video.pause();
+      },
     };
     return () => {
       controlRef.current = null;
@@ -138,11 +158,11 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
 
   const { composition } = state;
   const audioOnly = info.has_video === false;
-  const ratio = view === "original" ? info.width / info.height : audioOnly ? 16/9 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
+  const ratio = view === "original" ? info.width / info.height : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
   // The biggest frame of this shape that fits the space
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
 
-  const canDrag = Boolean(framing) && !audioOnly && view === "edited" && composition.mode === "fill";
+  const canDrag = Boolean(framing) && !audioOnly && !state.fablecut && view === "edited" && composition.mode === "fill";
 
   // ---------- Drag to reposition (Fill) ----------
   function startDrag(event) {
@@ -207,7 +227,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
 
         </div>
       </div>
-      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? 'Rendering edited preview… Original source shown until ready.' : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
+      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
           {playing ? "⏸" : "▶"}

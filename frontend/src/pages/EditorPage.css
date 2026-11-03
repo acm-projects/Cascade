@@ -284,3 +284,7 @@
   height: auto;
   padding: 10px 6px;
 }
+
+/* The timeline owns its horizontal scrolling; grid children must be allowed to shrink. */
+.editor-center, .editor-timeline { min-width: 0; }
+.editor-timeline { padding: 12px 10px; overflow: hidden; }

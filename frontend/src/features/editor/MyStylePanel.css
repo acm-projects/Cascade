@@ -1,0 +1,24 @@
+/* My Style sits above the AI Editor chat and uses the editor's wood/cream palette. */
+.ai-editor-with-style { display:flex; flex-direction:column; gap:10px; height:100%; min-height:0; }
+.ai-editor-with-style > .ai-editor-chat { flex:1; min-height:260px; }
+.my-style { flex-shrink:0; max-height:55%; overflow:auto; padding:9px; border:1px solid var(--color-wood-dark); border-radius:8px;
+  background:var(--color-cream-card); color:var(--color-wood-text); font:12px/1.45 var(--font-ui); }
+.my-style summary { font-weight:700; cursor:pointer; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.my-style-badge { font-weight:400; font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid currentColor; }
+.my-style-badge.approved { color:var(--color-jungle-deep); }
+.my-style select, .my-style input, .my-style textarea { font:inherit; color:inherit; background:#faf3df; border:1px solid var(--color-wood-dark); border-radius:6px; padding:3px 5px; min-width:0; }
+.my-style > select { margin-top:8px; width:100%; }
+.my-style-sheet ul { margin:8px 0 4px; padding-left:18px; }
+.my-style-meta { margin:0 0 8px; opacity:.75; font-size:11px; }
+.my-style-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:6px; }
+.my-style-grid label { display:flex; flex-direction:column; gap:2px; font-size:11px; }
+.my-style-grid input[type=color] { width:100%; height:26px; padding:1px; }
+.my-style-toggles { display:flex; flex-wrap:wrap; gap:4px 12px; margin:8px 0; }
+.my-style-toggles label { display:flex; gap:4px; align-items:center; font-size:11px; }
+.my-style-toggles input { accent-color:#317648; }
+.my-style-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.my-style-new { display:grid; gap:6px; margin-top:10px; padding-top:8px; border-top:1px dashed var(--color-wood-dark); }
+.my-style-file { display:flex; flex-direction:column; gap:2px; font-size:11px; }
+.my-style-file input { width:100%; }
+.my-style-status { margin:6px 0 0; font-style:italic; }
+.my-style-error { margin:6px 0 0; color:#a3261b; }

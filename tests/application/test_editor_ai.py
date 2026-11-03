@@ -18,7 +18,7 @@ class EditorAITests(unittest.TestCase):
 
     def test_each_provider_works_with_only_its_own_key(self):
         for provider in ('anthropic', 'openai'):
-            env={'LLM_PROVIDER':provider,'CASCADE_EDITOR_PROVIDER':'',
+            env={'LLM_PROVIDER':provider,'CASCADE_EDITOR_PROVIDER':provider,
                  'ANTHROPIC_API_KEY':'test' if provider=='anthropic' else '',
                  'OPENAI_API_KEY':'test' if provider=='openai' else ''}
             with self.subTest(provider=provider), patch.dict(os.environ,env), patch.object(
@@ -48,13 +48,13 @@ class EditorAITests(unittest.TestCase):
                 with self.assertRaises(HTTPException) as error:
                     ai.request_edit({})
                 self.assertEqual(error.exception.status_code,503)
-        with patch.object(ai,'structured_json',side_effect=LLMConfigError('private')):
+        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(ai,'structured_json',side_effect=LLMConfigError('private')):
             with self.assertRaises(HTTPException) as error:ai.request_edit({})
             self.assertNotIn('private',error.exception.detail)
 
     def test_invalid_output_never_becomes_an_edit(self):
         for data in ({'message':'ok','actions':[{'type':'shell'}]}, {'message':'ok','actions':'broken'}, {}):
-            with self.subTest(data=data), patch.object(ai,'structured_json',return_value=StructuredResult(data,0,0)):
+            with self.subTest(data=data), patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(ai,'structured_json',return_value=StructuredResult(data,0,0)):
                 with self.assertRaises(HTTPException) as error:ai.request_edit({})
                 self.assertEqual(error.exception.status_code,502)
                 self.assertEqual(error.exception.detail,'The editing AI returned an invalid response. Try rephrasing.')

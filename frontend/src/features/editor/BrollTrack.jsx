@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
+import { StockThumbnail } from "./TimelineMedia";
 import { dragBroll } from "./brollTiming";
 
-export default function BrollTrack({ state, duration, player, change, patch, recordUndo, selectedId, onSelect, disabled }) {
+export default function BrollTrack({ state, duration, player, change, patch, recordUndo, selectedId, onSelect, disabled, projectId, clip }) {
   const track = useRef(null);
   const drag = useRef(null);
   const latest = useRef(state);
@@ -24,6 +25,7 @@ export default function BrollTrack({ state, duration, player, change, patch, rec
   function begin(event, segment, kind) {
     if (disabled || event.button !== 0) return;
     event.preventDefault(); event.stopPropagation();
+    event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { before: latest.current, segment, kind, x: event.clientX, width: track.current.getBoundingClientRect().width };
     onSelect(segment.id); player.current?.seek(segment.start + .001);
@@ -39,7 +41,7 @@ export default function BrollTrack({ state, duration, player, change, patch, rec
     if (event.type === 'pointercancel') patch(drag.current.before);
     else recordUndo(drag.current.before);
     drag.current = null;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
   function nudge(event, segment, kind) {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -51,16 +53,15 @@ export default function BrollTrack({ state, duration, player, change, patch, rec
   }
   const props = (segment, kind) => ({
     disabled, onPointerDown: e => begin(e, segment, kind), onPointerMove: move,
-    onPointerUp: finish, onPointerCancel: finish, onKeyDown: e => nudge(e, segment, kind),
+    onPointerUp: finish, onPointerCancel: finish, onLostPointerCapture: finish, onKeyDown: e => nudge(e, segment, kind),
     onClick: () => { onSelect(segment.id); player.current?.seek(segment.start + .001); },
   });
   return <div className="timeline-broll" aria-label="B-roll track">
-    <small>B-roll · drag to move, edges to trim · Delete removes selection</small>
     <div ref={track} className="timeline-broll-lane">
       {state.broll.map((segment, index) => <div key={segment.id} className={`timeline-broll-segment${segment.id === selectedId ? ' active' : ''}`}
         style={{ left: `${segment.start / duration * 100}%`, width: `${segment.duration / duration * 100}%` }}>
         <button type="button" className="timeline-broll-body" aria-pressed={segment.id === selectedId}
-          aria-label={`B-roll ${index + 1}, ${segment.start.toFixed(2)} to ${(segment.start + segment.duration).toFixed(2)} seconds`} {...props(segment,'move')}>B-roll {index + 1}</button>
+          aria-label={`B-roll ${index + 1}, ${segment.start.toFixed(2)} to ${(segment.start + segment.duration).toFixed(2)} seconds`} {...props(segment,'move')}><StockThumbnail projectId={projectId} clip={clip} asset={segment.asset} /><span>B-roll {index + 1}</span></button>
         <button type="button" className="timeline-broll-edge start" aria-label={`Resize start of B-roll ${index + 1}`} {...props(segment,'start')} />
         <button type="button" className="timeline-broll-edge end" aria-label={`Resize end of B-roll ${index + 1}`} {...props(segment,'end')} />
       </div>)}

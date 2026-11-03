@@ -3,7 +3,9 @@ import math
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend import broll as stocklib
-from .advanced_models import AudioSegment, Motion, TextOverlay, Transition, TimelineSpan, SpeedRamp, CutAccent, ReelInfo
+from .advanced_models import AudioSegment, Motion, TextOverlay, Transition, TimelineSpan, SpeedRamp, CutAccent, ReelInfo, StyleEvent, StyleInfo, StyleOptions
+from .sequence_models import FablecutSequence
+from .director_models import DirectorPlan
 
 
 class Captions(BaseModel):
@@ -87,6 +89,8 @@ class Edit(BaseModel):
     accents: list[CutAccent] = Field(default_factory=list, max_length=8)
     reel: ReelInfo | None = None
     dialogue_volume: float = Field(default=1, ge=0, le=2)
+    fablecut: FablecutSequence | None = None
+    stylize: StyleInfo | None = None
 
 
 class Message(BaseModel):
@@ -107,13 +111,14 @@ class ChatInput(BaseModel):
     result_ids: list[str] = Field(default_factory=list, max_length=120)
     selected_segment: str | None = Field(default=None, max_length=32)
     research_id: str | None = Field(default=None,pattern='^[a-f0-9]{32}$')
+    style_id: str | None = Field(default=None,pattern='^[a-f0-9]{32}$')
     suggestion: int | None = Field(default=None,ge=0,le=7)
     suggestions: list[int] | None = Field(default=None,min_length=1,max_length=8)
 
 
 class Action(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
-    type: Literal['trim_first', 'keep_first', 'reset_trim', 'captions_enabled', 'caption_color', 'caption_bold', 'caption_position', 'caption_text', 'caption_settings', 'reframe_focus', 'broll_search', 'broll_insert', 'broll_update', 'broll_remove', 'broll_auto', 'audio_add', 'audio_update', 'audio_remove', 'motion', 'text_overlay', 'color_adjust', 'transition', 'caption_animation', 'dialogue_volume', 'high_energy_reel', 'speed_ramp', 'cut_accent']
+    type: Literal['trim_first', 'keep_first', 'reset_trim', 'captions_enabled', 'caption_color', 'caption_bold', 'caption_position', 'caption_text', 'caption_settings', 'reframe_focus', 'broll_search', 'broll_insert', 'broll_update', 'broll_remove', 'broll_auto', 'audio_add', 'audio_update', 'audio_remove', 'motion', 'motion_update', 'motion_remove', 'composition', 'text_overlay', 'color_adjust', 'transition', 'caption_animation', 'dialogue_volume', 'high_energy_reel', 'speed_ramp', 'cut_accent', 'style_preset', 'style_event', 'style_clear', 'auto_edit']
     focus: Literal['speaker','both','left','right','off'] | None = None
     settings: Captions | None = None
     seconds: float | None = Field(default=None, gt=0)
@@ -134,6 +139,8 @@ class Action(BaseModel):
     anchor: str | None = Field(default=None, max_length=200)
     audio: AudioSegment | None = None
     motion: Motion | None = None
+    target_index: int | None = Field(default=None, ge=0, le=29)
+    composition: Composition | None = None
     overlay: TextOverlay | None = None
     effects: Effects | None = None
     transition: Transition | None = None
@@ -142,6 +149,21 @@ class Action(BaseModel):
     animation: Literal['none','pop','karaoke'] | None = None
     speed: SpeedRamp | None = None
     accent: CutAccent | None = None
+    zoom_strength: float | None = Field(default=None, ge=1.05, le=1.45)
+    shake_strength: float | None = Field(default=None, ge=0, le=.015)
+    max_punch_ins: int | None = Field(default=None, ge=1, le=6)
+    style: StyleEvent | None = None
+    style_options: StyleOptions | None = None
+    plan: DirectorPlan | None = None
+
+
+class VisualObservation(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    frame_index: int = Field(ge=0, le=11)
+    at: float = Field(ge=0)
+    description: str = Field(max_length=300)
+    importance: float = Field(ge=0, le=1)
+    activity: Literal['low', 'medium', 'high'] = 'medium'
 
 
 class Proposal(BaseModel):
@@ -149,6 +171,8 @@ class Proposal(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     actions: list[Action] = Field(max_length=30)
     unsupported: list[str] = Field(default_factory=list, max_length=20)
+    observations: list[VisualObservation] = Field(default_factory=list, max_length=8)
+    planning_method: Literal['model','direct_revision'] = 'model'
 
 
 class CaptionImage(BaseModel):

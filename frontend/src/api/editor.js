@@ -62,6 +62,33 @@ export function saveDraft(token, projectId, jobId, index, draft) {
  * @returns {Promise<{ state: Edit, message: string, actions: object[], broll_search: object | null }>}
  *          state = the edit with the AI's changes applied, message = the AI's reply
  */
+/** GET /api/projects/{projectId}/editor/ai-status → provider, engine, model and free-tier usage (never credentials). */
+export function getEditorAIStatus(token, projectId) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/ai-status`, { token });
+}
+
+// My Style: saved style sheets built from the user's own reference reels (backend/editor/style_profile.py).
+// Shared by every project of this user; only approved styles can be sent as `style_id` to the chat.
+function stylesPath(projectId, styleId) {
+  return `/api/projects/${encodeURIComponent(projectId)}/editor/styles${styleId ? `/${encodeURIComponent(styleId)}` : ""}`;
+}
+export function listStyles(token, projectId) {
+  return apiFetch(stylesPath(projectId), { token });
+}
+/** Measures each video/link and returns a draft StyleProfile; can take a minute for several references. */
+export function createStyle(token, projectId, files, links) {
+  const form = new FormData();
+  for (const file of files) form.append("videos", file);
+  form.append("links", links.join("\n"));
+  return apiFetch(stylesPath(projectId), { token, method: "POST", form });
+}
+export function updateStyle(token, projectId, styleId, choices, approve = false) {
+  return apiFetch(stylesPath(projectId, styleId), { token, method: "PUT", body: { choices, approve } });
+}
+export function deleteStyle(token, projectId, styleId) {
+  return apiFetch(stylesPath(projectId, styleId), { token, method: "DELETE" });
+}
+
 export function sendEditorChat(token, projectId, jobId, index, body) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/chat`, { token, method: "POST", body });
 }
@@ -71,6 +98,11 @@ export function sendEditorChat(token, projectId, jobId, index, body) {
  * Renders one clip. 409 while automatic framing is still being prepared.
  * @returns {Promise<Blob>} the finished MP4
  */
+/** GET …/{jobId}/{index}/style-progress → { done, total } while fan-edit subject cutouts are computed, else {}. */
+export function getStyleProgress(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/style-progress`, { token });
+}
+
 export function exportClip(token, projectId, jobId, index, edit) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/export`, { token, method: "POST", body: edit });
 }

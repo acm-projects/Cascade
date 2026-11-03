@@ -2,6 +2,7 @@
 import array
 import json
 import math
+import os
 import shutil
 import subprocess
 import tempfile
@@ -60,7 +61,9 @@ class ReelRenderTests(unittest.TestCase):
     def get(self):return self.fx.get()['draft']['state']
     def test_style_plan_save_real_export_and_speech_pitch(self):
         actions=[Action(type='high_energy_reel')]
-        with patch.object(ai,'request_edit',return_value=Proposal(message='Plan',actions=actions)):
+        # This exercises the retained legacy renderer; FableCut has separate
+        # sequence integration tests and real-media verification.
+        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(ai,'request_edit',return_value=Proposal(message='Plan',actions=actions)):
             response=self.client.post(self.url+'/chat',headers=self.headers,json={'state':self.get(),'message':'Make this a polished high-energy Reel with a strong opening, beat-synced edits, bold animated captions, selective punch-in zooms, relevant B-roll, and music that stays beneath the dialogue.'})
         self.assertEqual(response.status_code,200,response.text);data=response.json();state=data['state']
         self.assertTrue(state['speed']);self.assertTrue(state['timeline']);self.assertTrue(state['reel']['beats'])

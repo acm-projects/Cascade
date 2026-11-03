@@ -224,9 +224,9 @@ class EditorTests(unittest.TestCase):
             self.assertEqual(ai.call_args.args[0]['transcript'][0]['start'],.5)
         with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'bad'}).status_code,422)
-        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':'','CASCADE_EDITOR_PROVIDER':''}):
+        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':'','CASCADE_EDITOR_PROVIDER':'openai'}):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'}).status_code,503)
-        with patch.object(editor.ai,'structured_json',side_effect=RuntimeError('private info')):
+        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(editor.ai,'structured_json',side_effect=RuntimeError('private info')):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'})
             self.assertEqual(result.status_code,502)
             self.assertNotIn('private info',result.text)
@@ -236,14 +236,14 @@ class EditorTests(unittest.TestCase):
     def test_ai_request_schema_and_response_validation(self):
         from types import SimpleNamespace
         valid = {'message':'Which part should I keep?', 'actions':[]}
-        with patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data=valid)) as call:
+        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data=valid)) as call:
             proposal = editor.request_edit({'request':'make it shorter'})
             self.assertEqual(proposal.actions, [])
             schema=call.call_args.args[1]
             self.assertFalse(schema['additionalProperties'])
             self.assertEqual(schema['required'],list(schema['properties']))
             self.assertIn('make it shorter',call.call_args.args[0])
-        with patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data={'message':'ok','actions':[{'type':'shell'}]})):
+        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data={'message':'ok','actions':[{'type':'shell'}]})):
             with self.assertRaises(HTTPException) as error:
                 editor.request_edit({})
             self.assertEqual(error.exception.status_code,502)

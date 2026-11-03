@@ -1,201 +1,66 @@
-/* Editor timeline. Colors come from theme.css. */
-.timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  user-select: none;
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
-}
+/* Source-time editor timeline. Keep geometry inside the scrolling canvas. */
+.timeline { --tl-line: color-mix(in srgb, var(--color-wood-dark) 22%, transparent); display:flex; flex-direction:column; gap:10px; min-width:0; max-width:100%; user-select:none; color:var(--color-wood-text); font-family:var(--font-ui); }
+.timeline *, .timeline *::before, .timeline *::after { box-sizing:border-box; }
+.timeline-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:0 5px; }
+.timeline-toolbar button { min-height:30px; padding:4px 9px; border:1px solid var(--color-wood-dark); border-radius:7px; background:var(--color-cream-card); color:var(--color-wood-text); font:700 11px var(--font-ui); cursor:pointer; white-space:nowrap; }
+.timeline-toolbar button:first-child { background:var(--color-leaf); }
+.timeline-toolbar button:disabled { opacity:.4; cursor:default; }
+.timeline button:focus-visible, .timeline-scroll:focus-visible, .timeline-playhead:focus-visible { outline:3px solid var(--color-leaf); outline-offset:2px; }
+.timeline-time { font:700 12px var(--font-ui); font-variant-numeric:tabular-nums; min-width:90px; }
+.timeline-clock-label { font-size:10px; opacity:.65; }
+.timeline-zoom { display:flex; align-items:center; gap:5px; margin-left:auto; }
+.timeline-zoom label { display:flex; align-items:center; gap:6px; font-size:10px; }
+.timeline-zoom input { width:65px; accent-color:var(--color-jungle-deep); }
+.timeline-board { display:grid; grid-template-columns:86px minmax(0,1fr); min-width:0; border:2px solid var(--color-wood-dark); border-radius:10px; overflow:hidden; background:var(--color-cream-card); }
+.timeline-labels { background:color-mix(in srgb,var(--color-cream-card) 90%,var(--color-wood-dark)); border-right:2px solid var(--color-wood-dark); z-index:6; }
+.timeline-label { display:flex; align-items:center; padding:0 9px; font-size:11px; font-weight:800; border-bottom:1px solid var(--tl-line); }
+.timeline-label-ruler { height:30px; font-size:9px; letter-spacing:.1em; opacity:.75; }
+.timeline-label button { border:0; padding:0; background:transparent; color:inherit; font:inherit; cursor:pointer; text-align:left; }
+.timeline-label.collapsed { font-size:10px; opacity:.7; }
+.timeline-scroll { min-width:0; overflow-x:auto; overflow-y:hidden; padding:0 10px; scrollbar-color:var(--color-wood-dark) var(--color-cream-card); scrollbar-width:thin; overscroll-behavior-x:contain; }
+.timeline-content { position:relative; min-width:100%; }
+.timeline-ruler { position:relative; height:30px; border-bottom:1px solid var(--tl-line); cursor:crosshair; touch-action:none; }
+.timeline-tick { position:absolute; top:4px; padding-left:4px; font-size:10px; font-weight:700; white-space:nowrap; opacity:.75; }
+.timeline-tick::after { content:''; position:absolute; left:0; top:17px; height:8px; width:1px; background:var(--color-wood-dark); }
+.timeline-row { position:relative; border-bottom:1px solid var(--tl-line); cursor:crosshair; touch-action:none; }
+.timeline-row:nth-child(odd) { background:color-mix(in srgb,var(--color-cream-card) 95%,var(--color-wood-dark)); }
+.timeline-empty { position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:10px; opacity:.6; white-space:nowrap; pointer-events:none; }
+.timeline-track { position:absolute; inset:8px 0; border:0; box-shadow:inset 0 0 0 1px var(--color-wood-dark); border-radius:7px; background:var(--color-cream-card); cursor:crosshair; }
+.timeline-filmstrip { position:absolute; inset:0; border-radius:6px; overflow:hidden; background:color-mix(in srgb,var(--color-cream-card) 80%,var(--color-wood-dark)); }
+.timeline-filmstrip img { position:absolute; top:0; height:100%; object-fit:cover; pointer-events:none; }
+.timeline-filmstrip > span { position:absolute; inset:0; display:grid; place-items:center; font-size:11px; }
+.timeline-cut { position:absolute; top:0; bottom:0; background:rgba(52,38,23,.65); pointer-events:none; border-radius:5px; }
+.timeline-kept { position:absolute; top:0; bottom:0; border:2px solid var(--color-leaf); border-radius:6px; pointer-events:none; }
+.timeline-track.active .timeline-kept { box-shadow:inset 0 0 0 1px var(--color-jungle-deep); }
+.timeline-footage-span { position:absolute; top:0; height:5px; background:var(--color-leaf); border-right:1px solid var(--color-wood-dark); pointer-events:none; }
+.timeline-handle { position:absolute; top:-3px; bottom:-3px; width:14px; padding:0; translate:-50% 0; border:2px solid var(--color-jungle-deep); border-radius:5px; background:var(--color-leaf); cursor:ew-resize; touch-action:none; z-index:5; }
+.timeline-handle::after { content:''; position:absolute; inset:35% 3px; border-inline:1px solid var(--color-jungle-deep); }
+.timeline-playhead { position:absolute; top:0; bottom:0; left:0; width:12px; translate:-50% 0; cursor:ew-resize; touch-action:none; z-index:4; }
+.timeline-playhead::before { content:''; position:absolute; left:5px; top:10px; bottom:0; width:2px; background:var(--color-plank); box-shadow:0 0 0 1px var(--color-cream-card); pointer-events:none; }
+.timeline-playhead::after { content:''; position:absolute; top:0; left:0; width:12px; height:13px; border:1px solid var(--color-cream-card); border-radius:3px 3px 6px 6px; background:var(--color-plank); }
+.timeline-cue { position:absolute; height:25px; min-width:0; max-width:100%; padding:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:0; border-radius:5px; background:color-mix(in srgb,var(--color-cream-card) 80%,var(--color-leaf)); color:var(--color-wood-text); font:600 10px var(--font-ui); text-align:left; cursor:pointer; box-shadow:inset 0 0 0 1px var(--color-wood-dark); }
+.timeline-cue.active, .timeline-cue:hover { background:var(--color-leaf); outline:1px solid var(--color-jungle-deep); outline-offset:-2px; }
+.timeline-effect { background:color-mix(in srgb,var(--color-cream-card) 90%,var(--color-wood-dark)); }
+.timeline-caption-detail { margin:0; padding:7px 10px; border:1px solid var(--tl-line); border-radius:6px; font-size:12px; line-height:1.5; max-height:80px; overflow:auto; overflow-wrap:anywhere; user-select:text; }
+.timeline-broll { position:absolute; inset:6px 0; }
+.timeline-broll-lane { position:relative; height:100%; width:100%; }
+.timeline-broll-segment { position:absolute; top:0; height:100%; min-width:0; }
+.timeline-broll-body { position:relative; width:100%; height:100%; padding:0 10px; overflow:hidden; border:1px solid var(--color-wood-dark); border-radius:7px; background:var(--color-cream-card); color:var(--color-wood-text); font:700 10px var(--font-ui); text-align:left; cursor:grab; touch-action:none; }
+.timeline-broll-body img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.8; pointer-events:none; }
+.timeline-broll-body span { position:relative; z-index:1; padding:2px 4px; border-radius:3px; background:var(--color-cream-card); white-space:nowrap; }
+.timeline-broll-segment.active .timeline-broll-body { outline:3px solid var(--color-leaf); outline-offset:-3px; }
+.timeline-broll-edge { position:absolute; z-index:5; top:0; width:10px; height:100%; padding:0; border:1px solid var(--color-jungle-deep); background:var(--color-leaf); cursor:ew-resize; touch-action:none; }
+.timeline-broll-edge::after { content:''; position:absolute; top:35%; bottom:35%; left:4px; border-left:1px solid var(--color-jungle-deep); }
+.timeline-broll-edge.start { left:0; border-radius:5px 0 0 5px; }
+.timeline-broll-edge.end { right:0; border-radius:0 5px 5px 0; }
+.timeline-no-cues { font-size:10px; opacity:.65; }
+.timeline-audio { position:absolute; height:44px; min-width:0; overflow:hidden; border:1px solid var(--color-wood-dark); border-radius:6px; padding:0; background:color-mix(in srgb,var(--color-cream-card) 80%,var(--color-leaf)); color:var(--color-jungle-deep); text-align:left; cursor:pointer; }
+.timeline-audio.active { outline:2px solid var(--color-jungle-deep); outline-offset:-2px; }
+.timeline-audio > span:not(.timeline-waveform-note) { position:absolute; top:2px; left:5px; padding:1px 3px; font:700 9px var(--font-ui); white-space:nowrap; background:var(--color-cream-card); border-radius:3px; }
+.timeline-waveform { position:absolute; inset:0; width:100%; height:100%; fill:var(--color-jungle-deep); opacity:.65; pointer-events:none; }
+.timeline-waveform-note { display:block; padding:16px 5px 0; font:10px var(--font-ui); white-space:nowrap; }
+.timeline-footer { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:0 5px; font-size:10px; line-height:1.5; opacity:.8; }
+.timeline-footer kbd { border:1px solid currentColor; border-radius:3px; padding:0 3px; font-family:inherit; }
+@media (max-width:700px) { .timeline-board { grid-template-columns:70px minmax(0,1fr); } .timeline-label { padding:0 5px; font-size:10px; } .timeline-clock-label { display:none; } .timeline-zoom { margin-left:0; } }
 
-/* ---------- Ruler ---------- */
-.timeline-ruler {
-  position: relative;
-  height: 16px;
-  margin: 0 8px;
-}
-
-.timeline-tick {
-  position: absolute;
-  bottom: 0;
-  translate: -50% 0;
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.7;
-  white-space: nowrap;
-}
-
-.timeline-tick::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  width: 1px;
-  height: 5px;
-  background: currentColor;
-}
-
-/* ---------- Track (with a decorative waveform look) ---------- */
-.timeline-track {
-  position: relative;
-  height: 56px;
-  margin: 0 8px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-sm);
-  background:
-    repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-jungle-deep) 55%, transparent) 0 2px, transparent 2px 6px)
-      center / 100% 55% no-repeat,
-    color-mix(in srgb, var(--color-cream-card) 85%, white);
-  cursor: pointer;
-  touch-action: none; /* let the timeline, not the page, handle touch drags */
-}
-
-/* The parts cut off by the trim: darker */
-.timeline-cut {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  background: color-mix(in srgb, var(--color-jungle-deep) 55%, transparent);
-  pointer-events: none;
-}
-
-/* The part you keep: a green outline */
-.timeline-kept {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  border-top: 3px solid var(--color-leaf);
-  border-bottom: 3px solid var(--color-leaf);
-  pointer-events: none;
-}
-
-/* The two trim handles: 10 px wide, leaf green, centered on their time */
-.timeline-handle {
-  position: absolute;
-  top: -6px;
-  bottom: -6px;
-  width: 10px;
-  padding: 0;
-  translate: -50% 0;
-  border: 2px solid var(--color-jungle-deep);
-  border-radius: 4px;
-  background: var(--color-leaf);
-  cursor: ew-resize;
-  touch-action: none;
-  z-index: 4; /* above the playhead: when they overlap, grabbing means trimming */
-}
-
-.timeline-handle::after {
-  content: "";
-  position: absolute;
-  inset: 40% 2px;
-  border-left: 1px solid var(--color-jungle-deep);
-  border-right: 1px solid var(--color-jungle-deep);
-}
-
-/* Playhead: a line with a knob on top; its left is set every frame in Timeline.jsx */
-.timeline-playhead {
-  position: absolute;
-  top: -10px;
-  bottom: -4px;
-  left: 0;
-  width: 14px;
-  translate: -50% 0;
-  cursor: grab;
-  z-index: 3;
-}
-
-.timeline-playhead::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 6px;
-  bottom: 0;
-  width: 2px;
-  translate: -50% 0;
-  background: var(--color-plank);
-}
-
-.timeline-playhead::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 10px;
-  height: 10px;
-  translate: -50% 0;
-  border-radius: 50%;
-  background: var(--color-plank);
-}
-
-/* ---------- Caption blocks ---------- */
-.timeline-cues {
-  position: relative;
-  height: 24px;
-  margin: 0 8px;
-}
-
-.timeline-cue {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  min-width: 6px;
-  overflow: hidden;
-  padding: 0 4px;
-  border: 1px solid var(--color-wood-dark);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--color-cream-card) 90%, white);
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  text-align: left;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-.timeline-cue:hover,
-.timeline-cue.active {
-  background: var(--color-leaf);
-  color: var(--color-jungle-deep);
-}
-
-.timeline-no-cues {
-  font-size: 12px;
-  opacity: 0.6;
-}
-
-/* ---------- Footer ---------- */
-.timeline-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 8px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.timeline-keys {
-  opacity: 0.65;
-  font-weight: 600;
-}
-
-.timeline-keys kbd {
-  padding: 0 4px;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  font-family: var(--font-ui);
-}
-
-.timeline-added > div { position: relative; height: 26px; margin: 0 8px; }
-.timeline-added small { font-size: 10px; color: var(--color-wood-text); }
-.timeline-added .timeline-cue { height: 24px; background: var(--color-cream-card); }
-
-.timeline-broll > small { font-size:11px; }
-.timeline-broll-lane { position:relative; height:30px; margin:4px 8px; background:color-mix(in srgb,var(--color-wood-dark) 10%,transparent); border-radius:4px; }
-.timeline-broll-segment { position:absolute; top:0; height:28px; min-width:6px; }
-.timeline-broll-body { width:100%; height:100%; padding:0 9px; overflow:hidden; white-space:nowrap; background:var(--color-cream-card); color:var(--color-wood-text); border:1px solid var(--color-wood-dark); border-radius:4px; font-size:11px; cursor:grab; touch-action:none; }
-.timeline-broll-segment.active .timeline-broll-body { background:var(--color-leaf); outline:2px solid var(--color-jungle-deep); }
-.timeline-broll-edge { position:absolute; top:0; width:8px; height:100%; padding:0; border:0; background:var(--color-wood-dark); cursor:ew-resize; touch-action:none; }
-.timeline-broll-edge.start { left:0; border-radius:4px 0 0 4px; }
-.timeline-broll-edge.end { right:0; border-radius:0 4px 4px 0; }
+.timeline-cue > span { display:block; padding:0 4px; overflow:hidden; text-overflow:ellipsis; }

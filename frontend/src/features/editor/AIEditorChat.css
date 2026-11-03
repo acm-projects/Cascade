@@ -1,0 +1,29 @@
+/* Scoped to the editor; shared ChatBox and other pages retain their appearance. */
+.ai-editor-chat { display:flex; flex-direction:column; min-height:0; gap:10px; height:100%; }
+.ai-editor-chat .chatbox { flex:1; min-height:0; }
+.ai-editor-chat .chatbox-header { padding:10px; }
+.ai-editor-chat .chatbox-title { font-size:18px; }
+.ai-editor-chat .chatbox-subtitle { font-size:11px; line-height:1.5; }
+.ai-editor-chat .chatbox-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+.ai-editor-chat .chatbox-quick { flex-wrap:wrap; }
+.ai-editor-receipt { flex-shrink:0; padding:9px; border:1px solid var(--color-wood-dark); border-radius:8px; background:var(--color-cream-card); color:var(--color-wood-text); font:11px/1.5 var(--font-ui); max-height:220px; overflow:auto; }
+.ai-editor-receipt summary { font-weight:700; cursor:pointer; }
+.ai-editor-engine { flex-shrink:0; margin:0; padding:4px 2px; color:var(--color-wood-text); font:11px/1.4 var(--font-ui); opacity:.85; }
+.ai-editor-receipt ol { padding-left:18px; }
+.ai-editor-step { margin:6px 0; }
+.ai-editor-step.applied b { color:var(--color-jungle-deep); }
+.ai-editor-step.failed b { text-decoration:underline; }
+.ai-sequence { margin-top: 12px; padding: 12px; border: 2px solid #49361e; border-radius: 14px; background: #f4ecd2; color: #49361e; font-size: 13px; min-width: 0; }
+.ai-sequence-shots { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; }
+.ai-sequence-shot { flex: 0 0 180px; display: grid; gap: 7px; padding: 8px; border: 1px solid #735b35; border-radius: 10px; background: #e4e8ca; }
+.ai-sequence button, .ai-sequence select { border: 1px solid #49361e; border-radius: 7px; padding: 5px; color: #49361e; background: #faf3df; cursor: pointer; }
+.ai-sequence label { display: flex; gap: 5px; align-items: center; }
+.ai-sequence input { min-width: 0; width: 85px; accent-color: #317648; }
+.ai-sequence-clock { margin-top: 8px; font-variant-numeric: tabular-nums; }
+.ai-sequence-strip { display: flex; height: 43px; overflow: hidden; border: 1px solid #49361e; border-radius: 8px; margin: 6px 0; }
+.ai-sequence-strip button { min-width: 0; border-radius: 0; overflow: hidden; background: #cad8a8; border-width: 0 1px 0 0; }
+.ai-sequence-strip small { display: block; font-size: 10px; white-space: nowrap; }
+.ai-sequence-details summary { padding: 7px 0; cursor: pointer; font-weight: 600; }
+.editor-center.has-ai-sequence { overflow-y: auto; }
+.editor-center.has-ai-sequence > .editor-preview { flex: 0 0 clamp(280px, 40vh, 480px); min-height: 280px; }
+.ai-editor-chat .ai-editor-clear { align-self:flex-start; font-size:12px; }
