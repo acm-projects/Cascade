@@ -1,4 +1,4 @@
-"""My Style: style sheets built from the user's own reference reels, offline (no Gemini, Ollama, yt-dlp or HyperFrames calls)."""
+"""Styles learned from the user's reference reels for the AI Editor chat, offline (no Gemini, Ollama, yt-dlp or HyperFrames calls)."""
 import subprocess
 import tempfile
 import unittest
@@ -74,18 +74,42 @@ class MyStyleTests(unittest.TestCase):
         self.assertEqual((info.label, round(info.duration), len(frames)), ('test pattern', 4, 6))
         self.assertGreater(info.saturation, .2)
 
-    def test_links_must_be_public_social_urls_and_drafts_cannot_be_used(self):
+    def test_links_must_be_public_social_urls(self):
         from backend.editor import style_profile, style_reference
         with self.assertRaises(HTTPException):
             style_reference.download('file:///etc/passwd', '/tmp')
-        with tempfile.TemporaryDirectory() as folder, patch.object(style_profile, 'folder', return_value=Path(folder)):
-            draft = style_profile.save('user', profile().model_copy(update={'status': 'draft'}))
-            with self.assertRaises(HTTPException) as raised:
-                style_profile.approved('user', draft.id)
-            self.assertEqual(raised.exception.status_code, 409)
-            with self.assertRaises(HTTPException):
-                style_profile.load('user', '../../etc')
-        self.assertEqual(ChatInput(state=Edit(start=0, end=1), message='edit', style_id='f'*32).style_id, 'f'*32)
+        message = 'edit this video like https://www.instagram.com/reel/abc123/, and http://evil.test/x https://example.com/y'
+        self.assertEqual(style_profile.chat_links(message), ['https://www.instagram.com/reel/abc123/'])
+
+    def test_chat_learns_from_the_folder_once_and_relearns_when_it_changes(self):
+        import os
+        from backend.editor import style_profile
+        built = []
+        def fake_build(user, paths=(), links=(), source_key=''):
+            built.append([p.name for p in paths])
+            return style_profile.save(user, profile().model_copy(update={'id': f'{len(built):032x}', 'source_key': source_key, 'created': len(built)}))
+        with tempfile.TemporaryDirectory() as refs, tempfile.TemporaryDirectory() as store, \
+                patch.object(style_profile, 'folder', return_value=Path(store)), patch.object(style_profile, 'build', side_effect=fake_build), \
+                patch.dict(os.environ, {'CASCADE_STYLE_REFERENCES': refs}):
+            (Path(refs)/'a.mov').write_bytes(b'1'); (Path(refs)/'notes.txt').write_text('x')
+            first, line = style_profile.for_chat('user', 'edit this video')
+            again, line2 = style_profile.for_chat('user', 'edit this video')
+            (Path(refs)/'b.mp4').write_bytes(b'2')
+            third, _ = style_profile.for_chat('user', 'edit this video')
+        self.assertEqual((built, first.id, again.id), ([['a.mov'], ['b.mp4', 'a.mov']], first.id, first.id))
+        self.assertNotEqual(third.id, first.id)
+        self.assertIn('learned "Red pop"', line); self.assertIn('Red pop', line2)
+        self.assertEqual(ChatInput(state=Edit(start=0, end=1), message='edit').message, 'edit')
+
+    def test_without_references_the_latest_style_is_reused_or_none(self):
+        import os
+        from backend.editor import style_profile
+        with tempfile.TemporaryDirectory() as store, patch.object(style_profile, 'folder', return_value=Path(store)), \
+                patch.dict(os.environ, {'CASCADE_STYLE_REFERENCES': ''}):
+            self.assertEqual(style_profile.for_chat('user', 'edit this video'), (None, ''))
+            style_profile.save('user', profile())
+            reused, line = style_profile.for_chat('user', 'edit this video')
+        self.assertEqual(reused.choices.name, 'Red pop')
 
     def test_motion_card_page_escapes_text_and_overlay_composites_alpha(self):
         import numpy as np

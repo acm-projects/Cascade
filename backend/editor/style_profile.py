@@ -1,22 +1,28 @@
-"""My Style: the user's saved editing styles, built from reference reels they upload or link.
+"""The user's editing style, learned in the background from reference reels for the AI Editor chat.
 
-Profiles live per user under `video_jobs/projects/<user hash>/styles/<id>.json` and are shared by
-all of that user's projects. A new profile is a draft; the AI Director only uses approved ones.
+References come from reel links pasted into the chat message, else from the folder named by
+`CASCADE_STYLE_REFERENCES` (e.g. ~/Desktop/AI Video Editor/Reference). A profile is built once per
+set of references and cached per user under `video_jobs/projects/<user hash>/styles/<id>.json`;
+adding, removing or replacing a reference builds a new one on the next edit.
 """
+import hashlib
 import json
+import logging
+import os
+import re
 import tempfile
 import time
 import uuid
 from pathlib import Path
 
-from fastapi import File, Form, HTTPException, Request, UploadFile
+from fastapi import HTTPException
 
 from backend.broll import write_json
-from backend.services.projects_store import project_dir, require_project
-from .style_profile_models import ProfileUpdate, StyleProfile
+from backend.services.projects_store import project_dir
+from .style_profile_models import StyleProfile
 
+LOG = logging.getLogger(__name__)
 MAX_REFERENCES = 8
-MAX_UPLOAD = 200*1024*1024
 VIDEO_TYPES = ('.mp4', '.mov', '.m4v', '.webm')
 
 
@@ -24,57 +30,44 @@ def folder(user):
     return project_dir(user)/'styles'
 
 
-def load(user, sid):
-    if not sid or len(sid) != 32 or any(c not in '0123456789abcdef' for c in sid):
-        raise HTTPException(404, 'Style not found.')
-    try:
-        return StyleProfile.model_validate_json((folder(user)/(sid+'.json')).read_text())
-    except (OSError, ValueError):
-        raise HTTPException(404, 'Style not found.') from None
-
-
-def approved(user, sid):
-    profile = load(user, sid)
-    if profile.status != 'approved':
-        raise HTTPException(409, 'Approve this style sheet before editing with it.')
-    return profile
-
-
 def save(user, profile):
     write_json(folder(user)/(profile.id+'.json'), profile.model_dump())
     return profile
 
 
-def _store_upload(upload, target):
-    size = 0
-    with target.open('wb') as out:
-        while chunk := upload.file.read(1024*1024):
-            size += len(chunk)
-            if size > MAX_UPLOAD: raise HTTPException(413, 'Each reference video must be at most 200 MB.')
-            out.write(chunk)
+def saved(user):
+    profiles = []
+    for path in folder(user).glob('*.json'):
+        try:
+            profiles.append(StyleProfile.model_validate(json.loads(path.read_text())))
+        except (OSError, ValueError):
+            continue
+    return sorted(profiles, key=lambda p: -p.created)
 
 
-def build(user, uploads, links):
-    """Measure every reference and choose the style; returns a draft StyleProfile."""
+def chat_links(message):
+    from .style_reference import LINK
+    return list(dict.fromkeys(u.rstrip('.,;)') for u in re.findall(r'https://\S+', message) if LINK.match(u.rstrip('.,;)'))))[:MAX_REFERENCES]
+
+
+def folder_references():
+    configured = os.environ.get('CASCADE_STYLE_REFERENCES', '').strip()
+    if not configured: return []
+    root = Path(configured).expanduser()
+    files = [p for p in root.glob('*') if p.is_file() and p.suffix.lower() in VIDEO_TYPES] if root.is_dir() else []
+    return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)[:MAX_REFERENCES]
+
+
+def build(user, paths=(), links=(), source_key=''):
+    """Measure every reference and choose the style; returns a saved StyleProfile."""
     from .style_reference import choose, download, measure
-    if not uploads and not links:
-        raise HTTPException(422, 'Add at least one reference video or link.')
-    if len(uploads)+len(links) > MAX_REFERENCES:
-        raise HTTPException(422, f'Use at most {MAX_REFERENCES} reference videos.')
     refs, frames, skipped = [], [], []
     with tempfile.TemporaryDirectory(prefix='cascade-style-') as work:
-        sources = []
-        for n, upload in enumerate(uploads):
-            name = Path(upload.filename or f'reference {n+1}').name
-            if Path(name).suffix.lower() not in VIDEO_TYPES:
-                raise HTTPException(422, f'{name}: upload MP4, MOV, M4V or WebM videos.')
-            target = Path(work)/f'upload{n}{Path(name).suffix.lower()}'
-            _store_upload(upload, target)
-            sources.append((target, name))
+        sources = [(Path(p), Path(p).name) for p in paths]
         for n, url in enumerate(links):
             place = Path(work)/f'link{n}'; place.mkdir()
             try:
-                sources.append((download(url.strip(), place), url.strip()))
+                sources.append((download(url, place), url))
             except HTTPException as exc:
                 skipped.append(exc.detail)
         for path, label in sources:
@@ -84,47 +77,35 @@ def build(user, uploads, links):
                 skipped.append(exc.detail); continue
             refs.append(info); frames += sampled[:max(2, 16//max(1, len(sources)))]
     if not refs:
-        raise HTTPException(422, 'No reference could be read. '+' '.join(skipped)[:400])
+        raise HTTPException(422, 'None of your reference reels could be read. '+' '.join(skipped)[:400])
     choices, chosen_by = choose(refs, frames)
     choices.summary = [line[:200] for line in choices.summary][:12]
     if skipped:
         choices.summary.append(('Skipped: '+'; '.join(skipped))[:200])
-    return save(user, StyleProfile(id=uuid.uuid4().hex, created=time.time(), chosen_by=chosen_by, references=refs, choices=choices))
+    return save(user, StyleProfile(id=uuid.uuid4().hex, status='approved', created=time.time(), chosen_by=chosen_by,
+                                   source_key=source_key, references=refs, choices=choices))
 
 
-# ---------------------------------------------------------------- routes
-
-def create_style(pid: str, request: Request, videos: list[UploadFile] = File(default=[]), links: str = Form('', max_length=4000)):
-    user = request.state.user_id
-    require_project(pid, user)
-    urls = [u.strip() for u in links.replace(',', '\n').splitlines() if u.strip()]
-    return build(user, videos, urls)
-
-
-def list_styles(pid: str, request: Request):
-    user = request.state.user_id
-    require_project(pid, user)
-    profiles = []
-    for path in folder(user).glob('*.json'):
-        try:
-            profiles.append(StyleProfile.model_validate(json.loads(path.read_text())))
-        except (OSError, ValueError):
-            continue
-    return {'styles': sorted(profiles, key=lambda p: -p.created)}
-
-
-def update_style(pid: str, sid: str, body: ProfileUpdate, request: Request):
-    user = request.state.user_id
-    require_project(pid, user)
-    profile = load(user, sid)
-    profile.choices = body.choices
-    if body.approve: profile.status = 'approved'
-    return save(user, profile)
-
-
-def delete_style(pid: str, sid: str, request: Request):
-    user = request.state.user_id
-    require_project(pid, user)
-    load(user, sid)
-    (folder(user)/(sid+'.json')).unlink(missing_ok=True)
-    return {'deleted': sid}
+def for_chat(user, message):
+    """(StyleProfile or None, report line). Links in the message win over the references folder;
+    without either, the most recent learned style is reused."""
+    links = chat_links(message)
+    paths = [] if links else folder_references()
+    if links:
+        key = 'links:'+hashlib.sha256('\n'.join(sorted(links)).encode()).hexdigest()[:24]
+    elif paths:
+        key = 'folder:'+hashlib.sha256(json.dumps([(p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in paths]).encode()).hexdigest()[:24]
+    else:
+        latest = next(iter(saved(user)), None)
+        return latest, (f'Style: your saved "{latest.choices.name}" style.' if latest else '')
+    cached = next((p for p in saved(user) if p.source_key == key), None)
+    if cached:
+        return cached, f'Style: "{cached.choices.name}", learned from your {len(cached.references)} reference reel(s).'
+    started = time.time()
+    try:
+        profile = build(user, paths, links, key)
+    except HTTPException as exc:
+        LOG.warning('style learning failed: %s', exc.detail)
+        return None, f'Could not learn your style ({exc.detail}); edited without it.'
+    return profile, (f'Style: learned "{profile.choices.name}" from {len(profile.references)} reference reel(s) in {time.time()-started:.0f}s '
+                     f'via {profile.chosen_by}; reused on later edits.')

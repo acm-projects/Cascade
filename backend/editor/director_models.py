@@ -59,4 +59,4 @@ class DirectorPlan(DirectorModel):
     rationale: str = Field(default='', max_length=600)
     inspiration: str = Field(default='', max_length=600)
     genre: Genre = 'other'
-    my_style: ProfileChoices | None = None  # the user's approved style sheet, when they edit with My Style
+    my_style: ProfileChoices | None = None  # the style learned from the user's reference reels

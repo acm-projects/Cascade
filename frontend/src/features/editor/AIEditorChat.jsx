@@ -3,6 +3,7 @@ import './AIEditorChat.css';
 
 export const AI_EDITOR_PROMPT = 'Make this a high-energy Instagram Reel with beat-synced cuts, punch-in zooms, animated captions, shakes, and music. Preserve complete spoken phrases and existing manual edits.';
 const suggestions = [
+  { label: 'Edit this video', prompt: 'Edit this video' },
   { label: 'Create a high-energy Reel', prompt: AI_EDITOR_PROMPT },
   { label: 'Less shake', prompt: 'Less shake' },
   { label: 'Move the last zoom earlier', prompt: 'Move that zoom earlier by 0.5 seconds' },

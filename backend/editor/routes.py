@@ -9,14 +9,8 @@ from .chat import chat
 from .ai import ai_status
 from .audio_assets import list_assets, upload_asset, asset_media
 from .trends import start as start_trends, latest as get_trends, apply_result
-from .style_profile import create_style, list_styles, update_style, delete_style
 
 router = APIRouter(prefix="/api/projects/{pid}/editor")
-# Registered before /{jid}/{index}, which would otherwise match /styles/{sid}.
-router.add_api_route('/styles', list_styles, methods=['GET'])
-router.add_api_route('/styles', create_style, methods=['POST'])
-router.add_api_route('/styles/{sid}', update_style, methods=['PUT'])
-router.add_api_route('/styles/{sid}', delete_style, methods=['DELETE'])
 router.add_api_route('/{jid}/{index}/trends', start_trends, methods=['POST'], status_code=202)
 router.add_api_route('/{jid}/{index}/trends', get_trends, methods=['GET'])
 router.add_api_route('/{jid}/{index}/trends/apply', apply_result, methods=['POST'])

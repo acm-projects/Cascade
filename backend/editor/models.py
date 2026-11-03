@@ -111,7 +111,6 @@ class ChatInput(BaseModel):
     result_ids: list[str] = Field(default_factory=list, max_length=120)
     selected_segment: str | None = Field(default=None, max_length=32)
     research_id: str | None = Field(default=None,pattern='^[a-f0-9]{32}$')
-    style_id: str | None = Field(default=None,pattern='^[a-f0-9]{32}$')
     suggestion: int | None = Field(default=None,ge=0,le=7)
     suggestions: list[int] | None = Field(default=None,min_length=1,max_length=8)
 

@@ -144,15 +144,13 @@ def plan(analysis, inspiration, request, state):
 
 def direct(source, state, info, frames, title, request, profile=None):
     """Returns (DirectorPlan, report lines). Raises only if the clip cannot be read at all.
-    With an approved My Style `profile`, it replaces the YouTube inspiration search and plan request."""
+    With a learned style `profile`, it replaces the YouTube inspiration search and plan request."""
     from .inspiration import inspire
     analysis, seen_by = analyze(source, state, info, frames, title)
     if profile is not None:
         from .my_style import plan_from_profile
         chosen = plan_from_profile(analysis, profile)
-        return chosen, [f'Watched: {seen_by}. Looks like {analysis.genre.replace("_", " ")}: {analysis.summary[:200]}',
-                        f'Style: your approved "{profile.choices.name}" style sheet, built from {len(profile.references)} reference video(s).',
-                        chosen.rationale]
+        return chosen, [f'Watched: {seen_by}. Looks like {analysis.genre.replace("_", " ")}: {analysis.summary[:200]}', chosen.rationale]
     inspiration = inspire(analysis.search_query or title+' edit')
     chosen, planned_by = plan(analysis, inspiration, request, state)
     top = ', '.join(f'"{r["title"][:50]}"' for r in inspiration.get('references', [])[:3])
@@ -177,12 +175,11 @@ def chat_proposal(jid, clip, body, info, hints, user=None):
     if clip.get('start') is not None and clip.get('end') is not None:
         info['clip_source_range'] = (float(clip['start']), float(clip['end']))
     frames = footage_frames(jid, clip, body.state, info, hints)
-    profile = None
-    if body.style_id:
-        from .style_profile import approved
-        profile = approved(user, body.style_id)
+    from .style_profile import for_chat
+    profile, learned = for_chat(user, body.message) if user else (None, '')
     with media(jid, clip) as source:
         chosen, report = direct(source, body.state, info, frames, clip.get('title', ''), body.message, profile)
+    if learned: report.insert(1, learned)
     actions = []
     if profile is not None:
         pass  # the style sheet drives every choice; no preset or reel grammar on top

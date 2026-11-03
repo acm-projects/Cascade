@@ -31,9 +31,10 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
         raise HTTPException(422,'High-energy Reels require video footage. This audio-only clip supports transcript, audio and trim edits.')
     # Fan-edit style requests are routed deterministically: free, no model quota, no guessing.
     from .style_requests import parse_request, proposal_for
-    style_request=parse_request(body.message) if info.get('has_video',True) and not body.research_id and not body.style_id else None
+    style_request=parse_request(body.message) if info.get('has_video',True) and not body.research_id else None
     from .style_requests import wants_director
-    director_request=not style_request and info.get('has_video',True) and not body.research_id and (bool(body.style_id) or wants_director(body.message))
+    from .style_profile import chat_links
+    director_request=not style_request and info.get('has_video',True) and not body.research_id and (wants_director(body.message) or bool(chat_links(body.message)))
     wants_trends=not style_request and not director_request and ai.editor_provider() not in ai.LOCAL_ANALYSIS and bool(re.search(r'flashy|crazy|tiktok|trend[- ]informed',body.message,re.I) and re.search(r'make|edit|apply|create',body.message,re.I))
     research_report=[]
     if body.research_id or wants_trends:

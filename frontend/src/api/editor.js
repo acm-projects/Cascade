@@ -67,28 +67,6 @@ export function getEditorAIStatus(token, projectId) {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/ai-status`, { token });
 }
 
-// My Style: saved style sheets built from the user's own reference reels (backend/editor/style_profile.py).
-// Shared by every project of this user; only approved styles can be sent as `style_id` to the chat.
-function stylesPath(projectId, styleId) {
-  return `/api/projects/${encodeURIComponent(projectId)}/editor/styles${styleId ? `/${encodeURIComponent(styleId)}` : ""}`;
-}
-export function listStyles(token, projectId) {
-  return apiFetch(stylesPath(projectId), { token });
-}
-/** Measures each video/link and returns a draft StyleProfile; can take a minute for several references. */
-export function createStyle(token, projectId, files, links) {
-  const form = new FormData();
-  for (const file of files) form.append("videos", file);
-  form.append("links", links.join("\n"));
-  return apiFetch(stylesPath(projectId), { token, method: "POST", form });
-}
-export function updateStyle(token, projectId, styleId, choices, approve = false) {
-  return apiFetch(stylesPath(projectId, styleId), { token, method: "PUT", body: { choices, approve } });
-}
-export function deleteStyle(token, projectId, styleId) {
-  return apiFetch(stylesPath(projectId, styleId), { token, method: "DELETE" });
-}
-
 export function sendEditorChat(token, projectId, jobId, index, body) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/chat`, { token, method: "POST", body });
 }

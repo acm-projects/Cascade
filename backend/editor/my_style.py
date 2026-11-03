@@ -1,4 +1,4 @@
-"""Apply the user's approved style sheet (My Style) with the Director's existing recipe machinery.
+"""Apply the user's learned style (from their reference reels) with the Director's existing recipe machinery.
 
 The Director still watches the clip for key moments, important words and B-roll ideas; the style
 sheet replaces the YouTube inspiration search and decides how each of those is presented.
@@ -19,7 +19,7 @@ def plan_from_profile(analysis, profile):
     style = 'memorial' if c.look in ('bw', 'sepia') and c.pacing == 'slow' else 'podcast'
     return DirectorPlan(style=style, look=c.look, pacing=c.pacing, captions=c.captions, music=c.music, tighten_pauses=c.tighten_pauses,
                         emphasis=analysis.emphasis[:6], broll=analysis.broll[:BROLL[c.broll]], key_moments=analysis.key_moments,
-                        rationale=f'Your approved style "{c.name}" applied to this {analysis.genre.replace("_", " ")} clip.',
+                        rationale=f'Edited this {analysis.genre.replace("_", " ")} clip in your "{c.name}" style.',
                         inspiration='; '.join(c.summary[:3])[:600], genre=analysis.genre, my_style=c)
 
 

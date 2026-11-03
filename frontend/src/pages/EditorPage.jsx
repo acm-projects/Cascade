@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
 import AIEditorChat from "../features/editor/AIEditorChat";
-import MyStylePanel from "../features/editor/MyStylePanel";
 import SequenceControls from "../features/editor/SequenceControls";
 import { sameEdit, isAIUndo, canUndoAI } from "../features/editor/editorTransactions";
 import EmptyState from "../components/ui/EmptyState";
@@ -274,11 +273,8 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
             ) : panelTab === "Music" ? (
               <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
             ) : (
-              <div className="ai-editor-with-style">
-                <MyStylePanel projectId={projectId} disabled={thinking} onApply={(message, style_id) => sendChat(message, { style_id })} />
-                <AIEditorChat messages={chatMessages} onSend={sendChat} onClear={clearChat} disabled={thinking} typing={thinking}
-                  clip={clip} result={editorResult} status={aiStatus} />
-              </div>
+              <AIEditorChat messages={chatMessages} onSend={sendChat} onClear={clearChat} disabled={thinking} typing={thinking}
+                clip={clip} result={editorResult} status={aiStatus} />
             )}
           </div>
         </aside>

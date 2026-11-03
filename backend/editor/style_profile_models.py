@@ -1,4 +1,4 @@
-"""Bounded data for a user's saved editing style, built from their own reference reels."""
+"""Bounded data for a user's learned editing style, built from their own reference reels."""
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -48,10 +48,6 @@ class StyleProfile(StyleModel):
     status: Literal['draft', 'approved'] = 'draft'
     created: float = 0
     chosen_by: str = Field(default='', max_length=80)
+    source_key: str = Field(default='', max_length=80)  # which reference set it was learned from
     references: list[ReferenceInfo] = Field(default_factory=list, max_length=8)
     choices: ProfileChoices = Field(default_factory=ProfileChoices)
-
-
-class ProfileUpdate(StyleModel):
-    choices: ProfileChoices
-    approve: bool = False
