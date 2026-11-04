@@ -88,7 +88,7 @@ function EditorPage() {
   }
 
   return (
-    <div className="editor leaf-page">
+    <div className="editor editing-theme">
       <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} />
       {body ? (
         <div className="editor-empty">{body}</div>

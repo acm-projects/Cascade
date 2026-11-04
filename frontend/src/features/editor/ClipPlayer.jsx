@@ -174,13 +174,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
 
   return (
     <div className="clip-player" style={{ "--preview-ratio": ratio || 16 / 9 }}>
-      <div className="editor-choice-row">
-        <div className="editor-choice-row" role="tablist" aria-label="Preview version">
-        {['original', 'edited'].map(mode => <button key={mode} role="tab" aria-selected={view === mode} className={`editor-choice${view === mode ? ' active' : ''}`} onClick={() => { videoRef.current?.pause(); setView(mode); }}>{mode === 'original' ? 'Original' : 'Edited'}</button>)}
-        </div>
-        {onOpenTrends && <button type="button" className="editor-choice clip-player-trends"
-          aria-haspopup="dialog" aria-expanded={trendsOpen} onClick={onOpenTrends}>Trends</button>}
-      </div>
+      {onOpenTrends && <button type="button" className="btn btn-primary clip-player-trends"
+        aria-haspopup="dialog" aria-expanded={trendsOpen} onClick={onOpenTrends}>Trends</button>}
       <div ref={stageRef} className="clip-player-stage">
         <div className={`clip-player-frame${canDrag ? " can-drag" : ""}`}
           style={{ width: frameWidth, height: frameHeight, background: composition.background }}
@@ -226,12 +221,17 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
             {muted ? <path d="m16 9 5 6m0-6-5 6" /> : <><path d="M15 8a6 6 0 0 1 0 8" /><path d="M18 5a10 10 0 0 1 0 14" /></>}
           </svg>
         </button>
-        <button type="button" className={`btn btn-small btn-ghost clip-player-loop${loop ? " active" : ""}`}
-          onClick={() => setLoop((l) => !l)} aria-pressed={loop} aria-label={loop ? "Turn looping off" : "Turn looping on"} title={loop ? "Looping: on" : "Looping: off"}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3" />
-          </svg>
-        </button>
+        <div className="clip-player-preview-controls">
+          <button type="button" className={`btn btn-small btn-ghost clip-player-loop${loop ? " active" : ""}`}
+            onClick={() => setLoop((l) => !l)} aria-pressed={loop} aria-label={loop ? "Turn looping off" : "Turn looping on"} title={loop ? "Looping: on" : "Looping: off"}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3" />
+            </svg>
+          </button>
+          <div className="editor-choice-row" role="tablist" aria-label="Preview version">
+            {['original', 'edited'].map(mode => <button key={mode} role="tab" aria-selected={view === mode} className={`editor-choice${view === mode ? ' active' : ''}`} onClick={() => { videoRef.current?.pause(); setView(mode); }}>{mode === 'original' ? 'Original' : 'Edited'}</button>)}
+          </div>
+        </div>
       </div>
     </div>
   );

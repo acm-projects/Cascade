@@ -86,7 +86,7 @@ function ExportPage() {
   }
 
   return (
-    <div className="export leaf-page">
+    <div className="export editing-theme">
       <TopNav projectTitle={projectName} active="export" canOpenEditor canOpenExport />
       {message ? (
         <div className="export-empty">{message}</div>

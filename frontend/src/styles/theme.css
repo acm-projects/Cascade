@@ -151,6 +151,30 @@ body {
   background: var(--color-leaf-mist) var(--leaf-bg) center / cover no-repeat;
 }
 
+.editing-theme {
+  --wood-cream: none;
+  --wood-green: none;
+  --color-cream-card: #d4ece7;
+  --panel-bg: var(--color-cream-card);
+  --editing-control: #74b7ba;
+  --editing-active: #569b9e;
+  --editing-corner: 12px;
+  --panel-radius: var(--editing-corner);
+  --radius-sm: var(--editing-corner);
+  --radius-md: var(--editing-corner);
+  --radius-lg: var(--editing-corner);
+  background: #203c32;
+}
+
+.editing-theme :is(.btn, .topnav-step) {
+  border-radius: var(--editing-corner);
+  background: var(--editing-control);
+}
+
+.editing-theme :is(.btn-primary, .topnav-step.active) {
+  background: var(--editing-active);
+}
+
 /* Keyboard focus: a clear leaf-green ring on anything you reach with Tab
    (:focus-visible = only when using the keyboard, not on mouse clicks) */
 :focus-visible {

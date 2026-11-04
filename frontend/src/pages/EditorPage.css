@@ -1,30 +1,16 @@
 /* Sizes are Figma pixels: calc(N * var(--u)) */
 .editor {
-  --wood-cream: none;
-  --wood-green: none;
-  --color-cream-card: #d4ece7;
-  --panel-bg: #d4ece7;
-  --editor-corner: 12px;
-  --panel-radius: var(--editor-corner);
-  --radius-sm: var(--editor-corner);
-  --radius-md: var(--editor-corner);
-  --radius-lg: var(--editor-corner);
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
 
-.editor.leaf-page {
-  background: #203C32;
-
+.editor :is(.editor-choice, .editor-ratio, .editor-panel-tab, .editor-clip-tab) {
+  background: var(--editing-control);
 }
 
-.editor :is(.btn, .editor-choice, .editor-ratio, .editor-panel-tab, .editor-clip-tab, .topnav-step) {
-  background: #74B7BA;
-}
-
-.editor :is(.btn-primary, .editor-choice.active, .editor-ratio.active, .editor-clip-tab.active, .topnav-step.active) {
-  background: #569B9E;
+.editor :is(.editor-choice.active, .editor-ratio.active, .editor-clip-tab.active) {
+  background: var(--editing-active);
 }
 
 /* ---------- Tool strip: 87 tall ---------- */
@@ -286,11 +272,11 @@
 .editor .captions-line,
 .editor .music-asset,
 .editor .music-segment {
-  border-radius: var(--editor-corner);
+  border-radius: var(--editing-corner);
 }
 
 .editor .editor-panel-tab {
-  border-radius: var(--editor-corner) var(--editor-corner) 0 0;
+  border-radius: var(--editing-corner) var(--editing-corner) 0 0;
 }
 
 .editor-panel-content {
