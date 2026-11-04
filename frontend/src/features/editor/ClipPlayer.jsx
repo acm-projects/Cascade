@@ -6,6 +6,7 @@ import { clipMediaPath } from "./clips";
 import { dragFraming, frameSize } from "./playerMath";
 import "./ClipPlayer.css";
 import { timelineClock } from "./reelTiming";
+import Icon from "../../components/ui/Icon";
 
 const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 4 / 3 };
 // Live preview of one clip with its edits: plays only the trimmed part (looping), in the chosen
@@ -186,7 +187,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
           title={canDrag ? "Drag to choose what stays in the frame" : undefined}
           onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
           {audioOnly ? <>
-            <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>🎧 Audio recording</p>
+            <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}><Icon name="headphones" /> Audio recording</p>
             <audio muted={muted} onEnded={handleEnded} ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
               onLoadedMetadata={e => {e.target.currentTime=showEdited || view === "original" ? 0 : state.start;}}
               onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
@@ -213,18 +214,18 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
       {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? 'Rendering edited preview… Original source shown until ready.' : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
-          {playing ? "⏸" : "▶"}
+          <Icon name={playing ? "pause" : "play"} />
         </button>
         <span className="clip-player-time">
           {formatTime(showEdited ? clock.output(time) : time)} / {formatTime(view === "original" ? info.duration : clock.duration)}
         </span>
         <button type="button" className="btn btn-small btn-ghost" onClick={() => setMuted((m) => !m)}
           aria-pressed={muted} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>
-          {muted ? "🔇" : "🔊"}
+          <Icon name={muted ? "mute" : "volume"} />
         </button>
         <button type="button" className={`btn btn-small btn-ghost clip-player-loop${loop ? " active" : ""}`}
           onClick={() => setLoop((l) => !l)} aria-pressed={loop} title={loop ? "Looping: on" : "Looping: off"}>
-          🔁 Loop
+          <Icon name="repeat" /> Loop
         </button>
       </div>
     </div>

@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import "./ProjectsPage.css";
 import bg from "../assets/figma/projects-bg.jpg";
-import woodPill from "../assets/figma/wood-pill.png";
-import woodGreen from "../assets/figma/wood-green-btn.png";
 import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/projectContextValue";
@@ -18,21 +16,21 @@ import Modal from "../components/ui/Modal";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 
-// icon: an emoji for now (easy to swap for a drawn icon later)
+// icon: simple line drawings (24 x 24, drawn in the text color), the same style as the landing page icons
 const views = [
-  { id: "all", label: "All Projects", icon: "📁" },
-  { id: "recent", label: "Recents", icon: "🕒" },
-  { id: "favorites", label: "Favorites", icon: "⭐" },
-  { id: "archives", label: "Archives", icon: "📦" },
-  { id: "trash", label: "Trash", icon: "🗑️" },
+  { id: "all", label: "All Projects", icon: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /> },
+  { id: "recent", label: "Recents", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
+  { id: "favorites", label: "Favorites", icon: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" /> },
+  { id: "archives", label: "Archives", icon: <><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4" /></> },
+  { id: "trash", label: "Trash", icon: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" /> },
 ];
 
 const emptyViews = {
-  all: ["🌿", "No active projects", "Create a project or restore one from Archives or Trash."],
-  recent: ["🕰️", "Nothing from the last 7 days", "Projects you work on this week show up here."],
-  favorites: ["⭐", "No favorites yet", "Choose Favorite from a project's menu to find it here."],
-  archives: ["📦", "No archived projects", "Archive a project from its menu to keep it here."],
-  trash: ["🗑️", "Trash is empty", "Projects moved to trash can be restored here."],
+  all: ["leaf", "No active projects", "Create a project or restore one from Archives or Trash."],
+  recent: ["clock", "Nothing from the last 7 days", "Projects you work on this week show up here."],
+  favorites: ["star", "No favorites yet", "Choose Favorite from a project's menu to find it here."],
+  archives: ["box", "No archived projects", "Archive a project from its menu to keep it here."],
+  trash: ["trash", "Trash is empty", "Projects moved to trash can be restored here."],
 };
 
 // Built from the Figma "Projects/Archive Page" (section 2, node 640:529)
@@ -154,7 +152,7 @@ function ProjectsPage() {
     if (projects.length === 0 && view.id === "all") {
       return (
         <EmptyState
-          icon="🌿"
+          icon="leaf"
           title="No projects yet"
           text="Upload a video and Cascade will find the best clips for you."
           action={{ label: "Create your first project", onClick: handleNewProject }}
@@ -163,7 +161,7 @@ function ProjectsPage() {
     }
     if (shown.length === 0) {
       return query ? (
-        <EmptyState icon="🔍" title={`No projects match "${search.trim()}"`} text="Try a different name." />
+        <EmptyState icon="search" title={`No projects match "${search.trim()}"`} text="Try a different name." />
       ) : (
         <EmptyState icon={emptyViews[view.id][0]} title={emptyViews[view.id][1]} text={emptyViews[view.id][2]} />
       );
@@ -201,11 +199,11 @@ function ProjectsPage() {
               key={v.id}
               type="button"
               className={`projects-filter${v.id === view.id ? " active" : ""}`}
-              style={{ backgroundImage: `url(${woodPill})` }}
               aria-current={v.id === view.id ? "page" : undefined}
               onClick={() => chooseView(v.id)}
             >
-              <span className="projects-filter-icon" aria-hidden="true">{v.icon}</span>
+              <svg className="projects-filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{v.icon}</svg>
               {v.label}
             </button>
           ))}
@@ -222,7 +220,7 @@ function ProjectsPage() {
             <div className="projects-actions">
               {view.id === "trash" && <Button size="sm" disabled={loading || deleting || updating.size > 0 || trashedProjects.length === 0}
                 onClick={() => setEmptyTrashOpen(true)}>Empty trash</Button>}
-              <label className="projects-search" style={{ backgroundImage: `url(${woodPill})` }}>
+              <label className="projects-search">
                 <img src={searchIcon} alt="" />
                 <input
                   type="search"
@@ -235,7 +233,6 @@ function ProjectsPage() {
               <button
                 type="button"
                 className="projects-new"
-                style={{ backgroundImage: `url(${woodGreen})` }}
                 onClick={handleNewProject}
               >
                 + New Project

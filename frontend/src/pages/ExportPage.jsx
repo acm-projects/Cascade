@@ -19,6 +19,7 @@ import YouTubePanel from "../features/export/YouTubePanel";
 import { isAudioClip } from '../utils/media';
 import TrendsModal from '../features/editor/TrendsModal';
 import { exportTree } from "../features/export/exportTree";
+import Icon from "../components/ui/Icon";
 
 // Built from the Figma "Export" wireframe (node 557:2263), connected to backend/editor_backend.py
 // (rendering) and Manila's posting backend. Every download is rendered by the server with your edits.
@@ -76,11 +77,11 @@ function ExportPage() {
   }
 
   let message;
-  if (error) message = <EmptyState icon="🌧️" title="Couldn't open Export" text={error.message} />;
+  if (error) message = <EmptyState icon="cloud" title="Couldn't open Export" text={error.message} />;
   else if (!clips) message = <Spinner size={48} label="Loading your clips" />;
   else if (!clips.length) {
     message = (
-      <EmptyState icon="📦" title="Nothing to export yet" text="Pick clips in AI Studio and edit them, then export them here."
+      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips in AI Studio and edit them, then export them here."
         action={{ label: "Go to AI Studio", onClick: () => navigate(`/projects/${projectId}/studio`) }} />
     );
   }
@@ -141,7 +142,7 @@ function TreeGroup({ label, title, checked, onCheck, children }) {
     <div className="export-tree-group">
       <div className="export-tree-row" title={title}>
         <button type="button" className="export-tree-fold" onClick={() => setOpen(!open)}
-          aria-expanded={open} aria-label={`${open ? "Fold" : "Unfold"} ${label}`}>{open ? "▾" : "▸"}</button>
+          aria-expanded={open} aria-label={`${open ? "Fold" : "Unfold"} ${label}`}><Icon name={open ? "chevronDown" : "chevronRight"} /></button>
         <input type="checkbox" checked={checked} onChange={onCheck} aria-label={`Include all of ${label}`} />
         <span>{label}</span>
       </div>
@@ -191,7 +192,7 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   const index = clipNumber - 1;
   const goTo = (i) => onPick(clipKey(clips[i]));
   let status = null;
-  if (framing.status === "error") status = `⚠ ${framing.message}`;
+  if (framing.status === "error") status = `Couldn't prepare framing: ${framing.message}`;
   else if (framing.status === "working") status = `Preparing automatic framing… ${Math.round(framing.progress * 100)}%`;
   else if (state) {
     status = `Clip ${clipNumber}: ${formatTime(state.end - state.start)} long · ${isAudioClip(clip) ? "audio recording"
@@ -211,7 +212,7 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
 
       <section className="export-stage">
         <header className="export-stage-head">
-          <h2 className="export-title">▦ {clips.length} {clips.length === 1 ? "clip" : "clips"}</h2>
+          <h2 className="export-title"><Icon name="grid" /> {clips.length} {clips.length === 1 ? "clip" : "clips"}</h2>
           {clips.length > 1 && (
             <button type="button" className="btn btn-small btn-ghost" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
               {expanded ? "Stack clips ↑" : "Expand clips ↓"}
@@ -254,11 +255,11 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
         {state && !isAudioClip(clip) && <div className="export-post"><Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends · YouTube research</Button></div>}
         {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onApply={applyResearch} onClose={() => setTrendsOpen(false)}>
-          <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</Button><small>{draft.saveStatus}</small></div>
+          <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}><Icon name="undo" /> Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}><Icon name="redo" /> Redo</Button><small>{draft.saveStatus}</small></div>
         </TrendsModal>}
         {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
         <div className="export-post">
-          <h3 className="export-social-title">{isAudioClip(clip) ? '🎧 Share audio' : '📱 Instagram, TikTok & more'}</h3>
+          <h3 className="export-social-title">{isAudioClip(clip) ? <><Icon name="headphones" /> Share audio</> : <><Icon name="phone" /> Instagram, TikTok & more</>}</h3>
           <p className="export-social-note">
             {isAudioClip(clip) ? 'Download the MP3, or share it with apps on this device that accept audio files.' : rendered
               ? canShare ? "Share the MP4 you just downloaded to any app on this device." : "This browser can't share files. Upload the downloaded MP4 in the app."

@@ -39,7 +39,7 @@ function UiPreviewPage() {
         <section className="ui-preview-card wood-panel">
           <h2>Modal</h2>
           <Button variant="primary" onClick={() => setModalOpen(true)}>Open modal</Button>
-          <p className="ui-preview-hint">Close it with Esc, a click outside, or ✕.</p>
+          <p className="ui-preview-hint">Close it with Esc, a click outside, or the close button.</p>
         </section>
 
         <section className="ui-preview-card wood-panel">
@@ -62,7 +62,7 @@ function UiPreviewPage() {
         <section className="ui-preview-card wood-panel">
           <h2>EmptyState</h2>
           <EmptyState
-            icon="🎬"
+            icon="film"
             title="No projects yet"
             text="Upload a video and Cascade will find the best clips."
             action={{ label: "+ New Project", onClick: () => toast.show("New project clicked") }}

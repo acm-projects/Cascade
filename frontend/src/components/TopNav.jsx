@@ -1,7 +1,7 @@
 import { Link, NavLink, useParams } from "react-router-dom";
 import UserAvatar from "./UserAvatar";
 import "./TopNav.css";
-import leafIcon from "../assets/icons/leaf.svg";
+import leafIcon from "../assets/icons/leaf-cream.svg";
 
 const steps = [
   { id: "studio", number: 1, label: "AI Studio" },
@@ -17,7 +17,7 @@ function stepPath(projectId, stepId, sessionId) {
   return stepId === "studio" && sessionId ? `${path}/${sessionId}` : path;
 }
 
-// The wooden bar across the top of AI Studio, Editor and Export (Figma Page 7, 1728 x 119).
+// The green bar across the top of AI Studio, Editor and Export (Figma Page 7, 1728 x 119).
 //   projectTitle   - shown next to the logo
 //   projectId      - used to build the step links (defaults to the one in the URL)
 //   active         - "studio" | "editor" | "export": the step that's filled in

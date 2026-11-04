@@ -1,14 +1,18 @@
-/* Sizes are Figma pixels: calc(N * var(--u)). Card: 382 x 292 wooden board. */
+/* Sizes are Figma pixels: calc(N * var(--u)). Card: 382 x 292, in the same style as the sidebar buttons
+   (cream, dark outline, a little "ledge" underneath), with the wood card's rounded corners */
 .project-card {
   position: relative;
-  height: calc(292 * var(--u));
-  background-color: transparent;
-  background-size: 100% 100%;
-  transition: scale 0.15s;
+  aspect-ratio: 382 / 292;   /* keeps the Figma card shape as the cards stretch to fill the row */
+  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
+  border-radius: calc(22 * var(--u));
+  background: var(--color-cream-card);
+  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 var(--color-wood-dark);
+  transition: translate 0.12s, box-shadow 0.12s;
 }
 
 .project-card:hover {
-  scale: 1.03;
+  translate: 0 -2px;
+  box-shadow: 0 max(5px, calc(8 * var(--u))) 0 var(--color-wood-dark);
 }
 
 /* The whole card is one big "open" button */
@@ -135,19 +139,20 @@
   align-items: center;
   justify-content: center;
   gap: calc(10 * var(--u));
-  height: calc(292 * var(--u));
-  border: max(2px, calc(5 * var(--u))) dashed var(--color-wood-dark);
+  aspect-ratio: 382 / 292;   /* keeps the Figma card shape as the cards stretch to fill the row */
+  border: max(2px, calc(4 * var(--u))) dashed var(--color-wood-dark);
   border-radius: calc(22 * var(--u));
-  background: color-mix(in srgb, var(--color-cream-card) 55%, transparent);
+  background: color-mix(in srgb, var(--color-cream-card) 70%, transparent);
   color: var(--color-wood-text);
+  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
   font-family: var(--font-heading);
   cursor: pointer;
-  transition: scale 0.15s, background 0.15s;
+  transition: translate 0.12s, box-shadow 0.12s, background 0.15s;
 }
 
 .project-card-new:hover {
-  scale: 1.03;
-  background: color-mix(in srgb, var(--color-cream-card) 80%, transparent);
+  translate: 0 -2px;
+  background: color-mix(in srgb, var(--color-cream-card) 90%, transparent);
 }
 
 .project-card-new-plus {

@@ -51,38 +51,50 @@
 }
 
 /* Wooden pill buttons: 294 x 72 */
+/* Sidebar buttons: the same pill buttons as the Editor's tool tabs (cream, dark outline, a little "ledge"
+   underneath so they read as pressable); the open view is green and pressed in */
 .projects-filter {
   display: flex;
   align-items: center;
   gap: calc(14 * var(--u));
-  width: calc(294 * var(--u));
-  height: calc(72 * var(--u));
-  padding: 0 calc(24 * var(--u));
-  border: none;
-  background-color: transparent;
-  background-size: 100% 100%;
+  width: calc(330 * var(--u));
+  height: calc(76 * var(--u));
+  padding: 0 calc(28 * var(--u));
+  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
+  border-radius: var(--radius-pill);
+  background: var(--color-cream-card);
   color: var(--color-wood-text);
+  box-shadow: 0 max(3px, calc(5 * var(--u))) 0 var(--color-wood-dark);
   font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: calc(32 * var(--u));
+  font-weight: 500;
+  font-size: calc(34 * var(--u));
   cursor: pointer;
-  transition: scale 0.15s, filter 0.15s;
+  transition: translate 0.1s, box-shadow 0.1s, filter 0.15s;
 }
 
 /* Icon on the left, then the label (text is left-aligned) */
 .projects-filter-icon {
+  flex-shrink: 0;
   width: calc(36 * var(--u));
-  font-size: calc(28 * var(--u));
-  text-align: center;
+  height: calc(36 * var(--u));
 }
 
 .projects-filter:hover {
-  scale: 1.04;
+  filter: brightness(1.05);
+  translate: 0 -1px;
+  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 var(--color-wood-dark);
 }
 
-/* The selected filter: slightly darker wood */
+/* Pressed in: the open view, or while clicking */
+.projects-filter:active,
 .projects-filter.active {
-  filter: brightness(0.85) saturate(1.2);
+  translate: 0 max(2px, calc(3 * var(--u)));
+  box-shadow: 0 max(1px, calc(2 * var(--u))) 0 var(--color-wood-dark);
+}
+
+.projects-filter.active {
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
 }
 
 .projects-main {
@@ -90,7 +102,9 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: calc(50 * var(--u)) calc(80 * var(--u)) 0 calc(43 * var(--u));
+  /* Title, subtitle and cards shifted right (bigger gap after the sidebar, like Figma) and low enough
+     that the title clears the hanging leaf */
+  padding: calc(104 * var(--u)) calc(80 * var(--u)) 0 calc(150 * var(--u));
 }
 
 .projects-header {
@@ -104,12 +118,12 @@
   color: var(--color-wood-text);
   font-family: var(--font-title);
   font-weight: 600;
-  font-size: calc(96 * var(--u));
-  line-height: 1.2;
+  font-size: calc(84 * var(--u));   /* letters 71 tall, the same size as the Figma title */
+  line-height: 1;   /* The Last Trunks has tall letters; a tight line keeps them off the subtitle */
 }
 
 .projects-subtitle {
-  margin: calc(9 * var(--u)) 0 0 calc(20 * var(--u));
+  margin: calc(18 * var(--u)) 0 0 calc(20 * var(--u));   /* Figma: subtitle at 459 across, just under the title */
   font-family: var(--font-ui);
   font-weight: 600;
   font-size: calc(32 * var(--u));
@@ -123,6 +137,8 @@
 }
 
 /* Search box: wood texture, 292 x 71, dark brown outline */
+/* Search and + New Project: the same pill style as the sidebar / Editor tabs (cream, dark outline, ledge),
+   but keeping their squarer corners */
 .projects-search {
   display: flex;
   align-items: center;
@@ -130,10 +146,10 @@
   width: calc(292 * var(--u));
   height: calc(71 * var(--u));
   padding: 0 calc(14 * var(--u));
-  border: max(2px, calc(4 * var(--u))) solid var(--color-wood-dark);
+  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
   border-radius: calc(10 * var(--u));
-  background-size: cover;
-  background-position: center;
+  background: var(--color-cream-card);
+  box-shadow: 0 max(3px, calc(5 * var(--u))) 0 var(--color-wood-dark);
   margin-top: calc(5 * var(--u));
 }
 
@@ -161,21 +177,27 @@
 .projects-new {
   width: calc(195 * var(--u));
   height: calc(76 * var(--u));
-  border: max(2px, calc(4 * var(--u))) solid var(--color-wood-dark);
+  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
   border-radius: calc(10 * var(--u));
-  background-size: cover;
-  background-position: center;
-  color: var(--color-wood-dark);
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+  box-shadow: 0 max(3px, calc(5 * var(--u))) 0 var(--color-wood-dark);
   font-family: var(--font-ui);
   font-weight: 700;
   font-size: calc(24 * var(--u));
   cursor: pointer;
-  transition: scale 0.15s, filter 0.15s;
+  transition: translate 0.1s, box-shadow 0.1s, filter 0.15s;
 }
 
 .projects-new:hover {
-  scale: 1.04;
-  filter: brightness(1.1);
+  filter: brightness(1.05);
+  translate: 0 -1px;
+  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 var(--color-wood-dark);
+}
+
+.projects-new:active {
+  translate: 0 max(2px, calc(3 * var(--u)));
+  box-shadow: 0 max(1px, calc(2 * var(--u))) 0 var(--color-wood-dark);
 }
 
 /* ---------- Main area below the header: scrolls on its own ---------- */
@@ -190,7 +212,7 @@
 /* Project cards: 3 per row on the Figma frame (382 x 292, gaps 43 / 42). The cards live in ProjectCard.css */
 .projects-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, calc(382 * var(--u)));   /* as many 382-wide cards as fit */
+  grid-template-columns: repeat(3, minmax(0, 1fr));   /* always 3 per row, stretched to fill the width */
   column-gap: calc(43 * var(--u));
   row-gap: calc(42 * var(--u));
   align-content: start;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 import { insertBroll, updateBroll, validateBroll } from "./brollTiming";
 import "./BrollPanel.css";
+import Icon from "../../components/ui/Icon";
 
 function useStockUrl(api, projectId, clip, id, kind, enabled = true) {
   const [result, setResult] = useState({ url: null, error: "" });
@@ -34,7 +35,7 @@ function StockResult({ api, projectId, clip, asset, selected, onSelect }) {
       <span>{asset.duration}s · {asset.creator}</span>
     </button>
     {(thumb.error || media.error || playbackError) && <small role="alert">{thumb.error || media.error || playbackError}</small>}
-    <a href={asset.source_url} target="_blank" rel="noopener noreferrer">Video by {asset.creator} on Pexels ↗</a>
+    <a href={asset.source_url} target="_blank" rel="noopener noreferrer">Video by {asset.creator} on Pexels <Icon name="external" /></a>
   </article>;
 }
 
@@ -85,7 +86,7 @@ export default function BrollPanel({ projectId, clip, state, duration, player, c
   }
 
   return <aside className="broll-drawer wood-panel" aria-label="B-roll panel">
-    <header><h2>B-roll</h2><button type="button" className="btn btn-ghost btn-small" aria-label="Close B-roll" onClick={onClose}>✕</button></header>
+    <header><h2>B-roll</h2><button type="button" className="btn btn-ghost btn-small" aria-label="Close B-roll" onClick={onClose}><Icon name="close" /></button></header>
     <p>Search Pexels stock footage. Your original dialogue stays.</p>
     <form className="broll-search" onSubmit={find}>
       <label>Search stock footage<input value={query} onChange={e => setQuery(e.target.value)} maxLength={160} required placeholder="e.g. city skyline" /></label>

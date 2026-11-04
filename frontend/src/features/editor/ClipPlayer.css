@@ -7,6 +7,20 @@
   min-height: 0;
 }
 
+/* Original / Edited buttons: moved in from the panel's edge, in the jungle button font */
+.clip-player > .editor-choice-row {
+  gap: 10px;
+  padding: 14px 0 0 16px;
+}
+
+.clip-player > .editor-choice-row .editor-choice {
+  padding: 7px 14px;
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
 /* The stage centers a frame of the chosen aspect ratio inside whatever space there is */
 .clip-player-stage {
   flex: 1;

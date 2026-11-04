@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import "../EditorControls.css";
 import "./AspectTab.css";
+import Icon from "../../../components/ui/Icon";
 
 // The frame shapes the backend accepts (Composition in backend/editor/models.py), with where each is used
 const PRESETS = [
@@ -90,7 +91,7 @@ function AspectTab({ state, info, change, patch, recordUndo }) {
             <input {...slider("y")} aria-label="Move the crop up or down" />
           </label>
           <button type="button" className="btn btn-small btn-ghost" disabled={centered}
-            onClick={() => set({ x: 0.5, y: 0.5 })}>⌖ Center</button>
+            onClick={() => set({ x: 0.5, y: 0.5 })}><Icon name="target" /> Center</button>
         </>
       ) : (
         <label className="editor-control">

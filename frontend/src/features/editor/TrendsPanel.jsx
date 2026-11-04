@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import useApi from '../../api/useApi';
 import { same, concise, viewData, referenceLearning, youtubeUrl, clipTime } from './trendsView';
 import './TrendsPanel.css';
+import Icon from "../../components/ui/Icon";
 
 const when = n => n && !Number.isNaN(new Date(typeof n === 'number' ? n * 1000 : n).getTime()) ? new Date(typeof n === 'number' ? n * 1000 : n).toLocaleString() : 'Date unavailable';
 const tabs = ['Overview', 'Suggested edits', 'References'];
@@ -20,7 +21,7 @@ function ReferenceCard({ reference: ref, number, supporting, cardRef }) {
     <p><strong>Why this reference</strong><br />{concise(ref.selected_reason, 230) || 'Discovered by the YouTube research step. This earlier report did not retain a clip-specific selection rationale.'}</p>
     <div><strong>{ref.kind === 'tutorial' ? 'Techniques explained' : 'Observed editing choices'}</strong>{learned.length ? <ul>{learned.map(x => <li key={x}>{x}</li>)}</ul> : <p>No detailed technique notes were retained.</p>}</div>
     <p><strong>Supports</strong><br />{supporting.length ? supporting.map(s => s.title).join(' · ') : 'No direct suggestion-to-source link was retained.'}</p>
-    {url ? <a className="editor-choice trends-watch" href={url} target="_blank" rel="noreferrer">Watch on YouTube ↗</a> : <small>Source link unavailable</small>}
+    {url ? <a className="editor-choice trends-watch" href={url} target="_blank" rel="noreferrer">Watch on YouTube <Icon name="external" /></a> : <small>Source link unavailable</small>}
   </article>;
 }
 
@@ -105,7 +106,7 @@ export default function TrendsPanel({ projectId, clip, state, info, preview, flu
   const showResult = !!analysis?.result || references.length > 0;
   return <div className="trends-workspace">
     <aside className="trends-preview-stack">{preview}
-      <div className="trends-guide" aria-label="Fox editing guide"><span aria-hidden="true">🦊</span><div><strong>A little direction</strong><p>{concise(guideText, 300, 3)}</p><button className="editor-choice" onClick={read} disabled={speaking}>Read aloud</button>{speaking && <button className="editor-choice" onClick={stop}>Stop</button>}</div></div>
+      <div className="trends-guide" aria-label="Editing guide"><span aria-hidden="true"><Icon name="compass" /></span><div><strong>A little direction</strong><p>{concise(guideText, 300, 3)}</p><button className="editor-choice" onClick={read} disabled={speaking}>Read aloud</button>{speaking && <button className="editor-choice" onClick={stop}>Stop</button>}</div></div>
       <p className="trends-scope">YouTube-based research · Your clip changes only when you apply an edit.</p>
     </aside>
     <section className="trends-main" aria-label="Clip analysis">

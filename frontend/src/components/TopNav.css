@@ -9,7 +9,8 @@
   padding: 0 calc(28 * var(--u)) 0 calc(36 * var(--u));
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  background: var(--panel-bg);
+  /* the same dark jungle green as the Projects page bar */
+  background: linear-gradient(90deg, var(--color-jungle-deep) 7%, var(--color-jungle) 100%);
   box-shadow: var(--shadow-soft);
   flex-shrink: 0;
 }
@@ -19,7 +20,7 @@
   align-items: center;
   gap: calc(26 * var(--u));
   border-radius: var(--radius-sm);
-  color: var(--color-wood-dark);
+  color: var(--color-cream-card);
   text-decoration: none;
 }
 
@@ -37,7 +38,7 @@
   width: max(2px, calc(4 * var(--u)));
   height: calc(57 * var(--u));
   margin: 0 calc(22 * var(--u)) 0 calc(29 * var(--u));
-  background: var(--color-wood-dark);
+  background: var(--color-cream-card);
 }
 
 .topnav-title {
@@ -45,7 +46,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: color-mix(in srgb, var(--color-wood-text) 60%, transparent);
+  color: color-mix(in srgb, var(--color-cream-card) 75%, transparent);
   font-family: var(--font-heading);
   font-weight: 500;
   font-size: calc(36 * var(--u));
@@ -56,8 +57,8 @@
   margin-left: auto;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-jungle-deep) 12%, transparent);
-  color: var(--color-text-green);
+  background: color-mix(in srgb, var(--color-cream-card) 18%, transparent);
+  color: var(--color-cream-card);
   font-family: var(--font-ui);
   font-size: 11px;
   white-space: nowrap;
@@ -82,7 +83,7 @@
   width: calc(222 * var(--u));
   height: calc(76 * var(--u));
   padding-left: calc(10 * var(--u));
-  border: max(2px, calc(6 * var(--u))) solid var(--color-wood-dark);
+  border: max(1.5px, calc(3 * var(--u))) solid var(--color-wood-dark);
   border-radius: calc(20 * var(--u));
   background: var(--color-cream-card) var(--wood-cream) center / cover;
   color: var(--color-wood-dark);
@@ -103,7 +104,7 @@
   justify-content: center;
   width: calc(38 * var(--u));
   height: calc(38 * var(--u));
-  border: max(1.5px, calc(3 * var(--u))) solid currentColor;
+  border: max(1px, calc(2 * var(--u))) solid currentColor;
   border-radius: 50%;
   font-size: calc(26 * var(--u));
 }

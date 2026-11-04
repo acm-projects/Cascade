@@ -1,39 +1,119 @@
-/* The landing is a full-screen picture, so it uses plain vw/vh (not --u) to match Figma's layout exactly */
+/* The landing is a full-screen picture, so it uses plain vw/vh (not --u) */
 .landing {
   position: relative;
+  display: flex;
+  align-items: center;
   height: 100vh;
   overflow: hidden;
   background-size: cover;
   background-position: center;
 }
 
-/* "CASCADE": The Last Trunks (--font-title), white, with a dark fuzzy outline */
+/* Left side: title, headline, button and features, stacked */
+.landing-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: min(2.2vh, 1.4vw);
+  width: min(46vw, 760px);
+  margin-left: 8vw;
+}
+
+/* "CASCADE": The Last Trunks (--font-title), white, with a dark outline */
 .landing-title {
-  position: absolute;
-  left: 50%;
-  top: 37%;
-  translate: -50% -50%;
   color: white;
   font-family: var(--font-title);
   font-weight: normal;
-  font-size: min(14.8vw, 23vh);           /* 256px on the 1728 x 1117 Figma frame */
+  font-size: min(9vw, 15vh);
+  line-height: 1;
   letter-spacing: 0.02em;
-  white-space: nowrap;
-  -webkit-text-stroke: min(0.55vw, 0.85vh) var(--color-lake-ink);
+  -webkit-text-stroke: min(0.4vw, 0.65vh) var(--color-lake-ink);
   paint-order: stroke fill;               /* draw the outline behind the white */
   text-shadow: 0 0.6vh 1.4vh rgba(20, 40, 50, 0.35);
 }
 
-/* "Get Started": wood plank, centered near the bottom (349 x 85 at y 957 in Figma) */
+.landing-headline {
+  color: var(--color-jungle-deep);
+  font-family: var(--font-heading);
+  font-size: min(3.4vw, 5.4vh);
+  line-height: 1.15;
+  text-shadow: 0 0 1.2vh rgba(255, 255, 255, 0.85);   /* keeps it readable over the mountains */
+}
+
+.landing-sub {
+  max-width: 34em;
+  color: var(--color-lake-ink);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: min(1.35vw, 2.2vh);
+  line-height: 1.4;
+  text-shadow: 0 0 1vh rgba(255, 255, 255, 0.9);
+}
+
 .landing-start {
-  position: absolute;
-  left: 50%;
-  top: 85.7%;
-  translate: -50% 0;
-  min-width: 20vw;
-  font-size: min(2.3vw, 3.6vh);           /* 40px on the Figma frame */
+  margin-top: 1vh;
+  font-size: min(1.9vw, 3vh);
 }
 
 .landing-start:hover {
   scale: 1.05;
+}
+
+/* 3 icons in circles, with a label under each */
+.landing-features {
+  display: flex;
+  gap: min(3vw, 48px);
+  margin-top: 2vh;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-features li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8vh;
+  color: var(--color-lake-ink);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: min(1.05vw, 1.7vh);
+  text-shadow: 0 0 0.8vh rgba(255, 255, 255, 0.9);
+}
+
+.landing-feature-icon {
+  display: grid;
+  place-items: center;
+  width: min(3.6vw, 6vh);
+  aspect-ratio: 1;
+  border: 2px solid var(--color-jungle-deep);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-cream-card) 85%, transparent);
+  color: var(--color-jungle-deep);
+  box-shadow: 0 3px 8px rgba(20, 40, 50, 0.2);
+}
+
+.landing-feature-icon svg {
+  width: 55%;
+  height: 55%;
+}
+
+/* Narrow screens: just the words, centered */
+@media (max-width: 800px) {
+  .landing {
+    justify-content: center;
+  }
+  .landing-copy {
+    align-items: center;
+    width: auto;
+    margin: 0 6vw;
+    text-align: center;
+  }
+  .landing-title { font-size: 16vw; }
+  .landing-headline { font-size: 6vw; }
+  .landing-sub { font-size: 3.6vw; }
+  .landing-start { font-size: 4.4vw; }
+  .landing-features li { font-size: 3vw; }
+  .landing-feature-icon { width: 10vw; }
 }

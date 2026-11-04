@@ -3,6 +3,7 @@ import Modal from "./ui/Modal";
 import Spinner from "./ui/Spinner";
 import { MEDIA_ACCEPT, isSupportedMedia } from "../utils/media";
 import "./NewProjectModal.css";
+import Icon from "./ui/Icon";
 
 const MAX_NAME = 100;          // the backend's limit
 const BIG_FILE = 2 * 1024 ** 3; // over 2 GB: warn (uploads still work, they just take a while)
@@ -80,7 +81,7 @@ function NewProjectModal({ onCreate, onClose }) {
         >
           {file ? (
             <>
-              <strong>🎬 {file.name}</strong>
+              <strong><Icon name="film" /> {file.name}</strong>
               <span>{fileSize(file.size)} · click to change</span>
             </>
           ) : (

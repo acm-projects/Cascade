@@ -3,6 +3,7 @@ import useApi from "../../api/useApi";
 import Button from "../../components/ui/Button";
 import Spinner from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/ToastContext";
+import Icon from "../../components/ui/Icon";
 
 const WORKING = ["Rendering", "Uploading", "Processing", "Verifying"];
 const POLL_MS = 3000;
@@ -116,7 +117,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
 
   return (
     <div className="export-post">
-      <h3 className="export-social-title">▶️ YouTube</h3>
+      <h3 className="export-social-title"><Icon name="youtube" /> YouTube</h3>
       {content}
       {upload && upload.status !== "Ready" && (
         <p className={`export-upload-status${upload.status === "Failed" ? " failed" : ""}`} role="status">

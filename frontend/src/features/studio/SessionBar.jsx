@@ -2,6 +2,7 @@ import { useState } from "react";
 import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
 import "./SessionBar.css";
+import Icon from "../../components/ui/Icon";
 
 // Thin bar under the TopNav: which AI Studio session you're in, switch / create / rename sessions.
 // Each session has its own source video and clip exploration.
@@ -42,7 +43,7 @@ function SessionBar({ sessions, activeId, onSwitch, onCreate, onRename, children
           ))}
         </select>
       </label>
-      <button type="button" className="btn btn-ghost btn-small" onClick={() => open("rename")} aria-label="Rename session">✎</button>
+      <button type="button" className="btn btn-ghost btn-small" onClick={() => open("rename")} aria-label="Rename session"><Icon name="pencil" /></button>
       <button type="button" className="btn btn-small" onClick={() => open("create")}>+ New session</button>
       {children && <div className="session-bar-actions">{children}</div>}
 
