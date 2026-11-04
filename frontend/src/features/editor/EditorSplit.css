@@ -1,0 +1,207 @@
+/* The "split" Editor layout: Abhishri's arrangement (from davebranch) in Cascade's own look.
+   Video on the left, tools on the right, timeline underneath, using the usual leaf background,
+   wood panels and buttons. Everything here only applies to this layout. */
+
+/* ---------- Grid: video on the left; tool bar, clips and tabs on the right; timeline underneath ---------- */
+.es-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+  grid-template-rows: auto minmax(200px, 1fr) auto;
+  grid-template-areas:
+    "preview actions"
+    "preview panel"
+    "timeline timeline";
+  gap: 12px;
+  overflow-y: auto;
+  padding: calc(20 * var(--u)) calc(24 * var(--u)) calc(24 * var(--u));
+}
+
+.es-preview,
+.es-tools,
+.es-panel,
+.es-timeline,
+.editor-split .er-clip-tabs {
+  border: var(--panel-border);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
+}
+
+/* ---------- Video ---------- */
+.es-preview {
+  grid-area: preview;
+  position: relative;
+  min-width: min(280px, 100%);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.es-preview .clip-player-stage {
+  width: calc(100% - 24px);
+  margin: 0 12px;
+  padding: 0;
+}
+
+/* Trends: a full-width button across the top */
+.es-preview .clip-player-trends {
+  order: -1;
+  margin: 12px 12px 0;
+  padding: 8px 14px;
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+/* Original / Edited: in the play bar's row, at the bottom right (they sit outside the bar in ClipPlayer.jsx) */
+.es-preview .clip-player > .editor-choice-row {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+  gap: 6px;
+  padding: 0;
+}
+
+/* The preview note only shows when something went wrong */
+.es-preview .clip-player > .editor-control-note:not(:has([role="alert"])) {
+  display: none;
+}
+
+.es-preview .clip-player-bar {
+  flex-wrap: wrap;
+  padding: 0 calc(12px + 175px) 12px 12px;   /* 175px: room for Original / Edited */
+}
+
+/* Loop: just the icon (the word is still there for screen readers) */
+.es-preview .clip-player-loop {
+  margin-left: auto;   /* next to Original / Edited */
+  font-size: 0;
+}
+
+.es-preview .clip-player-loop .ui-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- Right side ---------- */
+.es-actions {
+  grid-area: actions;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.es-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  min-height: 56px;
+  padding: 12px;
+}
+
+.editor-split .er-clip-tabs {
+  gap: 6px;
+  padding: 6px;
+}
+
+.editor-split .er-clip-tab {
+  max-width: 240px;
+  padding: 8px 12px;
+  border: 2px solid var(--color-wood-dark);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+}
+
+.editor-split .er-clip-tab:hover {
+  filter: brightness(1.05);
+}
+
+.editor-split .er-clip-tab.active {
+  border: 2px solid var(--color-wood-dark);
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+
+.es-panel {
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Real tabs, same shape as Abhishri's: all one color with a thin outline, the open one has a dark outline */
+.es-panel .editor-panel-tabs {
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 12px 12px 0;
+  border-bottom: 2px solid var(--color-wood-dark);
+}
+
+.es-panel .editor-panel-tab,
+.es-panel .editor-panel-tab:hover:not(:disabled),
+.es-panel .editor-panel-tab:active:not(:disabled),
+.es-panel .editor-panel-tab.active {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 4px;
+  border: 1px solid color-mix(in srgb, var(--color-wood-dark) 65%, transparent);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--color-wood-dark) 22%, var(--color-cream-card));
+  box-shadow: none;
+  translate: none;
+  filter: none;
+  color: var(--color-wood-text);
+  font: 700 clamp(10px, 0.95vw, 14px) var(--font-ui);
+}
+
+.es-panel .editor-panel-tab:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-wood-dark) 14%, var(--color-cream-card));
+}
+
+.es-panel .editor-panel-tab.active,
+.es-panel .editor-panel-tab.active:hover:not(:disabled) {
+  border-color: var(--color-wood-dark);
+  background: color-mix(in srgb, var(--color-wood-dark) 22%, var(--color-cream-card));
+  box-shadow: inset 0 0 0 1px var(--color-wood-dark);
+}
+
+/* ---------- Timeline ---------- */
+.es-timeline {
+  grid-area: timeline;
+  min-width: 0;
+  padding: 10px 6px;
+}
+
+.es-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* B-roll opens on top of the left side */
+.es-broll {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 12px;
+  width: min(360px, calc(100% - 24px));
+  z-index: 10;
+}
+
+@media (max-width: 760px) {
+  .es-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 380px auto minmax(280px, auto) auto;
+    grid-template-areas: "preview" "actions" "panel" "timeline";
+  }
+}

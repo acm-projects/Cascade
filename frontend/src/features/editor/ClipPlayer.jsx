@@ -16,7 +16,8 @@ const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 
 //                can move the playhead and jump the video
 //   framing    - optional { patch, recordUndo } from useClipDraft: in Fill mode you can then drag the video
 //                to choose what stays in the frame (one undo step per drag)
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
+//   onOpenTrends, trendsOpen - optional: show a Trends button that opens the Trends popup
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenTrends, trendsOpen }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -181,6 +182,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing }) {
       <div className="editor-choice-row" role="tablist" aria-label="Preview version">
         {['original', 'edited'].map(mode => <button key={mode} role="tab" aria-selected={view === mode} className={`editor-choice${view === mode ? ' active' : ''}`} onClick={() => { videoRef.current?.pause(); setView(mode); }}>{mode === 'original' ? 'Original' : 'Edited'}</button>)}
       </div>
+      {onOpenTrends && <button type="button" className="editor-choice clip-player-trends"
+        aria-haspopup="dialog" aria-expanded={trendsOpen} onClick={onOpenTrends}>Trends</button>}
       <div ref={stageRef} className="clip-player-stage">
         <div className={`clip-player-frame${canDrag ? " can-drag" : ""}`}
           style={{ width: frameWidth, height: frameHeight, background: composition.background }}

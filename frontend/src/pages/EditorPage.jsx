@@ -23,8 +23,9 @@ import ReelControls from "../features/editor/ReelControls";
 import TrendsModal from "../features/editor/TrendsModal";
 import MusicControls from "../features/editor/MusicControls";
 import Icon from "../components/ui/Icon";
-import useEditorLayout from "../features/editor/editorLayout";
+import useEditorLayout, { LAYOUTS } from "../features/editor/editorLayout";
 import "../features/editor/EditorRevamp.css";
+import "../features/editor/EditorSplit.css";
 const panelTabs = ["Trim", "Captions", "Trends", "Aspect Ratio", "Music", "Reel", "Chat"];
 const saveLabels = { saved: <><Icon name="check" /> Saved</>, saving: "Saving…", error: <><Icon name="alert" /> Not saved</> };
 // Ready-made requests shown while the Chat tab is empty
@@ -32,6 +33,8 @@ const chatSuggestions = [
   "Remove the first 2 seconds", "Make captions bigger and yellow", "Move captions to the top", "Turn captions off",
 ].map((prompt) => ({ label: prompt, prompt }));
 
+// Abhishri's layout has these tabs: trimming happens on the timeline, and Trends is a button on the player
+const splitTabs = ["Captions", "Aspect Ratio", "Music", "Chat"];
 // The new layout's tool rail: [panel tab, label under the icon, icon]
 const railTools = [
   ["Captions", "Captions", "captions"], ["Music", "Music", "headphones"], ["B-roll", "B-roll", "film"],
@@ -54,7 +57,7 @@ const panelInfo = {
 function EditorPage() {
   const navigate = useNavigate();
   const { projectId } = useParams();
-  const [layout, toggleLayout] = useEditorLayout();
+  const [layout, chooseLayout] = useEditorLayout();
   const api = useApi();
   const [clips, setClips] = useState(null); // null = loading
   const [error, setError] = useState(null);
@@ -105,7 +108,7 @@ function EditorPage() {
     </aside>
   );
 
-  // New layout: the picked clips as tabs above the video
+  // New and Abhishri's layouts: the picked clips as tabs
   const clipTabs = (
     <div className="er-clip-tabs" role="tablist" aria-label="Picked clips">
       {clips?.map((clip, index) => (
@@ -131,7 +134,7 @@ function EditorPage() {
   }
 
   return (
-    <div className={`editor leaf-page${layout === "revamp" ? " editor-revamp" : ""}`}>
+    <div className={`editor leaf-page editor-${layout}`}>
       <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} />
       {body ? (
         <div className="editor-empty">{body}</div>
@@ -139,10 +142,13 @@ function EditorPage() {
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
           registerFlush={registerFlush} onExport={() => navigate(`/projects/${projectId}/export`)} />
       )}
-      <button type="button" className="er-layout-switch" onClick={toggleLayout}
-        title="Switch between the original Editor layout and the new one">
-        <Icon name="grid" /> {layout === "revamp" ? "Use classic layout" : "Try new layout"}
-      </button>
+      <div className="er-layout-switch" role="group" aria-label="Editor layout">
+        <Icon name="grid" />
+        {LAYOUTS.map((option) => (
+          <button key={option.id} type="button" className={option.id === layout ? "active" : ""}
+            aria-pressed={option.id === layout} onClick={() => chooseLayout(option.id)}>{option.label}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -236,19 +242,20 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
         setCaptionsView("Text");
       }} />
   );
+  const activeTab = layout === "split" && !splitTabs.includes(panelTab) ? "Captions" : panelTab;
   const panelContent = !state ? (
     <Spinner label="Loading edits" />
-  ) : panelTab === "Trim" ? (
+  ) : activeTab === "Trim" ? (
     <TrimControls state={state} duration={info.duration} change={change} />
-  ) : panelTab === "Captions" ? (
+  ) : activeTab === "Captions" ? (
     <CaptionsTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo}
       player={player} view={captionsView} onView={setCaptionsView}
       focusedCue={focusedCue} onFocusCue={setFocusedCue} />
-  ) : panelTab === "Aspect Ratio" ? (
+  ) : activeTab === "Aspect Ratio" ? (
     <AspectTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo} />
-  ) : panelTab === "Reel" ? (
+  ) : activeTab === "Reel" ? (
     <ReelControls state={state} change={change} onApply={sendChat} thinking={thinking} />
-  ) : panelTab === "Music" ? (
+  ) : activeTab === "Music" ? (
     <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
   ) : (
     <ChatBox messages={chatMessages} onSend={sendChat} disabled={thinking} typing={thinking}
@@ -311,6 +318,52 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
           </main>
 
           {timeline && <section className="er-timeline" aria-label="Timeline">{timeline}</section>}
+        </div>
+        {trendsModal}
+      </>
+    );
+  }
+
+  // ---------- Abhishri's layout (from davebranch) ----------
+  if (layout === "split") {
+    return (
+      <>
+        <div className="es-body">
+          {brollOpen && state && <div className="es-broll">{brollPanel}</div>}
+          <section className="es-preview">
+            {draft.error ? (
+              <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
+            ) : info && state ? (
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+                onOpenTrends={() => setTrendsOpen(true)} trendsOpen={trendsOpen}
+                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
+            ) : (
+              <div className="editor-loading"><Spinner label="Loading clip" /></div>
+            )}
+          </section>
+          <div className="es-actions">
+            <div className="es-tools">
+              <button className="btn btn-small" type="button" aria-pressed={brollOpen} disabled={!state || info?.has_video === false}
+                onClick={() => setBrollOpen(open => !open)}>B-roll</button>
+              {undoRedo}
+              {statuses}
+              <button type="button" className="btn btn-small btn-primary editor-export" onClick={goToExport}>Go to Export →</button>
+            </div>
+            {clipTabs}
+          </div>
+          <aside className="es-panel">
+            <div className="editor-panel-tabs">
+              {splitTabs.map((tab) => (
+                <button key={tab} type="button" className={`editor-panel-tab${tab === activeTab ? " active" : ""}`}
+                  disabled={info?.has_video === false && tab === "Aspect Ratio"}
+                  title={info?.has_video === false && tab === "Aspect Ratio" ? "Audio recordings have no video framing" : undefined}
+                  onClick={() => setPanelTab(tab)}>{tab}</button>
+              ))}
+            </div>
+            <div className="editor-panel-content">{panelContent}</div>
+          </aside>
+          {timeline && <section className="es-timeline" aria-label="Timeline">{timeline}</section>}
+          {info?.warning && <p className="es-warning editor-warning">{info.warning}</p>}
         </div>
         {trendsModal}
       </>
