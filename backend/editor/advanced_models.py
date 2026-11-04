@@ -81,6 +81,13 @@ class StyleInfo(TimelineModel):
     events: list[StyleEvent] = Field(default_factory=list, max_length=80)
     note: str = Field(default='', max_length=300)
 
+class StoryboardInfo(TimelineModel):
+    """What the last rendered storyboard added, so the next one replaces it and manual edits stay."""
+    audio_ids: list[str] = Field(default_factory=list, max_length=24)
+    broll_ids: list[str] = Field(default_factory=list, max_length=30)
+    motion: list[Motion] = Field(default_factory=list, max_length=30)
+    text_keys: list[str] = Field(default_factory=list, max_length=1000)
+
 class StyleOptions(TimelineModel):
     """Preset request: the executor measures beats/cuts and lays out the events."""
     palette: StylePalette = 'spider'

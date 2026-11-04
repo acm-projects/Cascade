@@ -61,7 +61,9 @@ def get_draft(pid: str, jid: str, index: int, request: Request):
             draft = None
     if draft is None:
         draft = Draft(state=Edit(start=0, end=info['duration'], captions=Captions(enabled=not info['burned_in'])))
-    return {**info, 'draft': draft.model_dump()}
+    from .storyboard import pending
+    board = pending(pid, jid, index, request.state.user_id)  # still waiting for notes or "render" after a reload
+    return {**info, 'draft': draft.model_dump(), **({'storyboard': board.model_dump()} if board else {})}
 
 
 def save_draft(pid: str, jid: str, index: int, body: Draft, request: Request):

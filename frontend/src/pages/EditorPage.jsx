@@ -130,6 +130,8 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
   const selectedBroll = state?.broll?.some(s => s.id === selectedSegment) ? selectedSegment : null;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
+  const waitingBoard = info?.storyboard; // a storyboard still waiting for notes or "render" after a reload
+  useEffect(() => { if (waitingBoard) setEditorResult(current => current || { storyboard: waitingBoard }); }, [waitingBoard]);
 
   // "Make the captions yellow": the backend's editor AI returns a new edit + a reply
   async function sendChat(message, research = {}) {
@@ -274,7 +276,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
               <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
             ) : (
               <AIEditorChat messages={chatMessages} onSend={sendChat} onClear={clearChat} disabled={thinking} typing={thinking}
-                clip={clip} result={editorResult} status={aiStatus} />
+                clip={clip} result={editorResult} status={aiStatus} cues={info?.cues} />
             )}
           </div>
         </aside>

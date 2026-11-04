@@ -3,7 +3,7 @@ import math
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend import broll as stocklib
-from .advanced_models import AudioSegment, Motion, TextOverlay, Transition, TimelineSpan, SpeedRamp, CutAccent, ReelInfo, StyleEvent, StyleInfo, StyleOptions
+from .advanced_models import AudioSegment, Motion, TextOverlay, Transition, TimelineSpan, SpeedRamp, CutAccent, ReelInfo, StyleEvent, StoryboardInfo, StyleInfo, StyleOptions
 from .sequence_models import FablecutSequence
 from .director_models import DirectorPlan
 
@@ -91,6 +91,7 @@ class Edit(BaseModel):
     dialogue_volume: float = Field(default=1, ge=0, le=2)
     fablecut: FablecutSequence | None = None
     stylize: StyleInfo | None = None
+    board: StoryboardInfo | None = None
 
 
 class Message(BaseModel):

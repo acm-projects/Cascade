@@ -23,6 +23,7 @@ class Storyboard(BoardModel):
     """What the planner returns; the server adds id/request/planner before saving."""
     reply: str = Field(default='', max_length=600)    # short answer to the user's sentence or note
     title: str = Field(default='', max_length=60)
+    ratio: Literal['9:16', '1:1', '4:5', '16:9', 'original'] = '9:16'
     look: Literal['bw', 'sepia', 'warm', 'teal_orange', 'natural', 'vivid'] = 'natural'
     captions: Literal['none', 'clean', 'pop', 'karaoke'] = 'pop'
     caption_size: int = Field(default=40, ge=20, le=80)
@@ -35,7 +36,7 @@ class Storyboard(BoardModel):
 class SavedStoryboard(Storyboard):
     id: str = Field(pattern=r'^[a-f0-9]{32}$')
     request: str = Field(default='', max_length=2000)
-    planner: str = Field(default='', max_length=80)
+    planner: str = Field(default='', max_length=300)
     style: str = Field(default='', max_length=60)
     notes: list[str] = Field(default_factory=list, max_length=50)
     thumbnails: dict[str, str] = Field(default_factory=dict)  # beat number -> small base64 JPEG

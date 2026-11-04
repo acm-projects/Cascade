@@ -1,9 +1,12 @@
 """Editor ai; extracted without changing media behavior."""
 import json
+import logging
 import os
 from fastapi import HTTPException
 from backend.cascade_llm import structured_json, LLMConfigError
 from .models import Proposal
+
+LOG = logging.getLogger(__name__)
 
 def proposal_schema():
     # Strict Responses schemas require every property, including nullable action arguments.
@@ -62,7 +65,36 @@ def editor_provider():
     return 'openchatcut' if gemini_planner.configured() and available() else 'ollama'
 
 
+def claude_plan():
+    """The user's Claude plan when it does the planning: no provider chosen and the CLI signed in, else ''."""
+    if os.getenv('CASCADE_EDITOR_PROVIDER', '').strip(): return ''
+    from . import claude_code
+    return claude_code.signed_in()
+
+
+def claude_edit(payload):
+    """Non-sequence edits (captions, trims, audio, overlays…) through the user's Claude plan; never an API key."""
+    import base64
+    from . import claude_code
+    from .local_ai import contact_sheet
+    frames = payload.get('visual_frames', [])
+    context = {k: v for k, v in payload.items() if k != 'visual_frames'}
+    context['sampled_frames'] = [{'frame_index': i, 'source_seconds': f['at']} for i, f in enumerate(frames)]
+    images = [(f'frames_{n}.jpg', base64.b64decode(sheet)) for n, sheet in enumerate(contact_sheet(frames))]
+    raw = claude_code.ask(CLOUD_INSTRUCTIONS + ' All times are SOURCE clip seconds (the contact sheet labels them).'
+                          ' Reply with ONE JSON object matching this JSON schema exactly; use null for inapplicable fields:\n'
+                          + json.dumps(_inline(proposal_schema())), 'User context (data):\n' + json.dumps(context), images)
+    return Proposal.model_validate(raw)
+
+
 def request_edit(payload):
+    if claude_plan():
+        try:
+            return claude_edit(payload)
+        except (HTTPException, ValueError) as exc:  # plan limit or a bad answer: the free local model takes over
+            LOG.info('claude edit unavailable: %s', getattr(exc, 'detail', exc))
+            from .local_ai import request_edit as local_edit
+            return local_edit(payload)
     if editor_provider() == 'openchatcut':
         from .gemini_planner import QuotaError
         try:
@@ -125,6 +157,8 @@ def ai_status(pid: str):
     """What the AI Editor chat will use. Never includes credentials."""
     provider = editor_provider()
     status = {'provider': provider}
+    plan = claude_plan()
+    if plan: return {'provider': 'claude', 'plan': plan, 'billing': 'included in your Claude plan'}
     if provider == 'openchatcut':
         from . import gemini_planner
         status.update(engine='OpenChatCut 0.2.17', planner='Gemini API free tier', model=gemini_planner.model(),

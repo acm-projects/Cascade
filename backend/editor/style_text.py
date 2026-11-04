@@ -75,7 +75,9 @@ def apply_text(frame, t, events, palette, matte_at, frame_number):
         if event.animate == 'slam' and progress < .25:  # oversized, then slams down with a shake
             scale = 1+.7*(1-_ease(progress/.25))
             dx, dy = rng.integers(-w//60-1, w//60+1, 2)
-            matrix = np.float32([[scale, 0, (1-scale)*w/2+dx], [0, scale, (1-scale)*h/2+dy]])
+            rows = np.where(alpha.max(axis=1) > .05)[0]  # around the word itself, so a word near an edge stays in frame
+            cy = (rows[0]+rows[-1])/2 if len(rows) else h/2
+            matrix = np.float32([[scale, 0, (1-scale)*w/2+dx], [0, scale, (1-scale)*cy+dy]])
             rgb = cv2.warpAffine(rgb, matrix, (w, h)); alpha = cv2.warpAffine(alpha, matrix, (w, h))
         elif event.animate == 'glitch' and progress < .4:
             rgb = _glitch(rgb, rng, 2.2); alpha = np.maximum(alpha, np.roll(alpha, int(w*.02), axis=1)*.6)

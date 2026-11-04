@@ -89,7 +89,8 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     frames = footage_frames(jid,clip,body.state,info,hints) if ai.editor_provider() in ai.LOCAL_ANALYSIS and proposal is None else []
     # Rich sequence editing uses the installed open-source compositor. Shared
     # non-editor providers and ordinary manual-edit chat tools remain unchanged.
-    if ai.editor_provider() in ai.LOCAL_ANALYSIS and proposal is None:
+    # The sequence planner needs Gemini; with a Claude plan doing the planning, requests stay on the path below.
+    if ai.editor_provider() in ai.LOCAL_ANALYSIS and proposal is None and not ai.claude_plan():
         from .sequence_ai import direct_revision, edit as sequence_edit
         occ=ai.editor_provider()=='openchatcut'
         montage=r'sequence|montage|pacing|transition|ramp|shot|cut.*beat'+(r'|zoom|shake|slow.?mo|grade|look|cinematic|title|hook|faster|slower|energy|music' if occ else '')

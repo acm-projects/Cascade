@@ -3,7 +3,8 @@
 No API key is ever used: every Anthropic credential variable is removed from the child process,
 so `claude -p` can only authenticate with the claude.ai (Pro/Max) sign-in and nothing is billed
 per request. Frames are written to a private temporary folder and are the only files Claude may
-read (tools: Read only). Set CASCADE_CLAUDE_BIN to use a specific `claude` binary.
+read (tools: Read only). Set CASCADE_CLAUDE_BIN to use a specific `claude` binary, or
+CASCADE_EDITOR_CLAUDE=off to never use Claude (the test suite does, so tests cost no plan usage).
 """
 import json
 import os
@@ -26,6 +27,7 @@ class UsageLimit(HTTPException):
 
 
 def binary():
+    if os.environ.get('CASCADE_EDITOR_CLAUDE', '').strip().lower() == 'off': return None
     for candidate in (os.environ.get('CASCADE_CLAUDE_BIN', ''), shutil.which('claude') or '',
                       str(Path.home()/'.local'/'claude-code'/'node_modules'/'.bin'/'claude')):
         if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):

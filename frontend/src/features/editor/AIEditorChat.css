@@ -1,6 +1,7 @@
 /* Scoped to the editor; shared ChatBox and other pages retain their appearance. */
-.ai-editor-chat { display:flex; flex-direction:column; min-height:0; gap:10px; height:100%; }
-.ai-editor-chat .chatbox { flex:1; min-height:0; }
+.ai-editor-chat { display:flex; flex-direction:column; min-height:0; gap:10px; height:100%; overflow-y:auto; }
+.ai-editor-chat > * { flex-shrink:0; }
+.ai-editor-chat .chatbox { flex:0 0 auto; height:clamp(380px, 62vh, 620px); min-height:0; }
 .ai-editor-chat .chatbox-header { padding:10px; }
 .ai-editor-chat .chatbox-title { font-size:18px; }
 .ai-editor-chat .chatbox-subtitle { font-size:11px; line-height:1.5; }
@@ -28,9 +29,12 @@
 .editor-center.has-ai-sequence > .editor-preview { flex: 0 0 clamp(280px, 40vh, 480px); min-height: 280px; }
 .ai-editor-chat .ai-editor-clear { align-self:flex-start; font-size:12px; }
 
-.ai-storyboard { flex-shrink:0; max-height:45%; overflow:auto; padding:9px; border:1px solid var(--color-wood-dark); border-radius:8px; background:var(--color-cream-card); color:var(--color-wood-text); font:11px/1.45 var(--font-ui); }
+.ai-storyboard { flex-shrink:0; padding:9px; border:1px solid var(--color-wood-dark); border-radius:8px; background:var(--color-cream-card); color:var(--color-wood-text); font:11px/1.45 var(--font-ui); }
 .ai-storyboard header { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
 .ai-storyboard-beats { list-style:none; margin:0; padding:0; display:grid; gap:5px; }
+.ai-storyboard-plan { margin:0 0 7px; }
+.ai-storyboard-beats q { flex-basis:100%; quotes:none; }
+.ai-storyboard-beats q.rewritten { font-weight:700; }
 .ai-storyboard-beats li { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; padding:4px; border-radius:6px; background:#faf3df; }
 .ai-storyboard-beats li.cut { opacity:.55; text-decoration:line-through; }
 .ai-storyboard-beats img { width:64px; height:36px; object-fit:cover; border-radius:4px; }
