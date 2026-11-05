@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { clampTrim, minLength, moveEnd, moveStart, rulerStep, rulerTicks, timeToX, xToTime } from "./timelineMath.js";
+import { clampTrim, filmstripFrameIndex, filmstripTileCount, filmstripTimes, minLength, moveEnd, moveStart, rulerStep, rulerTicks, timeToX, xToTime } from "./timelineMath.js";
 
 // Run with: npm test
 
@@ -53,4 +53,23 @@ test("the ruler picks a readable spacing", () => {
   assert.equal(rulerStep(600), 60);
   assert.deepEqual(rulerTicks(10), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   assert.deepEqual(rulerTicks(12), [0, 2, 4, 6, 8, 10, 12]);
+});
+
+test("filmstripTimes: the middle of each slice", () => {
+  assert.deepEqual(filmstripTimes(40, 4), [5, 15, 25, 35]);
+  assert.deepEqual(filmstripTimes(40, 0), []);
+});
+
+test("filmstripTileCount: fits frames of the video's shape, at least one", () => {
+  assert.equal(filmstripTileCount(1600, 50, 16 / 9), 18);
+  assert.equal(filmstripTileCount(1600, 50, 9 / 16), 57);
+  assert.equal(filmstripTileCount(10, 50, 16 / 9), 1);
+  assert.equal(filmstripTileCount(0, 50, 16 / 9), 0);   // not measured yet
+  assert.equal(filmstripTileCount(1600, 50, 0), 0);     // no video shape yet
+});
+
+test("filmstripFrameIndex: spreads tiles over the frames and stays in range", () => {
+  assert.deepEqual([0, 1, 2].map((i) => filmstripFrameIndex(i, 3, 30)), [5, 15, 25]);
+  assert.deepEqual([0, 1, 2, 3].map((i) => filmstripFrameIndex(i, 4, 2)), [0, 0, 1, 1]);   // more tiles than frames repeats
+  assert.equal(filmstripFrameIndex(29, 30, 30), 29);
 });

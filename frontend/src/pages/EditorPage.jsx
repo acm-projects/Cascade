@@ -232,7 +232,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     <div className="editor-loading"><Spinner label="Loading clip" /></div>
   );
   const timeline = info && state && (
-    <Timeline duration={info.duration} cues={info.cues} state={state} player={player}
+    <Timeline projectId={projectId} clip={clip} hasVideo={info.has_video !== false}
+      duration={info.duration} cues={info.cues} state={state} player={player}
       change={change} patch={draft.patch} recordUndo={draft.recordUndo}
       selectedBroll={selectedBroll} onSelectBroll={selectBroll} disabled={thinking}
       focusedCue={focusedCue} onCueClick={(index) => {
@@ -240,6 +241,11 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
         if (layout === "revamp") setBrollOpen(false); // the new layout shows one panel at a time
         setPanelTab("Captions");
         setCaptionsView("Text");
+      }}
+      onOpenTool={(tool) => {
+        if (tool === "B-roll") return setBrollOpen(true);
+        if (layout === "revamp") setBrollOpen(false); // the new layout shows one panel at a time
+        setPanelTab(tool);
       }} />
   );
   const activeTab = layout === "split" && !splitTabs.includes(panelTab) ? "Captions" : panelTab;

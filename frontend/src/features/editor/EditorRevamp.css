@@ -320,10 +320,10 @@
   color: #ffd9a8;
 }
 
-/* ---------- Timeline: chunky colorful lanes, Captions on top of Video ---------- */
+/* ---------- Timeline panel ---------- */
 .er-timeline {
   grid-area: timeline;
-  max-height: calc(330 * var(--u));
+  max-height: 45vh;   /* tall enough for the usual tracks; extra ones scroll */
   overflow-y: auto;
   padding: calc(14 * var(--u)) calc(20 * var(--u));
   border: var(--panel-border);
@@ -331,87 +331,10 @@
   background: var(--panel-bg);
 }
 
-.editor-revamp .timeline {
-  gap: 10px;
-  --lane-gap: calc(112px + 12px);   /* room for the lane names on the left */
-}
-
-/* Captions sit above the video, like they do on screen */
-.editor-revamp .timeline-ruler { order: 0; }
-.editor-revamp .timeline-cues { order: 1; }
-.editor-revamp .timeline-track { order: 2; }
-.editor-revamp .timeline-broll { order: 3; }
-.editor-revamp .timeline-added { order: 4; }
-.editor-revamp .timeline-footer { order: 5; }
-
-.editor-revamp .timeline-ruler,
-.editor-revamp .timeline-cues,
-.editor-revamp .timeline-track,
-.editor-revamp .timeline-broll-lane,
-.editor-revamp .timeline-added,
-.editor-revamp .timeline-footer {
-  margin-left: calc(8px + var(--lane-gap));
-}
-
-/* Lane names: little cream tags on the left */
-.editor-revamp .timeline-cues::before,
-.editor-revamp .timeline-track::before,
-.editor-revamp .timeline-broll-lane::before {
-  position: absolute;
-  right: calc(100% + 12px);
-  top: 50%;
-  translate: 0 -50%;
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  width: 112px;
-  height: 38px;
-  padding-left: 12px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: 12px;
-  background: #fbf5e4;
-  color: var(--color-wood-text);
-  font-family: var(--font-display);
-  font-size: 15px;
-}
-
-.editor-revamp .timeline-cues::before { content: "Captions"; }
-.editor-revamp .timeline-track::before { content: "Video"; }
-.editor-revamp .timeline-broll-lane::before { content: "B-roll"; }
-
-/* Captions: yellow pills */
-.editor-revamp .timeline-cues {
-  height: 38px;
-}
-
-.editor-revamp .timeline-cues .timeline-cue {
-  border: 2px solid var(--color-wood-dark);
-  border-radius: 10px;
-  background: #f6c445;
-  color: var(--color-wood-dark);
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.editor-revamp .timeline-cues .timeline-cue:hover,
-.editor-revamp .timeline-cues .timeline-cue.active {
-  background: var(--color-leaf);
-  color: var(--color-jungle-deep);
-}
-
-/* Video: a chunky green block */
+/* The tracks themselves are in Timeline.css; this layout adds a chunkier video track and a coral playhead */
 .editor-revamp .timeline-track {
-  height: 50px;
   border: 3px solid var(--color-wood-dark);
   border-radius: 12px;
-  background:
-    repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-jungle-deep) 45%, transparent) 0 2px, transparent 2px 6px)
-      center / 100% 55% no-repeat,
-    #8fd897;
-}
-
-.editor-revamp .timeline-kept {
-  border-color: var(--color-leaf);
 }
 
 .editor-revamp .timeline-handle {
@@ -422,11 +345,6 @@
 
 .editor-revamp .timeline-handle::after {
   border-color: var(--color-cream-card);
-}
-
-/* Playhead: coral line with a round knob */
-.editor-revamp .timeline-playhead {
-  top: -16px;
 }
 
 .editor-revamp .timeline-playhead::before {
@@ -440,55 +358,6 @@
   box-sizing: border-box;
   border: 2.5px solid var(--color-wood-dark);
   background: #f06a4a;
-}
-
-/* B-roll: a dashed blue drop zone */
-.editor-revamp .timeline-broll > small {
-  display: none;   /* the lane tag says "B-roll" instead */
-}
-
-.editor-revamp .timeline-broll-lane {
-  height: 44px;
-  margin-top: 0;
-  margin-bottom: 0;
-  border: 2.5px dashed #5aa9d6;
-  border-radius: 12px;
-  background: color-mix(in srgb, #5aa9d6 10%, transparent);
-}
-
-.editor-revamp .timeline-broll-segment {
-  top: 4px;
-  height: 32px;
-}
-
-.editor-revamp .timeline-broll-body {
-  border: 2px solid var(--color-wood-dark);
-  border-radius: 10px;
-  background: #5aa9d6;
-  color: white;
-  font-weight: 800;
-}
-
-.editor-revamp .timeline-no-cues {
-  display: inline-block;
-  padding: 12px;
-  color: #2c6e8f;
-  font-weight: 800;
-}
-
-/* Music, sound effects and other added lanes: orange */
-.editor-revamp .timeline-added .timeline-cue {
-  height: 28px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: 10px;
-  background: #f29a3c;
-  color: var(--color-wood-dark);
-  font-weight: 800;
-}
-
-.editor-revamp .timeline-added small {
-  font-family: var(--font-display);
-  font-size: 13px;
 }
 
 /* ---------- A bigger video ----------

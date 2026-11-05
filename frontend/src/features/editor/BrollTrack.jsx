@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { dragBroll } from "./brollTiming";
+import Icon from "../../components/ui/Icon";
 
-export default function BrollTrack({ state, duration, player, change, patch, recordUndo, selectedId, onSelect, disabled }) {
+export default function BrollTrack({ state, duration, player, change, patch, recordUndo, selectedId, onSelect, disabled, onAdd }) {
   const track = useRef(null);
   const drag = useRef(null);
   const latest = useRef(state);
@@ -54,9 +55,8 @@ export default function BrollTrack({ state, duration, player, change, patch, rec
     onPointerUp: finish, onPointerCancel: finish, onKeyDown: e => nudge(e, segment, kind),
     onClick: () => { onSelect(segment.id); player.current?.seek(segment.start + .001); },
   });
-  return <div className="timeline-broll" aria-label="B-roll track">
-    <small>B-roll · drag to move, edges to trim · Delete removes selection</small>
-    <div ref={track} className="timeline-broll-lane">
+  return (
+    <div ref={track} className="timeline-lane timeline-broll-lane" aria-label="B-roll track">
       {state.broll.map((segment, index) => <div key={segment.id} className={`timeline-broll-segment${segment.id === selectedId ? ' active' : ''}`}
         style={{ left: `${segment.start / duration * 100}%`, width: `${segment.duration / duration * 100}%` }}>
         <button type="button" className="timeline-broll-body" aria-pressed={segment.id === selectedId}
@@ -64,7 +64,9 @@ export default function BrollTrack({ state, duration, player, change, patch, rec
         <button type="button" className="timeline-broll-edge start" aria-label={`Resize start of B-roll ${index + 1}`} {...props(segment,'start')} />
         <button type="button" className="timeline-broll-edge end" aria-label={`Resize end of B-roll ${index + 1}`} {...props(segment,'end')} />
       </div>)}
-      {!state.broll.length && <small className="timeline-no-cues">No B-roll yet</small>}
+      {!state.broll.length && <button type="button" className="timeline-add" onClick={onAdd} disabled={disabled}>
+        <Icon name="plus" /> Add B-roll
+      </button>}
     </div>
-  </div>;
+  );
 }
