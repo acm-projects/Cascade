@@ -41,3 +41,10 @@
 .ai-storyboard-n { font-weight:700; }
 .ai-storyboard-beats strong { color:#a3261b; }
 .ai-storyboard-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; }
+
+.ai-edit-progress { display: grid; gap: 6px; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,.06); }
+.ai-edit-progress p { margin: 0; }
+.ai-edit-progress small { opacity: .7; }
+.ai-edit-progress-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+.ai-edit-progress-bar i { display: block; height: 100%; background: #3d4eff; transition: width .4s ease; }
+.ai-edit-current { margin: 0; font-size: 13px; opacity: .85; display: grid; gap: 6px; justify-items: start; }

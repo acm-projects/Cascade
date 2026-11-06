@@ -26,7 +26,9 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
   const [cutout, setCutout] = useState(null);
-  const clock = useMemo(() => timelineClock(state), [state]);
+  // A finished AI edit is its own film: its file sets the clock, not the source timeline.
+  const aiDuration = state.ai_edit?.duration;
+  const clock = useMemo(() => aiDuration ? { duration: aiDuration, output: t => t, source: t => t } : timelineClock(state), [state, aiDuration]);
   const styled = Boolean(state.stylize?.events?.length);
   // Fan-edit previews first compute subject cutouts locally; show that progress while rendering.
   useEffect(() => {
@@ -158,7 +160,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
 
   const { composition } = state;
   const audioOnly = info.has_video === false;
-  const ratio = view === "original" ? info.width / info.height : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
+  const ratio = view === "original" ? info.width / info.height : state.ai_edit ? 9 / 16 : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
   // The biggest frame of this shape that fits the space
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
 
@@ -227,7 +229,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
 
         </div>
       </div>
-      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
+      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? (state.ai_edit ? `AI edit ${state.ai_edit.version} · this exact file is what Export saves` : 'Rendered preview · same audio/effects as MP4 export') : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
           {playing ? "⏸" : "▶"}

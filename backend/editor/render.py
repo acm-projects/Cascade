@@ -94,6 +94,9 @@ def _export(pid, jid, index, body, request, prepared=None):
     from .audio_assets import store
     audio_store=store(pid,jid,index,request.state.user_id)
     audio_store.verify(body)
+    if body.ai_edit and not prepared:  # a finished AI edit: this exact file is what the preview showed
+        from .ai_edit.jobs import rendered_path
+        return FileResponse(rendered_path(pid, jid, index, request.state.user_id, body.ai_edit.version), filename='cascade-edited.mp4', media_type='video/mp4', background=BackgroundTask(lambda: None))
     if body.fablecut and not prepared:
         if body.overlays is not None:
             raise HTTPException(422,'FableCut sequences render captions on the server; source raster overlays are unsupported.')

@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 
 // In dev, forward backend paths to FastAPI so React can use relative URLs
 // like fetch('/api/projects') with no CORS trouble.
-const backend = 'http://127.0.0.1:8000'
+const backend = process.env.CASCADE_BACKEND || 'http://127.0.0.1:8000'
 
 // https://vite.dev/config/
 export default defineConfig({

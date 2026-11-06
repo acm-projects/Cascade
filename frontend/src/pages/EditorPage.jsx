@@ -130,6 +130,27 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
   const selectedBroll = state?.broll?.some(s => s.id === selectedSegment) ? selectedSegment : null;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
+  // The background edit for this clip. It keeps running if you switch clips or reload; this picks it back up.
+  const [aiJob, setAIJob] = useState(null);
+  const serverJob = info?.ai_job;
+  useEffect(() => { if (serverJob) setAIJob(serverJob); }, [serverJob]);
+  const adoptAIEdit = draft.adoptAIEdit;
+  const jobRunning = aiJob?.status === "queued" || aiJob?.status === "running";
+  useEffect(() => {
+    if (!jobRunning) return undefined;
+    let active = true;
+    const poll = () => api.getAIEdit(projectId, clip.job_id, clip.clip_index).then(({ job, saved }) => {
+      if (!active || !job) return;
+      setAIJob(job);
+      if (job.status === "done" || job.status === "failed") {
+        if (saved?.chat) adoptAIEdit(saved.ai_edit ?? null, saved.chat);
+        setPanelTab("AI Editor");
+      }
+    }).catch(() => {});
+    const timer = setInterval(poll, 2000);
+    poll();
+    return () => { active = false; clearInterval(timer); };
+  }, [api, projectId, clip.job_id, clip.clip_index, jobRunning, adoptAIEdit]);
   const waitingBoard = info?.storyboard; // a storyboard still waiting for notes or "render" after a reload
   useEffect(() => { if (waitingBoard) setEditorResult(current => current || { storyboard: waitingBoard }); }, [waitingBoard]);
 
@@ -138,18 +159,24 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
     const history = draft.chat;
     if (isAIUndo(message)) {
       const transaction = aiTransactions.current.at(-1);
-      if (!canUndoAI(transaction, state)) {
+      if (!state.ai_edit && !canUndoAI(transaction, state)) {
         draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: transaction
           ? "Not undone: manual edits changed this clip after the AI transaction. Use the shared Undo controls to review those edits first."
           : "No AI edit is available to undo in this editing session. Undo history resets when the page reloads." }]);
         return;
       }
+      if (state.ai_edit) return sendEdit(message);
       draft.undo();
       aiTransactions.current.pop();
       setEditorResult(null);
       draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: "UNDONE: The last AI Editor transaction. Use Redo to restore it. Your earlier edits remain." }]);
       return;
     }
+    return sendEdit(message, research);
+  }
+
+  async function sendEdit(message, research = {}) {
+    const history = draft.chat;
     const sent = state;
     const sentRevision = draft.getRevision();
     draft.setChat([...history, { role: "user", text: message }]);
@@ -158,6 +185,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
     try {
       const result = await api.sendEditorChat(projectId, clip.job_id, clip.clip_index, { state, chat: history, message, ...research,
         result_ids: (brollSearch?.results || []).map(a => a.id), selected_segment: selectedBroll });
+      if (result.ai_job) setAIJob(result.ai_job);
       if (draft.getRevision() !== sentRevision || !sameEdit(latestState.current, sent)) {
         draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: "NOT APPLIED: The clip changed while I was planning. Your newer manual edits were preserved. Send the request again to plan against the current timeline." }]);
         return;
@@ -275,8 +303,9 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
             ) : panelTab === "Music" ? (
               <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
             ) : (
-              <AIEditorChat messages={chatMessages} onSend={sendChat} onClear={clearChat} disabled={thinking} typing={thinking}
-                clip={clip} result={editorResult} status={aiStatus} cues={info?.cues} />
+              <AIEditorChat messages={chatMessages} onSend={sendChat} onClear={clearChat} disabled={thinking || jobRunning} typing={thinking}
+                clip={clip} result={editorResult} status={aiStatus} cues={info?.cues} job={jobRunning ? aiJob : null} aiEdit={state.ai_edit}
+                onUseTimeline={() => change(s => ({ ...s, ai_edit: null }))} />
             )}
           </div>
         </aside>

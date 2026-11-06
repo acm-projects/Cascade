@@ -122,7 +122,18 @@ export default function useClipDraft(projectId, clip) {
       future.length ? { past: [...past, present], present: future[0], future: future.slice(1) } : { past, present, future });
   }, []);
 
+  // A finished AI edit saved its result on the server: take it without losing newer manual edits. One undo step.
+  const adoptAIEdit = useCallback((aiEdit, savedChat) => {
+    revision.current += 1;
+    setHistory(({ past, present, future }) => {
+      if (!present || JSON.stringify(present.ai_edit ?? null) === JSON.stringify(aiEdit ?? null)) return { past, present, future };
+      return { past: [...past, present].slice(-HISTORY_LIMIT), present: { ...present, ai_edit: aiEdit }, future: [] };
+    });
+    if (savedChat) setChat(savedChat);
+  }, []);
+
   return {
+    adoptAIEdit,
     info, error, state, change, patch, recordUndo, undo, redo, getRevision,
     canUndo: history.past.length > 0, canRedo: history.future.length > 0,
     chat, setChat, saveStatus, flush,

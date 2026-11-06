@@ -63,7 +63,9 @@ def get_draft(pid: str, jid: str, index: int, request: Request):
         draft = Draft(state=Edit(start=0, end=info['duration'], captions=Captions(enabled=not info['burned_in'])))
     from .storyboard import pending
     board = pending(pid, jid, index, request.state.user_id)  # still waiting for notes or "render" after a reload
-    return {**info, 'draft': draft.model_dump(), **({'storyboard': board.model_dump()} if board else {})}
+    from .ai_edit.jobs import job_status, root
+    job = job_status(root(pid, jid, index, request.state.user_id))  # an edit may still be running after a reload or a clip switch
+    return {**info, 'draft': draft.model_dump(), **({'storyboard': board.model_dump()} if board else {}), **({'ai_job': job} if job and job['status'] in ('queued', 'running') else {})}
 
 
 def save_draft(pid: str, jid: str, index: int, body: Draft, request: Request):

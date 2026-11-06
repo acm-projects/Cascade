@@ -70,6 +70,13 @@ class ReframePlanInput(BaseModel):
     selection: SubjectSelection | None = None
 
 
+class AIEditRef(BaseModel):
+    """A finished edit the AI Editor rendered for this clip (see ai_edit/). The file is the preview and the export."""
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    version: str = Field(pattern=r'^v[0-9]{3}$')
+    duration: float = Field(gt=0)
+
+
 class Edit(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
     start: float = Field(ge=0)
@@ -92,6 +99,7 @@ class Edit(BaseModel):
     fablecut: FablecutSequence | None = None
     stylize: StyleInfo | None = None
     board: StoryboardInfo | None = None
+    ai_edit: AIEditRef | None = None
 
 
 class Message(BaseModel):

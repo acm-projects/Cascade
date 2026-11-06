@@ -23,6 +23,10 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     from .execution import execute
     audio_store = store(pid,jid,index,request.state.user_id)
     audio_store.verify(body.state)
+    # "Edit this clip" and every follow-up on a finished edit: Claude directs a full edit in the background.
+    from .ai_edit import jobs as ai_edit_jobs
+    if ai_edit_jobs.wants(body,info):
+        return ai_edit_jobs.turn(pid,jid,index,request.state.user_id,clip,body,info,stock,audio_store)
     # Open edit requests and notes on a pending storyboard: plan beats first, render on "render".
     from . import storyboard_chat
     pending=storyboard_chat.wants(body,info,request.state.user_id,pid,jid,index)

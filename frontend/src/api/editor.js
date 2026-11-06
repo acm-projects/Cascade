@@ -67,6 +67,11 @@ export function getEditorAIStatus(token, projectId) {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/ai-status`, { token });
 }
 
+/** GET …/{jobId}/{index}/ai-edit → the background edit for this clip: { job, versions, saved } */
+export function getAIEdit(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/ai-edit`, { token });
+}
+
 export function sendEditorChat(token, projectId, jobId, index, body) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/chat`, { token, method: "POST", body });
 }

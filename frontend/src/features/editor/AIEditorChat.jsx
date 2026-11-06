@@ -42,17 +42,26 @@ function Storyboard({ board, cues, onSend, disabled }) {
   </section>;
 }
 
-export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, clip, result, status, cues }) {
+export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, clip, result, status, cues, job, aiEdit, onUseTimeline }) {
   const analysis = result?.analysis;
   // A used-up Gemini quota does not lock the chat: storyboards are planned with Claude (or the local
   // model), and requests that need Gemini come back as a visible NOT APPLIED note.
-  const placeholder = typing
-    ? 'Planning the storyboard with Claude (your Claude plan)…'
-    : 'Describe the edit, or refine the last change…';
+  const placeholder = job
+    ? 'Working on the edit. You can ask for changes when it finishes…'
+    : typing ? 'Starting…' : aiEdit ? 'Ask for a change to this edit…' : 'Type “edit this clip”, or describe the edit you want…';
   return <div className="ai-editor-chat">
     <ChatBox title="AI Editor" subtitle="Plans and applies real timeline edits. Preview shows the rendered result."
       messages={messages} onSend={onSend} disabled={disabled} typing={typing}
       tag={clip.title || 'Selected clip'} quickActions={suggestions} placeholder={placeholder} />
+    {job && <section className="ai-edit-progress" role="status" aria-live="polite">
+      <div className="ai-edit-progress-bar"><i style={{ width: `${Math.round((job.progress || 0) * 100)}%` }} /></div>
+      <p>{job.stage}</p>
+      <small>This usually takes a few minutes. It keeps going if you switch clips or reload.</small>
+    </section>}
+    {aiEdit && !job && <p className="ai-edit-current">
+      The Edited preview and Export use AI edit {aiEdit.version}, a finished film. Trim, Captions and the other tabs edit the source timeline.
+      <button type="button" className="editor-choice" onClick={onUseTimeline}>Use my timeline instead</button>
+    </p>}
     {result?.storyboard && <Storyboard board={result.storyboard} cues={cues} onSend={onSend} disabled={disabled} />}
     {onClear && <button type="button" className="editor-choice ai-editor-clear" onClick={onClear} disabled={typing || !messages.length}>
       Clear chat history

@@ -26,7 +26,7 @@ class EditorRouteTests(unittest.TestCase):
         prefix = '/api/projects/{pid}/editor/{jid}/{index}'
         additions = [[prefix + path, [method]] for path, method in (
             ('/audio', 'GET'), ('/audio', 'POST'), ('/audio/{asset_id}/media', 'GET'),
-            ('/trends', 'GET'), ('/trends', 'POST'), ('/trends/apply', 'POST'), ('/style-progress', 'GET'))]
+            ('/trends', 'GET'), ('/trends', 'POST'), ('/trends/apply', 'POST'), ('/style-progress', 'GET'), ('/ai-edit', 'GET'))]
         # The AI Editor chat reports its engine and free-tier usage (no credentials).
         additions.append(['/api/projects/{pid}/editor/ai-status', ['GET']])
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
