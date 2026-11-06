@@ -1,11 +1,11 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
-// The Landing page's 3D world: a floating rainforest island seen from an isometric camera.
+// The 3D world behind Landing and Projects: a rainforest island in the sea, seen from an isometric camera.
 // One big video screen feeds a river, and clip cards ride it down the waterfalls: one video becomes many clips.
 // Everything is drawn from code (no image files), so colors and sizes can be changed right here.
 //
-// createIslandScene(canvas, { still }) starts it and returns a function that stops it and frees its memory.
+// createIslandScene(canvas, { still, framing }) starts it and returns a function that stops it and frees its memory.
 // In the world: +x is down-right on screen, +z is down-left, +y is up.
 
 const COLORS = {
@@ -32,6 +32,7 @@ const LOW = 1.2;
 const RIVER_MIN_X = 0.5;
 const RIVER_MAX_X = 2.5;
 const RIVER_X = (RIVER_MIN_X + RIVER_MAX_X) / 2;
+const SEA_LEVEL = -0.6;
 
 // The same "random" numbers every time, so the island always looks the same
 function makeRandom(seed) {
@@ -231,8 +232,7 @@ function buildGround(root, random) {
   }
 
   for (const { x, z } of columns) {
-    const edge = Math.hypot(x, z) / 7;
-    const depth = -0.7 - (1 - Math.min(edge, 1)) * 4.4 * (0.75 + random() * 0.35);
+    const depth = SEA_LEVEL - 2;   // every column reaches below the water
     const river = isRiver(x);
     const top = groundHeight(z) - (river ? 0.34 : 0);
     addBlock(x, z, depth, Math.min(0.2, top - 0.9), pick(COLORS.deepRock, random));
@@ -243,6 +243,146 @@ function buildGround(root, random) {
   blocks.instanceMatrix.needsUpdate = true;
   blocks.instanceColor.needsUpdate = true;
   root.add(blocks);
+}
+
+// ---------- The sea ----------
+
+const SEA_VERTEX = `
+  varying vec2 vPlace;
+  void main() {
+    vPlace = position.xz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const SEA_FRAGMENT = `
+  uniform float uTime;
+  uniform sampler2D uShore;
+  uniform float uRange;
+  uniform float uMaxDistance;
+  uniform vec2 uFall;
+  uniform vec3 uDeep;
+  uniform vec3 uShallow;
+  uniform vec3 uFoam;
+  uniform float uPixel;
+  varying vec2 vPlace;
+
+  float hash(vec2 value) {
+    return fract(sin(dot(value, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
+  void main() {
+    // Every screen pixel inside one big square uses that square's spot on the sea, so the water draws as chunky pixels
+    vec2 grid = gl_FragCoord.xy / uPixel;
+    vec2 p = vPlace - dFdx(vPlace) * fract(grid.x) * uPixel - dFdy(vPlace) * fract(grid.y) * uPixel;
+    vec2 cell = floor(grid);
+    float t = uTime;
+    float shore = texture2D(uShore, (p + uRange) / (2.0 * uRange)).r * uMaxDistance;
+
+    // Turquoise in the shallows, deeper blue further out
+    vec3 color = mix(uShallow, uDeep, floor(smoothstep(0.1, 6.0, shore) * 9.0 + 0.5) / 9.0);   // in color steps, like pixel art
+
+    // Little dashes of pixels gliding across the surface, each row at its own speed, twinkling on and off
+    if (mod(cell.y, 3.0) < 1.0) {
+      float rowSeed = hash(vec2(cell.y, 4.0));
+      float along = cell.x + floor(t * (0.7 + rowSeed * 1.3)) + floor(rowSeed * 97.0);
+      float dash = floor(along / 11.0);
+      float dashSeed = hash(vec2(dash, cell.y));
+      float dashLength = 2.0 + floor(hash(vec2(cell.y, dash + 7.0)) * 4.0);
+      float twinkle = step(0.3, sin(t * (0.5 + dashSeed) + dashSeed * 40.0) * 0.5 + 0.5);
+      float lit = step(0.84, dashSeed) * step(mod(along, 11.0), dashLength - 1.0) * twinkle;
+      color = mix(color, uFoam, lit * 0.62);
+    }
+
+    // Waves rolling away from the island
+    float wave = smoothstep(0.07, 0.0, abs(fract(shore * 0.85 - t * 0.16) - 0.5));
+    color = mix(color, uFoam, step(0.5, wave) * step(shore, 2.4) * 0.32);
+
+    // Water streaming away from the bottom of the waterfall
+    float spread = 1.05 + max(0.0, p.y - uFall.y) * 0.3;
+    float inStream = smoothstep(spread, spread * 0.45, abs(p.x - uFall.x)) * smoothstep(uFall.y - 0.05, uFall.y + 0.1, p.y) * smoothstep(13.5, 7.5, p.y);
+    float dashes = smoothstep(0.55, 0.95, sin(p.y * 2.3 - t * 2.4 + sin(p.x * 3.1) * 0.9));
+    color = mix(color, uShallow, inStream * 0.6);
+    color = mix(color, uFoam, step(0.5, inStream * dashes) * 0.55);
+
+    // Rings where the waterfall lands
+    float fromFall = length((p - uFall) * vec2(1.0, 1.25));
+    float rings = smoothstep(0.25, 0.9, sin(fromFall * 5.0 - t * 3.2)) * smoothstep(4.6, 0.8, fromFall);
+    color = mix(color, uFoam, step(0.5, rings) * step(uFall.y - 0.05, p.y) * 0.5);
+    float splash = smoothstep(1.5, 0.75, fromFall + sin(atan(p.y - uFall.y, p.x - uFall.x) * 7.0 + t * 3.0) * 0.1);
+    color = mix(color, uFoam, step(0.5, splash) * step(uFall.y - 0.05, p.y) * 0.9);
+
+    // White foam hugging the shore
+    float edge = 0.2 + sin(p.x * 2.1 + t) * 0.07 + sin(p.y * 1.7 - t * 1.2) * 0.07;
+    color = mix(color, uFoam, step(shore, edge));
+
+    gl_FragColor = vec4(color, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+function buildSea(root, random, pixelRatio) {
+  // How far every spot of sea is from the island, worked out once and stored as a small picture
+  const SIZE = 128;
+  const RANGE = 18;
+  const MAX_DISTANCE = 8;
+  const land = [];
+  for (let x = -8; x <= 8; x += 1) {
+    for (let z = -8; z <= 8; z += 1) {
+      if (isLand(x, z)) land.push([x, z]);
+    }
+  }
+  const distances = new Uint8Array(SIZE * SIZE);
+  for (let row = 0; row < SIZE; row += 1) {
+    for (let column = 0; column < SIZE; column += 1) {
+      const x = ((column + 0.5) / SIZE) * RANGE * 2 - RANGE;
+      const z = ((row + 0.5) / SIZE) * RANGE * 2 - RANGE;
+      let nearest = Infinity;
+      for (const [landX, landZ] of land) {
+        const across = Math.max(Math.abs(x - landX) - 0.5, 0);
+        const down = Math.max(Math.abs(z - landZ) - 0.5, 0);
+        nearest = Math.min(nearest, across * across + down * down);
+      }
+      distances[row * SIZE + column] = Math.min(1, Math.sqrt(nearest) / MAX_DISTANCE) * 255;
+    }
+  }
+  const shore = new THREE.DataTexture(distances, SIZE, SIZE, THREE.RedFormat);
+  shore.magFilter = THREE.LinearFilter;
+  shore.minFilter = THREE.LinearFilter;
+  shore.needsUpdate = true;
+
+  const uniforms = {
+    uTime: { value: 0 },
+    uShore: { value: shore },
+    uRange: { value: RANGE },
+    uMaxDistance: { value: MAX_DISTANCE },
+    uFall: { value: new THREE.Vector2(RIVER_X, 6.55) },
+    uDeep: { value: new THREE.Color("#1f9fd6") },
+    uShallow: { value: new THREE.Color("#63e6df") },
+    uFoam: { value: new THREE.Color("#f3fffd") },
+    uPixel: { value: 5 * pixelRatio },   // how big the water's pixels are, in page pixels
+  };
+  const geometry = new THREE.PlaneGeometry(240, 240);
+  geometry.rotateX(-Math.PI / 2);
+  const surface = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms, vertexShader: SEA_VERTEX, fragmentShader: SEA_FRAGMENT, toneMapped: false }));
+  surface.position.y = SEA_LEVEL;
+  root.add(surface);
+
+  // Rocks and lily pads scattered near the island
+  for (const [x, z, size] of [[-8.6, 3.1, 0.62], [-7.9, 4.1, 0.34], [8.2, 2.9, 0.54], [6.2, 6.6, 0.48], [7, 6.1, 0.28], [-4.6, 8, 0.42]]) {
+    const rockMesh = withShadow(new THREE.Mesh(lumpyBall(size, random, 0.2, 0), material(pick(COLORS.rock, random))));
+    rockMesh.scale.y = 0.8;
+    rockMesh.position.set(x, SEA_LEVEL + size * 0.2, z);
+    root.add(rockMesh);
+  }
+  const padMaterial = material("#58b84a");
+  for (const [x, z, size] of [[-2.8, 8.4, 0.34], [-2.1, 8.9, 0.24], [-3.3, 9, 0.2], [5.3, 7.9, 0.3], [5.9, 8.4, 0.22]]) {
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(size, size, 0.04, 9), padMaterial);
+    pad.position.set(x, SEA_LEVEL + 0.03, z);
+    root.add(pad);
+  }
+
+  return (time) => { uniforms.uTime.value = time; };
 }
 
 // ---------- Water ----------
@@ -265,24 +405,11 @@ function buildWater(root, random) {
   }
 
   // Waterfalls: [z, top, bottom]
-  const falls = [[-2.48, HIGH - 0.08, MID - 0.14], [2.52, MID - 0.08, LOW - 0.14], [6.53, LOW - 0.08, -2.1]];
+  const falls = [[-2.48, HIGH - 0.08, MID - 0.14], [2.52, MID - 0.08, LOW - 0.14], [6.53, LOW - 0.08, SEA_LEVEL]];
   for (const [z, top, bottom] of falls) {
     const height = top - bottom;
     const texture = add(waterTexture(random, 1, height / 2.4, false), 0.95);
-    const faded = bottom < 0;
-    const fallMaterial = waterMaterial(texture);
-    if (faded) {
-      fallMaterial.transparent = true;
-      fallMaterial.alphaMap = paintTexture(4, 64, (context, width, h) => {
-        const gradient = context.createLinearGradient(0, 0, 0, h);
-        gradient.addColorStop(0, "#ffffff");
-        gradient.addColorStop(0.45, "#ffffff");
-        gradient.addColorStop(1, "#000000");
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, width, h);
-      });
-    }
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(RIVER_MAX_X - RIVER_MIN_X, height), fallMaterial);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(RIVER_MAX_X - RIVER_MIN_X, height), waterMaterial(texture));
     plane.position.set(RIVER_X, (top + bottom) / 2, z);
     root.add(plane);
   }
@@ -290,13 +417,16 @@ function buildWater(root, random) {
   // Foam where each waterfall lands
   const foamMaterial = new THREE.MeshStandardMaterial({ color: COLORS.foam, roughness: 0.7, flatShading: true });
   const foam = [];
-  const landings = [[-2.25, MID - 0.05], [2.75, LOW - 0.05], [-2.48, HIGH - 0.02], [2.52, MID - 0.02]];
+  const SEA_SPLASH = 2;   // the big splash where the last waterfall hits the sea
+  const landings = [[-2.25, MID - 0.05], [2.75, LOW - 0.05], [6.85, SEA_LEVEL + 0.02], [-2.48, HIGH - 0.02], [2.52, MID - 0.02]];
   landings.forEach(([z, y], landing) => {
-    const puffs = landing < 2 ? 11 : 6;
+    const big = landing <= SEA_SPLASH;
+    const seaSplash = landing === SEA_SPLASH;
+    const puffs = seaSplash ? 20 : big ? 11 : 6;
     for (let i = 0; i < puffs; i += 1) {
-      const size = landing < 2 ? 0.12 + random() * 0.14 : 0.05 + random() * 0.07;
+      const size = seaSplash ? 0.14 + random() * 0.2 : big ? 0.12 + random() * 0.14 : 0.05 + random() * 0.07;
       const puff = new THREE.Mesh(lumpyBall(size, random, 0.1, 0), foamMaterial);
-      puff.position.set(RIVER_MIN_X + 0.1 + random() * 1.8, y, z + (random() - 0.5) * (landing < 2 ? 0.34 : 0.05));
+      puff.position.set(RIVER_MIN_X + 0.1 + random() * 1.8, y, z + (random() - 0.5) * (seaSplash ? 0.7 : big ? 0.34 : 0.05));
       foam.push({ mesh: puff, phase: random() * 6.28, speed: 2.2 + random() * 2.2, baseY: y });
       root.add(puff);
     }
@@ -347,10 +477,11 @@ function buildScreen(root) {
 }
 
 function buildClipCards(root, random) {
-  // The route down the river, from the screen to the edge of the island
+  // The route down the river, from the screen to the edge of the island, then out across the sea
   const route = [
     [-5.6, HIGH - 0.04], [-2.56, HIGH - 0.04], [-2.32, MID + 0.04], [-2.1, MID - 0.04], [2.44, MID - 0.04],
-    [2.68, LOW + 0.04], [2.9, LOW - 0.04], [6.42, LOW - 0.04], [6.72, -1.9],
+    [2.68, LOW + 0.04], [2.9, LOW - 0.04], [6.42, LOW - 0.04],
+    [6.78, SEA_LEVEL + 0.03], [7.1, SEA_LEVEL + 0.02], [13, SEA_LEVEL + 0.02],
   ].map(([z, y]) => new THREE.Vector2(z, y));
   const lengths = [0];
   for (let i = 1; i < route.length; i += 1) lengths.push(lengths[i - 1] + route[i].distanceTo(route[i - 1]));
@@ -363,7 +494,7 @@ function buildClipCards(root, random) {
   const faceShape = new THREE.PlaneGeometry(0.74, 0.42);
   const cards = [];
 
-  const COUNT = 9;
+  const COUNT = 14;
   for (let i = 0; i < COUNT; i += 1) {
     const card = new THREE.Group();
     card.add(withShadow(new THREE.Mesh(cardBody, bodyMaterial)));
@@ -375,7 +506,7 @@ function buildClipCards(root, random) {
     cards.push({ card, start: i / COUNT, lane: (random() - 0.5) * 0.92, phase: random() * 6.28, spin: (random() - 0.5) * 0.7 });
   }
 
-  const SECONDS_PER_TRIP = 22;
+  const SECONDS_PER_TRIP = 34;
   return (time) => {
     for (const item of cards) {
       const progress = ((time / SECONDS_PER_TRIP + item.start) % 1);
@@ -387,7 +518,9 @@ function buildClipCards(root, random) {
       const along = (distance - lengths[segment]) / (lengths[segment + 1] - lengths[segment]);
       const slope = Math.atan2(from.y - to.y, to.x - from.x);
       const bob = slope < 0.2 ? Math.sin(time * 2 + item.phase) * 0.018 : 0;
-      item.card.position.set(RIVER_X + item.lane + Math.sin(time * 0.7 + item.phase) * 0.05, from.y + (to.y - from.y) * along + 0.07 + bob, from.x + (to.x - from.x) * along);
+      const z = from.x + (to.x - from.x) * along;
+      const fanOut = 1 + Math.max(0, z - 7) * 0.75;   // out at sea, the clips spread apart
+      item.card.position.set(RIVER_X + item.lane * fanOut + Math.sin(time * 0.7 + item.phase) * 0.05, from.y + (to.y - from.y) * along + 0.07 + bob, z);
       item.card.rotation.set(slope * 0.9 + Math.sin(time * 1.4 + item.phase) * 0.03, item.spin + Math.sin(time * 0.5 + item.phase) * 0.12, Math.cos(time * 1.2 + item.phase) * 0.03);
       // Grow as they leave the screen, shrink as they fall off the island
       const fadeIn = Math.min(1, progress / 0.035);
@@ -680,7 +813,7 @@ function buildBirds(root) {
 
 function buildClouds(scene, random) {
   const whiteMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 1, transparent: true, opacity: 0.92 });
-  const clouds = [[-12, -2.5, 8, 1.3, 0.16], [8, -3.4, 11, 1.1, 0.1], [14, 9.5, -8, 0.8, 0.12], [-8, 11, -11, 1, 0.08], [2, -4.6, -3, 1.45, 0.13]].map(([x, y, z, size, speed]) => {
+  const clouds = [[14, 9.5, -8, 0.8, 0.12], [-8, 11, -11, 1, 0.08]].map(([x, y, z, size, speed]) => {
     const group = new THREE.Group();
     for (let i = 0; i < 6; i += 1) {
       const puff = new THREE.Mesh(new THREE.SphereGeometry((0.62 + random() * 0.6) * size, 14, 10), whiteMaterial);
@@ -704,9 +837,9 @@ function buildClouds(scene, random) {
 
 // ---------- Putting it together ----------
 
-export function createIslandScene(canvas, { still = false } = {}) {
+export function createIslandScene(canvas, { still = false, framing = "hero" } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, framing === "backdrop" ? 1.5 : 2));   // a backdrop can be a little softer, and lighter to draw
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -743,6 +876,7 @@ export function createIslandScene(canvas, { still = false } = {}) {
     buildVines(root, random),
     buildBirds(root),
     buildClouds(scene, random),
+    buildSea(root, random, renderer.getPixelRatio()),
   ];
 
   // Fit the island to the page: on wide screens it sits on the right, next to the words
@@ -754,10 +888,15 @@ export function createIslandScene(canvas, { still = false } = {}) {
     renderer.setSize(width, height, false);
     const aspect = width / height;
     const wide = aspect > 1.15;
-    const halfHeight = wide ? 9 : Math.max(11, 12.5 / aspect);
+    const backdrop = framing === "backdrop";
+    const halfHeight = backdrop ? Math.max(8, 10 / aspect) : wide ? 9 : Math.max(11, 12.5 / aspect);
     const halfWidth = halfHeight * aspect;
-    const shiftX = wide ? halfWidth * 0.42 : 0;
-    const shiftY = wide ? 0.3 : -halfHeight * 0.36;   // narrow screens: the island sits below the words
+    let shiftX = wide ? halfWidth * 0.42 : 0;
+    let shiftY = wide ? 0.3 : -halfHeight * 0.36;   // narrow screens: the island sits below the words
+    if (backdrop) {   // low on the screen, behind the page's content
+      shiftX = wide ? halfWidth * 0.2 : 0;
+      shiftY = -halfHeight * 0.62;
+    }
     camera.left = -halfWidth - shiftX;
     camera.right = halfWidth - shiftX;
     camera.top = halfHeight - shiftY;
@@ -767,10 +906,9 @@ export function createIslandScene(canvas, { still = false } = {}) {
   }
 
   // The island turns very slightly toward the mouse
-  const mouse = { x: 0, y: 0, smoothX: 0, smoothY: 0 };
+  const mouse = { x: 0, smoothX: 0 };
   function handleMouse(event) {
     mouse.x = (event.clientX / window.innerWidth - 0.5) * 2;
-    mouse.y = (event.clientY / window.innerHeight - 0.5) * 2;
   }
 
   let frame = 0;
@@ -780,11 +918,8 @@ export function createIslandScene(canvas, { still = false } = {}) {
   function draw(delta = 0) {
     const time = still ? 7 : (performance.now() - startTime) / 1000 + 7;
     for (const update of updates) update(time, delta);
-    root.position.y = still ? 0 : Math.sin(time * 0.6) * 0.09;
     mouse.smoothX += (mouse.x - mouse.smoothX) * 0.04;
-    mouse.smoothY += (mouse.y - mouse.smoothY) * 0.04;
     root.rotation.y = mouse.smoothX * 0.055;
-    root.rotation.x = mouse.smoothY * 0.014;
     renderer.render(scene, camera);
   }
 
@@ -814,7 +949,6 @@ export function createIslandScene(canvas, { still = false } = {}) {
       for (const item of [object.material].flat()) {
         if (!item) continue;
         free(item.map);
-        free(item.alphaMap);
         free(item.emissiveMap);
         free(item);
       }

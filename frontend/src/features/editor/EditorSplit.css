@@ -1,6 +1,6 @@
 /* The "split" Editor layout: Abhishri's arrangement (from davebranch) in Cascade's own look.
-   Video on the left, tools on the right, timeline underneath, using the usual leaf background,
-   wood panels and buttons. Everything here only applies to this layout. */
+   Video on the left, tools on the right, timeline underneath, as chunky blocks on the pixel sea.
+   Everything here only applies to this layout. */
 
 /* ---------- Grid: video on the left; tool bar, clips and tabs on the right; timeline underneath ---------- */
 .es-body {
@@ -14,9 +14,9 @@
     "preview actions"
     "preview panel"
     "timeline timeline";
-  gap: 12px;
+  gap: 22px 18px;
   overflow-y: auto;
-  padding: calc(20 * var(--u)) calc(24 * var(--u)) calc(24 * var(--u));
+  padding: calc(14 * var(--u)) calc(24 * var(--u)) 28px;
 }
 
 .es-preview,
@@ -27,6 +27,7 @@
   border: var(--panel-border);
   border-radius: var(--panel-radius);
   background: var(--panel-bg);
+  box-shadow: var(--panel-edge);
 }
 
 /* ---------- Video ---------- */

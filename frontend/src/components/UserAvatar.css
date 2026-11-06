@@ -6,7 +6,7 @@
   height: calc(76 * var(--u));
   flex-shrink: 0;
   border-radius: 50%;
-  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
+  box-shadow: 0 max(2px, calc(4 * var(--u))) 0 #0b3f28;
   overflow: hidden;
 }
 
@@ -18,8 +18,8 @@
 
 /* "D" (dev mode) or "?" (signed out) */
 .user-avatar-letter {
-  background: var(--color-leaf);
-  color: var(--color-cream);
+  background: var(--wood-green);
+  color: #fff;
   font-family: var(--font-display);
   font-size: calc(36 * var(--u));
   text-decoration: none;

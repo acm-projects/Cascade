@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import "./ProjectsPage.css";
-import bg from "../assets/figma/projects-bg.jpg";
 import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/projectContextValue";
 import { useLeafNavigate } from "../context/leafTransitionValue";
 import useApi from "../api/useApi";
 import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
-import JungleLeaves from "../components/JungleLeaves";
+import IsoWorld from "../features/landing3d/IsoWorld";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
@@ -183,8 +182,8 @@ function ProjectsPage() {
   }
 
   return (
-    <div className="projects" style={{ backgroundImage: `url(${bg})` }}>
-      <JungleLeaves />
+    <div className="projects">
+      <IsoWorld framing="backdrop" />
       {/* Green top bar */}
       <header className="projects-bar">
         <div className="projects-brand">

@@ -8,11 +8,11 @@
   overflow: hidden;
 }
 
-/* Deep green behind the leaves, so no gap between them can show the page changing */
+/* Deep blue-green behind the leaves, so no gap between them can show the page changing */
 .leaf-transition-backdrop {
   position: absolute;
   inset: 0;
-  background: #0a4426;
+  background: #0f6d8f;
 }
 
 .leaf-transition-cover .leaf-transition-backdrop {

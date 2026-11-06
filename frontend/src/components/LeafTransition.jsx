@@ -12,11 +12,11 @@ const MAX_WAIT_MS = 4000; // never keep someone behind the leaves longer than th
 const COLUMNS = 7;
 const ROWS = 5;
 const COLORS = [
-  { base: "#1f8f4a", light: "#35ad5e" },
-  { base: "#0f7a3e", light: "#1f9550" },
-  { base: "#7cc52f", light: "#a3d637" },
-  { base: "#2fa84f", light: "#56c168" },
-  { base: "#0b5a30", light: "#127043" },
+  { base: "#1f8f4a", light: "#35ad5e", edge: "#0f5c32" },
+  { base: "#178244", light: "#2a9c58", edge: "#0b5029" },
+  { base: "#74c02f", light: "#98d63c", edge: "#478a22" },
+  { base: "#2fa84f", light: "#54c46c", edge: "#177a3a" },
+  { base: "#116a3a", light: "#1a8047", edge: "#0a4426" },
 ];
 
 // A fixed pattern of overlapping leaves, one column at a time so they arrive like a gust from the left
@@ -39,25 +39,16 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// A chunky low-poly leaf: a dark underside for its thickness, then two facets on top
 function Leaf({ color }) {
+  const left = "M50 4 L14 44 L6 88 L22 126 L50 156 Z";
+  const right = "M50 4 L86 44 L94 88 L78 126 L50 156 Z";
   return (
-    <svg viewBox="0 0 100 160">
-      <path
-        d="M50 3C69 16 81 31 88 47L78 50L93 62C96 76 95 88 90 100L77 99L86 113C78 128 66 143 50 157C34 143 22 128 14 113L23 99L10 100C5 88 4 76 7 62L22 50L12 47C19 31 31 16 50 3Z"
-        fill={color.base}
-        stroke="#0a4426"
-        strokeWidth="2.5"
-        strokeLinejoin="round"
-      />
-      <path d="M50 3C69 16 81 31 88 47L78 50L93 62C96 76 95 88 90 100L77 99L86 113C78 128 66 143 50 157Z" fill={color.light} />
-      <path
-        d="M50 12V150M50 45L27 30M50 45L73 30M50 76L20 58M50 76L80 58M50 108L27 92M50 108L73 92"
-        fill="none"
-        stroke="#0a4426"
-        strokeWidth="2"
-        strokeLinecap="round"
-        opacity="0.65"
-      />
+    <svg viewBox="0 0 100 170">
+      <path d={`${left} ${right}`} fill={color.edge} transform="translate(0 9)" />
+      <path d={left} fill={color.base} />
+      <path d={right} fill={color.light} />
+      <path d="M50 40 L28 62 M50 40 L72 62 M50 86 L22 106 M50 86 L78 106" fill="none" stroke={color.edge} strokeWidth="3" strokeLinecap="square" opacity="0.55" />
     </svg>
   );
 }

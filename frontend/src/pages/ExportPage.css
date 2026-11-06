@@ -20,6 +20,7 @@
 .export-settings,
 .export-social {
   min-height: 0;
+  box-shadow: var(--panel-edge);
   border: var(--panel-border);
   border-radius: calc(30 * var(--u));
   background: var(--panel-bg);

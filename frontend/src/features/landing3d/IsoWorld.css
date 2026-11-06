@@ -1,0 +1,17 @@
+/* Sea-colored until the 3D sea appears, and on devices that can't draw 3D. The island's canvas goes on top. */
+.iso-world {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(160deg, #63e6df, #2fb4dc 62%, #1f9fd6);
+}
+
+.iso-world-holder,
+.iso-world-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}

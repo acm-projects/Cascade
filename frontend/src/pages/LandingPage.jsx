@@ -1,10 +1,7 @@
-import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import "./LandingPage.css";
 import Icon from "../components/ui/Icon";
-
-// The 3D library is big, so it's downloaded only for this page. The sky shows until it's ready.
-const IslandCanvas = lazy(() => import("../features/landing3d/IslandCanvas"));
+import IsoWorld from "../features/landing3d/IsoWorld";
 
 // What Cascade does, as 3 small blocks under the button
 const features = [
@@ -17,9 +14,7 @@ const features = [
 function LandingPage() {
   return (
     <div className="landing">
-      <Suspense fallback={null}>
-        <IslandCanvas />
-      </Suspense>
+      <IsoWorld framing="hero" />
       <main className="landing-copy">
         <h1 className="landing-title">CASCADE</h1>
         <p className="landing-headline">Turn one video into a week of content.</p>
