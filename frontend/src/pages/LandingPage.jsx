@@ -1,7 +1,19 @@
 import { Link } from "react-router-dom";
 import "./LandingPage.css";
-import background from "../assets/figma/landing-bg-straight.jpg"; // straightened copy (the original is ~1 degree tilted)
-import LandingMascot from "../components/LandingMascot";
+// The picture is split into layers so parts can move: the scene with the front leaves painted out, plus each corner's leaves.
+// (Made from assets/figma/landing-bg-straight.jpg, which is kept as the full original.)
+import background from "../assets/landing/landing-plate.webp";
+import leavesTopLeft from "../assets/landing/leaves-tl.webp";
+import leavesTopRight from "../assets/landing/leaves-tr.webp";
+import leavesBottomLeft from "../assets/landing/leaves-bl.webp";
+import leavesBottomRight from "../assets/landing/leaves-br.webp";
+
+const leafLayers = [
+  { corner: "tl", src: leavesTopLeft },
+  { corner: "tr", src: leavesTopRight },
+  { corner: "bl", src: leavesBottomLeft },
+  { corner: "br", src: leavesBottomRight },
+];
 
 // What Cascade does, as 3 small icons under the button. Icons are simple line drawings (stroke = currentColor).
 const features = [
@@ -10,10 +22,15 @@ const features = [
   { label: "Export everywhere", icon: <><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5" /><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></> },
 ];
 
-// Landing: the words and button on the left, a jungle friend on the right, over the lake picture
+// Landing: the words and button on the left, over the lake picture with its swaying leaves
 function LandingPage() {
   return (
-    <div className="landing" style={{ backgroundImage: `url(${background})` }}>
+    <div className="landing">
+      <div className="landing-scene" style={{ backgroundImage: `url(${background})` }} aria-hidden="true">
+        {leafLayers.map((layer) => (
+          <img key={layer.corner} className={`landing-leaves landing-leaves-${layer.corner}`} src={layer.src} alt="" />
+        ))}
+      </div>
       <main className="landing-copy">
         <h1 className="landing-title">CASCADE</h1>
         <p className="landing-headline">Turn one video into a week of content.</p>
@@ -32,7 +49,6 @@ function LandingPage() {
           ))}
         </ul>
       </main>
-      <LandingMascot />
     </div>
   );
 }

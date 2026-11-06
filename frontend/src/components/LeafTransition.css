@@ -1,0 +1,64 @@
+/* Leaves gust in from the left until the screen is covered, the page changes behind them,
+   then they blow away to the right. Timings match the numbers in LeafTransition.jsx:
+   each leaf takes 380ms, and the last one starts about 240ms in. */
+.leaf-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;   /* above pages and pop-ups; also stops clicks while it plays */
+  overflow: hidden;
+}
+
+/* Deep green behind the leaves, so no gap between them can show the page changing */
+.leaf-transition-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #0a4426;
+}
+
+.leaf-transition-cover .leaf-transition-backdrop {
+  animation: leaf-backdrop-in 240ms ease-in 340ms both;
+}
+
+.leaf-transition-reveal .leaf-transition-backdrop {
+  animation: leaf-backdrop-out 220ms ease-out both;
+}
+
+.leaf-transition-leaf {
+  position: absolute;
+  width: 27vmax;
+  will-change: transform;
+}
+
+.leaf-transition-leaf svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.leaf-transition-cover .leaf-transition-leaf {
+  animation: leaf-in 380ms cubic-bezier(0.2, 0.75, 0.3, 1) var(--leaf-delay) both;
+}
+
+.leaf-transition-reveal .leaf-transition-leaf {
+  animation: leaf-out 380ms cubic-bezier(0.6, 0, 0.8, 0.4) var(--leaf-delay) both;
+}
+
+@keyframes leaf-in {
+  from { transform: translate(-50%, -50%) translate(-135vw, 22vh) rotate(calc(var(--leaf-rotate) - 80deg)); }
+  to { transform: translate(-50%, -50%) rotate(var(--leaf-rotate)); }
+}
+
+@keyframes leaf-out {
+  from { transform: translate(-50%, -50%) rotate(var(--leaf-rotate)); }
+  to { transform: translate(-50%, -50%) translate(135vw, -22vh) rotate(calc(var(--leaf-rotate) + 80deg)); }
+}
+
+@keyframes leaf-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes leaf-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

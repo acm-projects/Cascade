@@ -5,8 +5,46 @@
   align-items: center;
   height: 100vh;
   overflow: hidden;
-  background-size: cover;
-  background-position: center;
+  background: var(--color-lake-ink);
+}
+
+/* ---------- The moving picture ----------
+   The scene always keeps the picture's shape (2240 x 1557) and covers the screen, a little oversized
+   so the swaying leaves never show a gap at the edge. Everything inside is placed in % of the picture. */
+.landing-scene {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(104vw, calc(104vh * 2240 / 1557));
+  aspect-ratio: 2240 / 1557;
+  translate: -50% -50%;
+  background-size: 100% 100%;
+}
+
+/* Leaves: each corner bends a little from the edge it grows out of, each on its own timing */
+.landing-leaves {
+  position: absolute;
+  height: auto;
+  pointer-events: none;
+  will-change: transform;
+  animation: landing-sway var(--sway-time) ease-in-out var(--sway-delay) infinite alternate;
+}
+
+.landing-leaves-tl { --sway-time: 4.6s; --sway-delay: -1s;   --sway: 1;    left: 0;      top: 0;      width: 20%;     transform-origin: 0 0; }
+.landing-leaves-tr { --sway-time: 5.4s; --sway-delay: -3s;   --sway: -1;   left: 79.46%; top: 0;      width: 20.54%;  transform-origin: 100% 0; }
+.landing-leaves-bl { --sway-time: 5s;   --sway-delay: -2s;   --sway: -1;   left: 0;      top: 63.26%; width: 22.99%;  transform-origin: 0 100%; }
+.landing-leaves-br { --sway-time: 6s;   --sway-delay: -4.2s; --sway: 1;    left: 78.48%; top: 63.26%; width: 21.52%;  transform-origin: 100% 100%; }
+
+@keyframes landing-sway {
+  from { transform: rotate(calc(var(--sway) * -0.9deg)) skewX(calc(var(--sway) * -0.5deg)); }
+  to { transform: rotate(calc(var(--sway) * 0.9deg)) skewX(calc(var(--sway) * 0.5deg)); }
+}
+
+/* People who turned off animations on their device get the still picture */
+@media (prefers-reduced-motion: reduce) {
+  .landing-leaves {
+    animation: none;
+  }
 }
 
 /* Left side: title, headline, button and features, stacked */

@@ -1,47 +1,7 @@
 /* The new Editor layout (Figma "Editor Page – Revamp (Fun + Friendly)", Page 7).
    Everything here only applies inside .editor-revamp, so the classic layout looks exactly like before.
-   Switch layouts with the button in the bottom-left corner (see features/editor/editorLayout.js).
+   The layout in use is set in features/editor/editorLayout.js.
    Sizes are Figma pixels: calc(N * var(--u)). */
-
-/* ---------- The switch button (both layouts) ---------- */
-.er-layout-switch {
-  position: fixed;
-  left: 50%;
-  bottom: 8px;
-  translate: -50% 0;
-  z-index: 50;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px 4px 12px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-pill);
-  background: var(--color-cream-card);
-  box-shadow: 0 3px 0 var(--color-wood-dark);
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.er-layout-switch button {
-  padding: 3px 10px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.er-layout-switch button:hover {
-  background: color-mix(in srgb, var(--color-wood-dark) 12%, transparent);
-}
-
-.er-layout-switch button.active {
-  background: var(--color-wood-dark);
-  color: var(--color-cream-card);
-}
 
 /* ---------- Grid: rail | panel | stage, with the timeline under panel + stage ---------- */
 .er-body {

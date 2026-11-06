@@ -284,6 +284,17 @@
   padding: var(--space-3);
 }
 
+/* Undo and Redo: just the arrow */
+.editor-history-btn {
+  padding: 0.25em 0.45em;
+}
+
+.editor-history-btn .ui-icon {
+  width: 1.15em;
+  height: 1.15em;
+  stroke-width: 2.6;
+}
+
 .editor-save {
   font-family: var(--font-ui);
   font-weight: 700;

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import "./ProjectsPage.css";
 import bg from "../assets/figma/projects-bg.jpg";
 import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/projectContextValue";
+import { useLeafNavigate } from "../context/leafTransitionValue";
 import useApi from "../api/useApi";
 import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
+import JungleLeaves from "../components/JungleLeaves";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
@@ -35,7 +37,7 @@ const emptyViews = {
 
 // Built from the Figma "Projects/Archive Page" (section 2, node 640:529)
 function ProjectsPage() {
-  const navigate = useNavigate();
+  const leafNavigate = useLeafNavigate();
   const api = useApi();
   const toast = useToast();
   const { openProject } = useProject();
@@ -94,12 +96,12 @@ function ProjectsPage() {
   async function createProject(name, file) {
     const created = await api.createProject(name);
     openProject(created);
-    navigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined });
+    leafNavigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined, ready: import("./StudioPage") });
   }
 
   function handleOpen(project) {
     openProject(project);
-    navigate(`/projects/${project.id}/studio`);
+    leafNavigate(`/projects/${project.id}/studio`, { ready: import("./StudioPage") });
   }
 
   async function handleUpdate(project, changes) {
@@ -182,6 +184,7 @@ function ProjectsPage() {
 
   return (
     <div className="projects" style={{ backgroundImage: `url(${bg})` }}>
+      <JungleLeaves />
       {/* Green top bar */}
       <header className="projects-bar">
         <div className="projects-brand">

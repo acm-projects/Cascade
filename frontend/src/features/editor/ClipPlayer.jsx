@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useApi from "../../api/useApi";
-import Spinner from "../../components/ui/Spinner";
+import ClipLoading from "./ClipLoading";
 import { formatTime } from "../../utils/time";
 import { clipMediaPath } from "./clips";
 import { dragFraming, frameSize } from "./playerMath";
@@ -139,7 +139,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
   }
 
   if (error) return <div className="clip-player-message" role="alert">{error}</div>;
-  if (!url) return <div className="clip-player-message"><Spinner label="Loading clip" /> Loading clip…</div>;
+  if (!url) return <ClipLoading />;
 
   const { composition } = state;
   const audioOnly = info.has_video === false;

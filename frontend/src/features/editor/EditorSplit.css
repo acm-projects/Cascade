@@ -172,7 +172,7 @@
 .es-panel .editor-panel-tab.active,
 .es-panel .editor-panel-tab.active:hover:not(:disabled) {
   border-color: var(--color-wood-dark);
-  background: color-mix(in srgb, var(--color-wood-dark) 22%, var(--color-cream-card));
+  background: var(--color-leaf);
   box-shadow: inset 0 0 0 1px var(--color-wood-dark);
 }
 

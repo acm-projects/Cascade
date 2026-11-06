@@ -23,7 +23,8 @@ import ReelControls from "../features/editor/ReelControls";
 import TrendsModal from "../features/editor/TrendsModal";
 import MusicControls from "../features/editor/MusicControls";
 import Icon from "../components/ui/Icon";
-import useEditorLayout, { LAYOUTS } from "../features/editor/editorLayout";
+import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
+import ClipLoading from "../features/editor/ClipLoading";
 import "../features/editor/EditorRevamp.css";
 import "../features/editor/EditorSplit.css";
 const panelTabs = ["Trim", "Captions", "Trends", "Aspect Ratio", "Music", "Reel", "Chat"];
@@ -57,7 +58,7 @@ const panelInfo = {
 function EditorPage() {
   const navigate = useNavigate();
   const { projectId } = useParams();
-  const [layout, chooseLayout] = useEditorLayout();
+  const layout = EDITOR_LAYOUT;
   const api = useApi();
   const [clips, setClips] = useState(null); // null = loading
   const [error, setError] = useState(null);
@@ -142,13 +143,6 @@ function EditorPage() {
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
           registerFlush={registerFlush} onExport={() => navigate(`/projects/${projectId}/export`)} />
       )}
-      <div className="er-layout-switch" role="group" aria-label="Editor layout">
-        <Icon name="grid" />
-        {LAYOUTS.map((option) => (
-          <button key={option.id} type="button" className={option.id === layout ? "active" : ""}
-            aria-pressed={option.id === layout} onClick={() => chooseLayout(option.id)}>{option.label}</button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -211,8 +205,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     try { await draft.flush(); onExport(); } catch (e) { toast.show(e.message, "error"); }
   }
   const undoRedo = <>
-    <button type="button" className="btn btn-small" onClick={draft.undo} disabled={!draft.canUndo}><Icon name="undo" /> Undo</button>
-    <button type="button" className="btn btn-small" onClick={draft.redo} disabled={!draft.canRedo}><Icon name="redo" /> Redo</button>
+    <button type="button" className="btn btn-small editor-history-btn" onClick={draft.undo} disabled={!draft.canUndo} aria-label="Undo" title="Undo"><Icon name="undo" /></button>
+    <button type="button" className="btn btn-small editor-history-btn" onClick={draft.redo} disabled={!draft.canRedo} aria-label="Redo" title="Redo"><Icon name="redo" /></button>
   </>;
   const statuses = <>
     <span className={`editor-save editor-save-${draft.saveStatus}`} role="status">{saveLabels[draft.saveStatus]}</span>
@@ -229,7 +223,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
       framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
   ) : (
-    <div className="editor-loading"><Spinner label="Loading clip" /></div>
+    <ClipLoading />
   );
   const timeline = info && state && (
     <Timeline projectId={projectId} clip={clip} hasVideo={info.has_video !== false}
@@ -250,7 +244,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   );
   const activeTab = layout === "split" && !splitTabs.includes(panelTab) ? "Captions" : panelTab;
   const panelContent = !state ? (
-    <Spinner label="Loading edits" />
+    <div className="editor-loading"><Spinner label="Loading edits" /></div>
   ) : activeTab === "Trim" ? (
     <TrimControls state={state} duration={info.duration} change={change} />
   ) : activeTab === "Captions" ? (
@@ -344,7 +338,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
                 onOpenTrends={() => setTrendsOpen(true)} trendsOpen={trendsOpen}
                 framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
             ) : (
-              <div className="editor-loading"><Spinner label="Loading clip" /></div>
+              <ClipLoading />
             )}
           </section>
           <div className="es-actions">

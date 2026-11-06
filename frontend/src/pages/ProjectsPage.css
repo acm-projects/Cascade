@@ -2,7 +2,10 @@
 .projects {
   display: flex;
   flex-direction: column;
+  position: relative;
   height: 100vh;
+  overflow: hidden;
+  isolation: isolate;   /* keeps the moving jungle (components/JungleLeaves) behind everything on this page */
   background-size: cover;
   background-position: center;
   background-color: var(--color-leaf-mist);

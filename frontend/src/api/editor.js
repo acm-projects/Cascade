@@ -117,6 +117,11 @@ export function audioAssetPath(projectId, jobId, index, assetId) {
   return `${clipPath(projectId, jobId, index)}/audio/${encodeURIComponent(assetId)}/media`;
 }
 
+/** GET .../editor/{jobId}/{index}/thumbnail: the clip's first frame as a JPEG. @returns {Promise<Blob>} */
+export function getClipThumbnail(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/thumbnail`, { token });
+}
+
 /** Search only through the owner-checked backend; provider keys stay server-side. */
 export function searchBroll(token, projectId, jobId, index, query, page = 1) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/broll/search?${new URLSearchParams({ query, page })}`, { token });
