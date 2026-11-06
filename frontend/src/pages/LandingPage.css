@@ -1,50 +1,23 @@
-/* The landing is a full-screen picture, so it uses plain vw/vh (not --u) */
+/* The landing fills the screen, so it uses plain vw/vh (not --u).
+   Sky behind, 3D island over it (features/landing3d), words on top. */
 .landing {
   position: relative;
   display: flex;
   align-items: center;
   height: 100vh;
   overflow: hidden;
-  background: var(--color-lake-ink);
+  background:
+    radial-gradient(ellipse 60% 55% at 72% 18%, rgba(255, 252, 226, 0.9), transparent 70%),
+    radial-gradient(ellipse 90% 40% at 50% 104%, rgba(226, 255, 240, 0.95), transparent 72%),
+    linear-gradient(180deg, #5fcfe6 0%, #93e6ea 46%, #c9f6ea 100%);
 }
 
-/* ---------- The moving picture ----------
-   The scene always keeps the picture's shape (2240 x 1557) and covers the screen, a little oversized
-   so the swaying leaves never show a gap at the edge. Everything inside is placed in % of the picture. */
-.landing-scene {
+.landing-3d,
+.landing-3d-canvas {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: max(104vw, calc(104vh * 2240 / 1557));
-  aspect-ratio: 2240 / 1557;
-  translate: -50% -50%;
-  background-size: 100% 100%;
-}
-
-/* Leaves: each corner bends a little from the edge it grows out of, each on its own timing */
-.landing-leaves {
-  position: absolute;
-  height: auto;
-  pointer-events: none;
-  will-change: transform;
-  animation: landing-sway var(--sway-time) ease-in-out var(--sway-delay) infinite alternate;
-}
-
-.landing-leaves-tl { --sway-time: 4.6s; --sway-delay: -1s;   --sway: 1;    left: 0;      top: 0;      width: 20%;     transform-origin: 0 0; }
-.landing-leaves-tr { --sway-time: 5.4s; --sway-delay: -3s;   --sway: -1;   left: 79.46%; top: 0;      width: 20.54%;  transform-origin: 100% 0; }
-.landing-leaves-bl { --sway-time: 5s;   --sway-delay: -2s;   --sway: -1;   left: 0;      top: 63.26%; width: 22.99%;  transform-origin: 0 100%; }
-.landing-leaves-br { --sway-time: 6s;   --sway-delay: -4.2s; --sway: 1;    left: 78.48%; top: 63.26%; width: 21.52%;  transform-origin: 100% 100%; }
-
-@keyframes landing-sway {
-  from { transform: rotate(calc(var(--sway) * -0.9deg)) skewX(calc(var(--sway) * -0.5deg)); }
-  to { transform: rotate(calc(var(--sway) * 0.9deg)) skewX(calc(var(--sway) * 0.5deg)); }
-}
-
-/* People who turned off animations on their device get the still picture */
-@media (prefers-reduced-motion: reduce) {
-  .landing-leaves {
-    animation: none;
-  }
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 /* Left side: title, headline, button and features, stacked */
@@ -55,55 +28,93 @@
   flex-direction: column;
   align-items: flex-start;
   gap: min(2.2vh, 1.4vw);
-  width: min(46vw, 760px);
-  margin-left: 8vw;
+  width: min(40vw, 680px);
+  margin-left: 6vw;
 }
 
-/* "CASCADE": The Last Trunks (--font-title), white, with a dark outline */
+/* "CASCADE": chunky letters, with stacked shadows for the 3D edge */
 .landing-title {
-  color: white;
+  color: #fffdf3;
   font-family: var(--font-title);
   font-weight: normal;
-  font-size: min(9vw, 15vh);
+  font-size: min(7.6vw, 14vh);
   line-height: 1;
   letter-spacing: 0.02em;
-  -webkit-text-stroke: min(0.4vw, 0.65vh) var(--color-lake-ink);
-  paint-order: stroke fill;               /* draw the outline behind the white */
-  text-shadow: 0 0.6vh 1.4vh rgba(20, 40, 50, 0.35);
+  -webkit-text-stroke: min(0.3vw, 0.5vh) #0d4a3a;
+  paint-order: stroke fill;
+  text-shadow:
+    0 0.25vh 0 #0d4a3a,
+    0 0.5vh 0 #0d4a3a,
+    0 0.75vh 0 #0d4a3a,
+    0 1vh 0 #0d4a3a,
+    0 2.2vh 2.4vh rgba(10, 60, 70, 0.35);
 }
 
 .landing-headline {
-  color: var(--color-jungle-deep);
+  color: #0b3f33;
   font-family: var(--font-heading);
-  font-size: min(3.4vw, 5.4vh);
+  font-size: min(2.9vw, 5vh);
   line-height: 1.15;
-  text-shadow: 0 0 1.2vh rgba(255, 255, 255, 0.85);   /* keeps it readable over the mountains */
+  text-shadow: 0 0 1.4vh rgba(255, 255, 255, 0.75);
 }
 
 .landing-sub {
-  max-width: 34em;
-  color: var(--color-lake-ink);
+  max-width: 32em;
+  color: #124438;
   font-family: var(--font-ui);
   font-weight: 700;
-  font-size: min(1.35vw, 2.2vh);
+  font-size: min(1.3vw, 2.2vh);
   line-height: 1.4;
-  text-shadow: 0 0 1vh rgba(255, 255, 255, 0.9);
+  text-shadow: 0 0 1vh rgba(255, 255, 255, 0.8);
 }
 
+/* A chunky 3D button: the dark edge underneath stays put and the green top presses down into it */
 .landing-start {
-  margin-top: 1vh;
-  font-size: min(1.9vw, 3vh);
+  --press-depth: min(0.9vh, 8px);
+  display: inline-block;
+  margin-top: 1.2vh;
+  padding-bottom: var(--press-depth);
+  border-radius: 1.6vh;
+  background: #1d6b34;
+  box-shadow: 0 1.6vh 2.4vh rgba(10, 60, 50, 0.32);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: min(1.9vw, 3.1vh);
+  text-decoration: none;
+  transition: box-shadow 0.12s;
 }
 
-.landing-start:hover {
-  scale: 1.05;
+.landing-start-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.55em 1.2em;
+  border-radius: 1.6vh;
+  background: linear-gradient(180deg, #84dc4f, #4cb83e 60%, #3fa836);
+  box-shadow: inset 0 0.3vh 0 rgba(255, 255, 255, 0.5);
+  text-shadow: 0 0.2vh 0 #1d6b34;
+  transition: translate 0.12s, filter 0.12s;
 }
 
-/* 3 icons in circles, with a label under each */
+.landing-start:hover .landing-start-top {
+  translate: 0 calc(var(--press-depth) * 0.3);
+  filter: brightness(1.07);
+}
+
+.landing-start:active .landing-start-top {
+  translate: 0 var(--press-depth);
+}
+
+.landing-start:focus-visible {
+  outline: 3px solid #fffdf3;
+  outline-offset: 3px;
+}
+
+/* 3 little cream blocks with a label under each */
 .landing-features {
   display: flex;
-  gap: min(3vw, 48px);
-  margin-top: 2vh;
+  gap: min(2.6vw, 42px);
+  margin-top: 2.4vh;
   padding: 0;
   list-style: none;
 }
@@ -112,46 +123,48 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.8vh;
-  color: var(--color-lake-ink);
+  gap: 1vh;
+  color: #124438;
   font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: min(1.05vw, 1.7vh);
-  text-shadow: 0 0 0.8vh rgba(255, 255, 255, 0.9);
+  font-weight: 800;
+  font-size: min(1vw, 1.7vh);
+  text-shadow: 0 0 0.8vh rgba(255, 255, 255, 0.85);
 }
 
 .landing-feature-icon {
   display: grid;
   place-items: center;
-  width: min(3.6vw, 6vh);
+  width: min(3.5vw, 6vh);
   aspect-ratio: 1;
-  border: 2px solid var(--color-jungle-deep);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-cream-card) 85%, transparent);
-  color: var(--color-jungle-deep);
-  box-shadow: 0 3px 8px rgba(20, 40, 50, 0.2);
+  border-radius: 22%;
+  background: linear-gradient(180deg, #fffbea, #f4e7c5);
+  box-shadow:
+    0 0.6vh 0 #c7ad78,
+    0 1.4vh 1.6vh rgba(10, 60, 50, 0.25);
+  color: #17643a;
 }
 
 .landing-feature-icon svg {
-  width: 55%;
-  height: 55%;
+  width: 56%;
+  height: 56%;
 }
 
-/* Narrow screens: just the words, centered */
-@media (max-width: 800px) {
+/* Narrow screens: words on top, centered, with the island below */
+@media (max-aspect-ratio: 115/100) {
   .landing {
+    align-items: flex-start;
     justify-content: center;
   }
   .landing-copy {
     align-items: center;
     width: auto;
-    margin: 0 6vw;
+    margin: 5vh 6vw 0;
     text-align: center;
   }
-  .landing-title { font-size: 16vw; }
-  .landing-headline { font-size: 6vw; }
-  .landing-sub { font-size: 3.6vw; }
-  .landing-start { font-size: 4.4vw; }
-  .landing-features li { font-size: 3vw; }
-  .landing-feature-icon { width: 10vw; }
+  .landing-title { font-size: min(15vw, 9vh); }
+  .landing-headline { font-size: min(5.6vw, 3.4vh); }
+  .landing-sub { font-size: min(3.5vw, 2vh); }
+  .landing-start { font-size: min(4.4vw, 2.8vh); }
+  .landing-features li { font-size: min(2.8vw, 1.5vh); }
+  .landing-feature-icon { width: min(10vw, 6vh); }
 }
