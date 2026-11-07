@@ -5,19 +5,71 @@
   height: 100vh;
 }
 
-/* Layout (like the old site's Exports page): clip list on the left | everything else on the right, scrolling */
+.export .editor-choice {
+  background: var(--editing-control);
+}
+
+.export .editor-choice.active {
+  background: var(--editing-active);
+}
+
+.export, .export * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--editing-control) var(--panel-bg);
+}
+
+.export::-webkit-scrollbar, .export *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.export::-webkit-scrollbar-track, .export *::-webkit-scrollbar-track {
+  background: var(--panel-bg);
+}
+
+.export::-webkit-scrollbar-thumb, .export *::-webkit-scrollbar-thumb {
+  background: var(--editing-control);
+  border: 2px solid var(--panel-bg);
+  border-radius: 999px;
+}
+
+.export::-webkit-scrollbar-thumb:hover, .export *::-webkit-scrollbar-thumb:hover {
+  background: var(--editing-active);
+}
+
+/* Sessions and download settings on the left; preview and publishing on the right. */
 .export-body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(200px, 300fr) minmax(0, 1400fr);
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   column-gap: calc(36 * var(--u));
   padding: calc(23 * var(--u)) calc(42 * var(--u)) 0 calc(25 * var(--u));
+}
+
+.export-sidebar {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(20 * var(--u));
+  overflow-y: auto;
+  padding-bottom: calc(48 * var(--u));
+}
+
+.export-sidebar > * {
+  flex-shrink: 0;
+}
+
+.export-sidebar .export-tree {
+  align-self: stretch;
 }
 
 .export-tree,
 .export-stage,
 .export-settings,
+.export-youtube,
 .export-social {
   min-height: 0;
   border: var(--panel-border);
@@ -25,7 +77,22 @@
   background: var(--panel-bg);
 }
 
+.export-youtube {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: calc(20 * var(--u));
+}
+
+.export-youtube .btn {
+  font-size: 14px;
+  white-space: normal;
+}
+
 .export-main {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -198,7 +265,8 @@
 }
 
 .export-footer {
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .export-actions .btn,
@@ -217,8 +285,14 @@
 
 .export-stage-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+.export-stage-head .export-actions {
+  margin-left: auto;
 }
 
 .export-stage .export-title {
@@ -292,8 +366,9 @@
 .export-pager {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 14px;
-  color: var(--color-cream-card);
+  color: var(--color-wood-text);
   font-family: var(--font-ui);
   font-weight: 700;
   font-size: 15px;
@@ -333,7 +408,7 @@
 /* Posting row: post copy | YouTube | share */
 .export-social {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 0.8fr;
+  grid-template-columns: 1.4fr 0.8fr;
   gap: var(--space-3);
   padding: 14px 18px;
   overflow-y: auto;
@@ -411,6 +486,7 @@
 @media (max-width: 760px) {
   .export { height: auto; min-height: 100dvh; }
   .export-body { display: flex; flex-direction: column; gap: 16px; padding: 14px; }
+  .export-sidebar { order: 1; overflow: visible; padding-bottom: 0; gap: 16px; }
   .export-tree { max-height: 180px; flex-shrink: 0; }
   .export-main { overflow: visible; gap: 16px; }
   .export-social { grid-template-columns: minmax(0, 1fr); }

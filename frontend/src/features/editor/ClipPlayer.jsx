@@ -182,7 +182,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
           title={canDrag ? "Drag to choose what stays in the frame" : undefined}
           onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
           {audioOnly ? <>
-            <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>🎧 Audio recording</p>
+            <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}>Audio recording</p>
             <audio muted={muted} onEnded={handleEnded} ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
               onLoadedMetadata={e => {e.target.currentTime=showEdited || view === "original" ? 0 : state.start;}}
               onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />

@@ -116,7 +116,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
 
   return (
     <div className="export-post">
-      <h3 className="export-social-title">▶️ YouTube</h3>
+      <h3 className="export-social-title">YouTube</h3>
       {content}
       {upload && upload.status !== "Ready" && (
         <p className={`export-upload-status${upload.status === "Failed" ? " failed" : ""}`} role="status">
