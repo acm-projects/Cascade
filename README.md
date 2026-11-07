@@ -2,47 +2,67 @@
 
 [![CI](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml/badge.svg)](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml)
 
-For the React app, run the backend below and `cd frontend && npm ci && npm run dev`
-in a second terminal, then open http://localhost:5173. Port 8000 still serves the
-legacy website while migration ticket CAS-57 is deferred. See [CI checks](docs/ci.md).
+Cascade turns video and audio into searchable clips, with AI Studio, research,
+caption styling, editing, exports, and publishing. It is a modular monolith:
+React in `frontend/`, backed by one FastAPI application in `backend/`.
 
-Cascade turns uploaded videos into searchable clips and provides project management, research, caption styling, and a nondestructive video editor. The current website uses FastAPI and Clerk authentication. Generation uses the existing clip agent, Deepgram transcription, configurable AI provider, and parallel video rendering. Editor chat independently uses OpenAI.
+## Run locally
 
-Start from the repository root:
+Install Python dependencies with `python -m pip install -r requirements.txt` and
+install FFmpeg/FFprobe separately. If no `.env` exists, copy `.env.example`;
+keep an existing configuration. Install React dependencies with
+`npm --prefix frontend ci`.
 
-```sh
-python3 -m pip install -r requirements.txt
-cp .env.example .env  # Only when creating a new configuration; keep an existing .env.
-uvicorn app1:app --reload --host 127.0.0.1 --port 8000
+From the repository root, start the backend:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Install FFmpeg/FFprobe separately. See [setup and configuration](docs/setup.md), [editor behavior and browser checks](docs/editor.md), and [multi-clip investigation](docs/multi-clip-investigation.md), and [project groups and follow-ups](docs/project-generations.md).
+In a second terminal:
+
+```powershell
+npm --prefix frontend run dev
+```
+
+Open **http://127.0.0.1:5173**. Port 8000 serves the API and retained legacy UI.
+`uvicorn app1:app` remains a supported compatibility command. Generation and
+research use configured external services and can incur charges; offline tests
+mock those providers.
+
+## Repository map
 
 ```text
-app1.py                  FastAPI entry point, authentication, upload/generation
-backend/                 Project/editor services and feature implementations
-web/                     One HTML template (index.html), scripts, and styles
-tests/                   Regression and isolated browser checks
-  manual/                Explicit opt-in model/render smoke checks
-docs/                    Setup, editor, investigation, and cleanup notes
-video_jobs/              Private uploads, jobs, projects, drafts, and exports
+frontend/
+  src/                   Current React pages, features, API client, and styles
+  public/                Public React assets
+  legacy/                Retained older website and its Studio bundle source
+backend/
+  main.py                FastAPI application and router registration
+  core/                  Authentication, configuration, jobs, and storage
+  routers/               HTTP routes
+  services/              Project, session, and feature services
+  database/              Metadata store, migration CLI, and SQL migrations
+  agent/                 Clip selection, indexing, and research integration
+  editor/                Editor models, actions, rendering, and research
+  ...                    Media, providers, search, tracking, and publishing
+tests/
+  application/           Offline application/API regressions
+  agent/                 Agent/provider/transcription/selection tests
+  browser/               Opt-in browser checks and fixture servers
+  javascript/            Legacy JavaScript regression checks
+  fixtures/              Route contract snapshot
+  manual/                Opt-in media/provider/database checks
+scripts/                 Setup, evaluation, and diagnostic commands
+docs/                    Guides, architecture, database diagrams, and evidence
 ```
 
-Run offline regression checks from the repository root:
+Root requirements files are installation entry points; `app1.py` is a tiny
+compatibility entry point. `.github/` holds CI. Runtime data is private, not
+disposable source: keep `.env`, `video_jobs/`, input media, and model caches.
 
-```sh
-python3 -m unittest discover -s tests -p 'test_*.py' -q
-node tests/test_editor_state.cjs
-node tests/test_editor_flow.cjs
-node tests/test_canvas_branches.cjs
-```
-
-Some media tests require FFmpeg with the `subtitles` filter (libass). On Homebrew, install `ffmpeg-full` and put its `bin` directory first in PATH. Tests mock paid providers; scripts under `tests/manual/` are opt-in and may use configured external services. Do not run them as part of an offline test suite.
-
-Keep `.env`, `video_jobs/`, `outputs/`, and other saved media private. They are not disposable build output. All seven page views live in `web/index.html`; existing page URLs remain valid. The legacy publishable-key fallback was migrated there without changing authentication. See [frontend routing and verification](docs/frontend.md).
-
-Pexels B-roll is available in the editor; see [B-roll setup and workflow](docs/broll.md).
-
-Fill to Frame automatically uses local audio-visual Follow Speaker tracking when a crop is needed. Download its public models once with `python3 scripts/setup_reframe.py`; see [Auto Reframe](docs/auto-reframe.md) for setup, honest tracking limitations, and verification. Export selection is in the editor’s collapsible Session/Wave sidebar; Exports mirrors that hierarchy.
-
-See [the editor and Exports delivery update](docs/editor-delivery.md) for grouped downloads, compact/expanded tracks, Research Agent preferences, B-roll dragging, and current verification limits.
+See the [detailed map](docs/codebase-layout.md), [tests](tests/README.md),
+[setup](docs/setup.md), [database](docs/database/README.md),
+[CI](docs/ci.md), and [cleanup record](docs/codebase-organization.md).
+Feature guides cover [editing](docs/editor.md), [B-roll](docs/broll.md),
+[Auto Reframe](docs/auto-reframe.md), and [generation performance](docs/generation-performance.md).

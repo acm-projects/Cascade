@@ -49,7 +49,7 @@ def require_job_owner(job_id, user_id):
 
 
 def metadata_store():
-    from metadata_store import get_store
+    from backend.database.metadata_store import get_store
     return get_store(JOBS_DIR)
 
 

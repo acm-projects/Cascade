@@ -55,13 +55,13 @@ available for future export options.
 - UI: Studio source picker/preview, editor player/framing guard, export download
   helpers/settings and shared media-format utilities under `frontend/src/`.
   The legacy Studio/editor/export assets remain supported too.
-- Automated coverage: `tests/test_audio_media.py` and `frontend/src/utils/media.test.js`.
+- Automated coverage: `tests/application/test_audio_media.py` and `frontend/src/utils/media.test.js`.
   The legacy local-storage fixture now mocks the shared media probe instead of its
   former video-only inspection function.
 
 Run `python -m unittest discover -s tests -p 'test_*.py'` using local test metadata,
 plus `npm test`, `npm run build`, and `npm run lint` from `frontend/`. The optional
-`tests/audio_browser_server.py` serves a temporary, offline React audio fixture on
+`tests/browser/audio_browser_server.py` serves a temporary, offline React audio fixture on
 127.0.0.1:8768. Its identity/AI mocks are process-local and never enable dev auth
 in the normal app.
 

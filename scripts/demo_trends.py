@@ -15,7 +15,7 @@ from backend.editor import trends
 from backend.editor.storage import stock_store
 from backend import broll,cascade_llm
 from backend.trends import pipeline,youtube_trends
-from tests.test_clip_trends import findings
+from tests.application.test_clip_trends import findings
 
 def main():
  output=Path(sys.argv[1] if len(sys.argv)>1 else '/tmp/cascade-trends-demo')

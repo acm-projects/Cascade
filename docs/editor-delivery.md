@@ -38,17 +38,17 @@ Run the isolated server with real local models and controlled fixtures:
 ```sh
 CASCADE_REFRAME_MODELS=/tmp/cascade-reframe-models \
 CASCADE_REFRAME_FIXTURES=/tmp/cascade-tracking-fixtures \
-python3 tests/editor_browser_server.py
+python3 tests/browser/editor_browser_server.py
 ```
 
 Use isolated Chrome on DevTools port 9333. Run browser suites sequentially:
 
 ```sh
-python3 -m tests.test_editor_delivery_browser
-python3 -m tests.test_exports_browser
-python3 -m tests.test_reframe_browser
-python3 -m tests.test_editor_aspect_browser
-python3 -m tests.test_editor_layout_browser
+python3 -m tests.browser.test_editor_delivery_browser
+python3 -m tests.browser.test_exports_browser
+python3 -m tests.browser.test_reframe_browser
+python3 -m tests.browser.test_editor_aspect_browser
+python3 -m tests.browser.test_editor_layout_browser
 ```
 
 The delivery suite uses actual mouse dragging from a draggable result card, tests

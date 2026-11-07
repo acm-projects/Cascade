@@ -14,15 +14,13 @@ import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
 import BrollPanel from "../features/editor/BrollPanel";
 import Timeline from "../features/editor/Timeline";
-import { TrimControls } from "../features/editor/EditorControls";
 import AspectTab from "../features/editor/tabs/AspectTab";
 import CaptionsTab from "../features/editor/tabs/CaptionsTab";
 import { describeChanges } from "../features/editor/chatChanges";
 
-import ReelControls from "../features/editor/ReelControls";
 import TrendsModal from "../features/editor/TrendsModal";
 import MusicControls from "../features/editor/MusicControls";
-const panelTabs = ["Trim", "Captions", "Trends", "Aspect Ratio", "Music", "Reel", "Chat"];
+const panelTabs = ["Captions", "Aspect Ratio", "Music", "Chat"];
 const saveLabels = { saved: "✓ Saved", saving: "Saving…", error: "⚠ Not saved" };
 // Ready-made requests shown while the Chat tab is empty
 const chatSuggestions = [
@@ -63,20 +61,18 @@ function EditorPage() {
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   const hasClips = Boolean(clips?.length);
 
-  const sidebar = (
-    <aside className="editor-sidebar">
-      <span className="editor-sidebar-tab active">Picked clips</span>
-      <div className="editor-sidebar-content">
+  const clipTabs = (
+    <nav className="editor-clip-tabs" aria-label="Picked clips">
         {clips?.map((clip, index) => (
           <button key={clipKey(clip)} type="button"
-            className={`editor-media-item${clipKey(clip) === currentKey ? " active" : ""}`}
+            className={`editor-clip-tab${clipKey(clip) === currentKey ? " active" : ""}`}
+            aria-current={clipKey(clip) === currentKey ? "true" : undefined}
             onClick={async () => { try { await flushCurrent.current?.(); setCurrentKey(clipKey(clip)); } catch(e) { toast.show(e.message, "error"); } }} title={clip.title}>
-            {index + 1}. {clip.title || "Clip"}
-            <span>{clip.sessionName ? `${clip.sessionName} · ` : ""}{formatTime(clip.end - clip.start)}</span>
+            <span className="editor-clip-tab-title">{index + 1}. {clip.title || "Clip"}</span>
+            <span className="editor-clip-tab-duration">{formatTime(clip.end - clip.start)}</span>
           </button>
         ))}
-      </div>
-    </aside>
+    </nav>
   );
 
   let body;
@@ -92,12 +88,12 @@ function EditorPage() {
   }
 
   return (
-    <div className="editor leaf-page">
+    <div className="editor editing-theme">
       <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} />
       {body ? (
         <div className="editor-empty">{body}</div>
       ) : (
-        <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar}
+        <ClipWorkspace key={currentKey} projectId={projectId} clip={current} clipTabs={clipTabs}
           registerFlush={registerFlush} onExport={() => navigate(`/projects/${projectId}/export`)} />
       )}
     </div>
@@ -105,11 +101,11 @@ function EditorPage() {
 }
 
 // Everything for the clip being edited. It has key={clip key}, so switching clips loads that clip's own draft.
-function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
+function ClipWorkspace({ projectId, clip, clipTabs, onExport, registerFlush }) {
   const api = useApi();
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
-  const [panelTab, setPanelTab] = useState("Trim");
+  const [panelTab, setPanelTab] = useState("Captions");
   const [trendsOpen, setTrendsOpen] = useState(false);
   const [chatChanges, setChatChanges] = useState({});
   const [chatNote, setChatNote] = useState(null);
@@ -159,7 +155,30 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
 
   return (
     <>
+      <div className={`editor-body${brollOpen ? " broll-open" : ""}`}>
+        {brollOpen && state && <div className="editor-left-column">
+          <BrollPanel projectId={projectId} clip={clip} state={state} duration={info.duration}
+            player={player} change={change} search={brollSearch} onSearch={setBrollSearch} selectedId={selectedBroll}
+            onSelect={selectBroll} onClose={() => setBrollOpen(false)} disabled={thinking} />
+        </div>}
+
+        <main className="editor-center">
+          <div className="editor-preview-row">
+          <section className="editor-preview">
+            {draft.error ? (
+              <EmptyState icon="🌧️" title="Couldn't load this clip" text={draft.error.message} />
+            ) : info && state ? (
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+                onOpenTrends={() => setTrendsOpen(true)} trendsOpen={trendsOpen}
+                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
+            ) : (
+              <div className="editor-loading"><Spinner label="Loading clip" /></div>
+            )}
+          </section>
+          <div className="editor-preview-actions">
       <div className="editor-tools">
+        <button className="btn btn-small" type="button" aria-pressed={brollOpen} disabled={!state || info?.has_video === false}
+          onClick={() => setBrollOpen(open => !open)}>B-roll</button>
         <button type="button" className="btn btn-small" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo</button>
         <button type="button" className="btn btn-small" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</button>
         <span className={`editor-save editor-save-${draft.saveStatus}`} role="status">{saveLabels[draft.saveStatus]}</span>
@@ -171,29 +190,10 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
         {framing.status === "error" && <span className="editor-save editor-save-error" role="alert">⚠ {framing.message}</span>}
         <button type="button" className="btn btn-small btn-primary editor-export" onClick={async () => { try { await draft.flush(); onExport(); } catch(e) { toast.show(e.message, "error"); } }}>Go to Export →</button>
       </div>
+          {clipTabs}
+          </div>
+          </div>
 
-      <div className={`editor-body${brollOpen ? " broll-open" : ""}`}>
-        <div className="editor-left-column">
-          <nav className="editor-tool-rail" aria-label="Editor tools">
-            <button className="btn btn-small" type="button" aria-pressed={brollOpen} disabled={!state || info?.has_video === false}
-              onClick={() => setBrollOpen(open => !open)}>B-roll</button>
-          </nav>
-          {brollOpen && state ? <BrollPanel projectId={projectId} clip={clip} state={state} duration={info.duration}
-            player={player} change={change} search={brollSearch} onSearch={setBrollSearch} selectedId={selectedBroll}
-            onSelect={selectBroll} onClose={() => setBrollOpen(false)} disabled={thinking} /> : sidebar}
-        </div>
-
-        <main className="editor-center">
-          <section className="editor-preview">
-            {draft.error ? (
-              <EmptyState icon="🌧️" title="Couldn't load this clip" text={draft.error.message} />
-            ) : info && state ? (
-              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
-                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
-            ) : (
-              <div className="editor-loading"><Spinner label="Loading clip" /></div>
-            )}
-          </section>
           {info && state && (
             <section className="editor-timeline" aria-label="Timeline">
               <Timeline duration={info.duration} cues={info.cues} state={state} player={player}
@@ -212,7 +212,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
         <aside className="editor-panel">
           <div className="editor-panel-tabs">
             {panelTabs.map((tab) => (
-              <button key={tab} type="button" className={`editor-panel-tab${tab === panelTab ? " active" : ""}`}
+              <button key={tab} type="button" className={`editor-panel-tab${tab === 'Trends' ? " editor-trends-button" : ""}${tab === panelTab ? " active" : ""}`}
                 disabled={info?.has_video === false && tab === 'Aspect Ratio'}
                 title={info?.has_video === false && tab === 'Aspect Ratio' ? 'Audio recordings have no video framing' : undefined}
                 aria-haspopup={tab === 'Trends' ? 'dialog' : undefined}
@@ -223,16 +223,12 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
           <div className="editor-panel-content">
             {!state ? (
               <Spinner label="Loading edits" />
-            ) : panelTab === "Trim" ? (
-              <TrimControls state={state} duration={info.duration} change={change} />
             ) : panelTab === "Captions" ? (
               <CaptionsTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo}
                 player={player} view={captionsView} onView={setCaptionsView}
                 focusedCue={focusedCue} onFocusCue={setFocusedCue} />
             ) : panelTab === "Aspect Ratio" ? (
               <AspectTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo} />
-            ) : panelTab === "Reel" ? (
-              <ReelControls state={state} change={change} onApply={sendChat} thinking={thinking} />
             ) : panelTab === "Music" ? (
               <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
             ) : (
@@ -245,7 +241,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
       </div>
       {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} disabled={thinking}
         onClose={() => setTrendsOpen(false)} onApply={(research_id, selection) => sendChat('Apply selected edits from YouTube research.', { research_id, ...(Array.isArray(selection) ? { suggestions: selection } : { suggestion: selection }) })}>
-        <div className="export-post-actions"><button className="editor-choice" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo</button><button className="editor-choice" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</button><small>{draft.saveStatus}</small></div>
+        <small>{draft.saveStatus}</small>
       </TrendsModal>}
     </>
   );

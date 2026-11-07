@@ -7,6 +7,14 @@
   min-height: 0;
 }
 
+.clip-player .clip-player-trends {
+  flex-shrink: 0;
+  align-self: stretch;
+  margin: 12px 12px 0;
+  padding: 5px 12px;
+  font: 700 14px var(--font-ui);
+}
+
 /* The stage centers a frame of the chosen aspect ratio inside whatever space there is */
 .clip-player-stage {
   flex: 1;
@@ -65,15 +73,25 @@
 
 .clip-player-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   font-family: var(--font-ui);
   font-weight: 700;
   color: var(--color-wood-text);
+  padding: 0 12px 12px;
+}
+
+.clip-player-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
 }
 
 .clip-player-bar .btn {
   font-size: 16px;
+  border: 2px solid var(--color-lake-ink);
 }
 
 /* Loop off = faded */

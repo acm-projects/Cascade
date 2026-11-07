@@ -40,5 +40,5 @@ Platform references checked October 28, 2026:
 - [LinkedIn posts](https://www.linkedin.com/help/lms/answer/a528176): post 3000 characters.
 - [Meta media creation reference](https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media/): Instagram uses the ticket's conservative 2200-character/5-hashtag cap. Direct re-verification was rate-limited (HTTP 429).
 
-Run `.venv/Scripts/python -m unittest tests.test_export_downloads tests.test_social_copy`
+Run `.venv/Scripts/python -m unittest tests.application.test_export_downloads tests.application.test_social_copy`
 and `npm test` / `npm run build` from `frontend/`.

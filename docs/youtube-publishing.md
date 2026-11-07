@@ -11,7 +11,7 @@ Upload renders through the existing final export function, including saved edits
 
 Google may require OAuth verification before production access. Scheduling and privacy restrictions are checked against the live API response and read-back; Cascade does not infer eligibility from OAuth success. Consult Google’s current videos.insert and videos.update documentation for project requirements. Consent-screen testing mode can also limit refresh-token lifetime. No API key or frontend Google secret is used for publishing.
 
-Validation: `python3 -m unittest tests.test_social_youtube tests.test_editor -q` covers state replay/cancellation, ownership, encrypted credentials, idempotency, Private defaults, final-render reuse, upload failure and real FFmpeg downloads. `node tests/test_exports_selection.cjs` checks preserved selection behavior. Live OAuth, channel upload and remote processing require configured credentials and an authorized test channel.
+Validation: `python3 -m unittest tests.application.test_social_youtube tests.application.test_editor -q` covers state replay/cancellation, ownership, encrypted credentials, idempotency, Private defaults, final-render reuse, upload failure and real FFmpeg downloads. `node tests/javascript/test_exports_selection.cjs` checks preserved selection behavior. Live OAuth, channel upload and remote processing require configured credentials and an authorized test channel.
 
 ## Diagnosing connection errors
 
@@ -52,10 +52,10 @@ The persistent job stores current schedule, IANA timezone, UTC timestamp, video 
 Focused verification:
 
 ```sh
-python3 -m unittest tests.test_youtube_schedule tests.test_social_youtube tests.test_editor -q
-node tests/test_schedule_time.cjs
-python3 tests/test_youtube_schedule_browser.py
-python3 tests/test_exports_post_browser.py
+python3 -m unittest tests.application.test_youtube_schedule tests.application.test_social_youtube tests.application.test_editor -q
+node tests/javascript/test_schedule_time.cjs
+python3 tests/browser/test_youtube_schedule_browser.py
+python3 tests/browser/test_exports_post_browser.py
 ```
 
-The browser suites use the isolated `tests/editor_browser_server.py` fixture and Chrome DevTools on port 9333. Google transport is mocked; UI screenshots are `/tmp/cascade-schedule-desktop.png` and `/tmp/cascade-schedule-mobile.png`. These checks do not perform a real YouTube scheduled upload or establish a real project's/channel's scheduling eligibility.
+The browser suites use the isolated `tests/browser/editor_browser_server.py` fixture and Chrome DevTools on port 9333. Google transport is mocked; UI screenshots are `/tmp/cascade-schedule-desktop.png` and `/tmp/cascade-schedule-mobile.png`. These checks do not perform a real YouTube scheduled upload or establish a real project's/channel's scheduling eligibility.

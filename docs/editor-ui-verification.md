@@ -20,12 +20,12 @@ changed, and no commits or pushes were made.
 
 ## Tests performed
 
-`python3 -m tests.test_editor_layout_browser` passed at 1440, 1024, 768, and
+`python3 -m tests.browser.test_editor_layout_browser` passed at 1440, 1024, 768, and
 390 pixels. It checks horizontal overflow, readable hierarchy labels, selected
 clip state, editing tabs, research disclosure, and desktop column placement.
 Screenshots are in `/tmp/cascade-editor-layout-artifacts`.
 
-`python3 -m tests.test_reframe_browser` ran the real YuNet/Light-ASD models,
+`python3 -m tests.browser.test_reframe_browser` ran the real YuNet/Light-ASD models,
 Chrome preview, and FFmpeg exporter. It checked moving-subject framing,
 speaker-side changes, collapsible navigation, chat action application,
 undo/redo, reload, different saved focus settings and analysis IDs for two
@@ -36,7 +36,7 @@ These allow raster scaling and encoding differences; they are not claims of
 pixel-identical rendering. Images and MP4 are in
 `/tmp/cascade-reframe-browser-artifacts`.
 
-`python3 -m tests.test_exports_browser` passed the selection/refresh, carousel,
+`python3 -m tests.browser.test_exports_browser` passed the selection/refresh, carousel,
 MP4, ZIP, captions, B-roll, effects, trim, and audio workflow. The state and
 editor-flow JavaScript suites and 25 Python editor/navigation/reframe/frontend
 tests also passed.
