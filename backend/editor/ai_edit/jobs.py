@@ -15,7 +15,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from . import director, layout as layouts, page, picture, prep as preparation, sound, tools
+from . import behind, director, layout as layouts, page, picture, prep as preparation, sound, tools
 from .models import Plan, check
 
 LOG = logging.getLogger(__name__)
@@ -228,12 +228,27 @@ def _render(plan, source, prep, prep_dir, folder, out, stock, track, progress):
     credits = [c for c in ([plan.credit] if plan.credit else [])]
     if uses_planet: credits.append('Earth: NASA DSCOVR EPIC.')
     if any(e.kind == 'stock' for e in layout.events) and not notes: credits.append('Stock footage: Pexels.')
-    document, dots = page.build(plan, layout, has_closing, True, credits)
+    look = tools.look()
+    behinds = []
+    if look == 'scrapbook':  # words behind the speaker (FireEdit): cut the person out of the plate for a few key words
+        progress(.56, 'Cutting the speaker out for the words behind them…')
+        try:
+            behinds = behind.make(project/'assets'/'plate.mp4', behind.moments(layout), project/'assets', folder/'mattes', tools.ffmpeg())
+        except Exception:
+            LOG.warning('words-behind-the-speaker skipped', exc_info=True)
+    document, dots = page.build(plan, layout, has_closing, True, credits, look=look, behind=behinds)
     progress(.62, 'Composing the music and mixing…')
     numbers = sound.mix(plan, layout, prep_dir, prep, dots, project/'assets'/'mix.wav', track)
     (project/'index.html').write_text(document)
     progress(.7, 'Checking the composition…')
     checked = _hyperframes(project, 'check', '--json', timeout=300)
+    if behinds and '"errorCount": 0' not in checked.stdout and checked.returncode:
+        # the cut-out layers are the newest part: if the check objects, render without them rather than fail
+        LOG.warning('render check failed with words behind the speaker; retrying without them: %s', checked.stdout[-400:])
+        document, _ = page.build(plan, layout, has_closing, True, credits, look=look)
+        (project/'index.html').write_text(document)
+        for _, _, _, name in behinds: (project/'assets'/name).unlink(missing_ok=True)
+        checked = _hyperframes(project, 'check', '--json', timeout=300)
     if '"errorCount": 0' not in checked.stdout and checked.returncode: 
         LOG.warning('render check: %s', checked.stdout[-600:])
         raise ValueError('The edit did not pass its render check.')

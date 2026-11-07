@@ -1,47 +1,51 @@
-# AI video editor
+# AI video editor: Scrapbook style sheet
 
-Claude edits video for the owner of this folder. Raw clips are in `Raw Footage/`, style references in `References/`, finished videos in `Exports/`, tools in `Tools/`.
+Look: scrapbook
 
-## Brand sheet: required on every edit
+Claude edits video for the owner of this folder. Raw clips are in `Raw Footage/`, style references in `New References/` and `References/`, finished videos in `Exports/`, tools in `Tools/`.
 
-`Brand/brand-sheet.html` ("The Point") was approved on 2026-11-05, replacing the 2026-11-04 version (saved as `Brand/brand-sheet-v1-approved-2026-11-04.html`). Read it before editing and follow it on every edit. Depart from it only when the owner asks. An instruction for one edit overrides the sheet for that edit only.
+This sheet replaced the "Point" sheet on 2026-11-06. The old sheet is kept, unused, as `CLAUDE.point-style (kept aside).md`. An instruction for one edit overrides this sheet for that edit only.
 
-Format (owner's choice, 2026-11-05): follow `Exports/heat-cook-the-planet-reel.mp4`, real people in their own voices over real footage. Do not follow `Exports/still-home-reel.mp4`, AI narration and very short lines.
+## The feel
 
-Core rules:
-- Colour: Point Blue #3D4EFF, Ink #0C0D13, Bone #EDEEE8. Flare #FF6A3D for losses and warnings only. Blue is for shapes; words stay Bone. No gradients.
-- Fonts: Bricolage Grotesque ExtraBold condensed (hero), Instrument Sans SemiBold (connecting words, 50 px), Instrument Serif Italic (once per video at most).
-- Captions: word by word on the spoken frame, one hero word per phrase, no full stops and no dots (only a verdict's last word gets the dot), 5 words on screen at most, centred in the 52-72% height band, clear of the right 14%, bottom 20% and top 9%.
-- Ending: the End card shows up to 3 hero words and ONE line that sums the video up and makes it feel cool (a mood or a punchline, never a lesson or a call to action), with "Edited by Cascade" under it.
-- Pacing: 25-40 cuts per minute, a visual change every 1.5-3 s, graphics on 30-40% of runtime. Zooms are instant jumps between Wide 100%, Mid 115%, Close 130%.
-- Graphics: Dot transition (topic changes only, 4 per minute at most), Point field (one every 15 s at most), Point window, Tally, Numbers, End card. Fast start, soft landing, 4-12 frames.
-- Sound: -14 LUFS, true peak at or below -1 dB, voice on top, one licensed music track about 20 dB under the voice.
-- Never copy the references' signatures, and never put footage from `References/` into an export unless the owner confirms they have the rights.
+A scrapbook that tells the story of what is being said. Everything looks made by hand and pinned to paper: cream paper with grain and torn edges, footage taped up like photos, handwritten words next to cut-out block labels, red marker circles, red tape. The picture always shows what the words say. Studied from: FireEdit (sketchbook frames, words around the speaker, red and black), the "Edited by Frazix" reel (paper cards, red labels, storyboard notes), the paper-and-tape podcast edits in `References/` (polaroid cut-outs, script words, maroon and cream), and "Animal B-roll level" (close, sharp, cinematic animal footage).
 
-B-roll (every video):
-- When a speaker names a place, person, event, thing or number, makes a claim, or describes something hard to picture, show it. Also after 5 s of unchanged speaker, or to cover a cut.
-- 1-3 s per shot, arriving on the key word or up to 0.2 s ahead. Voice keeps running, captions stay on top. Speaker-led videos are 40-60% off the speaker, b-roll and graphics together.
-- No filler: if no shot truly matches, use a graphic or stay on the speaker. Stay on the face for emotional lines and the deliberate stillness.
-- Source: the owner's clips first, then public agency footage and free stock, with the licence checked per clip.
+## Formats
 
-Edits from the references (own versions, in `Brand/brand-sheet.html`; used when content calls for them): Backdrop swap, Number over footage, Proof run, Evidence card, Footage through the dot, Band opening; Earth mode only: Data map, Bright reset, Bookend.
+- Podcasts, interviews and Q&A (talk): question first, then the answer, in that order, ending on the punchline. The speakers carry it; b-roll shows every concrete thing they name.
+- B-roll films and nature clips: the footage carries it, a new shot every 1.5-3 s, handwritten lines as the narration.
 
-Music sync (every video):
-- Cut voice and picture first, then compose the track to fit. With a licensed track, cut the picture to its beats.
-- Montage: 80%+ of cuts on a beat, within 2 frames. One tempo per video, changing only between story parts.
-- Effects and graphics land on beats. Tuned effects match the track's key. Swell ends on the beat its Dot transition lands.
-- The voice wins: never move a spoken word to hit a beat, captions stay on the spoken frame, and effects never cover a stressed word.
-- Report the share of cuts and effects on a beat after every edit. Claude can't listen, so the owner judges the feel.
+## Picture
 
-Earth mode (every climate, environment and nature video; wins over Core where they differ):
-- The dot is the planet: blue in Home and What's left, Flare in Loss and Cost, changing on a hard cut. No new colours. Flare may run through Loss and Cost.
-- Story: Home about 25%, Loss 35%, Cost 20%, What's left 20%. End on one action for the viewer.
-- Footage full frame on 60-80% of runtime, graphics on 15-25%, speaker optional. Grade with deeper shadows and real colour, never a false tint. A flat Ink dim of up to 30% may sit behind captions.
-- Pacing: 35-55 cuts per minute in montage, 25-40 where someone speaks. One hold of up to 8 s. Up to 3 planned silences of 0.5-1.2 s. Lines of 3-6 words, voiceover at 80-120 wpm. A pause limit given for one edit still wins.
-- Graphics: Toll (Tally in Flare, 5 lines at most), Closing (circle of footage shrinks to a Flare dot, once per video), Verdict card (caps on Ink, 2 per video at most, no music under the line), Sourced number, Earth word (footage through a word, once per video), Cinema band (wide footage on Ink), End card with one action.
-- Sound: music about 14-16 dB under the voice, dark and low, level swing 8-12 LU on dramatic films, final mix still -14 LUFS and -1 dB peak. Real ambience under everything. Silence before a Verdict.
-- Truth: every number shows a named source and year, checked when used. No generated or staged footage passed off as real. Right place, right event. Dead or suffering animals 1 s at most, no gore.
-- Footage: the owner's own, public agency footage or free stock, with the licence checked per clip.
+- Speaker shots: full frame, centred on whoever is talking, under the paper grain and torn top and bottom edges.
+- Cutaways and b-roll: pinned up as a taped photo on paper (the frame shrinks to 80% with a white border, tilted about 2.5 degrees, tape on the top corners), alternating tilt left and right.
+- B-roll shows exactly what is said, on the word or up to 0.2 s before it: "roar" means a lion or big cat roaring close up, "jaguar" means a jaguar, "Amazon" means aerial rainforest river. Animals are shown close and sharp (eyes, fur, mouths, slow push-ins), like "Animal B-roll level". Never stock of people or faces, never vague searches ("wildlife", "nature"). Name the animal or thing, then the action, then "close up" or "aerial".
+- Podcasts: up to 6 b-roll shots per minute; 1.5-2.5 s each. If no shot truly shows it, stay on the speaker.
+- Grade: warm and slightly faded, deep blacks, never a false tint.
+
+## Words
+
+- Captions word by word on the spoken frame, at most 5 words on screen, centred in the 52-72% height band.
+- Small words are handwritten (Caveat, white). The one key word per phrase is a cut-out label in a bold block font, taking turns: cream paper with black text, red with white text, black with cream text, each a little tilted.
+- The key word is always a real word (noun, verb, name or number), never filler (a, the, of, or, and, is, they're, it, that, so, to, in).
+- Every fourth key word gets a red marker circle drawn around it.
+- No full stops, no dots.
+- One punchline at most, on a paper card in red marker caps, with the lead-in handwritten.
+
+## Pacing and sound
+
+- 25-40 cuts per minute where someone speaks, 35-55 in b-roll montage. Cuts and labels land on the beat; the voice is never moved to hit one.
+- Sound: -14 LUFS, true peak at or below -1 dB, voice on top, music about 18-20 dB under it.
+
+## Ending (every video, exactly like `New References/ENDWITHCASCADE.mov`)
+
+1. One handwritten line on paper that sums the video up and makes it feel cool: a mood or a punchline, never a lesson or a call to action (e.g. "half pit bull, all sweetheart").
+2. Then black, with only the wordmark "Cascade" in the centre: clean sans, filled with leopard print. It blurs in, holds, and leaves on a quick colour-split glitch. Nothing else on screen.
+
+## Truth
+
+- Every number shows a named source and year. No generated or staged footage passed off as real. Right animal, right place.
+- Footage: the owner's own clips, public agency footage or free stock (Pexels), licence checked per clip. Never put footage from the reference folders into an export.
 
 ## Tools
 

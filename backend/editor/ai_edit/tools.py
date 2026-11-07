@@ -32,3 +32,10 @@ def style_sheet():
     """The owner's live rules when the editing folder is on this machine, else the copy kept with Cascade."""
     live = folder()/'CLAUDE.md'
     return (live if live.is_file() else HERE/'style_sheet.md').read_text()
+
+
+def look():
+    """The visual look the active style sheet asks for: a "Look: scrapbook" line switches the renderer to it."""
+    import re
+    match = re.search(r'^\s*Look:\s*([a-z-]+)', style_sheet(), re.M | re.I)
+    return match.group(1).lower() if match else 'point'

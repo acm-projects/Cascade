@@ -93,11 +93,13 @@ LOOK_WORDS = {'close', 'up', 'closeup', 'shot', 'aerial', 'view', 'slow', 'motio
 
 
 def _stem(word):
-    return word[:-3] if word.endswith('ies') else word[:-1] if word.endswith('s') and len(word) > 3 else word
+    if word.endswith('ies'): return word[:-3]
+    if word.endswith('ing') and len(word) > 5: word = word[:-3]  # "roaring" matches a "lion-roars" clip
+    return word[:-1] if word.endswith('s') and len(word) > 3 else word
 
 
-def relevant(query, results):
-    """The stock result whose own page description names what the query is about, or None.
+def ranked(query, results):
+    """Stock results whose own page description names what the query is about, best first. whose own page description names what the query is about, or None.
 
     Pexels returns loose matches (a search for "jaguar" can return a woman's face), and the first result is
     often off. Each result's page address describes it ("/video/a-jaguar-resting-on-a-branch-123/"), so a
@@ -108,22 +110,44 @@ def relevant(query, results):
         slug = re.sub(r'[^a-z]+', ' ', (asset.get('source_url') or '').lower().rsplit('/video/', 1)[-1])
         words = {_stem(w) for w in slug.split()}
         return len(subject & words)
-    scored = [(score(a), i, a) for i, a in enumerate(results)]
-    best = max(scored, key=lambda x: (x[0], -x[1]), default=(0, 0, None))
     needed = 1 if len(subject) <= 2 else 2  # "jaguar" needs jaguar; "caiman river amazon" needs two of them
-    return best[2] if best[0] >= needed else None
+    scored = sorted(((score(a), i, a) for i, a in enumerate(results)), key=lambda x: (-x[0], x[1]))
+    return [a for n, _, a in scored if n >= needed]
+
+
+def relevant(query, results):
+    best = ranked(query, results)
+    return best[0] if best else None
 
 
 def _stock(event, store, frames, used):
     """(path, width, height, slow) of free stock footage for this shot, or None."""
     if store is None: return None
     try:
-        results = [a for a in store.search(event.query).get('results', []) if a['id'] not in used]
-        pick = relevant(event.query, results)
-        if not pick: return None  # nothing that really shows it: stay on the speaker rather than show something random
-        used.add(pick['id'])
-        path = store.media(pick['id'])
-        info = probe(path)
+        path = info = None
+        # Vertical clips first (they fill the frame natively), then 4K landscape ones (sharp after the vertical crop)
+        for orientation in ('portrait', 'landscape'):
+            results = [a for a in store.search(event.query, orientation=orientation, hd=True).get('results', []) if a['id'] not in used]
+            for pick in ranked(event.query, results)[:3]:
+                try:
+                    path = store.media(pick['id']); info = probe(path); used.add(pick['id']); break
+                except Exception:
+                    continue  # too large or too slow to download: try the next good match
+            if path: break
+        if not path:
+            # the exact action is not in stock ("jaguar jaws biting"): show the subject itself, close and sharp
+            subject = next((w for w in re.findall(r'[a-z]+', event.query.lower()) if w not in LOOK_WORDS and len(w) > 2), None)
+            simpler = f'{subject} close up' if subject else ''
+            if simpler and simpler != event.query.lower().strip():
+                for orientation in ('portrait', 'landscape'):
+                    results = [a for a in store.search(simpler, orientation=orientation, hd=True).get('results', []) if a['id'] not in used]
+                    for pick in ranked(simpler, results)[:3]:
+                        try:
+                            path = store.media(pick['id']); info = probe(path); used.add(pick['id']); break
+                        except Exception:
+                            continue
+                    if path: break
+        if not path: return None  # nothing that really shows it: stay on the speaker rather than show something random
     except Exception:  # no key, no network, quota: the edit carries on without this shot
         return None
     room = max(.2, info['duration']-.6)

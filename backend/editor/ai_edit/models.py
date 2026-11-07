@@ -67,7 +67,7 @@ class Plan(BaseModel):
         if self.mode != 'earth': self.closing_src = None  # the shrinking circle is an Earth-mode graphic; elsewhere it came out of nowhere
         if self.mode == 'talk':  # podcast references: the speakers carry it, stock only now and then, one punchline slam at most
             stock = [s for line in self.lines for s in line.shots if s.kind == 'stock']
-            for s in stock[3:]: s.kind, s.query = 'sync', ''
+            for s in stock[6:]: s.kind, s.query = 'sync', ''
             for line in [l for l in self.lines if l.verdict][1:]: line.verdict = False
         self.end_hero = self.end_hero.strip().rstrip('.')  # the end card shows no full stop
         return self

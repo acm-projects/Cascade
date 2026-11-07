@@ -2,6 +2,8 @@
 import html
 import re
 
+from . import scrapbook
+
 CLEAN = re.compile(r'[.,;:!"“”]+$')
 FILLER = {'a', 'an', 'the', 'of', 'or', 'and', 'but', 'is', 'are', 'was', 'were', 'be', 'it', "it's", 'its', 'that', 'this', 'so', 'to',
           'in', 'on', 'at', 'for', 'with', 'they', "they're", 'he', 'she', "he's", "she's", 'we', 'you', 'i', 'my', 'your', 'their',
@@ -55,9 +57,15 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:var(--ink)}
 '''
 
 
-def build(plan, layout, has_closing, has_mix, credits):
-    """Returns (html, dot landing times)."""
+def build(plan, layout, has_closing, has_mix, credits, look='point', behind=()):
+    """Returns (html, dot landing times). look: "point" (the original sheet) or "scrapbook".
+    behind: [(start, end, word, cut-out file)] for words behind the speaker (scrapbook only)."""
     elements, tweens, dots, count = [], [], [], [0]
+    scrap = look == 'scrapbook'
+    heroes = [0]  # scrapbook labels take turns: cream, red, ink; every 4th gets a marker circle
+    behind = list(behind) if scrap else []
+    hero_times = []  # when key words land: the picture punches in on them
+    in_behind = lambda t: any(a-.06 <= t < b for a, b, _, _ in behind)
 
     def nid():
         count[0] += 1
@@ -79,7 +87,9 @@ def build(plan, layout, has_closing, has_mix, credits):
         return f'<i id="{i}" class="pt {color}"></i>'
 
     def word(text, t):
-        i = nid(); show(i, t)
+        i = nid()
+        if scrap: tweens.append(f'tl.fromTo("#{i}",{{opacity:0,y:16,scale:.85}},{{opacity:1,y:0,scale:1,duration:{5/30:.4f},ease:"back.out(2.4)"}},{t:.4f});')
+        else: show(i, t)
         return f'<span id="{i}" class="wd">{html.escape(CLEAN.sub("", text))}</span>'
 
     def hero(text, t, color, with_dot=False, marker=False):
@@ -87,6 +97,17 @@ def build(plan, layout, has_closing, has_mix, credits):
         tweens.append(f'tl.fromTo("#{i}",{{opacity:0}},{{opacity:1,duration:{3/30:.4f},ease:"none"}},{t:.4f});')
         tweens.append(f'tl.fromTo("#{i}",{{scale:1.1}},{{scale:1,duration:{8/30:.4f},ease:"power3.out"}},{t:.4f});')
         mark = ''
+        if scrap:
+            n = heroes[0]; heroes[0] += 1
+            plain = CLEAN.sub('', text)
+            size = f' style="font-size:{min(118, int(1000/max(len(plain), 1)))}px"' if len(plain) > 8 else ''
+            doodle = ''
+            if n % 4 == 3:
+                d = nid(); doodle = scrapbook.DOODLE.replace('<path ', f'<path id="{d}" ', 1)
+                tweens.append(f'tl.fromTo("#{d}",{{strokeDasharray:1,strokeDashoffset:1}},{{strokeDashoffset:0,duration:.35,ease:"power2.out"}},{t+.12:.4f});')
+            variant = ('', 'red', 'ink')[n % 3]
+            tweens.append(f'tl.fromTo("#{i} .lab",{{rotation:{-9 if n % 2 else 9}}},{{rotation:{-2.2 if n % 2 == 0 else 1.8},duration:{9/30:.4f},ease:"back.out(3)"}},{t:.4f});')
+            return f'<div id="{i}" class="big"{size}><span class="lab {variant}">{html.escape(plain)}</span>{doodle}</div>'
         if marker:
             m = nid(); mark = f'<i id="{m}" class="mk"></i>'
             tweens.append(f'tl.fromTo("#{m}",{{scaleX:0}},{{scaleX:1,duration:{6/30:.4f},ease:"power2.out"}},{t+2/30:.4f});')
@@ -123,12 +144,28 @@ def build(plan, layout, has_closing, has_mix, credits):
         words = line['words']
         color = colour(line['plan'].part)
         lead = ''.join(word(words[i][0], words[i][1]) for i in range(a, h if h is not None else z+1))
-        big = hero(words[h][0], words[h][1], color, marker=plan.mode == 'talk') if h is not None else ''
+        if h is not None: hero_times.append(words[h][1])
+        if h is not None and in_behind(words[h][1]): h_shown = None
+        else: h_shown = h
+        big = hero(words[h][0], words[h][1], color, marker=plan.mode == 'talk' and not scrap) if h_shown is not None else ''
         under = ''.join(word(words[i][0], words[i][1]) for i in range(h+1, z+1)) if h is not None else ''
         inner = (f'<div class="lead">{lead}</div>' if lead else '')+big+(f'<div class="lead under">{under}</div>' if under else '')
         start = words[a][1]-.02
         clip('lay'+('' if on_ink(words[a][1]) else ' dim'), start, until, f'<div class="cap">{inner}</div>')
 
+    # scrapbook: cutaways are pinned up as taped photos on paper; the speaker stays full frame
+    if scrap:
+        tweens.append('tl.set("#plate",{scale:1,rotation:0,transformOrigin:"50% 45%"},0);')
+        tilt = 1
+        for e in layout.events:
+            if e.kind not in ('stock', 'source', 'band') or e.end-e.start < .7 or e.start >= layout.end_card: continue
+            tilt = -tilt; r = 2.4*tilt
+            tweens.append(f'tl.set("#plate",{{rotation:{r}}},{e.start:.4f});')
+            tweens.append(f'tl.fromTo("#plate",{{scale:.87}},{{scale:.8,duration:.22,ease:"power3.out"}},{e.start:.4f});')
+            tweens.append(f'tl.set("#plate",{{scale:1,rotation:0}},{min(e.end, layout.end_card):.4f});')
+            # the white border and tape move exactly with the footage: same origin, scale and tilt
+            frame = clip('photo', e.start, min(e.end, layout.end_card), '<i class="tape l"></i><i class="tape r"></i>')
+            tweens.append(f'tl.fromTo("#{frame}",{{scale:.87,rotation:{r}}},{{scale:.8,rotation:{r},duration:.22,ease:"power3.out"}},{e.start:.4f});')
     # the dot as the planet
     earth_offset = 0
     for e in layout.events:
@@ -157,13 +194,13 @@ def build(plan, layout, has_closing, has_mix, credits):
             chunks = [words[i:i+5] for i in range(0, caps, 5)]
             for j, chunk in enumerate(chunks):
                 until = chunks[j+1][0][1] if j+1 < len(chunks) else words[caps][1]
-                clip('lay verdict'+(' paper' if plan.mode == 'talk' else ''), chunk[0][1]-.02, until-.02, '<div class="vlead">'+''.join(word(w, t) for w, t, _ in chunk)+'</div>')
+                clip('lay verdict'+(' paper' if plan.mode == 'talk' or scrap else ''), chunk[0][1]-.02, until-.02, '<div class="vlead">'+''.join(word(w, t) for w, t, _ in chunk)+'</div>')
             big = ''
             for position, (w, t, _) in enumerate(words[caps:], caps):
                 i = nid(); show(i, t)
                 final = position == len(words)-1 and ENDS.search(w) is not None
-                big += f'<div id="{i}" class="vw">{html.escape(CLEAN.sub("", w).upper())}{dot(t, "flare") if final else ""}</div>'
-            clip('lay verdict'+(' paper' if plan.mode == 'talk' else ''), words[caps][1]-.02, stop, big)
+                big += f'<div id="{i}" class="vw">{html.escape(CLEAN.sub("", w).upper())}{dot(t, "flare") if final and not scrap else ""}</div>'
+            clip('lay verdict'+(' paper' if plan.mode == 'talk' or scrap else ''), words[caps][1]-.02, stop, big)
             continue
         numbered = len(words)
         if spec.number:
@@ -189,7 +226,7 @@ def build(plan, layout, has_closing, has_mix, credits):
         elements.append(f'<div id="{title}" class="clip otitle" data-start="0" data-duration="{first:.4f}">{html.escape(plan.title)}</div>')
     # the footage fades to black into the end card instead of cutting
     fade = min(.6, max(.2, layout.end_card-(layout.lines[-1]['end'] if layout.lines else 0)))
-    if layout.end_card > fade:
+    if layout.end_card > fade and not scrap:
         dark = clip('fadeout', layout.end_card-fade, layout.end_card+.05)
         tweens.append(f'tl.fromTo("#{dark}",{{opacity:0}},{{opacity:1,duration:{fade:.4f},ease:"power1.inOut"}},{layout.end_card-fade:.4f});')
     # credit and end card
@@ -199,22 +236,30 @@ def build(plan, layout, has_closing, has_mix, credits):
             clip('label', a, start, html.escape(plan.credit)); a = stop
         clip('label', a, layout.end_card, html.escape(plan.credit))
     start = layout.end_card
-    inner = hero(plan.end_hero, start+.05, 'blue') if plan.end_hero else ''
-    if plan.end_line:
-        line = nid()
-        tweens.append(f'tl.fromTo("#{line}",{{opacity:0,y:18}},{{opacity:1,y:0,duration:.8,ease:"power2.out"}},{start+.35:.4f});')
-        inner += f'<div id="{line}" class="eline">{html.escape(CLEAN.sub("", plan.end_line))}</div>'
-    if credits: inner += '<div class="ecred">'+'<br>'.join(html.escape(c) for c in credits)+'</div>'
-    brand = nid()
-    tweens.append(f'tl.fromTo("#{brand}",{{opacity:0,scale:1.25}},{{opacity:1,scale:1,duration:.45,ease:"back.out(2)"}},{start+.7:.4f});')
-    inner += f'<div id="{brand}" class="ebrand"><div class="stk"><span>Edited by</span><b>Cascade</b></div></div>'
-    clip('lay endc', start, layout.total, inner)
+    if scrap:
+        _scrap_ending(plan, layout, start, clip, nid, tweens, credits)
+        start = layout.total  # the scrapbook ending replaces the end card below
+    if not scrap:
+        inner = hero(plan.end_hero, start+.05, 'blue') if plan.end_hero else ''
+        if plan.end_line:
+            line = nid()
+            tweens.append(f'tl.fromTo("#{line}",{{opacity:0,y:18}},{{opacity:1,y:0,duration:.8,ease:"power2.out"}},{start+.35:.4f});')
+            inner += f'<div id="{line}" class="eline">{html.escape(CLEAN.sub("", plan.end_line))}</div>'
+        if credits: inner += '<div class="ecred">'+'<br>'.join(html.escape(c) for c in credits)+'</div>'
+        brand = nid()
+        tweens.append(f'tl.fromTo("#{brand}",{{opacity:0,scale:1.25}},{{opacity:1,scale:1,duration:.45,ease:"back.out(2)"}},{start+.7:.4f});')
+        inner += f'<div id="{brand}" class="ebrand"><div class="stk"><span>Edited by</span><b>Cascade</b></div></div>'
+        clip('lay endc', start, layout.total, inner)
+    if scrap:
+        _scrap_motion(layout, hero_times, behind, clip, nid, tweens, elements)
+    if scrap:  # paper grain and torn edges over everything except the black wordmark ending
+        clip('grain', 0, layout.end_card); clip('torn top', 0, layout.end_card); clip('torn bottom', 0, layout.end_card)
     audio = f'<audio id="mix" src="assets/mix.wav" data-start="0" data-duration="{layout.total:.4f}" data-has-audio="true"></audio>' if has_mix else ''
     document = f'''<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=1080, height=1920"/>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
-<style>{CSS}</style></head><body>
-<div id="root" data-composition-id="main" data-width="1080" data-height="1920" data-fps="30" data-start="0" data-duration="{layout.total:.4f}">
+<style>{CSS}{scrapbook.CSS if scrap else ''}</style></head><body>
+<div id="root"{' class="scrap"' if scrap else ''} data-composition-id="main" data-width="1080" data-height="1920" data-fps="30" data-start="0" data-duration="{layout.total:.4f}">
 <video id="plate" class="clip" src="assets/plate.mp4" muted data-start="0" data-duration="{layout.total:.4f}"></video>
 {chr(10).join(elements)}
 {audio}
@@ -227,3 +272,65 @@ tl.set({{}},{{}},{layout.total-.01:.4f});
 window.__timelines["main"]=tl;
 </script></body></html>'''
     return document, dots
+
+
+def _scrap_ending(plan, layout, start, clip, nid, tweens, credits):
+    """The closing line handwritten on paper, then the ENDWITHCASCADE ending: black, the wordmark blurs in,
+    holds, and leaves on a colour-split glitch. The wordmark is filled with leopard print."""
+    total = layout.total
+    mark_at = start
+    if plan.end_line:
+        mark_at = start+min(1.8, (total-start)*.5)
+        note = clip('lay note', start, mark_at, f'<p>{html.escape(CLEAN.sub("", plan.end_line))}</p>')
+        tweens.append(f'tl.fromTo("#{note} p",{{opacity:0,y:30,rotation:-6}},{{opacity:1,y:0,rotation:-2,duration:.35,ease:"back.out(1.6)"}},{start:.4f});')
+    w = nid()
+    inner = (f'<div id="{w}" class="wm"><span class="ghost r">Cascade</span><span class="ghost c">Cascade</span>'
+             f'<span class="fill">Cascade</span></div>')
+    clip('lay wmk', mark_at, total, inner)
+    tweens.append(f'tl.fromTo("#{w}",{{opacity:0,filter:"blur(18px)",scale:1.04}},{{opacity:1,filter:"blur(0px)",scale:1,duration:.35,ease:"power2.out"}},{mark_at+.08:.4f});')
+    g = max(mark_at+.6, total-.32)  # the glitch out, ~5 frames, like the reference
+    tweens.append(f'tl.to("#{w} .ghost.r",{{opacity:.9,x:-9,duration:.03}},{g:.4f});')
+    tweens.append(f'tl.to("#{w} .ghost.c",{{opacity:.9,x:9,duration:.03}},{g:.4f});')
+    tweens.append(f'tl.to("#{w}",{{x:6,duration:.03}},{g+.04:.4f});')
+    tweens.append(f'tl.to("#{w}",{{x:-4,skewX:8,duration:.03}},{g+.08:.4f});')
+    tweens.append(f'tl.to("#{w}",{{opacity:0,x:0,skewX:0,duration:.12}},{g+.14:.4f});')
+
+
+def _is_card(e, layout):
+    return e.kind in ('stock', 'source', 'band') and e.end-e.start >= .7 and e.start < layout.end_card
+
+
+def _scrap_motion(layout, hero_times, behind, clip, nid, tweens, elements):
+    """Nothing sits still: every shot drifts, punches in on its key words, cuts are covered by a paper swipe,
+    and a few key words sit behind the speaker (FireEdit)."""
+    target = '#plate,.photo,.cutv' if behind else '#plate,.photo'  # the photo's white border and tape zoom with the footage
+    for e in layout.events:
+        if e.kind in ('ink', 'dot') or e.start >= layout.end_card: continue
+        end = min(e.end, layout.end_card)
+        card = _is_card(e, layout)
+        base = .8 if card else 1.0
+        t0, level = (e.start+.22 if card else e.start), base
+        if not card: tweens.append(f'tl.set("{target}",{{scale:1}},{e.start:.4f});')
+        for h in sorted(h for h in hero_times if t0+.15 < h < end-.15):
+            if h-t0 > .05: tweens.append(f'tl.to("{target}",{{scale:{level*1.018:.4f},duration:{h-t0:.4f},ease:"none"}},{t0:.4f});')
+            level = base*1.1 if abs(level-base) < .01 else base  # punch in, then back out on the next key word
+            tweens.append(f'tl.to("{target}",{{scale:{level:.4f},duration:.16,ease:"power3.out"}},{h:.4f});')
+            t0 = h+.16
+        if end-t0 > .05: tweens.append(f'tl.to("{target}",{{scale:{level*1.025:.4f},duration:{end-t0:.4f},ease:"none"}},{t0:.4f});')
+    # a sheet of paper swipes across every cut between the speaker and a pinned-up photo
+    shots = [e for e in layout.events if e.kind not in ('ink', 'dot') and e.start < layout.end_card]
+    for a, b in zip(shots, shots[1:]):
+        if _is_card(a, layout) == _is_card(b, layout): continue
+        cut = b.start
+        sweep = clip('swipe', cut-.16, cut+.16)
+        tweens.append(f'tl.fromTo("#{sweep}",{{x:1250}},{{x:-1450,duration:.32,ease:"power2.inOut"}},{cut-.16:.4f});')
+    # words behind the speaker: the giant word, then the cut-out of the person on top of it
+    layers = []
+    for n, (a, b, word, name) in enumerate(behind):
+        size = min(330, int(2050/max(len(word), 1)))
+        w = nid()
+        layers.append(f'<div id="{w}" class="clip bword{" red" if n % 2 else ""}" data-start="{a:.4f}" data-duration="{b-a:.4f}" style="font-size:{size}px">{html.escape(word)}</div>')
+        tweens.append(f'tl.fromTo("#{w}",{{opacity:0,scale:1.35,y:40}},{{opacity:1,scale:1,y:0,duration:.22,ease:"power3.out"}},{a:.4f});')
+        tweens.append(f'tl.to("#{w}",{{opacity:0,duration:.12}},{b-.12:.4f});')
+        layers.append(f'<video id="{nid()}" class="clip cutv" src="assets/{name}" muted data-start="{a:.4f}" data-duration="{b-a:.4f}" data-media-start="0"></video>')
+    elements[:0] = layers  # straight above the plate, under every caption and graphic

@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 LOCK = threading.RLock()
-MAX_BYTES = 100 * 1024 * 1024
+MAX_BYTES = 250 * 1024 * 1024  # 4K b-roll for AI edits can be large
 CACHE_BYTES = 1024 * 1024 * 1024
 TTL = 24 * 60 * 60
 
@@ -106,21 +106,23 @@ class Store:
             if segment.asset.model_dump() != self.entry(segment.asset.id)['asset']:
                 raise HTTPException(422, 'B-roll metadata does not match the selected provider asset.')
 
-    def search(self, query, page=1):
+    def search(self, query, page=1, orientation=None, hd=False):
+        """hd: the AI edit's own search, wanting footage that stays sharp in a 1080x1920 frame (portrait clips, or 4K)."""
         query = query.strip()
         if not 1 <= len(query) <= 160 or not 1 <= page <= 100 or any(ord(c)<32 for c in query):
             raise HTTPException(422, 'Enter a search of 1–160 characters and a page from 1–100.')
         key = os.getenv('PEXELS_API_KEY', '').strip()
         if not key:
             raise HTTPException(503, 'Pexels is not configured. Set PEXELS_API_KEY in the backend .env and restart the server.')
-        cache_key = hashlib.sha256(json.dumps([query.casefold(), page]).encode()).hexdigest()
+        if orientation not in (None, 'portrait', 'landscape', 'square'): orientation = None
+        cache_key = hashlib.sha256(json.dumps([query.casefold(), page] + ([orientation, hd] if orientation or hd else [])).encode()).hexdigest()
         path = self.folder/'search'/f'{cache_key}.json'
         with LOCK:
             if path.is_file() and time.time()-path.stat().st_mtime < TTL:
                 return json.loads(path.read_text())
             try:
                 response = httpx.get('https://api.pexels.com/v1/videos/search',
-                                     params={'query': query, 'page': page, 'per_page': 12},
+                                     params={'query': query, 'page': page, 'per_page': 12, **({'orientation': orientation} if orientation else {}), **({'size': 'large'} if hd else {})},
                                      headers={'Authorization': key}, timeout=httpx.Timeout(20, connect=5), follow_redirects=False)
                 if response.status_code == 429:
                     raise HTTPException(429, 'Pexels request limit reached. Try again later; cached searches remain available.')
@@ -136,11 +138,16 @@ class Store:
                 for video in data['videos'][:12]:
                     if not isinstance(video,dict): continue
                     try:
+                        limit = 3840 if hd else 1920
                         files = [f for f in video.get('video_files', []) if f.get('file_type') == 'video/mp4'
-                                 and 0 < int(f.get('width') or 0) <= 1920 and 0 < int(f.get('height') or 0) <= 1920]
+                                 and 0 < int(f.get('width') or 0) <= limit and 0 < int(f.get('height') or 0) <= limit]
                         if not files:
                             continue
-                        rendition = min(files, key=lambda f: abs(max(f['width'], f['height'])-1280))
+                        if hd:  # sharp in a vertical 1080x1920 frame: a portrait clip ~1080 wide, or a landscape clip ~2160 tall (4K)
+                            need = lambda f: 1080 if f['height'] > f['width'] else 2160
+                            rendition = min(files, key=lambda f: (min(f['width'], f['height']) < need(f)*.66, abs(min(f['width'], f['height'])-need(f))))
+                        else:
+                            rendition = min(files, key=lambda f: abs(max(f['width'], f['height'])-1280))
                         asset = Asset(id=f"px-{int(video['id'])}-{int(rendition['id'])}", provider_id=int(video['id']),
                                       creator=str(video['user']['name']), creator_url=provider_url(video['user']['url'], 'page'),
                                       source_url=provider_url(video['url'], 'page'), duration=video['duration'],
@@ -185,7 +192,7 @@ class Store:
                             raise HTTPException(502, 'Stock footage download failed. Try another result.')
                         maximum = 5*1024*1024 if image else MAX_BYTES
                         total = 0
-                        deadline = time.monotonic()+90
+                        deadline = time.monotonic()+180
                         for chunk in response.iter_bytes():
                             total += len(chunk)
                             if total > maximum or used_bytes+total > CACHE_BYTES or time.monotonic() > deadline:

@@ -95,11 +95,28 @@ class Captions(unittest.TestCase):
 
 
 class Checks(unittest.TestCase):
+    def test_scrapbook_look(self):
+        lines = [*plan().model_dump()['lines'], {'from_word': 9, 'to_word': 11, 'key_word': 11, 'verdict': True, 'shots': []}]
+        lines[0]['shots'] = [{'at_word': 0, 'kind': 'source', 'src': 4}]
+        chosen = Plan.model_validate({'bpm': 72, 'mode': 'talk', 'end_line': 'half pit bull, all sweetheart', 'lines': lines})
+        document, dots = page.build(chosen, layout.build(chosen, WORDS), False, False, [], look='scrapbook')
+        self.assertIn('class="scrap"', document)
+        self.assertIn('class="lab', document)  # cut-out labels
+        self.assertIn('clip photo', document)  # cutaways pinned up as photos
+        self.assertIn('half pit bull, all sweetheart</p>', document)  # the handwritten closing line
+        self.assertIn('class="fill">Cascade</span>', document)  # the leopard wordmark ending
+        self.assertNotIn('ebrand', document.split('</style>')[1])
+        self.assertEqual(dots, [])
+
+    def test_point_look_unchanged_by_default(self):
+        chosen = plan()
+        self.assertNotIn('class="scrap"', page.build(chosen, layout.build(chosen, WORDS), False, False, [])[0])
+
     def test_talk_mode_keeps_the_speakers_on_screen(self):
         lines = [{'from_word': 0, 'to_word': 3, 'key_word': 3, 'verdict': True, 'shots': [{'at_word': i, 'kind': 'stock', 'query': 'x'} for i in range(4)]},
                  {'from_word': 4, 'to_word': 8, 'key_word': 7, 'verdict': True, 'shots': [{'at_word': 4, 'kind': 'sync'}]}]
         talk = Plan.model_validate({'bpm': 72, 'mode': 'talk', 'lines': lines})
-        self.assertEqual(sum(s.kind == 'stock' for l in talk.lines for s in l.shots), 3)
+        self.assertEqual(sum(s.kind == 'stock' for l in talk.lines for s in l.shots), 4)
         self.assertEqual(sum(l.verdict for l in talk.lines), 1)
 
     def test_a_hero_written_as_a_word_becomes_its_number(self):
