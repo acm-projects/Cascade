@@ -40,6 +40,16 @@ export function getEditorIndex(token, projectId, { selectedOnly = false } = {}) 
  * @returns {Promise<{ duration, width, height, cues, burned_in, warning,
  *                     draft: { state: Edit, chat: { role, text }[], updated_at } }>}
  */
+/**
+ * POST /api/projects/{projectId}/editor/upload
+ * Your own video, straight into the Editor (no AI Studio picking). Captions are added when speech-to-text is set up.
+ * @returns {Promise<{ job_id, clip_index, title, duration, captions: boolean, warning: string }>}
+ */
+export function uploadEditorClip(token, projectId, file) {
+  const form = new FormData(); form.append('video', file);
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/upload`, { token, method: 'POST', form });
+}
+
 export function getDraft(token, projectId, jobId, index) {
   return apiFetch(clipPath(projectId, jobId, index), { token });
 }
@@ -127,6 +137,11 @@ export function uploadAudioAsset(token, projectId, jobId, index, file, kind = 'm
 }
 export function audioAssetPath(projectId, jobId, index, assetId) {
   return `${clipPath(projectId, jobId, index)}/audio/${encodeURIComponent(assetId)}/media`;
+}
+
+/** GET .../editor/{jobId}/{index}/thumbnail: the clip's first frame as a JPEG. @returns {Promise<Blob>} */
+export function getClipThumbnail(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/thumbnail`, { token });
 }
 
 /** Search only through the owner-checked backend; provider keys stay server-side. */

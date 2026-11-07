@@ -4,6 +4,7 @@ import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { AuthContext } from "./AuthContext";
 import { getAuthConfig } from "../api/auth";
 import "./AuthGate.css";
+import Icon from "../components/ui/Icon";
 
 const devAuth = { mode: "dev", getToken: async () => null };
 
@@ -27,7 +28,7 @@ function AuthGate({ children }) {
   }, []);
 
   if (!config) {
-    return <div className="auth-screen">🌿 Checking the trail…</div>;
+    return <div className="auth-screen"><Icon name="leaf" /> Checking the trail…</div>;
   }
 
   if (config.dev_auth) {

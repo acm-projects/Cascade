@@ -11,7 +11,8 @@ Format (owner's choice, 2026-11-05): follow `Exports/heat-cook-the-planet-reel.m
 Core rules:
 - Colour: Point Blue #3D4EFF, Ink #0C0D13, Bone #EDEEE8. Flare #FF6A3D for losses and warnings only. Blue is for shapes; words stay Bone. No gradients.
 - Fonts: Bricolage Grotesque ExtraBold condensed (hero), Instrument Sans SemiBold (connecting words, 50 px), Instrument Serif Italic (once per video at most).
-- Captions: word by word on the spoken frame, one hero word per phrase, a dot only where a sentence ends (replacing the full stop, never mid-sentence; a question keeps its question mark and gets no dot), 5 words on screen at most, centred in the 52-72% height band, clear of the right 14%, bottom 20% and top 9%.
+- Captions: word by word on the spoken frame, one hero word per phrase, no full stops and no dots (only a verdict's last word gets the dot), 5 words on screen at most, centred in the 52-72% height band, clear of the right 14%, bottom 20% and top 9%.
+- Ending: the End card shows up to 3 hero words and ONE line that sums the video up and makes it feel cool (a mood or a punchline, never a lesson or a call to action), with "Edited by Cascade" under it.
 - Pacing: 25-40 cuts per minute, a visual change every 1.5-3 s, graphics on 30-40% of runtime. Zooms are instant jumps between Wide 100%, Mid 115%, Close 130%.
 - Graphics: Dot transition (topic changes only, 4 per minute at most), Point field (one every 15 s at most), Point window, Tally, Numbers, End card. Fast start, soft landing, 4-12 frames.
 - Sound: -14 LUFS, true peak at or below -1 dB, voice on top, one licensed music track about 20 dB under the voice.

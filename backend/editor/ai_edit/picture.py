@@ -1,5 +1,6 @@
 """Cut every shot to the vertical plate, frame-exact so cuts stay on the grid. Parts are cached, so a
 revision that keeps a shot does not cut it again."""
+import re
 import bisect
 import hashlib
 import json
@@ -85,13 +86,41 @@ def cut(events, source, prep, parts_dir, plate, stock=None, fallback_notes=None)
         raise ValueError('I could not join the shots together.')
 
 
+# Words that say how a shot looks, not what is in it: they never make a stock clip relevant on their own
+LOOK_WORDS = {'close', 'up', 'closeup', 'shot', 'aerial', 'view', 'slow', 'motion', 'footage', 'video', 'cinematic', 'b', 'roll',
+              'stock', 'wide', 'macro', 'drone', 'the', 'a', 'an', 'of', 'in', 'on', 'at', 'and', 'with', 'from', 'into', 'its',
+              'walking', 'running', 'moving', 'looking', 'face', 'powerful', 'beautiful', 'dark', 'night', 'day'}
+
+
+def _stem(word):
+    return word[:-3] if word.endswith('ies') else word[:-1] if word.endswith('s') and len(word) > 3 else word
+
+
+def relevant(query, results):
+    """The stock result whose own page description names what the query is about, or None.
+
+    Pexels returns loose matches (a search for "jaguar" can return a woman's face), and the first result is
+    often off. Each result's page address describes it ("/video/a-jaguar-resting-on-a-branch-123/"), so a
+    clip is used only when that description contains the query's subject words."""
+    subject = {_stem(w) for w in re.findall(r'[a-z]+', query.lower()) if w not in LOOK_WORDS and len(w) > 2}
+    if not subject: return None
+    def score(asset):
+        slug = re.sub(r'[^a-z]+', ' ', (asset.get('source_url') or '').lower().rsplit('/video/', 1)[-1])
+        words = {_stem(w) for w in slug.split()}
+        return len(subject & words)
+    scored = [(score(a), i, a) for i, a in enumerate(results)]
+    best = max(scored, key=lambda x: (x[0], -x[1]), default=(0, 0, None))
+    needed = 1 if len(subject) <= 2 else 2  # "jaguar" needs jaguar; "caiman river amazon" needs two of them
+    return best[2] if best[0] >= needed else None
+
+
 def _stock(event, store, frames, used):
     """(path, width, height, slow) of free stock footage for this shot, or None."""
     if store is None: return None
     try:
-        results = store.search(event.query).get('results', [])
-        pick = next((a for a in results if a['id'] not in used), results[0] if results else None)
-        if not pick: return None
+        results = [a for a in store.search(event.query).get('results', []) if a['id'] not in used]
+        pick = relevant(event.query, results)
+        if not pick: return None  # nothing that really shows it: stay on the speaker rather than show something random
         used.add(pick['id'])
         path = store.media(pick['id'])
         info = probe(path)

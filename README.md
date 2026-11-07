@@ -1,5 +1,7 @@
 # Cascade
 
+**New here? Start with [Getting started](docs/GETTING_STARTED.md)** — install, `.env`, running both servers, and troubleshooting.
+
 [![CI](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml/badge.svg)](https://github.com/acm-projects/Cascade/actions/workflows/ci.yml)
 
 Cascade turns video and audio into searchable clips, with AI Studio, research,

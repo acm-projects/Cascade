@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import useApi from '../../api/useApi';
 import { clipTime, problemText, referenceLearning, same, viewData, youtubeUrl } from './trendsView';
 import './TrendsPanel.css';
+import Icon from '../../components/ui/Icon';
 
 const DEFAULT_GOAL = 'Help me improve this clip’s editing.';
 const shownGoal = goal => (goal && goal !== DEFAULT_GOAL ? goal : '');
@@ -23,7 +24,7 @@ function Source({ reference: ref, number }) {
     </a>}
     <div className="trends-source-text">
       <small className="trends-source-kind">[{number}] {ref.kind === 'tutorial' ? 'Tutorial' : 'Example'}</small>
-      <h4>{url ? <a href={url} target="_blank" rel="noreferrer">{ref.title || 'Untitled video'} ↗</a> : ref.title || 'Untitled video'}</h4>
+      <h4>{url ? <a href={url} target="_blank" rel="noreferrer">{ref.title || 'Untitled video'} <Icon name="external" /></a> : ref.title || 'Untitled video'}</h4>
       {facts.length > 0 && <small>{facts.join(' · ')}</small>}
       {learned.length > 0 && <ul>{learned.map(item => <li key={item}>{item}</li>)}</ul>}
     </div>

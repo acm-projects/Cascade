@@ -46,7 +46,7 @@ class Layout(unittest.TestCase):
     def test_verdict_gets_graphics_on_whole_beats_then_footage_without_empty_frames(self):
         lines = [*plan().model_dump()['lines'], {'from_word': 9, 'to_word': 11, 'key_word': 11, 'verdict': True, 'shots': []},
                  {'from_word': 12, 'to_word': 17, 'key_word': 13, 'shots': [{'at_word': 12, 'kind': 'source', 'src': 8}]}]
-        built = layout.build(Plan.model_validate({'bpm': 72, 'closing_src': 5, 'lines': lines}), WORDS)
+        built = layout.build(Plan.model_validate({'bpm': 72, 'mode': 'earth', 'closing_src': 5, 'lines': lines}), WORDS)
         for t in (built.closing[0], built.closing[1], built.silence[0]):
             self.assertLess(abs(t/built.beat-round(t/built.beat))*built.beat, 2/30)
         after = next(e for e in built.events if e.start >= built.reset[1]-.001)
@@ -62,16 +62,55 @@ class Layout(unittest.TestCase):
 
 
 class Captions(unittest.TestCase):
-    def test_dot_only_where_a_sentence_ends_and_no_typed_full_stops(self):
+    def test_no_dots_or_typed_full_stops_on_ordinary_captions(self):
         chosen = plan()
         document, dots = page.build(chosen, layout.build(chosen, WORDS), False, False, [])
-        self.assertEqual(len(dots), 2)  # heroes "wait." and "now." end sentences; hero "is" does not
-        self.assertRegex(document, r'>is</div>')
+        self.assertEqual(dots, [])  # a dot after every sentence looked like periods everywhere
+        self.assertRegex(document, r'class="big">planet</div>')  # the hero "is" is filler, so the real word takes the big slot
         self.assertNotIn('wait.<', document)
-        self.assertIn('>wait<', document)
+        self.assertIn('>wait</div>', document)
+
+    def test_only_a_verdict_ends_on_the_dot(self):
+        lines = [*plan().model_dump()['lines'], {'from_word': 9, 'to_word': 11, 'key_word': 11, 'verdict': True, 'shots': []}]
+        chosen = Plan.model_validate({'bpm': 72, 'lines': lines})
+        _, dots = page.build(chosen, layout.build(chosen, WORDS), False, False, [])
+        self.assertEqual(len(dots), 1)  # "cook." closes the verdict
+
+    def test_end_card_sums_it_up_and_says_edited_by_cascade(self):
+        chosen = plan(end_hero='Never again.', end_line='Some walks you never forget.')
+        document, _ = page.build(chosen, layout.build(chosen, WORDS), False, False, [])
+        self.assertIn('>Never again</div>', document)  # no full stop on the end card
+        self.assertIn('Some walks you never forget</div>', document)
+        self.assertIn('Edited by</span><b>Cascade</b>', document)
+        bare = plan()  # even with nothing to say, the film ends on the Cascade credit
+        self.assertIn('Edited by</span><b>Cascade</b>', page.build(bare, layout.build(bare, WORDS), False, False, [])[0])
+
+    def test_closing_circle_and_silence_dot_only_in_earth_mode(self):
+        lines = [*plan().model_dump()['lines'], {'from_word': 9, 'to_word': 11, 'key_word': 11, 'verdict': True, 'shots': []}]
+        core = Plan.model_validate({'bpm': 72, 'closing_src': 5, 'lines': lines})
+        self.assertIsNone(core.closing_src)
+        built = layout.build(core, WORDS)
+        self.assertIsNone(built.closing)
+        self.assertNotIn('class="clip stopdot"', page.build(core, built, False, False, [])[0])
 
 
 class Checks(unittest.TestCase):
+    def test_talk_mode_keeps_the_speakers_on_screen(self):
+        lines = [{'from_word': 0, 'to_word': 3, 'key_word': 3, 'verdict': True, 'shots': [{'at_word': i, 'kind': 'stock', 'query': 'x'} for i in range(4)]},
+                 {'from_word': 4, 'to_word': 8, 'key_word': 7, 'verdict': True, 'shots': [{'at_word': 4, 'kind': 'sync'}]}]
+        talk = Plan.model_validate({'bpm': 72, 'mode': 'talk', 'lines': lines})
+        self.assertEqual(sum(s.kind == 'stock' for l in talk.lines for s in l.shots), 3)
+        self.assertEqual(sum(l.verdict for l in talk.lines), 1)
+
+    def test_a_hero_written_as_a_word_becomes_its_number(self):
+        chosen = plan()
+        chosen.lines[1].phrases[0].hero = 'Planet'
+        chosen.lines[1].phrases[1].hero = 'gone'  # not in the phrase: shown without a big word
+        check(chosen, WORDS, [(0, 99)])
+        self.assertEqual(chosen.lines[1].phrases[0].hero, 5)
+        self.assertIsNone(chosen.lines[1].phrases[1].hero)
+        page.build(chosen, layout.build(chosen, WORDS), False, False, [])
+
     def test_rejects_long_phrases_and_times_outside_the_trim(self):
         bad = plan(lines=[{'from_word': 0, 'to_word': 8, 'key_word': 3, 'phrases': [{'from_word': 0, 'to_word': 8}]}])
         with self.assertRaisesRegex(ValueError, 'more than 5'):

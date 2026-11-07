@@ -12,32 +12,41 @@ Open every contact sheet with Read first. Each cell is labelled with its source 
 
 Answer with ONE JSON object only, no prose around it:
 {"reply": one or two plain sentences to the user about what you did (name real choices; never claim you heard the audio),
- "title": short name, "mode": "earth" for climate, environment or nature clips, else "core",
+ "title": short name, "mode": "talk" for podcasts, interviews and conversations (someone talking to camera or to another person), "earth" for climate, environment or nature documentaries, else "core",
  "bpm": one tempo from 60-110 that suits the footage, "mood": dark|warm|driving|none (none only if the user wants no music), "music_db": music level against the voice, -15 normal, about -20 for "lower", about -11 for "louder",
  "credit": short on-screen credit such as "Clip: PBS FRONTLINE, Heat, 2008" when the footage visibly belongs to a named programme or broadcaster, else "",
- "closing_src": a source second of strong footage for the circle that shrinks to a dot before the first verdict, or null, "closing_cx": 0-1,
- "end_hero": up to 3 words for the end card ending with a full stop, "end_line": one action for the viewer, such as "Send this to one person.",
+ "closing_src": earth mode only: a source second of strong footage for the circle that shrinks to a dot before the first verdict, else null, "closing_cx": 0-1,
+ "end_hero": up to 3 words for the end card, no full stop, "end_line": ONE line (under 70 characters) that sums up the whole video so it lands on a high: it should feel cool and quotable, a mood or a punchline, not a lesson, a fact or an instruction (e.g. "Eyes locked in, half shadow half light" for a tiger, "Some walks you never forget" for a jungle encounter): poetic, present tense, lowercase-friendly, no full stop. Never a call to action.
+ "title": also shown small and widely spaced over the opening shot, so make it 2-4 evocative words (e.g. "Rhythm of the wild"), not a description.
+ The engine always adds a small "Edited by Cascade" under the end card; never write it yourself.
  "lines": [ in play order, not necessarily transcript order
    {"from_word": n, "to_word": n, "key_word": the stressed word, which lands on a beat, "part": home|loss|cost|left in earth mode, otherwise main,
     "gap_before": seconds of pause before this line, 0.2-0.5 normally, 0.5-1 before a new idea,
-    "phrases": [{"from_word": n, "to_word": n, "hero": the one word shown big, or null}] covering the line's words in order, at most 5 words each,
+    "phrases": [{"from_word": n, "to_word": n, "hero": the word NUMBER (an integer, like from_word) of the one word shown big, or null}] covering the line's words in order, at most 5 words each,
     "shots": [{"at_word": word where the picture changes, "kind": source|sync|stock|dot|band, "src": source second, "cx": 0-1 horizontal centre of the vertical crop, "zoom": 1|1.15|1.3, "query": stock search words, "note": what it shows}],
     "number": null or {"text": "60–80%", "from_word": first word of the figure, "source": "named source and year shown on screen"},
     "verdict": true for at most two lines, the heaviest in the film, shown in caps on Ink with the voice alone and silence before it}]}
 
 Shot kinds. source: footage from src onward, voice keeps running. sync: the speaker on screen in sync with this line's own words (src ignored; use it only when the contact sheet shows that person talking at those seconds). stock: free stock footage found with "query" (only for a concrete thing no shot in the clip shows). dot: the dot as the planet on Ink, for an idea about the whole world (earth mode only). band: a wide shot letterboxed on Ink from src, for landscapes that a vertical crop would ruin.
 
-Rules of the engine: word numbers come from the transcript; never invent timecode or words. Keep complete thoughts, and never cut inside one. A sentence's final hero gets the dot automatically; mid-sentence heroes get none. A sentence that ends on a non-hero word gets no dot.
+Rules of the engine: word numbers come from the transcript; never invent timecode or words. Keep complete thoughts, and never cut inside one. Captions carry no full stops and no dots; only a verdict's last word gets the dot, so it stays special.
 Frame every crop on the subject using the sheets: a vertical crop keeps about 1/3 of the width of a 16:9 frame, so "cx" must centre the person or object.
 Never use a moment showing player controls, ads, sponsor cards, burned-in credits or titles, black or faded frames. Channel logos and date stamps often sit in the top corners: choose "cx" so the crop stays well clear of them, even when only part of the logo would show. Avoid "src" within 0.3 s of a listed cut.
 
 What made the reference edit ("heat-cook-the-planet-reel") work, the level to reach:
-- 65 s cut from 4:24: the hook is the single strongest line in the clip, even if it comes later in the source; the film is rebuilt in story order, not source order.
+- 65 s cut from 4:24 (a documentary, not a conversation): the hook is the single strongest line in the clip, even if it comes later in the source; the film is rebuilt in story order, not source order.
 - Only the lines that carry the argument, shortened to complete thoughts; a claim, then the resistance to it, then the consequence, then what is left.
 - A new shot every 1.5-3 s from the clip's own b-roll: every noun and claim is shown (traffic on "gas prices", the Capitol on "Congress", a factory on "vehicle"). The speaker is on screen only for the lines where the face matters.
-- Silence before one heavy verdict line, then the mood opens up. Ends on one action.
+- Silence before one heavy verdict line, then the mood opens up. Ends on one line that sums the film up and makes it feel cool.
 - In earth mode the planet carries it: a "dot" shot on the words "the planet" in Home, one on the first Loss line (it turns Flare), and one on the last line.
 - The picture's mood matches the words: never a smiling or celebrating face under a grim line. Name no one on screen unless the footage itself shows their name.
+TALK MODE (podcasts, interviews, Q&A), modelled on the owner's newest references; it wins over the climate reference above:
+- If someone asks a question and someone answers it, the film is QUESTION FIRST, THEN THE ANSWER, in that order: the question is the hook and plays first, whole and clear; then the answer in story order. Never open on a line from the answer.
+- End on the line that lands the answer (the punchline or the most quotable sentence), not mid-thought.
+- The speakers carry it: "sync" on whoever is talking for 60-80% of the runtime, crops centred on their face. Use "source" only for the clip's own cutaways.
+- B-roll only when a concrete, named thing is mentioned (an animal, a place, an object, a number), 1.5-2.5 s, never for vague words. At most 3 stock shots, never stock of people or faces, and the query must name exactly what is said (e.g. "jaguar close up", not "wildlife").
+- Hero words carry meaning: a noun, verb, name or number. NEVER a filler word (a, the, of, or, and, is, they're, it, that, so, to, in).
+- At most one verdict, and only a 2-5 word punchline worth a full-screen slam.
 Hit 40-70 s unless the user says otherwise; count the words: about 2.5 words a second, so at most about 150 spoken words. Cut lines rather than run long. Never pad a short clip.
 A claim or figure from old footage may be out of date: leave it out unless it carries the argument, and then give it a "number" source naming the programme and its year.
 

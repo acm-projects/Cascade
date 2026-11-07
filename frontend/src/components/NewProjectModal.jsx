@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import Modal from "./ui/Modal";
 import Spinner from "./ui/Spinner";
-import { MEDIA_ACCEPT, isSupportedMedia } from "../utils/media";
+import { MEDIA_ACCEPT, VIDEO_ACCEPT, isSupportedMedia, isVideoFile } from "../utils/media";
 import "./NewProjectModal.css";
+import Icon from "./ui/Icon";
 
 const MAX_NAME = 100;          // the backend's limit
 const BIG_FILE = 2 * 1024 ** 3; // over 2 GB: warn (uploads still work, they just take a while)
@@ -14,10 +15,10 @@ function fileSize(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-// The "+ New Project" pop-up: name the project and (optionally) pick its video.
-// The video uploads in AI Studio together with your first prompt (that's how the backend works),
-// where a progress bar shows how far along it is.
-//   onCreate(name, file) - creates the project; throws to show an error here
+// The "+ New Project" pop-up: name the project, pick how to start, and (optionally) pick its video.
+//   "Find clips with AI": the video uploads in AI Studio together with your first prompt.
+//   "Edit my own clip":   the video is required and goes straight into the Editor (no picking).
+//   onCreate(name, file, mode) - mode is "studio" or "editor"; throws to show an error here
 //   onClose()
 function NewProjectModal({ onCreate, onClose }) {
   const [name, setName] = useState("");
@@ -25,12 +26,14 @@ function NewProjectModal({ onCreate, onClose }) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState("studio");
   const fileInput = useRef(null);
+  const ownClip = mode === "editor";
 
   function choose(picked) {
     if (!picked) return;
-    if (!isSupportedMedia(picked)) {
-      setError("Choose MP4, MOV, WebM, MKV, MP3, WAV, M4A, or FLAC audio/video.");
+    if (!isSupportedMedia(picked) || (ownClip && !isVideoFile(picked))) {
+      setError(ownClip ? "Choose a video: MP4, MOV, WebM, MKV or AVI." : "Choose MP4, MOV, WebM, MKV, MP3, WAV, M4A, or FLAC audio/video.");
       return;
     }
     setError(null);
@@ -43,10 +46,18 @@ function NewProjectModal({ onCreate, onClose }) {
       setError("Give your project a name.");
       return;
     }
+    if (ownClip && !file) {
+      setError("Choose the video you want to edit.");
+      return;
+    }
+    if (ownClip && !isVideoFile(file)) {
+      setError("Choose a video: MP4, MOV, WebM, MKV or AVI.");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
-      await onCreate(name.trim(), file);
+      await onCreate(name.trim(), file, mode);
     } catch (err) {
       setError(`Couldn't create the project: ${err.message}`);
       setCreating(false);
@@ -61,6 +72,21 @@ function NewProjectModal({ onCreate, onClose }) {
           <input autoFocus value={name} maxLength={MAX_NAME} placeholder="e.g. Podcast episode 12"
             onChange={(e) => setName(e.target.value)} disabled={creating} />
         </label>
+
+        <div className="new-project-modes" role="radiogroup" aria-label="How do you want to start?">
+          {[
+            ["studio", "sparkles", "Find clips with AI", "Upload a long video and let AI pick the best moments"],
+            ["editor", "scissors", "Edit my own clip", "Skip the AI picking and go straight to the Editor"],
+          ].map(([id, icon, label, hint]) => (
+            <button key={id} type="button" role="radio" aria-checked={mode === id} disabled={creating}
+              className={`new-project-mode${mode === id ? " active" : ""}`}
+              onClick={() => { setMode(id); setError(null); }}>
+              <Icon name={icon} size={20} />
+              <strong>{label}</strong>
+              <span>{hint}</span>
+            </button>
+          ))}
+        </div>
 
         <div
           className={`new-project-drop${dragging ? " dragging" : ""}${file ? " has-file" : ""}`}
@@ -80,28 +106,31 @@ function NewProjectModal({ onCreate, onClose }) {
         >
           {file ? (
             <>
-              <strong>🎬 {file.name}</strong>
+              <strong><Icon name="film" /> {file.name}</strong>
               <span>{fileSize(file.size)} · click to change</span>
             </>
           ) : (
             <>
               <strong>Drag a video here or click to browse</strong>
-              <span>Optional: you can also pick it in AI Studio</span>
+              <span>{ownClip ? "Required: this is the clip you'll edit" : "Optional: you can also pick it in AI Studio"}</span>
             </>
           )}
-          <input ref={fileInput} type="file" accept={MEDIA_ACCEPT} hidden
+          <input ref={fileInput} type="file" accept={ownClip ? VIDEO_ACCEPT : MEDIA_ACCEPT} hidden
             onChange={(e) => choose(e.target.files[0])} />
         </div>
 
         {file?.size > BIG_FILE && (
           <p className="new-project-warning">This file is over 2 GB, so uploading may take a while.</p>
         )}
+        {creating && ownClip && <p className="new-project-warning" role="status">Uploading your clip and adding captions. Longer videos can take a minute.</p>}
         {error && <p className="new-project-error" role="alert">{error}</p>}
 
         <div className="new-project-actions">
           <button type="button" className="btn btn-ghost btn-small" onClick={onClose} disabled={creating}>Cancel</button>
           <button type="submit" className="btn btn-primary btn-small" disabled={creating}>
-            {creating ? <><Spinner size={14} label="Creating" /> Creating…</> : "Create project"}
+            {creating
+              ? <><Spinner size={14} label="Creating" /> {ownClip ? "Uploading and preparing…" : "Creating…"}</>
+              : ownClip ? "Create and open Editor" : "Create project"}
           </button>
         </div>
       </form>

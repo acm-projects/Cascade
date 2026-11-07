@@ -9,6 +9,7 @@ from .chat import chat
 from .ai import ai_status
 from .audio_assets import list_assets, upload_asset, asset_media
 from .trends import start as start_trends, latest as get_trends, apply_result
+from .own_clip import upload_clip
 
 router = APIRouter(prefix="/api/projects/{pid}/editor")
 
@@ -29,6 +30,7 @@ router.add_api_route('/{jid}/{index}/audio', list_assets, methods=['GET'])
 router.add_api_route('/{jid}/{index}/audio', upload_asset, methods=['POST'])
 router.add_api_route('/{jid}/{index}/audio/{asset_id}/media', asset_media, methods=['GET'])
 router.add_api_route('', editor_index, methods=['GET'])
+router.add_api_route('/upload', upload_clip, methods=['POST'], status_code=201)
 router.add_api_route('/ai-status', ai_status, methods=['GET'])
 router.add_api_route('/{jid}/{index}/reframe', start_reframe, methods=['POST'])
 router.add_api_route('/{jid}/{index}/reframe/{analysis_id}', reframe_status, methods=['GET'])

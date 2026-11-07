@@ -66,7 +66,7 @@ def build(plan, words):
             reset = (b(k), b(k+.25))
     if reset and placed[-1]['plan'].verdict: reset = None  # nothing to open onto
     end_beat = math.ceil(max(cur, reset[1] if reset else 0)/beat+.5)
-    card = max(4, math.ceil(3.2/beat)) if plan.end_hero or plan.end_line else 1
+    card = max(4, math.ceil(3.2/beat)) if plan.end_hero or plan.end_line else max(2, math.ceil(1.6/beat))  # the end card always shows "Edited by Cascade"
     layout = Layout(beat=beat, total=b(end_beat+card), lines=placed, closing=closing, silence=silence, reset=reset, end_card=b(end_beat))
     layout.events = _events(plan, layout)
     previous = None

@@ -1,0 +1,42 @@
+/* The scene keeps the picture's shape (1671 x 941) and covers its page, a little oversized
+   so the swaying leaves never show a gap at the edge. Layers are placed in % of the picture.
+   The page needs: position: relative; overflow: hidden; isolation: isolate. */
+.jungle-scene {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  width: max(104vw, calc(104vh * 1671 / 941));
+  aspect-ratio: 1671 / 941;
+  translate: -50% -50%;
+  background-size: 100% 100%;
+  pointer-events: none;
+}
+
+/* Each group bends a little from where it grows, on its own timing. --sway is how far, in degrees. */
+.jungle-leaves {
+  position: absolute;
+  height: auto;
+  will-change: transform;
+  animation: jungle-sway var(--sway-time) ease-in-out var(--sway-delay) infinite alternate;
+}
+
+.jungle-leaves-topleft     { --sway: 0.45; --sway-time: 5.2s; --sway-delay: -1s;   left: 0;      top: 0;      width: 55.36%; transform-origin: 15% 0; }
+.jungle-leaves-lowleft     { --sway: -1.2; --sway-time: 4.4s; --sway-delay: -2.5s; left: 0;      top: 21.79%; width: 14.36%; transform-origin: 0 60%; }
+.jungle-leaves-topright    { --sway: -0.6; --sway-time: 5.8s; --sway-delay: -3s;   left: 69.72%; top: 0;      width: 30.28%; transform-origin: 80% 0; }
+.jungle-leaves-vine1       { --sway: 2.4;  --sway-time: 3.8s; --sway-delay: -0.6s; left: 74.69%; top: 7.65%;  width: 5.80%;  transform-origin: 50% 0; }
+.jungle-leaves-vine2       { --sway: -2.8; --sway-time: 4.3s; --sway-delay: -2s;   left: 83.30%; top: 10.63%; width: 4.37%;  transform-origin: 50% 0; }
+.jungle-leaves-bottomleft  { --sway: -0.9; --sway-time: 5s;   --sway-delay: -2s;   left: 0;      top: 52.60%; width: 27.23%; transform-origin: 0 100%; }
+.jungle-leaves-bottomright { --sway: 0.9;  --sway-time: 6s;   --sway-delay: -4.2s; left: 66.43%; top: 59.51%; width: 33.57%; transform-origin: 100% 100%; }
+
+@keyframes jungle-sway {
+  from { transform: rotate(calc(var(--sway) * -1deg)); }
+  to { transform: rotate(calc(var(--sway) * 1deg)); }
+}
+
+/* People who turned off animations on their device get the still picture */
+@media (prefers-reduced-motion: reduce) {
+  .jungle-leaves {
+    animation: none;
+  }
+}

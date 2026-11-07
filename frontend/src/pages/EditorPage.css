@@ -188,28 +188,56 @@
   overflow: hidden;
 }
 
+/* Tool tabs: small buttons that wrap in the narrow panel; the open one is green */
 .editor-panel-tabs {
   display: flex;
-  flex-wrap: wrap;            /* 4 tabs don't fit on one line in the narrow panel */
-  gap: calc(12 * var(--u));
-  padding: calc(17 * var(--u)) calc(18 * var(--u)) 0;
+  flex-wrap: wrap;
+  gap: calc(10 * var(--u));
+  padding: calc(17 * var(--u)) calc(18 * var(--u));
   border-bottom: 1px solid rgba(65, 52, 20, 0.25);
 }
 
 .editor-panel-tab {
-  padding-bottom: calc(8 * var(--u));
-  border: none;
-  border-bottom: 3px solid transparent;
-  background: none;
+  padding: calc(8 * var(--u)) calc(16 * var(--u));
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-pill);
+  background: var(--color-cream-card);
+  color: var(--color-wood-text);
+  box-shadow: 0 3px 0 var(--color-wood-dark);  /* a little "ledge" so it reads as pressable */
   font-family: var(--font-heading);
   font-weight: 500;
-  font-size: calc(24 * var(--u));
+  font-size: calc(20 * var(--u));
   white-space: nowrap;
   cursor: pointer;
+  transition: translate 0.1s, box-shadow 0.1s, filter 0.15s;
+}
+
+.editor-panel-tab:hover:not(:disabled) {
+  filter: brightness(1.05);
+  translate: 0 -1px;
+  box-shadow: 0 4px 0 var(--color-wood-dark);
+}
+
+/* Pressed in: the open tab, or while clicking */
+.editor-panel-tab:active:not(:disabled),
+.editor-panel-tab.active {
+  translate: 0 2px;
+  box-shadow: 0 1px 0 var(--color-wood-dark);
 }
 
 .editor-panel-tab.active {
-  border-bottom-color: var(--color-wood-dark);
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+}
+
+.editor-panel-tab:focus-visible {
+  outline: 3px solid var(--color-leaf);
+  outline-offset: 2px;
+}
+
+.editor-panel-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .editor-panel-content {
@@ -256,6 +284,17 @@
   padding: var(--space-3);
 }
 
+/* Undo and Redo: just the arrow */
+.editor-history-btn {
+  padding: 0.25em 0.45em;
+}
+
+.editor-history-btn .ui-icon {
+  width: 1.15em;
+  height: 1.15em;
+  stroke-width: 2.6;
+}
+
 .editor-save {
   font-family: var(--font-ui);
   font-weight: 700;
@@ -288,3 +327,14 @@
 /* The timeline owns its horizontal scrolling; grid children must be allowed to shrink. */
 .editor-center, .editor-timeline { min-width: 0; }
 .editor-timeline { padding: 12px 10px; overflow: hidden; }
+
+/* Empty Editor: "Upload your own clip" or "Find clips with AI Studio" */
+.editor-empty-choices { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.editor-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.editor-empty-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* "+ Upload clip" at the end of the clip tabs / clip list */
+.er-clip-tab.er-clip-tab-upload { border-style: dashed; opacity: 0.85; }
+.er-clip-tab.er-clip-tab-upload:hover:not(:disabled) { opacity: 1; }
+.er-clip-tab.er-clip-tab-upload:disabled { cursor: progress; }
+.editor-upload-clip { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; width: 100%; justify-content: center; }

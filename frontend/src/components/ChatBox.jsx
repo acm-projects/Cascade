@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./ChatBox.css";
 import leafIcon from "../assets/icons/leaf.svg";
+import Icon from "./ui/Icon";
 
 // A chat panel: header, message list, optional "attached video" tag, text box, and quick buttons.
 //   title / subtitle - header text (leave out for no header)
@@ -9,7 +10,7 @@ import leafIcon from "../assets/icons/leaf.svg";
 //                      (system = a note from the app; changes = small chips under the message)
 //   onSend(text)     - called when the user sends a message
 //   tag              - text for the attachment tag (e.g. the video's name), or null for none
-//   onRemoveTag      - called when the ✕ on the tag is clicked
+//   onRemoveTag      - called when the close (x) on the tag is clicked
 //   quickActions     - [{ label, prompt }]: buttons under the text box that send a ready-made prompt
 //   typing           - show the "…" bubble while the AI is answering
 function ChatBox({
@@ -62,9 +63,9 @@ function ChatBox({
 
       {tag && (
         <div className="chatbox-tag">
-          <span>🎬 {tag}</span>
+          <span><Icon name="film" /> {tag}</span>
           {onRemoveTag && (
-            <button type="button" onClick={onRemoveTag} title="Remove">✕</button>
+            <button type="button" onClick={onRemoveTag} title="Remove" aria-label="Remove"><Icon name="close" /></button>
           )}
         </div>
       )}
@@ -77,7 +78,7 @@ function ChatBox({
           onChange={(e) => setText(e.target.value)}
         />
         <button type="submit" className="chatbox-send" title="Send" disabled={disabled}>
-          ➤
+          <Icon name="send" />
         </button>
       </div>
 

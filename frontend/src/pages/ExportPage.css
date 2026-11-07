@@ -419,5 +419,5 @@
   .export .topnav-title { flex: 1; min-width: 0; }
   .export .topnav-steps { position: static; order: 5; width: 100%; margin: 0; justify-content: space-between; }
   .export .topnav-step { flex: 1; min-width: 0; width: auto; padding: 6px; gap: 5px; font-size: 16px; }
-  .export .topnav-route { display: none; }
+  .export .topnav-user { display: none; }
 }

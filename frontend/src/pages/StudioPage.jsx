@@ -263,7 +263,7 @@ function StudioPage() {
         <div className="studio-empty">
           {error ? (
             <div className="studio-empty-card wood-panel">
-              <EmptyState icon="🌧️" title="Couldn't open AI Studio" text={error.message}
+              <EmptyState icon="cloud" title="Couldn't open AI Studio" text={error.message}
                 action={{ label: "Retry", onClick: refresh }} />
             </div>
           ) : (
