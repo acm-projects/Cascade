@@ -204,7 +204,6 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
       // Quota, engine and planning failures stay visible in the chat; nothing was applied.
       if ([429, 502, 503, 504].includes(err.status)) setChatNote(`NOT APPLIED: ${err.message}`);
       else toast.show(err.message, "error");
-      if (research.research_id) throw err;
     } finally {
       setThinking(false);
       refreshAIStatus();
@@ -310,10 +309,7 @@ function ClipWorkspace({ projectId, clip, sidebar, onExport, registerFlush }) {
           </div>
         </aside>
       </div>
-      {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} disabled={thinking}
-        onClose={() => setTrendsOpen(false)} onApply={(research_id, selection) => sendChat('Apply selected edits from YouTube research.', { research_id, ...(Array.isArray(selection) ? { suggestions: selection } : { suggestion: selection }) })}>
-        <div className="export-post-actions"><button className="editor-choice" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo</button><button className="editor-choice" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</button><small>{draft.saveStatus}</small></div>
-      </TrendsModal>}
+      {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onClose={() => setTrendsOpen(false)} />}
     </>
   );
 }

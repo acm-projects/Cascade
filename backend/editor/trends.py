@@ -27,7 +27,7 @@ TTL = 21600
 POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix='clip-trends')
 LOCK = threading.RLock()
 RUNNING = set()
-REVISION = 'youtube-clip-v3-guided-1'
+REVISION = 'youtube-clip-v4-analysis-1'
 
 class ResearchInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -46,6 +46,7 @@ class ApplyInput(BaseModel):
 class Suggestion(BaseModel):
     model_config = ConfigDict(extra='forbid')
     category: Literal['hook','pacing','captions','visuals','audio']
+    title: str = Field(default='',max_length=80)
     text: str = Field(max_length=700)
     reason: str = Field(max_length=700)
     source_ids: list[str] = Field(max_length=5)
@@ -163,7 +164,7 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
     goal=body.goal.strip() or 'Help me improve this clip’s editing.'
     topic=derive_search(clip,info,goal,body.topic)
     if len(topic)<3:raise HTTPException(422,'Enter a topic with at least three characters.')
-    from backend.cascade_llm import selected_model
+    from backend.trends.claude_route import model as selected_model
     model=selected_model();root=folder(pid,jid,index,user);edit_version=version(body.state)
     key=hashlib.sha256(f'{REVISION}|{model}|{edit_version}|{topic.casefold()}|{goal.casefold()}'.encode()).hexdigest()
     with LOCK:
@@ -183,7 +184,7 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
 
 def tutorial(video_id,work):
     from backend.trends import pipeline
-    from backend.cascade_llm import structured_json
+    from backend.trends.claude_route import structured_json
     path=stage('download',pipeline.download_video,video_id,work,reference=video_id)
     audio=stage('audio_extract',pipeline.extract_audio,path,work,reference=video_id)
     transcript=stage('transcription',pipeline.transcribe,audio,reference=video_id)
@@ -193,9 +194,9 @@ def tutorial(video_id,work):
     return {'techniques':data['techniques'][:8]}
 
 def collect(pid,jid,index,user,state,record,progress):
-    from backend.trends import pipeline,youtube_trends
+    from backend.trends import claude_route,pipeline,youtube_trends
     from backend.trends.router import _compare_tags
-    from backend.cascade_llm import structured_json
+    from backend.trends.claude_route import structured_json
     from .render import export
     request=SimpleNamespace(state=SimpleNamespace(user_id=user))
     clip=selected(pid,jid,index,user);info=details(jid,clip)
@@ -207,7 +208,7 @@ def collect(pid,jid,index,user,state,record,progress):
             _,mapped,clock=mapped_state(state,info)
             transcript=' '.join(c['text'] for c in mapped['cues'])
             speech=speech_evidence(info)
-            if not transcript and info.get('has_audio'):
+            if not transcript and info.get('has_audio') and not claude_route.active():
                 # Missing saved captions are not evidence of silence. Analyze actual
                 # edited audio for research, without overwriting the user's VTT/draft.
                 try:
@@ -257,7 +258,7 @@ def collect(pid,jid,index,user,state,record,progress):
                 'Describe repeated OBSERVED patterns only from example observed_tags; tutorial techniques are explanations, not visual evidence. '
                 'Give a 2–3 sentence plain-language summary, at most 3 concise strengths about THIS clip, and at most 6 prioritized concrete editing opportunities tailored to its editing goal. '
                 'Do not retell reference plots, list schema keys, or call absent reference traits problems. With two examples say both analyzed examples, not widespread trends. '
-                'Each suggestion needs 1–2 short sentences and a concise benefit for THIS clip. No virality or verified TikTok/Instagram trend claims. '
+                'Each suggestion needs a heading of at most 7 words that names this exact advice, 1–2 short sentences and a one-sentence benefit for THIS clip. No virality or verified TikTok/Instagram trend claims. '
                 'Use source_ids only for genuinely supporting references; use [] for an AI-only idea. For each reference supply reference_notes explaining selection relevance and actual learned techniques; tutorials explain techniques, examples show observations. '
                 'Missing transcription never proves no dialogue. Obey speech_evidence uncertainty; frames alone do not reveal audio. '
                 'at is ORIGINAL SELECTED CLIP SOURCE seconds, never output seconds. Use null when no moment can be located; never invent 0 as a default. '
@@ -314,7 +315,7 @@ def run(pid,jid,index,user,state,record,root):
 
 def research_for_chat(pid,jid,index,user,state,topic='',goal=''):
     # Chat can run the same worker synchronously, while UI calls it in the background.
-    from backend.cascade_llm import selected_model
+    from backend.trends.claude_route import model as selected_model
     model=selected_model()
     with LOCK:
         root=folder(pid,jid,index,user)

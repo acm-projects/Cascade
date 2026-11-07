@@ -21,9 +21,6 @@ export function getTrends(token, projectId, jobId, index, researchId) {
 export function analyzeTrends(token, projectId, jobId, index, body) {
   return apiFetch(clipPath(projectId, jobId, index) + '/trends', { token, method: 'POST', body });
 }
-export function applyTrends(token, projectId, jobId, index, body) {
-  return apiFetch(clipPath(projectId, jobId, index) + '/trends/apply', { token, method: 'POST', body });
-}
 
 /**
  * GET /api/projects/{projectId}/editor[?selected_only=true]

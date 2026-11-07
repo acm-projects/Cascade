@@ -158,13 +158,6 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   const [trendsOpen, setTrendsOpen] = useState(false);
   const { info, state, error, patch } = draft;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
-  const api = useApi();
-  async function applyResearch(research_id, suggestion) {
-    const result = await api.applyTrends(projectId, clip.job_id, clip.clip_index, { state, research_id, ...(Array.isArray(suggestion) ? { suggestions: suggestion } : { suggestion }) });
-    draft.change(result.state);
-    draft.setChat([...draft.chat, { role: 'user', text: 'Apply suggested edits from YouTube research.' }, { role: 'assistant', text: result.message }]);
-    return result;
-  }
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
   const framing = useAutoFraming(projectId, clip, state, info, patch);
   const rendering = downloads.working;
@@ -253,10 +246,8 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
 
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
-        {state && !isAudioClip(clip) && <div className="export-post"><Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends · YouTube research</Button></div>}
-        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onApply={applyResearch} onClose={() => setTrendsOpen(false)}>
-          <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</Button><small>{draft.saveStatus}</small></div>
-        </TrendsModal>}
+        {state && !isAudioClip(clip) && <div className="export-post"><Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends analysis</Button></div>}
+        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onClose={() => setTrendsOpen(false)} />}
         {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
         {!isAudioClip(clip) && <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />}
         <div className="export-post">
