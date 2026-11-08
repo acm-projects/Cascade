@@ -165,3 +165,23 @@ body {
   height: 100vh;
   background: var(--color-leaf-mist);
 }
+
+/* Shared scrollbars use the same wood and cream palette as the screen. */
+:root {
+  --scrollbar-track: var(--color-cream-card);
+  --scrollbar-thumb: var(--color-plank);
+  --scrollbar-thumb-hover: var(--color-wood-dark);
+}
+html, body, * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 2px solid var(--scrollbar-track);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }

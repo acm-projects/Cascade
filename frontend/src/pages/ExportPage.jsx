@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
@@ -31,6 +32,7 @@ function ExportPage() {
   const [error, setError] = useState(null);
   const [projectName, setProjectName] = useState(null);
   const [currentKey, setCurrentKey] = useState(null);
+  const [youtubePanelTarget, setYoutubePanelTarget] = useState(null);
   const [inZip, setInZip] = useState([]);       // clip keys to put in the ZIP
   const [settings, setSettings] = useState({resolution: "original", includeCaptions: true});
   const downloads = useDownloads(api, projectId, projectName, settings);
@@ -93,7 +95,14 @@ function ExportPage() {
         <div className="export-empty">{message}</div>
       ) : (
         <div className="export-body">
-          <aside className="export-tree" aria-label="Clips to export">
+          <aside className="export-sidebar" aria-label="Export options">
+          <div className="export-footer">
+            <Button size="sm" onClick={async () => {
+              try { await activeFlush.current?.(); navigate(`/projects/${projectId}/editor`); }
+              catch (err) { toast.show(err.message, "error"); }
+            }}>← Back to editor</Button>
+          </div>
+          <section className="export-tree" aria-label="Clips to export">
             {tree.map((session) => {
               const sessionClips = session.waves.flatMap((wave) => wave.clips);
               return (
@@ -120,14 +129,20 @@ function ExportPage() {
                 </TreeGroup>
               );
             })}
+          </section>
+          <section className="export-settings">
+            <ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)} />
+          </section>
+          {!isAudioClip(current) && <section className="export-youtube" aria-label="YouTube tools" ref={setYoutubePanelTarget} />}
+          <div className="export-footer">
+            <Button variant="primary" size="sm" onClick={() => navigate("/projects")}>Go to projects</Button>
+          </div>
           </aside>
 
           <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads} registerFlush={registerFlush}
             clips={clips} picked={picked} onPick={pickClip} onDownloadSelected={downloadZip}
             clipNumber={clips.indexOf(current) + 1}
-            settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)}/>}
-            onEdit={() => navigate(`/projects/${projectId}/editor`)}
-            onProjects={() => navigate("/projects")}
+            youtubePanelTarget={youtubePanelTarget}
           />
         </div>
       )}
@@ -152,7 +167,7 @@ function TreeGroup({ label, title, checked, onCheck, children }) {
 }
 
 // Everything right of the list, for the clip on screen. key={clip key}, so it follows the chosen clip.
-function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, onEdit, onProjects, downloads, clipNumber, settingsPanel, registerFlush }) {
+function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, downloads, clipNumber, registerFlush, youtubePanelTarget }) {
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [trendsOpen, setTrendsOpen] = useState(false);
@@ -201,18 +216,17 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
 
   return (
     <main className="export-main">
-      <div className="export-actions">
-        <Button size="sm" onClick={downloadMp4} disabled={!state || rendering || framing.status === "working"}>
-          {rendering ? <><Spinner size={14} label="Rendering" /> Rendering…</> : "Download this clip"}
-        </Button>
-        <Button variant="primary" size="sm" onClick={onDownloadSelected} disabled={rendering || !picked.length}>
-          Download selected clips ({picked.length})
-        </Button>
-      </div>
-
       <section className="export-stage">
         <header className="export-stage-head">
           <h2 className="export-title"><Icon name="grid" /> {clips.length} {clips.length === 1 ? "clip" : "clips"}</h2>
+          <div className="export-actions">
+            <Button size="sm" onClick={downloadMp4} disabled={!state || rendering || framing.status === "working"}>
+              {rendering ? <><Spinner size={14} label="Rendering" /> Rendering…</> : "Download this clip"}
+            </Button>
+            <Button variant="primary" size="sm" onClick={onDownloadSelected} disabled={rendering || !picked.length}>
+              Download selected clips ({picked.length})
+            </Button>
+          </div>
           {clips.length > 1 && (
             <button type="button" className="btn btn-small btn-ghost" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
               {expanded ? "Stack clips ↑" : "Expand clips ↓"}
@@ -239,25 +253,25 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
             </div>
           </div>
         )}
+        <div className="export-pager">
+          <button type="button" className="btn btn-small" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous clip">←</button>
+          <span>{clipNumber} of {clips.length}</span>
+          <button type="button" className="btn btn-small" onClick={() => goTo(index + 1)} disabled={index === clips.length - 1} aria-label="Next clip">→</button>
+        </div>
       </section>
-
-      <div className="export-pager">
-        <button type="button" className="btn btn-small" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous clip">←</button>
-        <span>{clipNumber} of {clips.length}</span>
-        <button type="button" className="btn btn-small" onClick={() => goTo(index + 1)} disabled={index === clips.length - 1} aria-label="Next clip">→</button>
-      </div>
 
       {status && <p className="export-status" role="status">{status}</p>}
 
-      <section className="export-settings">{settingsPanel}</section>
-
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
-        {state && !isAudioClip(clip) && <div className="export-post"><Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends · YouTube research</Button></div>}
         {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onApply={applyResearch} onClose={() => setTrendsOpen(false)}>
           <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}><Icon name="undo" /> Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}><Icon name="redo" /> Redo</Button><small>{draft.saveStatus}</small></div>
         </TrendsModal>}
-        {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
+        {!isAudioClip(clip) && youtubePanelTarget && createPortal(<>
+          <h3 className="export-section-title">YouTube tools</h3>
+          {state && <Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends · YouTube research</Button>}
+          <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />
+        </>, youtubePanelTarget)}
         <div className="export-post">
           <h3 className="export-social-title">{isAudioClip(clip) ? <><Icon name="headphones" /> Share audio</> : <><Icon name="phone" /> Instagram, TikTok & more</>}</h3>
           <p className="export-social-note">
@@ -269,10 +283,6 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
         </div>
       </section>
 
-      <div className="export-footer">
-        <Button size="sm" onClick={async () => { try { await draft.flush(); onEdit(); } catch (err) { toast.show(err.message, "error"); } }}>← Back to editor</Button>
-        <Button variant="primary" size="sm" onClick={onProjects}>Back to projects →</Button>
-      </div>
     </main>
   );
 }
