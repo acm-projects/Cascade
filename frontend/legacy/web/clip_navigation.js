@@ -1,4 +1,4 @@
-/* Shared nested navigation; selection and opening a clip are independent actions. */
+c/* Shared nested navigation; selection and opening a clip are independent actions. */
 window.CascadeClipNavigation=class {
   constructor({container,items,selected=[],selectable=false,onOpen,onSelection}) {
     this.items=items;this.selected=new Set(selected);this.groups=[];this.buttons=new Map();this.leaves=[];
