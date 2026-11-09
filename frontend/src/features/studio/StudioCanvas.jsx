@@ -59,7 +59,7 @@ function StudioCanvas({ nodes, edges, nodeTypes, edgeTypes, onNodeClick, onDropF
           flowRef.current = instance;
           window.dispatchEvent(new CustomEvent("cascade:canvas-move", { detail: instance.getViewport() }));
         }}
-        onMove={(_, viewport) => window.dispatchEvent(new CustomEvent("cascade:canvas-move", { detail: viewport }))}   // the 3D lake slides along
+        onMove={(_, viewport) => window.dispatchEvent(new CustomEvent("cascade:canvas-move", { detail: viewport }))}   // the 3D beach slides along
         fitView
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.2}

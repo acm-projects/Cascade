@@ -242,16 +242,35 @@
   gap: 10px; padding: 12px; overflow-y: auto;
   border-bottom: 0; border-left: 1px solid color-mix(in srgb, var(--color-wood-dark) 20%, transparent);
 }
-.editor-split .es-panel .editor-panel-tab {
+/* The side rail's buttons. Every state is listed, so the top-tab look above (stretchy, flat bottom) never leaks in on hover or click. */
+.editor-split .es-panel .editor-panel-tab,
+.editor-split .es-panel .editor-panel-tab:hover:not(:disabled),
+.editor-split .es-panel .editor-panel-tab:active:not(:disabled),
+.editor-split .es-panel .editor-panel-tab.active {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; flex: 0 0 auto; min-height: 44px;
+  gap: 4px; flex: 0 0 auto; min-height: 44px; padding: 8px 4px;
   border: 0; border-radius: 8px; background: var(--color-cream-card) var(--wood-cream) center / cover;
   box-shadow: 0 3px 0 #d6bf8b;
+  translate: none; filter: none;
+}
+.editor-split .es-panel .editor-panel-tab:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+.editor-split .es-panel .editor-panel-tab:active:not(:disabled) {
+  translate: 0 2px;
+  box-shadow: 0 1px 0 #d6bf8b;
 }
 .editor-split .es-panel .editor-panel-tab.active,
-.editor-split .es-panel .editor-panel-tab.active:hover:not(:disabled) {
+.editor-split .es-panel .editor-panel-tab.active:hover:not(:disabled),
+.editor-split .es-panel .editor-panel-tab.active:active:not(:disabled) {
+  translate: none;
   background: var(--color-leaf) var(--wood-green) center / cover;
   box-shadow: 0 3px 0 color-mix(in srgb, var(--color-jungle-deep) 45%, var(--color-leaf));
+}
+/* Keyboard focus ring drawn inside the button, so the rail's edge doesn't cut it off */
+.editor-split .es-panel .editor-panel-tab:focus-visible {
+  outline: 2px solid var(--color-jungle-deep);
+  outline-offset: -4px;
 }
 .es-tab-label { font: 700 11px/1.2 var(--font-ui); white-space: normal; text-align: center; }
 .editor-split .es-panel .es-export,

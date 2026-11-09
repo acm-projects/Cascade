@@ -344,7 +344,7 @@ function StudioPage() {
           chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
 
         <div className="studio-canvas-frame">
-          <IsoWorld framing="lake" />
+          <IsoWorld framing="beach" />
           <StudioCanvas nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onDropFile={chooseFile} onNodeDragStop={savePosition} />
         </div>

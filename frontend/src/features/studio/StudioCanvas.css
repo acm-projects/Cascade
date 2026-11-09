@@ -4,7 +4,7 @@
   width: 100%;
   height: 100%;
 
-  /* See-through, so the 3D waterfall lake (features/landing3d/lakeScene.js) shows behind the cards */
+  /* See-through, so the 3D beach (features/landing3d/beachScene.js) shows behind the cards */
   --xy-background-color: transparent;
   --xy-background-pattern-color: transparent;
 

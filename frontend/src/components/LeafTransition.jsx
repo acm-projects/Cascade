@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./LeafTransition.css";
 import { LeafTransitionContext } from "../context/leafTransitionValue";
@@ -20,12 +20,37 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// One cartoon leaf drawing. The Editor's preview (features/editor/PreviewLeaves.jsx) uses it too.
+export function Leaf({ color, preserveAspectRatio }) {
+  return (
+    <svg viewBox="0 0 100 160" preserveAspectRatio={preserveAspectRatio}>
+      <path
+        d="M50 3C69 16 81 31 88 47L78 50L93 62C96 76 95 88 90 100L77 99L86 113C78 128 66 143 50 157C34 143 22 128 14 113L23 99L10 100C5 88 4 76 7 62L22 50L12 47C19 31 31 16 50 3Z"
+        fill={color.base}
+        stroke="#0a4426"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <path d="M50 3C69 16 81 31 88 47L78 50L93 62C96 76 95 88 90 100L77 99L86 113C78 128 66 143 50 157Z" fill={color.light} />
+      <path
+        d="M50 12V150M50 45L27 30M50 45L73 30M50 76L20 58M50 76L80 58M50 108L27 92M50 108L73 92"
+        fill="none"
+        stroke="#0a4426"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.65"
+      />
+    </svg>
+  );
+}
+
 // Wraps the pages. The wash of water lives here, above the pages, so it stays on screen while the page underneath changes.
 function LeafTransition({ children }) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState("idle");   // idle -> cover -> reveal -> idle
   const [style, setStyle] = useState("push");
   const running = useRef(false);
+  const shownLocation = useLocation();   // the page to draw (App.jsx passes it to <Routes>)
 
   // style: "push" (the default) or "dive" (from Landing). ready: an optional promise to wait for (the next page's code).
   const leafNavigate = useCallback(async (to, { state, ready, style: chosen = "push" } = {}) => {
