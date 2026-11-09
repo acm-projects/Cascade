@@ -478,10 +478,11 @@ function buildScreen(root) {
 
 function buildClipCards(root, random) {
   // The route down the river, from the screen to the edge of the island, then out across the sea
+  // Each waterfall: float past its edge, then arc down in front of the falling water (never through it)
   const route = [
-    [-5.6, HIGH - 0.04], [-2.56, HIGH - 0.04], [-2.32, MID + 0.04], [-2.1, MID - 0.04], [2.44, MID - 0.04],
-    [2.68, LOW + 0.04], [2.9, LOW - 0.04], [6.42, LOW - 0.04],
-    [6.78, SEA_LEVEL + 0.03], [7.1, SEA_LEVEL + 0.02], [13, SEA_LEVEL + 0.02],
+    [-5.6, HIGH - 0.04], [-2.62, HIGH - 0.04], [-2.38, HIGH - 0.04], [-2.08, (HIGH + MID) / 2], [-1.93, MID + 0.05], [-1.7, MID - 0.04],
+    [2.4, MID - 0.04], [2.62, MID - 0.04], [2.92, (MID + LOW) / 2], [3.07, LOW + 0.05], [3.3, LOW - 0.04],
+    [6.42, LOW - 0.04], [6.63, LOW - 0.04], [6.93, (LOW + SEA_LEVEL) / 2], [7.08, SEA_LEVEL + 0.04], [7.35, SEA_LEVEL + 0.02], [13, SEA_LEVEL + 0.02],
   ].map(([z, y]) => new THREE.Vector2(z, y));
   const lengths = [0];
   for (let i = 1; i < route.length; i += 1) lengths.push(lengths[i - 1] + route[i].distanceTo(route[i - 1]));
@@ -506,22 +507,33 @@ function buildClipCards(root, random) {
     cards.push({ card, start: i / COUNT, lane: (random() - 0.5) * 0.92, phase: random() * 6.28, spin: (random() - 0.5) * 0.7 });
   }
 
+  // Where a card is after travelling this far along the route (x = along the river, y = height)
+  const point = new THREE.Vector2();
+  function placeAt(distance) {
+    const clamped = Math.min(total, Math.max(0, distance));
+    let segment = 0;
+    while (segment < route.length - 2 && lengths[segment + 1] < clamped) segment += 1;
+    const along = (clamped - lengths[segment]) / (lengths[segment + 1] - lengths[segment]);
+    return point.copy(route[segment]).lerp(route[segment + 1], along);
+  }
+
   const SECONDS_PER_TRIP = 34;
   return (time) => {
     for (const item of cards) {
       const progress = ((time / SECONDS_PER_TRIP + item.start) % 1);
       const distance = progress * total;
-      let segment = 0;
-      while (segment < route.length - 2 && lengths[segment + 1] < distance) segment += 1;
-      const from = route[segment];
-      const to = route[segment + 1];
-      const along = (distance - lengths[segment]) / (lengths[segment + 1] - lengths[segment]);
-      const slope = Math.atan2(from.y - to.y, to.x - from.x);
+      // Tip by looking a little behind and ahead, so a card tilts smoothly over each edge
+      const behind = placeAt(distance - 0.08).clone();
+      const ahead = placeAt(distance + 0.18).clone();
+      const slope = Math.atan2(behind.y - ahead.y, ahead.x - behind.x);
+      const here = placeAt(distance);
       const bob = slope < 0.2 ? Math.sin(time * 2 + item.phase) * 0.018 : 0;
-      const z = from.x + (to.x - from.x) * along;
+      const z = here.x;
       const fanOut = 1 + Math.max(0, z - 7) * 0.75;   // out at sea, the clips spread apart
-      item.card.position.set(RIVER_X + item.lane * fanOut + Math.sin(time * 0.7 + item.phase) * 0.05, from.y + (to.y - from.y) * along + 0.07 + bob, z);
-      item.card.rotation.set(slope * 0.9 + Math.sin(time * 1.4 + item.phase) * 0.03, item.spin + Math.sin(time * 0.5 + item.phase) * 0.12, Math.cos(time * 1.2 + item.phase) * 0.03);
+      const level = Math.cos(Math.min(slope, Math.PI / 2));   // 1 when flat, 0 when dropping straight down
+      item.card.position.set(RIVER_X + item.lane * fanOut + Math.sin(time * 0.7 + item.phase) * 0.05, here.y + 0.07 + bob, z);
+      // While falling a card stays square to the waterfall, so no corner swings back into the water
+      item.card.rotation.set(slope + Math.sin(time * 1.4 + item.phase) * 0.03 * level, (item.spin + Math.sin(time * 0.5 + item.phase) * 0.12) * level, Math.cos(time * 1.2 + item.phase) * 0.03 * level);
       // Grow as they leave the screen, shrink as they fall off the island
       const fadeIn = Math.min(1, progress / 0.035);
       const fadeOut = Math.min(1, (1 - progress) / 0.05);
