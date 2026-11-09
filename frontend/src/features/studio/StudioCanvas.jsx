@@ -55,11 +55,7 @@ function StudioCanvas({ nodes, edges, nodeTypes, edgeTypes, onNodeClick, onDropF
         onNodesChange={(changes) => setShownNodes((current) => applyNodeChanges(changes, current))}
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
-        onInit={(instance) => {
-          flowRef.current = instance;
-          window.dispatchEvent(new CustomEvent("cascade:canvas-move", { detail: instance.getViewport() }));
-        }}
-        onMove={(_, viewport) => window.dispatchEvent(new CustomEvent("cascade:canvas-move", { detail: viewport }))}   // the 3D beach slides along
+        onInit={(instance) => (flowRef.current = instance)}
         fitView
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.2}

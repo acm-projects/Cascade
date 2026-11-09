@@ -17,7 +17,6 @@ import useStudioData from "../features/studio/useStudioData";
 import { nodeTypes } from "../features/studio/nodes";
 import { edgeTypes } from "../features/studio/edges";
 import { buildGraph, displayClips, sameRef, sessionGroups } from "../features/studio/graph";
-import IsoWorld from "../features/landing3d/IsoWorld";
 
 const isRunning = (group) => ["queued", "processing"].includes(group.state);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -344,7 +343,6 @@ function StudioPage() {
           chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
 
         <div className="studio-canvas-frame">
-          <IsoWorld framing="beach" />
           <StudioCanvas nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onDropFile={chooseFile} onNodeDragStop={savePosition} />
         </div>

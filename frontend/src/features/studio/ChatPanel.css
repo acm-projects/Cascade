@@ -7,6 +7,34 @@
   color: var(--color-wood-text);
 }
 
+/* The capybara head badge next to the title */
+.chat-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chat-panel-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--surface-edge);
+  border-radius: 50%;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+
+/* The big capybara: pushed to the bottom of the message area */
+.chat-panel-mascot {
+  flex: none;
+  align-self: center;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
 .chat-panel-header h2 {
   font-family: var(--font-display);
   font-weight: normal;

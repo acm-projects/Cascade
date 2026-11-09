@@ -23,8 +23,6 @@
 
 /* The canvas is a block of water, with a thick edge like everything else */
 .studio-canvas-frame {
-  position: relative;
-  isolation: isolate;   /* the 3D beach sits behind the canvas */
   min-height: 0;
   overflow: hidden;
   border: var(--panel-border);

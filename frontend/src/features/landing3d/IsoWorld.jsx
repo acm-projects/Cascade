@@ -8,7 +8,6 @@ const IslandCanvas = lazy(() => import("./IslandCanvas"));
 //   framing="hero"     - big, on the right, next to the words (Landing)
 //   framing="backdrop"   - low on the screen, behind the page's content (Sign-in)
 //   framing="underwater" - under the sea below the island, behind the page's content (Projects)
-//   framing="beach"      - a sandy beach, behind the AI Studio canvas
 function IsoWorld({ framing = "hero" }) {
   return (
     <div className={`iso-world iso-world-${framing}`} aria-hidden="true">
