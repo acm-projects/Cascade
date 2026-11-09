@@ -8,6 +8,16 @@
   background: linear-gradient(160deg, #63e6df, #2fb4dc 62%, #1f9fd6);
 }
 
+/* Projects: deep water until the 3D sea floor appears */
+.iso-world-underwater {
+  background: linear-gradient(0deg, #0b3a6e, #1663a8 55%, #2fb4dc);
+}
+
+/* AI Studio's canvas: lake-colored until the 3D waterfall lake appears */
+.iso-world-lake {
+  background: linear-gradient(180deg, #2fa36f, #3fb9b0 30%, #1d8fb0);
+}
+
 .iso-world-holder,
 .iso-world-canvas {
   position: absolute;

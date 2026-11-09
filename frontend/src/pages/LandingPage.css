@@ -132,9 +132,9 @@
   width: min(3.5vw, 6vh);
   aspect-ratio: 1;
   border-radius: 22%;
-  background: linear-gradient(180deg, #fffbea, #f4e7c5);
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
   box-shadow:
-    0 0.6vh 0 #c7ad78,
+    0 0.6vh 0 var(--surface-edge),
     0 1.4vh 1.6vh rgba(10, 60, 50, 0.25);
   color: #17643a;
 }

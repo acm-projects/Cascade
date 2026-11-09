@@ -31,8 +31,8 @@
   --color-accent-text: #ffffff;
 
   /* Jungle / wood colors (from the fleshed-out Projects page) */
-  --color-wood-dark: #6f5429;      /* soft brown outlines and thin edges */
-  --color-wood-text: #423717;      /* brown headings */
+  --color-wood-dark: #2e5f80;      /* soft outlines and thin edges (deep sea blue) */
+  --color-wood-text: #0f3552;      /* headings (deep sea blue) */
   --color-cream: #e3d5b1;          /* logo text on the green bar */
   --color-vine: #3e7b4f;           /* the vines connecting clips on the AI Studio canvas */
 
@@ -42,17 +42,36 @@
   --color-jungle: #115525;         /* the lighter end of the top-bar gradient */
   --color-leaf: #3fae4a;           /* bright leaf green: main buttons, highlights */
   --color-leaf-mist: #eef6ee;      /* pale green behind the leafy backgrounds */
-  --color-cream-card: #f8efd6;     /* card / panel background */
+  --color-cream-card: #e2f7f5;     /* card / panel background (pale seafoam) */
   --color-plank: #8a5a2b;          /* plank brown accent */
   --color-text-green: #1f3d22;     /* dark green text */
   --color-lake-ink: #2c3e4f;       /* blue-gray outline on the landing "CASCADE" */
   --radius-card: 16px;
   --shadow-soft: 0 6px 18px rgba(10, 50, 60, 0.24);
 
+  /* ---------- Surfaces: cards, panels, buttons and pop-ups ----------
+     Every chunky block in the app takes its colors from here, so change these to recolor them all.
+     They match the sea: pale seafoam faces, with a deep-blue edge underneath (like the sea floor). */
+  --surface-light: #f3fdfc;       /* the top of a block's face */
+  --surface: #d4f1f0;             /* the bottom of a block's face */
+  --surface-edge: #9bd2db;        /* the thin light edge just under a block */
+  --surface-base: #2c6a8f;        /* the thick deep edge under that */
+  --surface-ink: #0f3552;         /* text on a block */
+  --surface-ink-soft: #3e6b87;    /* quieter text on a block */
+  --card-cap-light: #6fe3e0;      /* the strip across the top of a project card */
+  --card-cap: #34c3d0;
+  --card-cap-edge: #1f93a8;
+  --bar-light: #1b6aa0;           /* the top bar of every page */
+  --bar-dark: #0f4a7c;
+  --bar-edge: #08294a;
+  --canvas: #f1e4c4;              /* the AI Studio canvas, like warm sand */
+  --canvas-dots: rgba(140, 105, 50, 0.32);
+  --canvas-map: #e6d3a8;          /* the little map in its corner */
+
   /* ---------- Textures ----------
      Every box uses --panel-bg + --panel-border, every main button uses --wood-green.
      To restyle all of them at once, change these lines. */
-  --wood-cream: linear-gradient(180deg, #fffbea, #f6ebcd);
+  --wood-cream: linear-gradient(180deg, var(--surface-light), var(--surface));
   --wood-green: linear-gradient(180deg, #84dc4f, #4cb83e 60%, #3fa836);
   --panel-bg: var(--color-cream-card) var(--wood-cream) center / cover;
   --panel-border: 0 solid transparent;
@@ -60,13 +79,13 @@
 
   /* Isometric look: no outlines. A block is a cream face with a thick edge of cream and soil underneath. */
   --block-edge:
-    0 max(3px, calc(6 * var(--u))) 0 #d6bf8b,
-    0 max(6px, calc(13 * var(--u))) 0 #8f6a3c,
+    0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge),
+    0 max(6px, calc(13 * var(--u))) 0 var(--surface-base),
     0 max(12px, calc(26 * var(--u))) calc(26 * var(--u)) rgba(10, 50, 60, 0.32);
   /* The same block, thinner: for panels that sit close together */
   --panel-edge:
-    0 5px 0 #d6bf8b,
-    0 10px 0 #8f6a3c,
+    0 5px 0 var(--surface-edge),
+    0 10px 0 var(--surface-base),
     0 18px 18px rgba(10, 50, 60, 0.3);
   --sea-deep: #1f9fd6;
   --sea-shallow: #63e6df;
@@ -105,7 +124,7 @@ body {
    Sizes use "em", so changing font-size scales the whole button. */
 .btn {
   --press: max(3px, 0.2em);
-  --edge: #c7ad78;
+  --edge: var(--surface-edge);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -115,7 +134,7 @@ body {
   border-radius: 0.5em;
   background: var(--wood-cream);
   box-shadow: 0 var(--press) 0 var(--edge), 0 calc(var(--press) + 4px) 8px rgba(10, 50, 60, 0.22);
-  color: #4a3419;
+  color: var(--surface-ink);
   font-family: var(--font-display);
   font-size: calc(40 * var(--u));
   line-height: 1.2;

@@ -6,7 +6,7 @@
   height: calc(76 * var(--u));
   flex-shrink: 0;
   border-radius: 50%;
-  box-shadow: 0 max(2px, calc(4 * var(--u))) 0 #0b3f28;
+  box-shadow: 0 max(2px, calc(4 * var(--u))) 0 var(--bar-edge);
   overflow: hidden;
 }
 

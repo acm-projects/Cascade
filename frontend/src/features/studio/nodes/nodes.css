@@ -10,7 +10,7 @@
 .studio-pad-label {position:absolute;inset:0;display:grid;place-items:center;padding-top:7px;font:700 21px var(--font-heading);color:#173e29;}
 .studio-pad-status {font:600 11px var(--font-ui);padding:3px 8px;border-radius:20px;background:var(--color-cream-card);white-space:nowrap;}
 .studio-prompt-pad.is-error .studio-pad-status {color:#9b3629;}
-.studio-pad-status {box-shadow:0 2px 0 #c7ad78;}
+.studio-pad-status {box-shadow:0 2px 0 var(--surface-edge);}
 .studio-prompt-pad.is-processing .studio-pad-leaf,.studio-prompt-pad.is-queued .studio-pad-leaf {fill:#b4cf7d;}
 @media(prefers-reduced-motion:reduce) {.studio-pad-button {transition:none;}}
 .studio-node {
@@ -22,7 +22,7 @@
   border-radius: 16px;
   background: var(--wood-cream);
   color: var(--color-wood-text);
-  box-shadow: 0 4px 0 #d6bf8b, 0 9px 0 #8f6a3c, 0 16px 14px rgba(8, 60, 90, 0.35);
+  box-shadow: 0 4px 0 var(--surface-edge), 0 9px 0 var(--surface-base), 0 16px 14px rgba(8, 60, 90, 0.35);
 }
 
 /* Selected box (React Flow adds .selected to the wrapper) */

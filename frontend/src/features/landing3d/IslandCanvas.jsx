@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
 import { createIslandScene } from "./islandScene";
+import { createUnderwaterScene } from "./underwaterScene";
+import { createLakeScene } from "./lakeScene";
 
-// The 3D island, filling its parent. If the device can't draw 3D, nothing is added and the plain sea color stays.
+// The 3D world, filling its parent: the island (Landing, Sign-in), under the sea (Projects) or the waterfall lake (AI Studio's canvas).
+// If the device can't draw 3D, nothing is added and the plain sea color stays.
 function IslandCanvas({ framing }) {
   const holderRef = useRef(null);
 
@@ -14,7 +17,8 @@ function IslandCanvas({ framing }) {
     holder.append(canvas);
     let stop = null;
     try {
-      stop = createIslandScene(canvas, { still, framing });
+      const create = { underwater: createUnderwaterScene, lake: createLakeScene }[framing];
+      stop = create ? create(canvas, { still }) : createIslandScene(canvas, { still, framing });
     } catch {
       canvas.remove();
     }

@@ -4,10 +4,10 @@
   position: relative;
   aspect-ratio: 382 / 292;   /* keeps the card shape as the cards stretch to fill the row */
   border-radius: calc(24 * var(--u));
-  background: linear-gradient(180deg, #fffbea, #f6ebcd);
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
   box-shadow:
-    0 max(3px, calc(6 * var(--u))) 0 #d6bf8b,
-    0 max(7px, calc(14 * var(--u))) 0 #8f6a3c,
+    0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge),
+    0 max(7px, calc(14 * var(--u))) 0 var(--surface-base),
     0 max(14px, calc(28 * var(--u))) calc(26 * var(--u)) rgba(10, 60, 50, 0.3);
   transition: translate 0.14s, box-shadow 0.14s;
 }
@@ -19,16 +19,16 @@
   inset: 0 0 auto;
   height: calc(20 * var(--u));
   border-radius: calc(24 * var(--u)) calc(24 * var(--u)) 0 0;
-  background: linear-gradient(180deg, #84dc4f, #5cbf42);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), 0 2px 0 #3e9a38;
+  background: linear-gradient(180deg, var(--card-cap-light), var(--card-cap));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), 0 2px 0 var(--card-cap-edge);
   pointer-events: none;
 }
 
 .project-card:hover {
   translate: 0 -5px;
   box-shadow:
-    0 max(3px, calc(6 * var(--u))) 0 #d6bf8b,
-    0 max(7px, calc(14 * var(--u))) 0 #8f6a3c,
+    0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge),
+    0 max(7px, calc(14 * var(--u))) 0 var(--surface-base),
     0 max(22px, calc(44 * var(--u))) calc(34 * var(--u)) rgba(10, 60, 50, 0.32);
 }
 
@@ -78,7 +78,7 @@
   margin-top: calc(12 * var(--u));
   flex-shrink: 0;
   overflow: hidden;
-  color: #4a3419;
+  color: var(--surface-ink);
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: calc(30 * var(--u));
@@ -88,7 +88,7 @@
 
 .project-card-meta {
   flex-shrink: 0;
-  color: #6a5230;
+  color: var(--surface-ink-soft);
   font-family: var(--font-ui);
   font-weight: 700;
   font-size: calc(18 * var(--u));
@@ -108,9 +108,9 @@
   min-height: 20px;
   border: none;
   border-radius: calc(10 * var(--u));
-  background: #fffbea;
-  box-shadow: 0 calc(3 * var(--u)) 0 #c7ad78, 0 calc(6 * var(--u)) 8px rgba(10, 40, 30, 0.3);
-  color: #4a3419;
+  background: var(--surface-light);
+  box-shadow: 0 calc(3 * var(--u)) 0 var(--surface-edge), 0 calc(6 * var(--u)) 8px rgba(10, 40, 30, 0.3);
+  color: var(--surface-ink);
   font-family: var(--font-display);
   font-size: calc(26 * var(--u));
   line-height: 1;
@@ -131,8 +131,8 @@
   min-width: 136px;
   padding: 6px;
   border-radius: 14px;
-  background: #fffbea;
-  box-shadow: 0 5px 0 #c7ad78, 0 14px 20px rgba(10, 40, 30, 0.35);
+  background: var(--surface-light);
+  box-shadow: 0 5px 0 var(--surface-edge), 0 14px 20px rgba(10, 40, 30, 0.35);
 }
 
 .project-card-popup button {
@@ -164,10 +164,10 @@
   justify-content: center;
   gap: calc(10 * var(--u));
   aspect-ratio: 382 / 292;   /* keeps the card shape as the cards stretch to fill the row */
-  border: max(2px, calc(4 * var(--u))) dashed #17643a;
+  border: max(2px, calc(4 * var(--u))) dashed var(--surface-ink-soft);
   border-radius: calc(24 * var(--u));
-  background: rgba(255, 253, 240, 0.88);
-  color: #14492f;
+  background: color-mix(in srgb, var(--surface-light) 88%, transparent);
+  color: var(--surface-ink);
   font-family: var(--font-heading);
   cursor: pointer;
   transition: translate 0.14s, background 0.15s;
@@ -175,7 +175,7 @@
 
 .project-card-new:hover {
   translate: 0 -5px;
-  background: rgba(255, 253, 240, 0.97);
+  background: color-mix(in srgb, var(--surface-light) 97%, transparent);
 }
 
 .project-card-new:focus-visible,

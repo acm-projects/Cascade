@@ -9,10 +9,10 @@
   padding: 0 calc(28 * var(--u)) 0 calc(36 * var(--u));
   border-radius: var(--panel-radius);
   /* the same green block as the Projects page bar */
-  background: linear-gradient(180deg, #1f7a4b, #125c39);
+  background: linear-gradient(180deg, var(--bar-light), var(--bar-dark));
   box-shadow:
     inset 0 2px 0 rgba(255, 255, 255, 0.18),
-    0 calc(7 * var(--u)) 0 #0b3f28,
+    0 calc(7 * var(--u)) 0 var(--bar-edge),
     0 calc(18 * var(--u)) calc(22 * var(--u)) rgba(10, 50, 60, 0.32);
   flex-shrink: 0;
 }
@@ -89,8 +89,8 @@
   border: 0;
   border-radius: calc(18 * var(--u));
   background: var(--wood-cream);
-  box-shadow: 0 max(3px, calc(6 * var(--u))) 0 #c7ad78;
-  color: #4a3419;
+  box-shadow: 0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge);
+  color: var(--surface-ink);
   font-family: var(--font-display);
   font-size: calc(30 * var(--u));
   text-decoration: none;
@@ -119,7 +119,7 @@
   translate: 0 max(2px, calc(4 * var(--u)));
   background: var(--wood-green);
   box-shadow: 0 max(1px, calc(2 * var(--u))) 0 #1d6b34;
-  color: #0b3f28;
+  color: var(--bar-edge);
 }
 
 /* Locked until clips are picked */

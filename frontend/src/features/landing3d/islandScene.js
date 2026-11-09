@@ -8,7 +8,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 // createIslandScene(canvas, { still, framing }) starts it and returns a function that stops it and frees its memory.
 // In the world: +x is down-right on screen, +z is down-left, +y is up.
 
-const COLORS = {
+export const COLORS = {
   grass: ["#6cc644", "#5dbb3f", "#7ace4c", "#55b03c"],
   dirt: ["#9a6a3c", "#8d5f35"],
   rock: ["#6f6a68", "#65615f", "#77716c"],
@@ -33,9 +33,16 @@ const RIVER_MIN_X = 0.5;
 const RIVER_MAX_X = 2.5;
 const RIVER_X = (RIVER_MIN_X + RIVER_MAX_X) / 2;
 const SEA_LEVEL = -0.6;
+// How big the island is: about this many tiles out from the middle. The river runs from RIVER_BACK to RIVER_FRONT,
+// and its last waterfall drops into the sea at the front edge (RIVER_FRONT + 0.5).
+const ISLAND_RADIUS = 9;
+const RIVER_BACK = -8;
+const RIVER_FRONT = 8;
+const EDGE = RIVER_FRONT + 0.5;
+const GRID = ISLAND_RADIUS + 2;   // the land is looked for in this many tiles each way from the middle
 
 // The same "random" numbers every time, so the island always looks the same
-function makeRandom(seed) {
+export function makeRandom(seed) {
   let value = seed;
   return () => {
     value = (value + 0x6d2b79f5) | 0;
@@ -45,7 +52,7 @@ function makeRandom(seed) {
   };
 }
 
-function pick(list, random) {
+export function pick(list, random) {
   return list[Math.floor(random() * list.length)];
 }
 
@@ -55,11 +62,11 @@ function groundHeight(z) {
   return LOW;
 }
 
-function material(color, options = {}) {
+export function material(color, options = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.82, flatShading: true, ...options });
 }
 
-function withShadow(mesh) {
+export function withShadow(mesh) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
@@ -68,7 +75,7 @@ function withShadow(mesh) {
 // ---------- Shapes ----------
 
 // A lumpy low-poly ball: a treetop, a rock or a cloud
-function lumpyBall(radius, random, lumps = 0.14, detail = 1) {
+export function lumpyBall(radius, random, lumps = 0.14, detail = 1) {
   const geometry = new THREE.IcosahedronGeometry(radius, detail);
   const position = geometry.attributes.position;
   const moved = new Map();
@@ -85,7 +92,7 @@ function lumpyBall(radius, random, lumps = 0.14, detail = 1) {
 }
 
 // A curved leaf with a crease down the middle, growing along +z and drooping down
-function leafShape(length, width, droop, steps = 6) {
+export function leafShape(length, width, droop, steps = 6) {
   const vertices = [];
   const indices = [];
   for (let step = 0; step <= steps; step += 1) {
@@ -108,7 +115,7 @@ function leafShape(length, width, droop, steps = 6) {
 
 // ---------- Pictures painted on small canvases ----------
 
-function paintTexture(width, height, paint) {
+export function paintTexture(width, height, paint) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -129,7 +136,7 @@ function playTriangle(context, x, y, size, color) {
   context.fill();
 }
 
-function waterTexture(random, repeatX, repeatY, streakWide) {
+export function waterTexture(random, repeatX, repeatY, streakWide) {
   const texture = paintTexture(256, 256, (context, width, height) => {
     context.fillStyle = COLORS.water;
     context.fillRect(0, 0, width, height);
@@ -156,7 +163,7 @@ function waterTexture(random, repeatX, repeatY, streakWide) {
   return texture;
 }
 
-function clipTexture(background, accent) {
+export function clipTexture(background, accent) {
   return paintTexture(192, 108, (context, width, height) => {
     const gradient = context.createLinearGradient(0, 0, width, height);
     gradient.addColorStop(0, background);
@@ -199,9 +206,9 @@ function screenTexture() {
 // ---------- The ground ----------
 
 function isLand(x, z) {
-  if (isRiver(x)) return z >= -6 && z <= 6;   // the river runs right to the edge, so its last waterfall can be seen
+  if (isRiver(x)) return z >= RIVER_BACK && z <= RIVER_FRONT;   // the river runs right to the edge, so its last waterfall can be seen
   const wobble = Math.sin(x * 1.7 + z * 0.6) * 0.5 + Math.cos(z * 1.9 - x * 0.4) * 0.4;
-  return Math.hypot(x, z) <= 7 + wobble * 0.55;
+  return Math.hypot(x, z) <= ISLAND_RADIUS + wobble * 0.55;
 }
 
 function isRiver(x) {
@@ -210,8 +217,8 @@ function isRiver(x) {
 
 function buildGround(root, random) {
   const columns = [];
-  for (let x = -8; x <= 8; x += 1) {
-    for (let z = -8; z <= 8; z += 1) {
+  for (let x = -GRID; x <= GRID; x += 1) {
+    for (let z = -GRID; z <= GRID; z += 1) {
       if (isLand(x, z)) columns.push({ x, z });
     }
   }
@@ -324,11 +331,11 @@ const SEA_FRAGMENT = `
 function buildSea(root, random, pixelRatio) {
   // How far every spot of sea is from the island, worked out once and stored as a small picture
   const SIZE = 128;
-  const RANGE = 18;
+  const RANGE = 22;
   const MAX_DISTANCE = 8;
   const land = [];
-  for (let x = -8; x <= 8; x += 1) {
-    for (let z = -8; z <= 8; z += 1) {
+  for (let x = -GRID; x <= GRID; x += 1) {
+    for (let z = -GRID; z <= GRID; z += 1) {
       if (isLand(x, z)) land.push([x, z]);
     }
   }
@@ -356,7 +363,7 @@ function buildSea(root, random, pixelRatio) {
     uShore: { value: shore },
     uRange: { value: RANGE },
     uMaxDistance: { value: MAX_DISTANCE },
-    uFall: { value: new THREE.Vector2(RIVER_X, 6.55) },
+    uFall: { value: new THREE.Vector2(RIVER_X, EDGE + 0.05) },
     uDeep: { value: new THREE.Color("#1f9fd6") },
     uShallow: { value: new THREE.Color("#63e6df") },
     uFoam: { value: new THREE.Color("#f3fffd") },
@@ -369,14 +376,14 @@ function buildSea(root, random, pixelRatio) {
   root.add(surface);
 
   // Rocks and lily pads scattered near the island
-  for (const [x, z, size] of [[-8.6, 3.1, 0.62], [-7.9, 4.1, 0.34], [8.2, 2.9, 0.54], [6.2, 6.6, 0.48], [7, 6.1, 0.28], [-4.6, 8, 0.42]]) {
+  for (const [x, z, size] of [[-11.1, 4, 0.7], [-10.2, 5.3, 0.38], [10.6, 3.7, 0.6], [8, 8.5, 0.52], [9, 7.9, 0.3], [-5.9, 10.3, 0.46]]) {
     const rockMesh = withShadow(new THREE.Mesh(lumpyBall(size, random, 0.2, 0), material(pick(COLORS.rock, random))));
     rockMesh.scale.y = 0.8;
     rockMesh.position.set(x, SEA_LEVEL + size * 0.2, z);
     root.add(rockMesh);
   }
   const padMaterial = material("#58b84a");
-  for (const [x, z, size] of [[-2.8, 8.4, 0.34], [-2.1, 8.9, 0.24], [-3.3, 9, 0.2], [5.3, 7.9, 0.3], [5.9, 8.4, 0.22]]) {
+  for (const [x, z, size] of [[-3.6, 10.8, 0.36], [-2.7, 11.5, 0.26], [-4.3, 11.6, 0.22], [6.8, 10.2, 0.32], [7.6, 10.8, 0.24]]) {
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(size, size, 0.04, 9), padMaterial);
     pad.position.set(x, SEA_LEVEL + 0.03, z);
     root.add(pad);
@@ -393,7 +400,7 @@ function buildWater(root, random) {
   const waterMaterial = (map) => new THREE.MeshStandardMaterial({ map, roughness: 0.28, metalness: 0.05, emissive: "#0b6f86", emissiveIntensity: 0.28 });
 
   // Flat parts of the river: [from z, to z, height]
-  const stretches = [[-6.5, -2.5, HIGH], [-2.5, 2.5, MID], [2.5, 6.5, LOW]];
+  const stretches = [[RIVER_BACK - 0.5, -2.5, HIGH], [-2.5, 2.5, MID], [2.5, EDGE, LOW]];
   for (const [from, to, y] of stretches) {
     const length = to - from;
     const texture = add(waterTexture(random, 1, length / 2.4, false), 0.28);
@@ -405,7 +412,7 @@ function buildWater(root, random) {
   }
 
   // Waterfalls: [z, top, bottom]
-  const falls = [[-2.48, HIGH - 0.08, MID - 0.14], [2.52, MID - 0.08, LOW - 0.14], [6.53, LOW - 0.08, SEA_LEVEL]];
+  const falls = [[-2.48, HIGH - 0.08, MID - 0.14], [2.52, MID - 0.08, LOW - 0.14], [EDGE + 0.03, LOW - 0.08, SEA_LEVEL]];
   for (const [z, top, bottom] of falls) {
     const height = top - bottom;
     const texture = add(waterTexture(random, 1, height / 2.4, false), 0.95);
@@ -418,7 +425,7 @@ function buildWater(root, random) {
   const foamMaterial = new THREE.MeshStandardMaterial({ color: COLORS.foam, roughness: 0.7, flatShading: true });
   const foam = [];
   const SEA_SPLASH = 2;   // the big splash where the last waterfall hits the sea
-  const landings = [[-2.25, MID - 0.05], [2.75, LOW - 0.05], [6.85, SEA_LEVEL + 0.02], [-2.48, HIGH - 0.02], [2.52, MID - 0.02]];
+  const landings = [[-2.25, MID - 0.05], [2.75, LOW - 0.05], [EDGE + 0.35, SEA_LEVEL + 0.02], [-2.48, HIGH - 0.02], [2.52, MID - 0.02]];
   landings.forEach(([z, y], landing) => {
     const big = landing <= SEA_SPLASH;
     const seaSplash = landing === SEA_SPLASH;
@@ -446,7 +453,7 @@ function buildWater(root, random) {
 
 function buildScreen(root) {
   const group = new THREE.Group();
-  group.position.set(RIVER_X, HIGH, -6.05);
+  group.position.set(RIVER_X, HIGH, RIVER_BACK - 0.05);
   const wood = material(COLORS.wood);
   const dark = material(COLORS.woodDark);
 
@@ -480,9 +487,9 @@ function buildClipCards(root, random) {
   // The route down the river, from the screen to the edge of the island, then out across the sea
   // Each waterfall: float past its edge, then arc down in front of the falling water (never through it)
   const route = [
-    [-5.6, HIGH - 0.04], [-2.62, HIGH - 0.04], [-2.38, HIGH - 0.04], [-2.08, (HIGH + MID) / 2], [-1.93, MID + 0.05], [-1.7, MID - 0.04],
+    [RIVER_BACK + 0.4, HIGH - 0.04], [-2.62, HIGH - 0.04], [-2.38, HIGH - 0.04], [-2.08, (HIGH + MID) / 2], [-1.93, MID + 0.05], [-1.7, MID - 0.04],
     [2.4, MID - 0.04], [2.62, MID - 0.04], [2.92, (MID + LOW) / 2], [3.07, LOW + 0.05], [3.3, LOW - 0.04],
-    [6.42, LOW - 0.04], [6.63, LOW - 0.04], [6.93, (LOW + SEA_LEVEL) / 2], [7.08, SEA_LEVEL + 0.04], [7.35, SEA_LEVEL + 0.02], [13, SEA_LEVEL + 0.02],
+    [EDGE - 0.08, LOW - 0.04], [EDGE + 0.13, LOW - 0.04], [EDGE + 0.43, (LOW + SEA_LEVEL) / 2], [EDGE + 0.58, SEA_LEVEL + 0.04], [EDGE + 0.85, SEA_LEVEL + 0.02], [EDGE + 6.5, SEA_LEVEL + 0.02],
   ].map(([z, y]) => new THREE.Vector2(z, y));
   const lengths = [0];
   for (let i = 1; i < route.length; i += 1) lengths.push(lengths[i - 1] + route[i].distanceTo(route[i - 1]));
@@ -529,7 +536,7 @@ function buildClipCards(root, random) {
       const here = placeAt(distance);
       const bob = slope < 0.2 ? Math.sin(time * 2 + item.phase) * 0.018 : 0;
       const z = here.x;
-      const fanOut = 1 + Math.max(0, z - 7) * 0.75;   // out at sea, the clips spread apart
+      const fanOut = 1 + Math.max(0, z - (EDGE + 0.5)) * 0.75;   // out at sea, the clips spread apart
       const level = Math.cos(Math.min(slope, Math.PI / 2));   // 1 when flat, 0 when dropping straight down
       item.card.position.set(RIVER_X + item.lane * fanOut + Math.sin(time * 0.7 + item.phase) * 0.05, here.y + 0.07 + bob, z);
       // While falling a card stays square to the waterfall, so no corner swings back into the water
@@ -561,7 +568,7 @@ function buildPlants(root, random) {
     root.add(group);
   }
 
-  function tree(x, z, size = 1) {
+  function tree(x, z, size = 1, fruit = null) {
     const group = new THREE.Group();
     const height = 1.5 * size;
     const trunk = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.12 * size, 0.24 * size, height, 6), trunkMaterial));
@@ -575,6 +582,18 @@ function buildPlants(root, random) {
       const blob = withShadow(new THREE.Mesh(lumpyBall(radius * size, random), useBright ? pick(brightMaterials, random) : pick(leafMaterials, random)));
       blob.position.set(bx * size, by * size, bz * size);
       crown.add(blob);
+    }
+    if (fruit) {   // a few round fruits sitting on the outside of the leaves
+      const fruitMaterial = material(fruit);
+      for (let i = 0; i < 7; i += 1) {
+        const [bx, by, bz, radius] = blobs[i % 4];
+        const angle = random() * Math.PI * 2;
+        const lift = 0.15 + random() * 0.5;
+        const out = Math.sqrt(1 - lift * lift) * radius * size * 0.97;
+        const piece = new THREE.Mesh(new THREE.IcosahedronGeometry(0.075 * size, 1), fruitMaterial);
+        piece.position.set(bx * size + Math.cos(angle) * out, by * size + lift * radius * size * 0.97, bz * size + Math.sin(angle) * out);
+        crown.add(piece);
+      }
     }
     group.add(crown);
     sway(crown, 0.022, 0.8 + random() * 0.4);
@@ -603,6 +622,12 @@ function buildPlants(root, random) {
       frond.rotation.y = (i / count) * Math.PI * 2;
       frond.rotation.x = -0.34;
       crown.add(frond);
+    }
+    const coconut = material("#6b4423");
+    for (const [cx, cz] of [[0.11, 0.05], [-0.07, 0.1], [0.02, -0.12]]) {
+      const nut = withShadow(new THREE.Mesh(new THREE.IcosahedronGeometry(0.1 * size, 1), coconut));
+      nut.position.set(cx * size, -0.1 * size, cz * size);
+      crown.add(nut);
     }
     group.add(crown);
     sway(crown, 0.05, 1.05 + random() * 0.5);
@@ -654,7 +679,7 @@ function buildPlants(root, random) {
   }
 
   // Back step
-  tree(-3.6, -4.5, 1.3);
+  tree(-3.6, -4.5, 1.3, "#f0912e");   // an orange tree
   tree(-1.3, -5.2, 1.08);
   tree(-5.1, -2.9, 0.95);
   tree(5.4, -2.8, 0.85);   // low enough not to block the video screen
@@ -665,6 +690,16 @@ function buildPlants(root, random) {
   rock(2.95, -2.95, 0.28);
   mushroom(-0.4, -4.2, 1.3);
   flowers(-3, -3.1, "#ff9ec7");
+
+  // The outer ring of the bigger island
+  tree(-6.6, -5.4, 1.15);
+  palm(-4.2, -7.6, 1.05);
+  tree(4.3, -6.5, 1.1, "#f0912e");
+  palm(7.2, -4.8, 1);
+  leafyPlant(-7.8, -3.4, 1);
+  leafyPlant(3.4, -8.2, 0.9, true);
+  mushroom(-5.4, -6.8, 1.2);
+  flowers(6, -6.2, "#ff9ec7");
 
   // Middle step
   tree(-5.5, 0.1, 1.22);
@@ -680,9 +715,16 @@ function buildPlants(root, random) {
   mushroom(5.5, 1.6, 0.85);
   flowers(-2.2, -1.5, "#ffd34d");
 
+  tree(-8.2, -0.8, 1.1);
+  palm(-8, 1.8, 1.05);
+  tree(8.3, -1.2, 1);
+  leafyPlant(8, 1.6, 1.05, true);
+  rock(-6.8, 2.2, 0.34);
+  flowers(7.2, 0.2, "#ffd34d");
+
   // Front step
   palm(-1.9, 5.1, 0.98);
-  tree(4.6, 4.1, 0.86);
+  tree(4.6, 4.1, 0.86, "#e94a3f");   // a red-fruit tree
   leafyPlant(-3.4, 3.8, 1.2);
   leafyPlant(3.4, 5.5, 1.18, true);
   leafyPlant(-0.3, 3.3, 0.72, true);
@@ -691,6 +733,13 @@ function buildPlants(root, random) {
   mushroom(-4.7, 3.2, 1.3);
   flowers(5.3, 3.1, "#ff9ec7");
   flowers(-2.4, 3.15, "#ffd34d");
+  palm(-6.4, 5.2, 1.1);
+  tree(-3.3, 6.9, 1);
+  leafyPlant(-1.4, 7.8, 1.05, true);
+  tree(5.4, 6.8, 0.95, "#e94a3f");
+  leafyPlant(3.4, 7, 0.95);
+  mushroom(-5.4, 7, 1.2);
+  rock(6.6, 3.2, 0.3);
 
   return (time) => {
     for (const item of swaying) {
@@ -728,6 +777,28 @@ function buildHutAndBridge(root) {
   roof.position.y = 1.8;
   roof.rotation.y = Math.PI / 4;
   hut.add(roof);
+  const thatchUnder = withShadow(new THREE.Mesh(new THREE.ConeGeometry(1.5, 0.38, 4), material("#c99a45")));
+  thatchUnder.position.y = 1.5;
+  thatchUnder.rotation.y = Math.PI / 4;
+  hut.add(thatchUnder);
+  const ridge = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.22, 4), material("#a7772f"));
+  ridge.position.y = 2.3;
+  ridge.rotation.y = Math.PI / 4;
+  hut.add(ridge);
+  // A little ladder from the deck down to the grass, in front of the door
+  const ladderTilt = -0.59;
+  for (const x of [-0.25, 0.45]) {
+    const rail = withShadow(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.66, 0.06), dark));
+    rail.position.set(x, 0.27, 1.07);
+    rail.rotation.x = ladderTilt;
+    hut.add(rail);
+  }
+  for (let step = 0; step < 3; step += 1) {
+    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.05), wood);
+    const along = (step + 1) / 4;
+    rung.position.set(0.1, 0.52 - along * 0.52, 0.9 + along * 0.35);
+    hut.add(rung);
+  }
   root.add(hut);
 
   // A plank bridge over the river
@@ -809,7 +880,7 @@ function buildBirds(root) {
     right.scale.x = -1;
     group.add(left, right);
     root.add(group);
-    return { group, left, right, radius: 8.4 + index * 1.2, height: 7.4 + index * 0.8, speed: 0.13 + index * 0.05, phase: index * 2.2 };
+    return { group, left, right, radius: 10.8 + index * 1.2, height: 8.4 + index * 0.8, speed: 0.13 + index * 0.05, phase: index * 2.2 };
   });
   return (time) => {
     for (const bird of birds) {
@@ -847,6 +918,304 @@ function buildClouds(scene, random) {
   };
 }
 
+// ---------- Small details: grass, stones, moss, a campfire, a dock, and little animals ----------
+
+// Many copies of one small shape, drawn in one go. items: [{ x, y, z, rx, ry, rz, sx, sy, sz, color }]
+export function instanced(root, geometry, baseMaterial, items, shadows = false) {
+  if (!items.length) return;
+  const mesh = new THREE.InstancedMesh(geometry, baseMaterial, items.length);
+  const matrix = new THREE.Matrix4();
+  const rotation = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+  const position = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+  const color = new THREE.Color();
+  items.forEach((item, i) => {
+    rotation.setFromEuler(euler.set(item.rx ?? 0, item.ry ?? 0, item.rz ?? 0));
+    matrix.compose(position.set(item.x, item.y, item.z), rotation, scale.set(item.sx ?? 1, item.sy ?? 1, item.sz ?? 1));
+    mesh.setMatrixAt(i, matrix);
+    mesh.setColorAt(i, color.set(item.color));
+  });
+  mesh.castShadow = shadows;
+  mesh.receiveShadow = true;
+  root.add(mesh);
+}
+
+// Spots to keep clear of grass and pebbles: the hut, the screen, the bridge and the campfire
+function isBusy(x, z) {
+  return (x > -3.2 && x < -1 && z > -1.1 && z < 1.4) || (x > -0.2 && x < 3.2 && z > -0.3 && z < 0.9) || (x > -4.2 && x < -3 && z > -1.5 && z < -0.3) || (z < RIVER_BACK + 0.8 && x > -0.5 && x < 3.5);
+}
+
+function buildGroundDetails(root, random) {
+  const tufts = [];
+  const pebbles = [];
+  const blooms = [];
+  const stones = [];
+  const moss = [];
+  for (let x = -GRID; x <= GRID; x += 1) {
+    for (let z = -GRID; z <= GRID; z += 1) {
+      if (!isLand(x, z) || isRiver(x)) continue;
+      const top = groundHeight(z);
+
+      // Grass tufts, pebbles and flowers on the tile
+      const tuftCount = random() < 0.75 ? 1 + Math.floor(random() * 2) : 0;
+      for (let t = 0; t < tuftCount; t += 1) {
+        const tx = x + (random() - 0.5) * 0.8;
+        const tz = z + (random() - 0.5) * 0.8;
+        if (isBusy(tx, tz)) continue;
+        const shade = pick(["#4caa3a", "#5cbf42", "#3f9a36", "#7acc4c"], random);
+        for (let blade = 0; blade < 4; blade += 1) {
+          const angle = (blade / 4) * Math.PI * 2 + random();
+          tufts.push({ x: tx + Math.cos(angle) * 0.04, y: top + 0.1, z: tz + Math.sin(angle) * 0.04, rx: Math.sin(angle) * 0.35, rz: -Math.cos(angle) * 0.35, sy: 0.8 + random() * 0.6, color: shade });
+        }
+      }
+      if (random() < 0.28) {
+        const px = x + (random() - 0.5) * 0.8;
+        const pz = z + (random() - 0.5) * 0.8;
+        if (!isBusy(px, pz)) pebbles.push({ x: px, y: top + 0.03, z: pz, ry: random() * 3, sx: 0.7 + random() * 0.8, sy: 0.6, sz: 0.7 + random() * 0.6, color: pick(["#8d8984", "#a19c95", "#77736e"], random) });
+      }
+      if (random() < 0.22) {
+        const fx = x + (random() - 0.5) * 0.8;
+        const fz = z + (random() - 0.5) * 0.8;
+        const color = pick(["#ffffff", "#ffd34d", "#ff9ec7", "#c9a7ff"], random);
+        if (!isBusy(fx, fz)) for (let f = 0; f < 3; f += 1) blooms.push({ x: fx + (random() - 0.5) * 0.25, y: top + 0.05, z: fz + (random() - 0.5) * 0.25, color });
+      }
+
+      // The cliff walls you can see (facing +x and +z): stones poking out, and moss hanging over the top
+      for (const [dx, dz] of [[1, 0], [0, 1]]) {
+        const nx = x + dx;
+        const nz = z + dz;
+        const below = isLand(nx, nz) ? (isRiver(nx) ? groundHeight(nz) - 0.34 : groundHeight(nz)) : SEA_LEVEL;
+        const drop = top - below;
+        if (drop < 0.6) continue;
+        const across = (u) => (dx ? [x + 0.5 + 0.03, z + u] : [x + u, z + 0.5 + 0.03]);
+        const stoneCount = Math.round(drop * 1.4 + random());
+        for (let i = 0; i < stoneCount; i += 1) {
+          const [sx, sz] = across((random() - 0.5) * 0.8);
+          const y = below + 0.15 + random() * Math.max(0.05, drop - 0.75);
+          const size = 0.07 + random() * 0.08;
+          stones.push({ x: sx, y, z: sz, ry: dx ? Math.PI / 2 : 0, rz: (random() - 0.5) * 0.6, sx: size * 2.2, sy: size, sz: size * 0.8, color: y > top - 0.9 ? pick(["#7a5230", "#6e4a2b"], random) : pick(["#5d5956", "#86817b", "#4f4c49"], random) });
+        }
+        if (random() < 0.6) {
+          const drips = 1 + Math.floor(random() * 2);
+          for (let i = 0; i < drips; i += 1) {
+            const [mx, mz] = across((random() - 0.5) * 0.7);
+            const length = 0.12 + random() * 0.32;
+            moss.push({ x: mx - dx * 0.01, y: top - 0.4 - length / 2, z: mz - dz * 0.01, ry: dx ? Math.PI / 2 : 0, sx: 0.14 + random() * 0.26, sy: length, sz: 0.05, color: pick(["#3f9a36", "#4caa3a", "#2f8a3a"], random) });
+          }
+        }
+      }
+    }
+  }
+  instanced(root, new THREE.ConeGeometry(0.035, 0.24, 4), material("#ffffff"), tufts);
+  instanced(root, new THREE.DodecahedronGeometry(0.07, 0), material("#ffffff"), pebbles);
+  instanced(root, new THREE.IcosahedronGeometry(0.045, 0), material("#ffffff"), blooms);
+  instanced(root, new THREE.BoxGeometry(1, 1, 1), material("#ffffff"), stones);
+  instanced(root, new THREE.BoxGeometry(1, 1, 1), material("#ffffff"), moss);
+
+  // Stepping stones: from the hut's ladder to the bridge, and from the bridge on toward the trees
+  const path = [];
+  const trail = (from, to, count) => {
+    for (let i = 0; i < count; i += 1) {
+      const along = i / (count - 1);
+      path.push({ x: from[0] + (to[0] - from[0]) * along + (random() - 0.5) * 0.12, y: MID + 0.02, z: from[1] + (to[1] - from[1]) * along + (random() - 0.5) * 0.12, ry: random() * 3, sx: 0.85 + random() * 0.3, sz: 0.85 + random() * 0.3, color: pick(["#e3cf9b", "#d6bf86", "#ecdcae"], random) });
+    }
+  };
+  trail([-1.95, 1.55], [-0.05, 0.6], 6);
+  trail([3.05, 0.6], [4.3, 1.3], 4);
+  instanced(root, new THREE.CylinderGeometry(0.17, 0.19, 0.06, 7), material("#ffffff"), path);
+}
+
+function buildCampfire(root, random) {
+  const fire = new THREE.Group();
+  fire.position.set(-3.6, MID, -0.9);
+  for (let i = 0; i < 8; i += 1) {
+    const angle = (i / 8) * Math.PI * 2;
+    const rock = new THREE.Mesh(lumpyBall(0.08, random, 0.2, 0), material(pick(COLORS.rock, random)));
+    rock.position.set(Math.cos(angle) * 0.28, 0.05, Math.sin(angle) * 0.28);
+    fire.add(rock);
+  }
+  for (let i = 0; i < 3; i += 1) {
+    const log = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.42, 6), material(COLORS.woodDark)));
+    log.position.y = 0.08;
+    log.rotation.set(Math.PI / 2 - 0.25, (i / 3) * Math.PI, 0);
+    fire.add(log);
+  }
+  const outer = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.42, 6), new THREE.MeshBasicMaterial({ color: "#ff8a1f", toneMapped: false }));
+  outer.position.y = 0.3;
+  const inner = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 6), new THREE.MeshBasicMaterial({ color: "#ffe066", toneMapped: false }));
+  inner.position.y = 0.26;
+  fire.add(outer, inner);
+  const glow = new THREE.PointLight("#ff9a3c", 3.5, 3.2, 1.8);
+  glow.position.y = 0.5;
+  fire.add(glow);
+  // Smoke puffs that rise, grow and fade, one after another
+  const puffs = [];
+  for (let i = 0; i < 5; i += 1) {
+    const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), new THREE.MeshStandardMaterial({ color: "#eef3f2", roughness: 1, flatShading: true, transparent: true, depthWrite: false }));
+    fire.add(puff);
+    puffs.push(puff);
+  }
+  root.add(fire);
+  return (time) => {
+    const flicker = 1 + Math.sin(time * 13) * 0.08 + Math.sin(time * 21.7) * 0.06;
+    outer.scale.set(1, flicker, 1);
+    inner.scale.set(1, 2 - flicker, 1);
+    glow.intensity = 3.2 * flicker;
+    puffs.forEach((puff, i) => {
+      const rise = ((time / 3.2) + i / puffs.length) % 1;
+      puff.position.set(Math.sin(time * 0.8 + i) * 0.12 + rise * 0.35, 0.55 + rise * 1.7, -rise * 0.2);
+      puff.scale.setScalar(0.6 + rise * 1.1);
+      puff.material.opacity = 0.6 * (1 - rise);
+    });
+  };
+}
+
+function buildDockAndBoat(root) {
+  // The pier sticks out from the low step of the island on the right, with a ladder up the cliff
+  let edgeX = GRID;
+  while (edgeX > 0 && !isLand(edgeX, 4)) edgeX -= 1;
+  const start = edgeX + 0.5;
+  const wood = material(COLORS.wood);
+  const dark = material(COLORS.woodDark);
+  const dock = new THREE.Group();
+  for (let i = 0; i < 8; i += 1) {
+    const plank = withShadow(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.8), i % 2 ? wood : dark));
+    plank.position.set(start + 0.14 + i * 0.26, SEA_LEVEL + 0.3, 4);
+    dock.add(plank);
+  }
+  for (const [x, z] of [[start + 0.3, 3.65], [start + 0.3, 4.35], [start + 1.9, 3.65], [start + 1.9, 4.35]]) {
+    const post = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.7, 6), dark));
+    post.position.set(x, SEA_LEVEL + 0.1, z);
+    dock.add(post);
+  }
+  for (const z of [3.8, 4.2]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, LOW - SEA_LEVEL + 0.1, 0.05), dark);
+    rail.position.set(start + 0.03, (LOW + SEA_LEVEL + 0.5) / 2, z);
+    dock.add(rail);
+  }
+  for (let y = SEA_LEVEL + 0.55; y < LOW; y += 0.28) {
+    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.45), wood);
+    rung.position.set(start + 0.03, y, 4);
+    dock.add(rung);
+  }
+  root.add(dock);
+
+  // A little rowboat tied up at the end, bobbing on the waves
+  const boat = new THREE.Group();
+  const hull = withShadow(new THREE.Mesh(new RoundedBoxGeometry(1.1, 0.26, 0.5, 2, 0.08), material("#b5653a")));
+  boat.add(hull);
+  const inside = new THREE.Mesh(new RoundedBoxGeometry(0.92, 0.1, 0.36, 2, 0.04), material("#7d4325"));
+  inside.position.y = 0.1;
+  boat.add(inside);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.38), wood);
+  seat.position.y = 0.14;
+  boat.add(seat);
+  for (const side of [-1, 1]) {
+    const oar = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.03, 0.06), material(COLORS.cream));
+    oar.position.set(0.05, 0.15, side * 0.28);
+    oar.rotation.y = side * 0.35;
+    boat.add(oar);
+  }
+  boat.position.set(start + 2.6, SEA_LEVEL + 0.1, 4.7);
+  boat.rotation.y = 0.5;
+  root.add(boat);
+  return (time) => {
+    boat.position.y = SEA_LEVEL + 0.1 + Math.sin(time * 1.3) * 0.04;
+    boat.rotation.z = Math.sin(time * 1.1) * 0.05;
+    boat.rotation.x = Math.cos(time * 0.9) * 0.04;
+  };
+}
+
+function buildCritters(root) {
+  // Butterflies wandering over the grass, wings flapping
+  const wingShape = new THREE.CircleGeometry(0.07, 5);
+  wingShape.translate(0.06, 0, 0);
+  const butterflies = [["#ffd34d", -2.5, -3, HIGH], ["#ff9ec7", 3.6, 2, MID], ["#ffffff", -3.5, 4, LOW]].map(([color, x, z, ground], index) => {
+    const group = new THREE.Group();
+    const skin = new THREE.MeshStandardMaterial({ color, roughness: 0.8, side: THREE.DoubleSide });
+    const left = new THREE.Mesh(wingShape, skin);
+    const right = new THREE.Mesh(wingShape, skin);
+    left.rotation.x = -Math.PI / 2;
+    right.rotation.x = -Math.PI / 2;
+    right.scale.x = -1;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.1), material("#3a2a1a"));
+    group.add(left, right, body);
+    root.add(group);
+    return { group, left, right, x, z, ground, phase: index * 2.1 };
+  });
+
+  // Fish that leap out of the sea now and then
+  const fishBody = new THREE.ConeGeometry(0.07, 0.3, 6);
+  fishBody.rotateZ(-Math.PI / 2);
+  const fishTail = new THREE.ConeGeometry(0.06, 0.12, 4);
+  fishTail.rotateZ(Math.PI / 2);
+  fishTail.translate(-0.2, 0, 0);
+  const fish = [["#ff8a3d", -7, 12, 0], ["#ffd34d", 12, -2, Math.PI / 2]].map(([color, x, z, heading], index) => {
+    const group = new THREE.Group();
+    const skin = material(color);
+    group.add(new THREE.Mesh(fishBody, skin), new THREE.Mesh(fishTail, skin));
+    group.rotation.y = heading;
+    root.add(group);
+    const splash = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.04, 4, 12), new THREE.MeshBasicMaterial({ color: "#f3fffd", transparent: true, depthWrite: false }));
+    splash.rotation.x = Math.PI / 2;
+    splash.position.set(x, SEA_LEVEL + 0.02, z);
+    root.add(splash);
+    return { group, splash, x, z, heading, offset: index * 3.4 };
+  });
+
+  // A parrot sitting on top of the video screen
+  const parrot = new THREE.Group();
+  const feathers = material("#e8443a");
+  const bodyMesh = withShadow(new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 1), feathers));
+  bodyMesh.scale.set(0.85, 1.25, 0.85);
+  parrot.add(bodyMesh);
+  const head = new THREE.Group();
+  head.position.y = 0.2;
+  head.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 1), feathers));
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 4), material("#ffcf3d"));
+  beak.rotation.x = Math.PI / 2;
+  beak.position.set(0, -0.01, 0.1);
+  head.add(beak);
+  parrot.add(head);
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.14), material("#2d6cdf"));
+  wing.position.set(0.11, -0.02, -0.02);
+  parrot.add(wing);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.04), material("#2d6cdf"));
+  tail.position.set(0, -0.22, -0.06);
+  tail.rotation.x = -0.4;
+  parrot.add(tail);
+  parrot.position.set(RIVER_X + 1.25, HIGH + 3.18, -6);
+  parrot.rotation.y = 0.6;
+  root.add(parrot);
+
+  return (time) => {
+    for (const item of butterflies) {
+      const t = time * 0.45 + item.phase;
+      item.group.position.set(item.x + Math.sin(t) * 1.1, item.ground + 0.7 + Math.sin(t * 2.3) * 0.25, item.z + Math.sin(t * 0.7) * 1.1);
+      item.group.rotation.y = Math.atan2(Math.cos(t) * 1.1, Math.cos(t * 0.7) * 0.77);
+      const flap = Math.sin(time * 18 + item.phase) * 0.9;
+      item.left.rotation.y = flap;
+      item.right.rotation.y = -flap;
+    }
+    for (const item of fish) {
+      const cycle = ((time + item.offset) % 7) / 1.1;   // a 1.1 second leap every 7 seconds
+      const leaping = cycle < 1;
+      item.group.visible = leaping;
+      if (leaping) {
+        const along = (cycle - 0.5) * 1.3;
+        item.group.position.set(item.x + Math.cos(item.heading) * along, SEA_LEVEL + Math.sin(cycle * Math.PI) * 0.8, item.z - Math.sin(item.heading) * along);
+        item.group.rotation.z = Math.cos(cycle * Math.PI) * 0.9;
+      }
+      const ripple = Math.min(1, cycle % 1.6);
+      item.splash.scale.setScalar(0.4 + ripple * 1.4);
+      item.splash.material.opacity = cycle < 1.6 ? 0.7 * (1 - ripple) : 0;
+    }
+    head.rotation.x = Math.max(0, Math.sin(time * 1.7)) * 0.35;
+    head.rotation.y = Math.sin(time * 0.6) * 0.5;
+  };
+}
+
 // ---------- Putting it together ----------
 
 export function createIslandScene(canvas, { still = false, framing = "hero" } = {}) {
@@ -866,10 +1235,10 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
   sun.position.set(5, 18, 13);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -13;
-  sun.shadow.camera.right = 13;
-  sun.shadow.camera.top = 13;
-  sun.shadow.camera.bottom = -13;
+  sun.shadow.camera.left = -16;
+  sun.shadow.camera.right = 16;
+  sun.shadow.camera.top = 16;
+  sun.shadow.camera.bottom = -16;
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.025;
   scene.add(sun);
@@ -879,6 +1248,7 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
   scene.add(root);
   buildGround(root, random);
   buildHutAndBridge(root);
+  buildGroundDetails(root, random);
   const updates = [
     buildWater(root, random),
     buildScreen(root),
@@ -889,6 +1259,9 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
     buildBirds(root),
     buildClouds(scene, random),
     buildSea(root, random, renderer.getPixelRatio()),
+    buildCampfire(root, random),
+    buildDockAndBoat(root),
+    buildCritters(root),
   ];
 
   // Fit the island to the page: on wide screens it sits on the right, next to the words
@@ -901,7 +1274,9 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
     const aspect = width / height;
     const wide = aspect > 1.15;
     const backdrop = framing === "backdrop";
-    const halfHeight = backdrop ? Math.max(8, 10 / aspect) : wide ? 9 : Math.max(11, 12.5 / aspect);
+    // The camera was set up for an island 7 tiles out; step back to fit this one (less on phones, where it sits below the words)
+    const bigger = wide ? ISLAND_RADIUS / 7 : 1 + (ISLAND_RADIUS / 7 - 1) * 0.35;
+    const halfHeight = (backdrop ? Math.max(8, 10 / aspect) : wide ? 9 : Math.max(11, 12.5 / aspect)) * bigger;
     const halfWidth = halfHeight * aspect;
     let shiftX = wide ? halfWidth * 0.42 : 0;
     let shiftY = wide ? 0.3 : -halfHeight * 0.36;   // narrow screens: the island sits below the words
@@ -909,12 +1284,41 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
       shiftX = wide ? halfWidth * 0.2 : 0;
       shiftY = -halfHeight * 0.62;
     }
-    camera.left = -halfWidth - shiftX;
-    camera.right = halfWidth - shiftX;
-    camera.top = halfHeight - shiftY;
-    camera.bottom = -halfHeight - shiftY;
-    camera.updateProjectionMatrix();
+    view.left = -halfWidth - shiftX;
+    view.right = halfWidth - shiftX;
+    view.top = halfHeight - shiftY;
+    view.bottom = -halfHeight - shiftY;
+    aim();
     draw();
+  }
+
+  // What the camera shows (set by fit), and the "dive" camera move: a glide and zoom down into the splash
+  // where the last waterfall meets the sea. Started by a "cascade:camera" event (see components/LeafTransition.jsx).
+  const view = { left: -10, right: 10, top: 10, bottom: -10 };
+  let move = null;
+  const smooth = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+  function aim() {
+    let zoom = 1;
+    let centreX = (view.left + view.right) / 2;
+    let centreY = (view.top + view.bottom) / 2;
+    if (move) {
+      const eased = smooth(Math.min(1, (performance.now() - move.start) / move.duration));
+      zoom = 1 + eased * 9;
+      centreX += (move.x - centreX) * eased;
+      centreY += (move.y - centreY) * eased;
+    }
+    const halfWidth = (view.right - view.left) / 2 / zoom;
+    const halfHeight = (view.top - view.bottom) / 2 / zoom;
+    camera.left = centreX - halfWidth;
+    camera.right = centreX + halfWidth;
+    camera.top = centreY + halfHeight;
+    camera.bottom = centreY - halfHeight;
+    camera.updateProjectionMatrix();
+  }
+  function handleCamera(event) {
+    if (event.detail?.move !== "dive" || still) return;
+    const splash = root.localToWorld(new THREE.Vector3(RIVER_X, SEA_LEVEL, EDGE + 0.9)).applyMatrix4(camera.matrixWorldInverse);
+    move = { start: performance.now(), duration: event.detail.duration ?? 1000, x: splash.x, y: splash.y };
   }
 
   // The island turns very slightly toward the mouse
@@ -930,8 +1334,12 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
   function draw(delta = 0) {
     const time = still ? 7 : (performance.now() - startTime) / 1000 + 7;
     for (const update of updates) update(time, delta);
-    mouse.smoothX += (mouse.x - mouse.smoothX) * 0.04;
-    root.rotation.y = mouse.smoothX * 0.055;
+    if (move) {
+      aim();   // during the dive the island stops turning toward the mouse
+    } else {
+      mouse.smoothX += (mouse.x - mouse.smoothX) * 0.04;
+      root.rotation.y = mouse.smoothX * 0.055;
+    }
     renderer.render(scene, camera);
   }
 
@@ -947,12 +1355,14 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
   fit();
   if (!still) {
     window.addEventListener("pointermove", handleMouse);
+    window.addEventListener("cascade:camera", handleCamera);
     frame = requestAnimationFrame(loop);
   }
 
   return () => {
     cancelAnimationFrame(frame);
     window.removeEventListener("pointermove", handleMouse);
+    window.removeEventListener("cascade:camera", handleCamera);
     observer.disconnect();
     const seen = new Set();
     const free = (thing) => { if (thing && !seen.has(thing)) { seen.add(thing); thing.dispose?.(); } };

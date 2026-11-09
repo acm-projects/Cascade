@@ -6,7 +6,7 @@
   padding: 6px 12px;
   border-radius: var(--radius-lg);
   background: var(--wood-cream);
-  box-shadow: 0 4px 0 #d6bf8b, 0 8px 0 #8f6a3c, 0 14px 14px rgba(10, 50, 60, 0.28);
+  box-shadow: 0 4px 0 var(--surface-edge), 0 8px 0 var(--surface-base), 0 14px 14px rgba(10, 50, 60, 0.28);
 }
 
 .session-bar-picker {

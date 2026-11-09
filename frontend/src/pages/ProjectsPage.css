@@ -16,10 +16,10 @@
   justify-content: space-between;
   height: calc(92 * var(--u));
   padding: 0 calc(42 * var(--u)) 0 calc(40 * var(--u));
-  background: linear-gradient(180deg, #1f7a4b, #125c39);
+  background: linear-gradient(180deg, var(--bar-light), var(--bar-dark));
   box-shadow:
     inset 0 2px 0 rgba(255, 255, 255, 0.18),
-    0 calc(7 * var(--u)) 0 #0b3f28,
+    0 calc(7 * var(--u)) 0 var(--bar-edge),
     0 calc(16 * var(--u)) calc(24 * var(--u)) rgba(10, 60, 50, 0.3);
   flex-shrink: 0;
 }
@@ -31,7 +31,7 @@
   color: #fff8e4;
   font-family: var(--font-display);
   font-size: calc(46 * var(--u));
-  text-shadow: 0 calc(3 * var(--u)) 0 #0b3f28;
+  text-shadow: 0 calc(3 * var(--u)) 0 var(--bar-edge);
 }
 
 .projects-leaf {
@@ -51,13 +51,13 @@
   flex-direction: column;
   gap: calc(24 * var(--u));
   width: calc(360 * var(--u));
-  padding: calc(64 * var(--u)) 0 0 calc(34 * var(--u));
+  padding: var(--cards-top, calc(64 * var(--u))) 0 0 calc(34 * var(--u));   /* --cards-top: set by ProjectsPage.jsx, so it lines up with the cards */
   flex-shrink: 0;
 }
 
 /* Sidebar buttons: cream blocks. The open one is green and pressed down. */
 .projects-filter {
-  --edge: #c7ad78;
+  --edge: var(--surface-edge);
   --depth: max(4px, calc(8 * var(--u)));
   display: flex;
   align-items: center;
@@ -67,8 +67,8 @@
   padding: 0 calc(26 * var(--u));
   border: 0;
   border-radius: calc(20 * var(--u));
-  background: linear-gradient(180deg, #fffbea, #f4e7c5);
-  color: #4a3419;
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
+  color: var(--surface-ink);
   box-shadow:
     0 var(--depth) 0 var(--edge),
     0 calc(var(--depth) + 8px) 14px rgba(10, 60, 50, 0.25);
@@ -104,7 +104,7 @@
 .projects-filter.active {
   --edge: #2a7d33;
   background: linear-gradient(180deg, #84dc4f, #4cb83e);
-  color: #0b3f28;
+  color: var(--bar-edge);
 }
 
 .projects-main {
@@ -165,10 +165,10 @@
   height: calc(68 * var(--u));
   padding: 0 calc(18 * var(--u));
   border-radius: calc(18 * var(--u));
-  background: #fffbea;
+  background: var(--surface-light);
   box-shadow:
-    inset 0 calc(4 * var(--u)) 0 rgba(120, 90, 40, 0.22),
-    0 calc(5 * var(--u)) 0 #c7ad78,
+    inset 0 calc(4 * var(--u)) 0 color-mix(in srgb, var(--surface-base) 22%, transparent),
+    0 calc(5 * var(--u)) 0 var(--surface-edge),
     0 calc(14 * var(--u)) 14px rgba(10, 60, 50, 0.22);
 }
 
@@ -311,12 +311,12 @@
   margin: calc(30 * var(--u)) auto;
   border: 0;
   border-radius: calc(24 * var(--u));
-  background: linear-gradient(180deg, #fffbea, #f6ebcd);
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
   box-shadow:
-    0 calc(6 * var(--u)) 0 #d6bf8b,
-    0 calc(14 * var(--u)) 0 #8f6a3c,
+    0 calc(6 * var(--u)) 0 var(--surface-edge),
+    0 calc(14 * var(--u)) 0 var(--surface-base),
     0 calc(28 * var(--u)) calc(26 * var(--u)) rgba(10, 60, 50, 0.3);
-  color: #4a3419;
+  color: var(--surface-ink);
 }
 
 .projects .ui-empty-icon {
@@ -324,10 +324,36 @@
 }
 
 .projects .ui-empty-text {
-  color: #6a5230;
+  color: var(--surface-ink-soft);
 }
 
 .projects-state .ui-spinner {
   border-color: rgba(255, 255, 255, 0.4);
   border-top-color: #ffffff;
+}
+
+/* ---------- Underwater: the cards drift gently up and down, each on its own timing ---------- */
+.projects-grid > * {
+  animation: projects-float 5.5s ease-in-out infinite alternate;
+}
+
+.projects-grid > :nth-child(3n + 2) {
+  animation-duration: 6.4s;
+  animation-delay: -2.1s;
+}
+
+.projects-grid > :nth-child(3n) {
+  animation-duration: 5s;
+  animation-delay: -3.7s;
+}
+
+@keyframes projects-float {
+  from { transform: translateY(-4px) rotate(-0.35deg); }
+  to { transform: translateY(4px) rotate(0.35deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects-grid > * {
+    animation: none;
+  }
 }
