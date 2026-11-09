@@ -4,9 +4,10 @@
   position: relative;
   display: flex;
   align-items: center;
-  height: calc(104 * var(--u));
+  min-height: 68px;
+  gap: 14px;
   margin: calc(18 * var(--u)) calc(24 * var(--u)) calc(14 * var(--u));
-  padding: 0 calc(28 * var(--u)) 0 calc(36 * var(--u));
+  padding: 12px 20px;
   border-radius: var(--panel-radius);
   /* the same green block as the Projects page bar */
   background: linear-gradient(180deg, var(--bar-light), var(--bar-dark));
@@ -20,74 +21,61 @@
 .topnav-brand {
   display: flex;
   align-items: center;
-  gap: calc(26 * var(--u));
+  gap: 10px;
   border-radius: var(--radius-sm);
   color: #fff8e4;
   text-decoration: none;
 }
 
 .topnav-leaf {
-  width: calc(51 * var(--u));
-  height: calc(43 * var(--u));
+  width: 28px;
+  height: 28px;
 }
 
 .topnav-name {
   font-family: var(--font-title);
-  font-size: calc(48 * var(--u));
+  font-size: 28px;
 }
 
 .topnav-divider {
   width: max(2px, calc(4 * var(--u)));
-  height: calc(52 * var(--u));
-  margin: 0 calc(22 * var(--u)) 0 calc(29 * var(--u));
+  height: 26px;
+  margin: 0;
   border-radius: 2px;
   background: rgba(255, 248, 228, 0.35);
 }
 
 .topnav-title {
-  max-width: calc(220 * var(--u));      /* stops long names running into the steps */
+  min-width: 0;
+  max-width: 220px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: color-mix(in srgb, var(--color-cream-card) 75%, transparent);
   font-family: var(--font-heading);
   font-weight: 500;
-  font-size: calc(36 * var(--u));
+  font-size: 17px;
 }
 
-/* Dev-only chip with the URL ids, just left of the avatar */
-.topnav-route {
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-cream-card) 18%, transparent);
-  color: var(--color-cream-card);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.topnav-route + .topnav-avatar {
-  margin-left: calc(16 * var(--u));
-}
-
-/* The ① ② ③ pills: placed where they are in Figma (607px from the left) */
+/* Compact workflow navigation follows the project title in the flex layout. */
 .topnav-steps {
-  position: absolute;
-  left: calc(607 * var(--u));
+  margin-left: auto;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(11, 63, 40, 0.35);
   display: flex;
-  gap: calc(42 * var(--u));
+  gap: 6px;
 }
 
 .topnav-step {
   display: flex;
   align-items: center;
-  gap: calc(14 * var(--u));
-  width: calc(222 * var(--u));
-  height: calc(66 * var(--u));
-  padding-left: calc(12 * var(--u));
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 14px;
+  white-space: nowrap;
   border: 0;
-  border-radius: calc(18 * var(--u));
+  border-radius: 8px;
   background: var(--wood-cream);
   box-shadow: 0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge);
   color: var(--surface-ink);
@@ -103,20 +91,9 @@
   filter: brightness(1.05);
 }
 
-.topnav-step-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(38 * var(--u));
-  height: calc(38 * var(--u));
-  border: max(1px, calc(2 * var(--u))) solid currentColor;
-  border-radius: 50%;
-  font-size: calc(26 * var(--u));
-}
-
 /* The step you're on: green and pressed down */
 .topnav-step.active {
-  translate: 0 max(2px, calc(4 * var(--u)));
+  translate: 0 1px;
   background: var(--wood-green);
   box-shadow: 0 max(1px, calc(2 * var(--u))) 0 #1d6b34;
   color: var(--bar-edge);
@@ -130,5 +107,14 @@
 
 /* The avatar sits at the far right (its look is in UserAvatar.css) */
 .topnav-avatar {
-  margin-left: auto;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.topnav-step:focus-visible { outline: 2px solid var(--color-cream-card); outline-offset: 3px; }
+@media (max-width: 760px) {
+  .topnav { flex-wrap: wrap; gap: 10px; padding: 12px; margin: 10px 14px; }
+  .topnav-title { flex: 1; max-width: none; }
+  .topnav-steps { order: 5; margin: 0; }
+  .topnav-step { padding: 7px 12px; }
 }

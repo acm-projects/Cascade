@@ -4,12 +4,11 @@ import "./TopNav.css";
 import leafIcon from "../assets/icons/leaf-cream.svg";
 
 const steps = [
-  { id: "studio", number: 1, label: "AI Studio" },
-  { id: "editor", number: 2, label: "Editor" },
-  { id: "export", number: 3, label: "Export" },
+  { id: "studio", label: "AI Studio" },
+  { id: "editor", label: "Editor" },
+  { id: "export", label: "Export" },
 ];
 
-const short = (id) => (id && id.length > 10 ? `${id.slice(0, 8)}…` : id);
 
 // /projects/<id>/studio|editor|export. While you're in an AI Studio session, the AI Studio link keeps it.
 function stepPath(projectId, stepId, sessionId) {
@@ -43,7 +42,6 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
           const className = `topnav-step${step.id === active ? " active" : ""}`;
           const content = (
             <>
-              <span className="topnav-step-number">{step.number}</span>
               {step.label}
             </>
           );
@@ -66,16 +64,6 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
           );
         })}
       </nav>
-
-      {/* Only while running `npm run dev`: shows the ids read from the URL, so you can see routing work */}
-      {import.meta.env.DEV && (
-        <span className="topnav-route"
-          title={`From the URL (useParams): project ${id}${params.sessionId ? `, session ${params.sessionId}` : ""}`}>
-          {/* Real ids are 32 characters, so show the start; hover for the full id */}
-          project: {short(id)}
-          {params.sessionId && <> · session: {short(params.sessionId)}</>}
-        </span>
-      )}
 
       <UserAvatar className="topnav-avatar" />
     </header>

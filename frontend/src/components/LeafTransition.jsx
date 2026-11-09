@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./LeafTransition.css";
 import { LeafTransitionContext } from "../context/leafTransitionValue";
 
@@ -59,7 +59,7 @@ function LeafTransition({ children }) {
   const move = MOVES[style] ?? MOVES.push;
   return (
     <LeafTransitionContext.Provider value={leafNavigate}>
-      {children}
+      {children(shownLocation)}
       {phase !== "idle" && (
         <div
           className={`camera-transition camera-transition-${move.color} camera-transition-${phase}`}

@@ -24,7 +24,7 @@ const UiPreviewPage = import.meta.env.DEV ? lazy(() => import("./pages/UiPreview
 function App() {
   return (
     <LeafTransition>
-      <Routes>
+      {(location) => <Routes location={location}>
         <Route path="/" element={<LandingPage />} />
         <Route path="/sign-in/*" element={<SignInPage />} />
 
@@ -48,7 +48,7 @@ function App() {
         )}
 
         <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      </Routes>}
     </LeafTransition>
   );
 }

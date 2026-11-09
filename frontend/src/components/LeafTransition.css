@@ -38,3 +38,5 @@
   from { opacity: 1; }
   to { opacity: 0; }
 }
+
+.leaf-transition-backward { transform: scaleX(-1); }

@@ -27,7 +27,7 @@ import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import ClipLoading from "../features/editor/ClipLoading";
 import "../features/editor/EditorRevamp.css";
 import "../features/editor/EditorSplit.css";
-const panelTabs = ["Trim", "Captions", "Trends", "Aspect Ratio", "Music", "Reel", "Chat"];
+const panelTabs = ["Trim", "Captions", "B-roll", "Trends", "Aspect Ratio", "Music", "Reel", "Chat"];
 const saveLabels = { saved: <><Icon name="check" /> Saved</>, saving: "Saving…", error: <><Icon name="alert" /> Not saved</> };
 // Ready-made requests shown while the Chat tab is empty
 const chatSuggestions = [
@@ -35,7 +35,7 @@ const chatSuggestions = [
 ].map((prompt) => ({ label: prompt, prompt }));
 
 // Abhishri's layout has these tabs: trimming happens on the timeline, and Trends is a button on the player
-const splitTabs = ["Captions", "Aspect Ratio", "Music", "Chat"];
+const splitTabs = ["Captions", "Aspect Ratio", "B-roll", "Music", "Chat"];
 // The new layout's tool rail: [panel tab, label under the icon, icon]
 const railTools = [
   ["Captions", "Captions", "captions"], ["Music", "Music", "headphones"], ["B-roll", "B-roll", "film"],
@@ -114,9 +114,9 @@ function EditorPage() {
     <div className="er-clip-tabs" role="tablist" aria-label="Picked clips">
       {clips?.map((clip, index) => (
         <button key={clipKey(clip)} type="button" role="tab" aria-selected={clipKey(clip) === currentKey}
-          className={`er-clip-tab${clipKey(clip) === currentKey ? " active" : ""}`} onClick={() => selectClip(clip)} title={clip.title}>
-          <span className="er-clip-tab-name">{index + 1}. {clip.title || "Clip"}</span>
-          <span className="er-clip-tab-time">{formatTime(clip.end - clip.start)}</span>
+          className={`er-clip-tab${clipKey(clip) === currentKey ? " active" : ""}`} onClick={() => selectClip(clip)} title={clip.title} aria-label={`Clip ${index + 1}`}>
+          <span className="er-clip-tab-name">{layout === "split" ? index + 1 : `Clip ${index + 1}`}</span>
+          {layout !== "split" && <span className="er-clip-tab-time">{formatTime(clip.end - clip.start)}</span>}
         </button>
       ))}
     </div>
@@ -157,7 +157,6 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const [chatChanges, setChatChanges] = useState({});
   const [chatNote, setChatNote] = useState(null);
   const [thinking, setThinking] = useState(false);
-  const [brollOpen, setBrollOpen] = useState(false);
   const [brollSearch, setBrollSearch] = useState(null);
   const [selectedSegment, setSelectedSegment] = useState(null);
   const selectBroll = useCallback(id => setSelectedSegment(id), []);
@@ -184,7 +183,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
       if (latestState.current !== sent) toast.show("The AI edit replaced changes made while it was working. Undo to restore them.");
       change(result.state);
       setChatChanges(all => ({ ...all, [history.length + 1]: describeChanges(sent, result.state) }));
-      if (result.broll_search) { setBrollSearch(result.broll_search); setBrollOpen(true); }
+      if (result.broll_search) { setBrollSearch(result.broll_search); setPanelTab("B-roll"); }
       draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: result.message }]);
       return result;
     } catch (err) {
@@ -220,7 +219,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const preview = draft.error ? (
     <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
   ) : info && state ? (
-    <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+    <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
       framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
   ) : (
     <ClipLoading />
@@ -232,17 +231,18 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
       selectedBroll={selectedBroll} onSelectBroll={selectBroll} disabled={thinking}
       focusedCue={focusedCue} onCueClick={(index) => {
         setFocusedCue(index);
-        if (layout === "revamp") setBrollOpen(false); // the new layout shows one panel at a time
         setPanelTab("Captions");
         setCaptionsView("Text");
       }}
       onOpenTool={(tool) => {
-        if (tool === "B-roll") return setBrollOpen(true);
-        if (layout === "revamp") setBrollOpen(false); // the new layout shows one panel at a time
+        if (tool === "B-roll") return setPanelTab("B-roll");
         setPanelTab(tool);
       }} />
   );
   const activeTab = layout === "split" && !splitTabs.includes(panelTab) ? "Captions" : panelTab;
+  const brollPanel = state && <BrollPanel projectId={projectId} clip={clip} state={state} duration={info.duration}
+    player={player} change={change} search={brollSearch} onSearch={setBrollSearch} selectedId={selectedBroll}
+    onSelect={selectBroll} inline disabled={thinking} />;
   const panelContent = !state ? (
     <div className="editor-loading"><Spinner label="Loading edits" /></div>
   ) : activeTab === "Trim" ? (
@@ -251,6 +251,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     <CaptionsTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo}
       player={player} view={captionsView} onView={setCaptionsView}
       focusedCue={focusedCue} onFocusCue={setFocusedCue} />
+  ) : activeTab === "B-roll" ? (
+    brollPanel
   ) : activeTab === "Aspect Ratio" ? (
     <AspectTab state={state} info={info} change={change} patch={draft.patch} recordUndo={draft.recordUndo} />
   ) : activeTab === "Reel" ? (
@@ -262,9 +264,6 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
       quickActions={draft.chat.length === 0 ? chatSuggestions : []}
       placeholder={thinking ? "Editing…" : "e.g. add dramatic music, a punch-in on the reaction, and relevant B-roll"} />
   );
-  const brollPanel = state && <BrollPanel projectId={projectId} clip={clip} state={state} duration={info.duration}
-    player={player} change={change} search={brollSearch} onSearch={setBrollSearch} selectedId={selectedBroll}
-    onSelect={selectBroll} onClose={() => setBrollOpen(false)} disabled={thinking} />;
   const trendsModal = trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} disabled={thinking}
     onClose={() => setTrendsOpen(false)} onApply={(research_id, selection) => sendChat('Apply selected edits from YouTube research.', { research_id, ...(Array.isArray(selection) ? { suggestions: selection } : { suggestion: selection }) })}>
     <div className="export-post-actions"><button className="editor-choice" onClick={draft.undo} disabled={!draft.canUndo}><Icon name="undo" /> Undo</button><button className="editor-choice" onClick={draft.redo} disabled={!draft.canRedo}><Icon name="redo" /> Redo</button><small>{draft.saveStatus}</small></div>
@@ -272,12 +271,11 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
 
   // ---------- New layout (Figma "Editor Page – Revamp") ----------
   if (layout === "revamp") {
-    const tool = brollOpen ? "B-roll" : panelTab; // the tool that's lit up in the rail
+    const tool = panelTab; // the tool that's lit up in the rail
     const [title, tip] = panelInfo[tool] ?? panelInfo.Chat;
     function chooseTool(id) {
       if (id === "Trends") return setTrendsOpen(true);
-      if (id === "B-roll") return setBrollOpen(true);
-      setBrollOpen(false);
+      if (id === "B-roll") return setPanelTab("B-roll");
       setPanelTab(id);
     }
     const unavailable = (id) => (id === "Aspect Ratio" || id === "B-roll") && info?.has_video === false;
@@ -299,7 +297,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
 
           <aside className="er-panel">
             <h2 className="er-panel-title">{title}</h2>
-            <div className="er-panel-content editor-panel-content">{tool === "B-roll" ? brollPanel : panelContent}</div>
+            <div className="er-panel-content editor-panel-content">{panelContent}</div>
             <div className="er-tip">
               <span className="er-tip-mascot" aria-hidden="true"><Icon name="leaf" size={26} /></span>
               <p><strong>Tip</strong>{tip}</p>
@@ -329,38 +327,42 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     return (
       <>
         <div className="es-body">
-          {brollOpen && state && <div className="es-broll">{brollPanel}</div>}
           <section className="es-preview">
+            <nav className="es-clip-rail" aria-label="Select clip">{clipTabs}</nav>
+            <div className="es-preview-player">
             {draft.error ? (
               <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
-              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
-                onOpenTrends={() => setTrendsOpen(true)} trendsOpen={trendsOpen}
+              <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
                 framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
             ) : (
               <ClipLoading />
             )}
-          </section>
-          <div className="es-actions">
-            <div className="es-tools">
-              <button className="btn btn-small" type="button" aria-pressed={brollOpen} disabled={!state || info?.has_video === false}
-                onClick={() => setBrollOpen(open => !open)}>B-roll</button>
-              {undoRedo}
-              {statuses}
-              <button type="button" className="btn btn-small btn-primary editor-export" onClick={goToExport}>Go to Export →</button>
             </div>
-            {clipTabs}
-          </div>
+          </section>
           <aside className="es-panel">
+            <div className="es-panel-workspace">
             <div className="editor-panel-tabs">
+              <button type="button" className="btn btn-small btn-primary es-export" onClick={goToExport}>Export →</button>
+              <div className="es-history">{undoRedo}</div>
               {splitTabs.map((tab) => (
                 <button key={tab} type="button" className={`editor-panel-tab${tab === activeTab ? " active" : ""}`}
-                  disabled={info?.has_video === false && tab === "Aspect Ratio"}
-                  title={info?.has_video === false && tab === "Aspect Ratio" ? "Audio recordings have no video framing" : undefined}
-                  onClick={() => setPanelTab(tab)}>{tab}</button>
+                  disabled={info?.has_video === false && ["Aspect Ratio", "B-roll"].includes(tab)}
+                  title={info?.has_video === false && ["Aspect Ratio", "B-roll"].includes(tab) ? "Audio recordings have no video" : undefined}
+                  aria-label={tab} aria-pressed={tab === activeTab}
+                  onClick={() => setPanelTab(tab)}>
+                  <Icon name={railTools.find(([id]) => id === tab)?.[2]} size={22} />
+                  <span className="es-tab-label">{tab}</span>
+                </button>
               ))}
+              <button type="button" className="btn btn-small btn-primary es-trends"
+                disabled={!state || info?.has_video === false} aria-haspopup="dialog" aria-expanded={trendsOpen}
+                onClick={() => setTrendsOpen(true)}>
+                <Icon name="sparkles" size={18} /> Trends
+              </button>
             </div>
             <div className="editor-panel-content">{panelContent}</div>
+            </div>
           </aside>
           {timeline && <section className="es-timeline" aria-label="Timeline">{timeline}</section>}
           {info?.warning && <p className="es-warning editor-warning">{info.warning}</p>}
@@ -379,13 +381,9 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
         <button type="button" className="btn btn-small btn-primary editor-export" onClick={goToExport}>Go to Export →</button>
       </div>
 
-      <div className={`editor-body${brollOpen ? " broll-open" : ""}`}>
+      <div className="editor-body">
         <div className="editor-left-column">
-          <nav className="editor-tool-rail" aria-label="Editor tools">
-            <button className="btn btn-small" type="button" aria-pressed={brollOpen} disabled={!state || info?.has_video === false}
-              onClick={() => setBrollOpen(open => !open)}>B-roll</button>
-          </nav>
-          {brollOpen && state ? brollPanel : sidebar}
+          {sidebar}
         </div>
 
         <main className="editor-center">
@@ -398,8 +396,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
           <div className="editor-panel-tabs">
             {panelTabs.map((tab) => (
               <button key={tab} type="button" className={`editor-panel-tab${tab === panelTab ? " active" : ""}`}
-                disabled={info?.has_video === false && tab === 'Aspect Ratio'}
-                title={info?.has_video === false && tab === 'Aspect Ratio' ? 'Audio recordings have no video framing' : undefined}
+                disabled={info?.has_video === false && ["Aspect Ratio", "B-roll"].includes(tab)}
+                title={info?.has_video === false && ["Aspect Ratio", "B-roll"].includes(tab) ? 'Audio recordings have no video' : undefined}
                 aria-haspopup={tab === 'Trends' ? 'dialog' : undefined}
                 aria-expanded={tab === 'Trends' ? trendsOpen : undefined}
                 onClick={() => tab === 'Trends' ? setTrendsOpen(true) : setPanelTab(tab)}>{tab}</button>
