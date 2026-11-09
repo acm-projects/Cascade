@@ -104,10 +104,10 @@ function PostPanel({ projectId, clip, onChange }) {
       </label>
       <div className="export-post-actions">
         <Button size="sm" variant="primary" onClick={save} disabled={busy !== null || !dirty}>
-          {busy === "save" ? "Saving…" : dirty ? "Save" : "✓ Saved"}
+          {busy === "save" ? "Saving…" : dirty ? "Save" : "Saved"}
         </Button>
         <Button size="sm" onClick={() => suggest(post.caption ? "rewrite" : "generate")} disabled={busy !== null}>
-          {busy === "generate" || busy === "rewrite" ? "Writing…" : post.caption ? "✨ Improve with AI" : "✨ Write with AI"}
+          {busy === "generate" || busy === "rewrite" ? "Writing…" : post.caption ? "Improve with AI" : "Write with AI"}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => suggest("tags")} disabled={busy !== null}>
           {busy === "tags" ? "Thinking…" : "# Suggest hashtags"}

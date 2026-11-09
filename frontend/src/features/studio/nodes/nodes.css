@@ -1,7 +1,8 @@
 /* Canvas boxes. Plain px: the canvas zoom scales them. Colors come from theme.css. */
 .studio-prompt-pad {width:130px;position:relative;display:flex;flex-direction:column;align-items:center;color:var(--color-jungle-deep);}
 .studio-pad-button {position:relative;width:130px;height:100px;padding:0;border:0;background:transparent;cursor:pointer;filter:drop-shadow(0 4px 3px #12352125);transition:transform .15s;}
-.studio-pad-button:hover {transform:translateY(-3px);}
+.studio-pad-button {cursor:grab;}
+.studio-pad-button:active {cursor:grabbing;}
 .studio-pad-button:focus-visible {outline:3px solid var(--color-jungle-deep);outline-offset:5px;border-radius:50%;}
 .studio-pad-button svg {display:block;width:100%;height:100%;}
 .studio-pad-shadow {fill:#224c37;}

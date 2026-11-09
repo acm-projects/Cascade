@@ -1,12 +1,14 @@
+> This guide describes the retained legacy Studio. The current React app is in `frontend/src/`; see [the current layout](codebase-layout.md).
+
 # Branching AI Studio
 
 The canvas route still uses FastAPI and Clerk. Its UI is now an actual React Flow
-app bundled locally from `studio-ui/` into `web/studio/`, served at `/studio-assets`.
+app bundled locally from `frontend/legacy/studio-ui/` into `frontend/legacy/web/studio/`, served at `/studio-assets`.
 It needs no separate frontend server, CDN scripts, or browser-exposed API keys.
 
 ## Workflow
 
-1. Upload the original video and describe the clips to find. Choose 1–12 clips.
+1. Upload the original video and describe the clips to find. Choose 1â€“12 clips.
 2. Each request produces a generation node and its actual result clips. Empty,
    processing, error and fewer-than-requested results are shown honestly.
 3. Check the single **Select clip** checkbox on one or more clips. Those same
@@ -53,17 +55,17 @@ locally, while generated media follows the existing local/S3 storage setting.
 ## Build and checks
 
 ```powershell
-cd studio-ui
+cd frontend/legacy/studio-ui
 npm ci
 npm run build
-cd ..
-node --test studio-ui/src/graph.test.js
+cd ../../..
+node --test frontend/legacy/studio-ui/src/graph.test.js
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_studio.py
 ```
 
-Commit the generated `web/studio/studio.js` and CSS along with source/lockfiles so
+Commit the generated `frontend/legacy/web/studio/studio.js` and CSS along with source/lockfiles so
 other teammates can start FastAPI without a Node build. The synthetic browser
-fixture `tests/project_browser_server.py` runs on port 8767 with mock identity and
+fixture `tests/browser/project_browser_server.py` runs on port 8767 with mock identity and
 generation and actual small FFmpeg media. It is not a production authentication
 route and must not be deployed. The opt-in Neon smoke test checks studio state
 after removing local metadata; synthetic database records are cleaned afterward.
@@ -103,5 +105,5 @@ Unchecking while a request is pending prevents it from selecting the replacement
 again. Empty and failed requests retain the previous visible results and selection.
 
 Select two or more clips to combine their creative qualities in each new result.
-For example, ask for three clips blending one reference�s humor with another�s action.
+For example, ask for three clips blending one reference’s humor with another’s action.
 Each child connects to all selected parents; the source video supplies the footage.

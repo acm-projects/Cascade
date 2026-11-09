@@ -67,12 +67,13 @@
   margin-left: calc(16 * var(--u));
 }
 
-/* The ① ② ③ pills: placed where they are in Figma (607px from the left) */
+/* The step buttons sit together beside the profile. */
 .topnav-steps {
-  position: absolute;
-  left: calc(607 * var(--u));
   display: flex;
+  margin-left: auto;
+  padding-left: calc(24 * var(--u));
   gap: calc(42 * var(--u));
+  flex-shrink: 0;
 }
 
 .topnav-step {
@@ -80,14 +81,14 @@
   align-items: center;
   gap: calc(14 * var(--u));
   width: calc(222 * var(--u));
-  height: calc(76 * var(--u));
+  height: calc(64 * var(--u));
   padding-left: calc(10 * var(--u));
-  border: max(2px, calc(6 * var(--u))) solid var(--color-wood-dark);
-  border-radius: calc(20 * var(--u));
+  border: max(2px, calc(4 * var(--u))) solid var(--color-wood-dark);
+  border-radius: calc(14 * var(--u));
   background: var(--color-cream-card) var(--wood-cream) center / cover;
   color: var(--color-wood-dark);
   font-family: var(--font-display);
-  font-size: calc(32 * var(--u));
+  font-size: calc(28 * var(--u));
   text-decoration: none;
   cursor: pointer;
   transition: scale 0.15s;
@@ -101,11 +102,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: calc(38 * var(--u));
-  height: calc(38 * var(--u));
+  width: calc(32 * var(--u));
+  height: calc(32 * var(--u));
   border: max(1.5px, calc(3 * var(--u))) solid currentColor;
   border-radius: 50%;
-  font-size: calc(26 * var(--u));
+  font-size: calc(22 * var(--u));
 }
 
 /* The step you're on: green wood */
@@ -121,5 +122,5 @@
 
 /* The avatar sits at the far right (its look is in UserAvatar.css) */
 .topnav-avatar {
-  margin-left: auto;
+  margin-left: calc(28 * var(--u));
 }

@@ -18,6 +18,12 @@
   pointer-events: none;
 }
 
+/* React Flow animates every path in a loading edge; keep leaf details solid. */
+.react-flow__edge.animated .vine-leaves path {
+  stroke-dasharray: none;
+  animation: none;
+}
+
 .vine-leaf {
   fill: var(--color-leaf);
   stroke: var(--color-jungle-deep);

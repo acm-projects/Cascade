@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as directory:
     folder = Path(directory)
     source = folder / "source.mp4"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=320x240:r=24:d=2", "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-c:v", "libx264", "-c:a", "aac", "-shortest", str(source)], check=True)
-    with patch("backend.clips.render_subtitles.whisper.load_model", return_value=Transcript()):
+    with patch("backend.clips.render_subtitles.transcribe_media", return_value=Transcript().transcribe()["segments"]):
         names = generate_four_styled_clips(str(source), ["hormozi", "minimalist", "bold_viral", "cinematic"], output_dir=folder / "rendered", whole_clip=True)
     assert len(names) == 4
     for name in names:

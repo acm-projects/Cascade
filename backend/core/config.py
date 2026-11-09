@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-FRONTEND_DIR = PROJECT_DIR / "web"
+FRONTEND_DIR = PROJECT_DIR / "frontend" / "legacy" / "web"
 
 load_dotenv(PROJECT_DIR / ".env", override=True)
 # Accept existing local names without rewriting the user's secrets file.
