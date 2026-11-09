@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./LeafTransition.css";
 import { LeafTransitionContext } from "../context/leafTransitionValue";
 
@@ -35,13 +35,9 @@ for (let column = 0; column < COLUMNS; column += 1) {
   }
 }
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function Leaf({ color }) {
+export function Leaf({ color, preserveAspectRatio }) {
   return (
-    <svg viewBox="0 0 100 160">
+    <svg viewBox="0 0 100 160" preserveAspectRatio={preserveAspectRatio}>
       <path
         d="M50 3C69 16 81 31 88 47L78 50L93 62C96 76 95 88 90 100L77 99L86 113C78 128 66 143 50 157C34 143 22 128 14 113L23 99L10 100C5 88 4 76 7 62L22 50L12 47C19 31 31 16 50 3Z"
         fill={color.base}
@@ -65,35 +61,68 @@ function Leaf({ color }) {
 // Wraps the pages. The leaves live here, above the pages, so they stay on screen while the page underneath changes.
 function LeafTransition({ children }) {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState("idle");   // idle -> cover -> reveal -> idle
-  const running = useRef(false);
+  const location = useLocation();
+  const [shownLocation, setShownLocation] = useState(location);
+  const shown = useRef(location);
+  const [phase, setPhase] = useState("idle");
+  const [backward, setBackward] = useState(false);
+  const readyPage = useRef(null);
 
-  const leafNavigate = useCallback(async (to, { state, ready } = {}) => {
-    if (running.current) return;   // already on the way (a double click)
+  // Existing callers can preload a page; every router navigation uses the same animation.
+  const leafNavigate = useCallback((to, { ready, ...options } = {}) => {
+    readyPage.current = ready ? Promise.resolve(ready).catch(() => {}) : null;
+    navigate(to, options);
+  }, [navigate]);
 
-    // People who turned off animations on their device just go to the page
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      navigate(to, { state });
+  useLayoutEffect(() => {
+    let cancelled = false;
+    const timers = new Set();
+    const delay = ms => new Promise(resolve => {
+      const timer = setTimeout(() => { timers.delete(timer); resolve(); }, ms);
+      timers.add(timer);
+    });
+    const commit = () => {
+      shown.current = location;
+      setShownLocation(location);
+    };
+    // Session switches, query changes and redirects within a page stay immediate.
+    const page = pathname => pathname.replace(/(\/studio)(?:\/[^/]+)?\/?$/, "$1");
+    if (page(location.pathname) === page(shown.current.pathname) ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      commit();
+      setPhase("idle");
       return;
     }
-
-    running.current = true;
+    const ready = readyPage.current;
+    readyPage.current = null;
+    const workflowStep = pathname => {
+      const step = pathname.match(/^\/projects\/[^/]+\/(studio|editor|export)(?:\/|$)/)?.[1];
+      return { studio: 1, editor: 2, export: 3 }[step] ?? 0;
+    };
+    setBackward(workflowStep(location.pathname) < workflowStep(shown.current.pathname));
     setPhase("cover");
-    const nextPageReady = Promise.race([Promise.resolve(ready).catch(() => {}), wait(MAX_WAIT_MS)]);
-    await Promise.all([wait(COVER_MS), nextPageReady]);
-    navigate(to, { state });
-    await wait(HOLD_MS);
-    setPhase("reveal");
-    await wait(REVEAL_MS);
-    setPhase("idle");
-    running.current = false;
-  }, [navigate]);
+    async function transition() {
+      await Promise.all([delay(COVER_MS), Promise.race([ready, delay(MAX_WAIT_MS)])]);
+      if (cancelled) return;
+      commit();
+      await delay(HOLD_MS);
+      if (cancelled) return;
+      setPhase("reveal");
+      await delay(REVEAL_MS);
+      if (!cancelled) setPhase("idle");
+    }
+    transition();
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+  }, [location]);
 
   return (
     <LeafTransitionContext.Provider value={leafNavigate}>
-      {children}
+      {children(shownLocation)}
       {phase !== "idle" && (
-        <div className={`leaf-transition leaf-transition-${phase}`} aria-hidden="true">
+        <div className={`leaf-transition leaf-transition-${phase}${backward ? " leaf-transition-backward" : ""}`} aria-hidden="true">
           <div className="leaf-transition-backdrop" />
           {LEAVES.map((leaf) => (
             <div

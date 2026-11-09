@@ -312,3 +312,62 @@
   white-space: normal;
   text-align: center;
 }
+
+/* Use the same panel spacing and compact controls as Export. */
+.editor-split .es-body { gap: 16px; padding: 16px 20px 20px; }
+.editor-split .es-preview,
+.editor-split .es-panel,
+.editor-split .es-timeline { border-radius: calc(30 * var(--u)); }
+.editor-split .es-preview { padding: 16px; gap: 12px; }
+.editor-split .editor-save { font-size: 12px; font-weight: 500; }
+.editor-split .es-panel .es-export { font-family: var(--font-ui); font-size: 13px; padding: 9px 10px; }
+.editor-split .es-panel .editor-panel-tab { border-radius: 8px; box-shadow: none; transition: background .15s; }
+.editor-split .es-panel .editor-panel-tab:hover:not(:disabled),
+.editor-split .es-panel .editor-panel-tab.active { translate: none; }
+.editor-split .es-preview .clip-player-trends { align-self: flex-start; width: auto; font-family: var(--font-ui); font-weight: 600; font-size: 13px; padding: 8px 12px; }
+@media (max-width: 760px) {
+  .editor-split { height: auto; min-height: 100dvh; }
+  .editor-split .es-body { flex: none; padding: 14px; gap: 16px; overflow: visible; }
+}
+
+/* Horizontal clip navigation above the preview. */
+.editor-split .es-preview {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "clips" "saved" "player";
+}
+.editor-split .es-clip-rail { overflow-x: auto; overflow-y: hidden; }
+.editor-split .es-clip-rail .er-clip-tabs {
+  flex-direction: row;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  width: max-content;
+  min-width: 100%;
+  padding-bottom: 4px;
+}
+.editor-split .es-panel .es-trends {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-top: 4px;
+  padding: 10px 8px;
+  font: 600 13px var(--font-ui);
+  white-space: nowrap;
+}
+.editor-split .es-panel .editor-panel-tabs { overflow-y: auto; }
+
+/* Keep save feedback alongside the preview version controls. */
+.editor-split .es-preview { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "clips" "player"; }
+.editor-split .clip-player-version-controls { order: 3; flex-shrink: 0; padding: 0 12px 10px; gap: 12px; }
+.editor-split .clip-player-version-controls > .editor-choice-row { position: static; padding: 0; gap: 6px; }
+.editor-split .clip-player-version-controls .editor-choice { padding: 6px 10px; font-size: 13px; }
+.editor-split .es-preview .clip-player-bar { padding: 0 12px; }
+
+/* Playback, save state and preview version share one compact control row. */
+.editor-split .clip-player-bar { gap: 8px; }
+.editor-split .clip-player-version-controls { order: initial; margin-left: auto; padding: 0; gap: 10px; flex-wrap: nowrap; }
+.editor-split .clip-player-save-status { flex-wrap: nowrap; white-space: nowrap; }
+.editor-split .clip-player-version-controls > .editor-choice-row { flex-wrap: nowrap; }
+.editor-split .es-preview .clip-player-bar { padding-bottom: 10px; }

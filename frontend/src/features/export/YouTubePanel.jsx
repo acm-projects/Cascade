@@ -85,8 +85,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
   } else if (connection.error) {
     content = (
       <p className="export-social-note">
-        YouTube isn't set up on this server yet. Add <code>GOOGLE_YOUTUBE_CLIENT_ID</code> and{" "}
-        <code>GOOGLE_YOUTUBE_CLIENT_SECRET</code> to <code>.env</code> (ask Manila), then restart the backend.
+        YouTube publishing is unavailable.
       </p>
     );
   } else if (!connection.connected) {

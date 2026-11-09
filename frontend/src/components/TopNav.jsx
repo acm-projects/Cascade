@@ -1,6 +1,7 @@
 import { Link, NavLink, useParams } from "react-router-dom";
 import UserAvatar from "./UserAvatar";
 import "./TopNav.css";
+import "./WorkflowNav.css";
 import leafIcon from "../assets/icons/leaf-cream.svg";
 
 const steps = [
@@ -27,7 +28,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
   const unlocked = { studio: true, editor: canOpenEditor, export: canOpenExport };
 
   return (
-    <header className="topnav">
+    <header className={`topnav${["studio", "editor", "export"].includes(active) ? " topnav--compact" : ""}`}>
       <Link to="/projects" className="topnav-brand" title="Back to your projects">
         <img src={leafIcon} alt="" className="topnav-leaf" />
         <span className="topnav-name">Cascade</span>

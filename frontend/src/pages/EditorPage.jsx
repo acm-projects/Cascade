@@ -219,7 +219,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const preview = draft.error ? (
     <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
   ) : info && state ? (
-    <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+    <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
       framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
   ) : (
     <ClipLoading />
@@ -329,13 +329,11 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
         <div className="es-body">
           <section className="es-preview">
             <nav className="es-clip-rail" aria-label="Select clip">{clipTabs}</nav>
-            <div className="es-save-status">{statuses}</div>
             <div className="es-preview-player">
             {draft.error ? (
               <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
-              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
-                onOpenTrends={() => setTrendsOpen(true)} trendsOpen={trendsOpen}
+              <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
                 framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
             ) : (
               <ClipLoading />
@@ -357,6 +355,11 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
                   <span className="es-tab-label">{tab}</span>
                 </button>
               ))}
+              <button type="button" className="btn btn-small btn-primary es-trends"
+                disabled={!state || info?.has_video === false} aria-haspopup="dialog" aria-expanded={trendsOpen}
+                onClick={() => setTrendsOpen(true)}>
+                <Icon name="sparkles" size={18} /> Trends
+              </button>
             </div>
             <div className="editor-panel-content">{panelContent}</div>
             </div>
