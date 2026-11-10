@@ -62,3 +62,8 @@
   from { opacity: 1; }
   to { opacity: 0; }
 }
+
+/* Mirror the entire gust so its stagger and travel both start on the right. */
+.leaf-transition-backward {
+  transform: scaleX(-1);
+}

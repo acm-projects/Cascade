@@ -39,7 +39,7 @@ function StockResult({ api, projectId, clip, asset, selected, onSelect }) {
   </article>;
 }
 
-export default function BrollPanel({ projectId, clip, state, duration, player, change, search, onSearch, selectedId, onSelect, onClose, disabled }) {
+export default function BrollPanel({ projectId, clip, state, duration, player, change, search, onSearch, selectedId, onSelect, onClose, disabled, inline = false }) {
   const api = useApi();
   const [query, setQuery] = useState(search?.query || "");
   const [chosenId, setChosenId] = useState(null);
@@ -85,8 +85,8 @@ export default function BrollPanel({ projectId, clip, state, duration, player, c
     } catch (e) { setError(e.message); }
   }
 
-  return <aside className="broll-drawer wood-panel" aria-label="B-roll panel">
-    <header><h2>B-roll</h2><button type="button" className="btn btn-ghost btn-small" aria-label="Close B-roll" onClick={onClose}><Icon name="close" /></button></header>
+  return <aside className={inline ? "broll-drawer broll-inline" : "broll-drawer wood-panel"} aria-label="B-roll panel">
+    <header><h2>B-roll</h2>{!inline && <button type="button" className="btn btn-ghost btn-small" aria-label="Close B-roll" onClick={onClose}><Icon name="close" /></button>}</header>
     <p>Search Pexels stock footage. Your original dialogue stays.</p>
     <form className="broll-search" onSubmit={find}>
       <label>Search stock footage<input value={query} onChange={e => setQuery(e.target.value)} maxLength={160} required placeholder="e.g. city skyline" /></label>

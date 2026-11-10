@@ -1,0 +1,21 @@
+.preview-leaves {
+  position: absolute; inset: 0; z-index: 4; overflow: hidden;
+  pointer-events: none; border-radius: inherit;
+}
+/* One continuous overlapping canopy, with no center seam. */
+.preview-leaf {
+  position: absolute; width: 80%; height: 110%;
+  transform: rotate(var(--turn));
+}
+.preview-leaf svg { display: block; width: 100%; height: 100%; }
+.preview-leaves.is-ready .preview-leaf {
+  animation: preview-leaf-fall var(--fall-duration) cubic-bezier(.42,0,.85,.5) var(--fall-delay) both;
+}
+@keyframes preview-leaf-fall {
+  from { transform: translate(0, 0) rotate(var(--turn)); }
+  to { transform: translate(var(--drift), 260%) rotate(calc(var(--turn) + var(--fall-turn))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preview-leaves.is-ready .preview-leaf { animation: preview-leaf-fade 150ms ease-out both; }
+  @keyframes preview-leaf-fade { to { opacity: 0; } }
+}

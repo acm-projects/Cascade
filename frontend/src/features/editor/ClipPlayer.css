@@ -8,12 +8,12 @@
 }
 
 /* Original / Edited buttons: moved in from the panel's edge, in the jungle button font */
-.clip-player > .editor-choice-row {
+.clip-player-version-controls > .editor-choice-row {
   gap: 10px;
   padding: 14px 0 0 16px;
 }
 
-.clip-player > .editor-choice-row .editor-choice {
+.clip-player-version-controls > .editor-choice-row .editor-choice {
   padding: 7px 14px;
   font-family: var(--font-display);
   font-weight: normal;
@@ -146,3 +146,8 @@
     animation: none;
   }
 }
+
+.clip-loading-screen { position: relative; overflow: hidden; }
+
+.clip-player-version-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.clip-player-save-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
