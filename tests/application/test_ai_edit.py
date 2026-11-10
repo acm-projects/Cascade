@@ -152,9 +152,13 @@ class Routing(unittest.TestCase):
             edited = self.state.model_copy(update={'ai_edit': AIEditRef(version='v001', duration=9)})
             self.assertTrue(jobs.wants(body(edited, 'make the captions yellow'), {'has_video': True}))
 
-    def test_never_without_the_claude_plan(self):
-        with patch('backend.editor.ai.claude_plan', return_value=''):
+    def test_legacy_engine_never_without_the_claude_plan(self):
+        with patch('backend.editor.ai.claude_plan', return_value=''), patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'legacy'}):
             self.assertFalse(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
+
+    def test_cinema_engine_edits_even_without_claude(self):
+        with patch('backend.editor.ai.claude_plan', return_value=''), patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'cinema'}):
+            self.assertTrue(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
 
 
 class Failure(unittest.TestCase):
@@ -164,7 +168,10 @@ class Failure(unittest.TestCase):
             folder = Path(folder)
             job = {'id': 'x', 'status': 'queued', 'progress': 0, 'stage': '', 'version': None, 'message': '', 'finished': None}
             with jobs.GUARD: jobs.RUNNING[str(folder)] = object()
-            jobs._run(folder, 'p', 'j', 0, 'u', {}, {}, edited, [], 'lower the music', None, None, job)
+            for engine in ('legacy', 'cinema'):
+                with patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': engine}):
+                    with jobs.GUARD: jobs.RUNNING[str(folder)] = object()
+                    jobs._run(folder, 'p', 'j', 0, 'u', {}, {}, edited, [], 'lower the music', None, None, job)
         args = publish.call_args.args
         self.assertIsNone(args[5])  # no new version attached
         self.assertIn('usage limit reached', args[7])

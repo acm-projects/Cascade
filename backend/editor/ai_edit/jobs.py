@@ -68,7 +68,7 @@ def wants(body, info):
     """Whether this chat turn belongs to the finished-edit workflow."""
     if body.research_id or not info.get('has_video', True) or re.search(r'storyboard', body.message, re.I): return False
     from ..ai import claude_plan
-    if not claude_plan(): return False
+    if not claude_plan() and not tools.cinema(): return False
     return bool(body.state.ai_edit) or bool(EDIT_REQUEST.search(body.message))
 
 
@@ -100,7 +100,7 @@ def turn(pid, jid, index, user, clip, body, info, stock, audio_store):
     with GUARD: RUNNING[str(folder)] = thread
     thread.start()
     verb = 'Changing the edit' if current else 'Editing this clip'
-    return _reply(body.state, f'{verb} now. Claude is directing it on your Claude plan, at no extra cost. You can keep working or switch clips; it stays tied to this clip and will appear in the Edited preview when it is ready.', job)
+    return _reply(body.state, f'{verb} now, at no extra cost. You can keep working or switch clips; it stays tied to this clip and will appear in the Edited preview when it is ready.', job)
 
 
 def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock, audio_store, job):
@@ -110,6 +110,8 @@ def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock,
         job.update(status='running', progress=round(amount, 3), stage=stage)
         _write(folder/'job.json', job)
 
+    if tools.cinema():
+        return _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message, stock, job, progress)
     try:
         with RENDER_SLOT, media(jid, clip) as source:
             progress(.02, 'Getting the clip ready…')
@@ -157,6 +159,65 @@ def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock,
     except Exception as exc:  # any failure is told in the chat, and the last edit keeps playing
         why = getattr(exc, 'detail', None) or str(exc) or exc.__class__.__name__
         LOG.warning('AI edit failed', exc_info=True)
+        if not isinstance(exc, (HTTPException, ValueError)): why = 'Something went wrong while making this edit. Try the request again.'
+        text = f'NOT CHANGED: {str(why)[:600]}'+(' The last working edit is still in place.' if state.ai_edit else '')
+        _publish(pid, jid, index, user, state, None, None, text)
+        job.update(status='failed', message=text, finished=time.time())
+        _write(folder/'job.json', job)
+    finally:
+        with GUARD: RUNNING.pop(str(folder), None)
+
+
+def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message, stock, job, progress):
+    """The Cinema engine (cinema/): clean dialogue, designed moments, original score, Cascade stamp."""
+    from ..storage import media
+    from .cinema import broll, director as cine_director, engine, plan as cine_plan
+    try:
+        with RENDER_SLOT, media(jid, clip) as source:
+            progress(.02, 'Getting the clip ready…')
+            prep_dir = folder/'prep'
+            prep = preparation.prepare(source, info.get('cues', []), prep_dir, progress, separate=False)
+            windows = _windows(state)
+            current = None
+            if state.ai_edit:
+                saved = _read(folder/state.ai_edit.version/'plan.json')
+                try:
+                    current = cine_plan.CinemaPlan.model_validate(saved) if saved and 'story' in saved else None
+                except ValueError:
+                    current = None
+            progress(.3, 'Claude is watching the clip and directing the edit…' if not current else 'Claude is revising the edit…')
+            directed = 'Claude'
+            try:
+                plan = (cine_director.revise(message, current, prep_dir, prep, windows, chat) if current
+                        else cine_director.plan_edit(message, prep_dir, prep, windows, chat))
+            except Exception as exc:  # no Claude, usage limit, or no usable plan: the rule-based director still makes the edit
+                LOG.info('Cinema: Claude unavailable (%s); using the rule-based director', getattr(exc, 'detail', exc))
+                plan = current or cine_plan.auto(prep['words'])
+                directed = 'rules'
+            name = _next_version(folder)
+            out = folder/name; out.mkdir(parents=True, exist_ok=True)
+            _write(out/'plan.json', plan.model_dump())
+            local = [tools.folder()/'B-roll', tools.folder()/'Raw Footage']
+            report = engine.make(source, prep['words'], plan, out/'edited.mp4.part.mp4', prep['cuts'], broll.resolver(stock, local),
+                                 lambda a, s: progress(.36+a*.6, s), tools.ffmpeg())
+            (out/'edited.mp4.part.mp4').replace(out/'edited.mp4')
+            duration = preparation.probe(out/'edited.mp4')['duration']
+            report.update(directed=directed)
+            _write(out/'report.json', report)
+            history = [*versions(folder), {'version': name, 'title': plan.title, 'request': message[:500], 'duration': duration, 'created': time.time()}]
+            _write(folder/'versions.json', history)
+            text = '\n'.join([plan.reply or f'{plan.title} is ready.', '',
+                               f"{name} · {report['seconds']} s · cut {report['removed_fillers']} ums and stumbles"
+                               f"{', '+str(report['removed_interjections'])+' interjections' if report['removed_interjections'] else ''} · "
+                               f"{report['broll']} b-roll shots · {report['moments']} designed moments · {report['lufs']} LUFS.",
+                               *(["Claude was not available, so Cascade's own director made this cut."] if directed == 'rules' else []),
+                               'Ask for any change here.'])[:4000]
+            _publish(pid, jid, index, user, state, name, duration, text)
+            job.update(status='done', progress=1, stage='Done', version=name, duration=duration, message=text, finished=time.time())
+            _write(folder/'job.json', job)
+    except Exception as exc:
+        why = getattr(exc, 'detail', None) or str(exc) or exc.__class__.__name__
+        LOG.warning('Cinema edit failed', exc_info=True)
         if not isinstance(exc, (HTTPException, ValueError)): why = 'Something went wrong while making this edit. Try the request again.'
         text = f'NOT CHANGED: {str(why)[:600]}'+(' The last working edit is still in place.' if state.ai_edit else '')
         _publish(pid, jid, index, user, state, None, None, text)

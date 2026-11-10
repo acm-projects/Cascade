@@ -39,3 +39,8 @@ def look():
     import re
     match = re.search(r'^\s*Look:\s*([a-z-]+)', style_sheet(), re.M | re.I)
     return match.group(1).lower() if match else 'point'
+
+
+def cinema():
+    """The Cinema engine (cinema/) makes AI edits unless CASCADE_EDIT_ENGINE=legacy asks for the older HyperFrames looks."""
+    return os.getenv('CASCADE_EDIT_ENGINE', 'cinema').strip().lower() != 'legacy'

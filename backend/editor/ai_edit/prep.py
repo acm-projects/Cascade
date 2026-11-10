@@ -29,9 +29,12 @@ def _voice(source, folder):
     subprocess.run([tools.ffmpeg(), '-nostdin', '-v', 'error', '-y', '-i', str(source), '-vn', '-ac', '2', '-ar', '44100', str(mix)], check=True, timeout=600, **RUN)
     python = tools.demucs()
     if not python: return mix, False
-    run = subprocess.run([python, '-m', 'demucs', '--two-stems=vocals', '-d', 'mps', '-o', str(folder/'sep'), str(mix)], timeout=1800, cwd=folder, **RUN)
+    import platform
     stem = folder/'sep'/'htdemucs'/'mix'/'vocals.wav'
-    if run.returncode or not stem.is_file():
+    run = None
+    if platform.system() == 'Darwin' and platform.machine() == 'arm64':  # Apple GPU only exists on Apple silicon Macs
+        run = subprocess.run([python, '-m', 'demucs', '--two-stems=vocals', '-d', 'mps', '-o', str(folder/'sep'), str(mix)], timeout=1800, cwd=folder, **RUN)
+    if run is None or run.returncode or not stem.is_file():
         run = subprocess.run([python, '-m', 'demucs', '--two-stems=vocals', '-d', 'cpu', '-o', str(folder/'sep'), str(mix)], timeout=3600, cwd=folder, **RUN)
     if not stem.is_file(): return mix, False
     final = folder/'voice.wav'
@@ -119,6 +122,20 @@ def _transcribe(mono, x, db, folder):
     return words
 
 
+def _faster_whisper(path):
+    """Word times from faster-whisper when whisper-cli is not installed (the model downloads once)."""
+    try:
+        from faster_whisper import WhisperModel
+    except Exception:
+        return None
+    import os
+    model = WhisperModel(os.getenv('CASCADE_WHISPER_MODEL', 'small'), device='cpu', compute_type='int8')
+    pcm = subprocess.run([tools.ffmpeg(), '-nostdin', '-v', 'error', '-i', str(path), '-ac', '1', '-ar', '16000', '-f', 'f32le', '-'], capture_output=True, timeout=900).stdout
+    segments, _ = model.transcribe(np.frombuffer(pcm, np.float32), language='en', word_timestamps=True, condition_on_previous_text=False,
+                                   initial_prompt='Um, uh, so, like, you know.')
+    return [{'w': w.word.strip(), 's': round(w.start, 3), 'e': round(w.end, 3)} for s in segments for w in s.words if w.word.strip()]
+
+
 def _from_cues(cues):
     """Without whisper: spread the existing transcript's words through each cue."""
     words = []
@@ -144,30 +161,41 @@ def _sheets(source, duration, folder):
     return every
 
 
-def prepare(source, cues, folder, progress):
-    """Returns the measurements; cached in `folder` for the life of the clip."""
+def prepare(source, cues, folder, progress, separate=True):
+    """Returns the measurements; cached in `folder` for the life of the clip. `separate=False` skips
+    voice separation (the Cinema engine edits the clip's own sound and does not need it)."""
     folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
     done = folder/'prep.json'
     stat = Path(source).stat()
     stamp = [stat.st_size, stat.st_mtime_ns]
     if done.is_file():
         saved = json.loads(done.read_text())
-        if saved.get('stamp') == stamp: return saved
+        if saved.get('stamp') == stamp and (saved.get('separated', True) or not separate): return saved
     media = probe(source)
     if not media['width']: raise ValueError('This clip has no video.')
     if not media['has_audio']: raise ValueError('This clip has no sound, and this edit is built around what is said.')
-    progress(.06, 'Separating the voices from any music in the clip…')
-    voice, isolated = _voice(source, folder)
+    if separate:
+        progress(.06, 'Separating the voices from any music in the clip…')
+        voice, isolated = _voice(source, folder)
+    else:
+        voice = folder/'mix.wav'
+        subprocess.run([tools.ffmpeg(), '-nostdin', '-v', 'error', '-y', '-i', str(source), '-vn', '-ac', '2', '-ar', '44100', str(voice)], check=True, timeout=600, **RUN)
+        isolated = False
     progress(.2, 'Transcribing every word…')
     mono, x, db = _energy(voice, folder)
     words = _transcribe(mono, x, db, folder)
+    if words is None:
+        try:
+            words = _faster_whisper(voice)
+        except Exception:
+            words = None
     if words is None: words = _from_cues(cues)
     if not words: raise ValueError('I could not find any speech in this clip to edit around.')
     progress(.28, 'Finding the shots…')
     cuts = _cuts(source)
     every = _sheets(source, media['duration'], folder)
     np.save(folder/'energy.npy', db.astype('float32'))
-    saved = {**media, 'stamp': stamp, 'voice': Path(voice).name, 'isolated': isolated, 'words': [{**w, 'i': i} for i, w in enumerate(words)],
+    saved = {**media, 'stamp': stamp, 'voice': Path(voice).name, 'isolated': isolated, 'separated': separate, 'words': [{**w, 'i': i} for i, w in enumerate(words)],
              'cuts': cuts, 'sheet_every': every, 'sheets': sorted(p.name for p in folder.glob('sheet*.jpg'))}
     done.write_text(json.dumps(saved))
     return saved
