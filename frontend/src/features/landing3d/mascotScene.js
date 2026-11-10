@@ -1,12 +1,25 @@
 import * as THREE from "three";
-import { buildCapybara } from "./capybaraModel";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// Small 3D views of the capybara mascot (capybaraModel.js), with a see-through background.
+// Small 3D views of the capybara mascot, with a see-through background.
+// The capybara itself is made in Blender: frontend/blender/capybara.py builds it and exports
+// public/models/capybara.glb, with its "Idle" animation (breathing, a lazy nod, blinks and an ear flick).
 //
-// createMascotScene(canvas, { still }) - the whole capybara, idling (breathing, blinking, ear flicks)
-//   at about 30 frames a second. Returns a function that stops it and frees its memory.
-// capybaraHeadPicture(size) - draws the capybara's head once and returns it as a picture (a data URL),
+// createMascotScene(canvas, { still }) - the whole capybara, playing its idle animation at about
+//   30 frames a second. Returns a function that stops it and frees its memory.
+// capybaraHeadPicture(size) - draws the capybara's head once and resolves to a picture (a data URL),
 //   for small badges. No 3D keeps running afterwards.
+const MODEL_URL = "/models/capybara.glb";
+
+// Download the model once; every view makes its own copy of it
+let modelPromise = null;
+function loadModel() {
+  modelPromise ??= new GLTFLoader().loadAsync(MODEL_URL).catch((error) => {
+    modelPromise = null;   // let a later try download it again
+    throw error;
+  });
+  return modelPromise;
+}
 
 function setUp(canvas, width, height) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "low-power" });
@@ -32,10 +45,24 @@ function setUp(canvas, width, height) {
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
+  return { renderer, scene };
+}
 
-  const capybara = buildCapybara();
-  scene.add(capybara.group);
-  return { renderer, scene, capybara };
+// Put a copy of the Blender capybara in the scene, with its idle animation ready to play
+function addCapybara(scene, gltf) {
+  const capybara = gltf.scene.clone(true);
+  capybara.traverse((object) => {
+    if (object.isMesh) {
+      object.castShadow = true;
+      object.receiveShadow = true;
+    }
+  });
+  scene.add(capybara);
+  // Blender exports the idle loop as one clip per moving part (body, head, eyes, ears).
+  // They are all the same length, so playing them together keeps them in step.
+  const mixer = new THREE.AnimationMixer(capybara);
+  for (const clip of gltf.animations) mixer.clipAction(clip).play();
+  return mixer;
 }
 
 function freeAll(scene, renderer) {
@@ -52,39 +79,49 @@ function freeAll(scene, renderer) {
 export function createMascotScene(canvas, { still = false } = {}) {
   const width = canvas.clientWidth || 160;
   const height = canvas.clientHeight || 130;
-  const { renderer, scene, capybara } = setUp(canvas, width, height);
+  const { renderer, scene } = setUp(canvas, width, height);
   // A three-quarter view from the front-right, a little above, like the island's camera
   const camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 50);
-  camera.position.set(3.4, 2.5, 5.2);
-  camera.lookAt(0.25, 0.85, 0);
+  camera.position.set(3.6, 2.4, 5.4);
+  camera.lookAt(0.4, 0.8, 0);
 
-  const start = performance.now();
+  let stopped = false;
+  let mixer = null;
   let frame = 0;
   let timer = 0;
-  function draw() {
-    capybara.update(still ? 0 : (performance.now() - start) / 1000);
-    renderer.render(scene, camera);
-  }
+  const clock = new THREE.Clock();
   function loop() {
-    draw();
+    mixer.update(clock.getDelta());
+    renderer.render(scene, camera);
     timer = setTimeout(() => { frame = requestAnimationFrame(loop); }, 1000 / 30 - 4);
   }
-  if (still) draw();
-  else loop();
+  loadModel().then((gltf) => {
+    if (stopped) return;
+    mixer = addCapybara(scene, gltf);
+    if (still) {
+      mixer.update(0);
+      renderer.render(scene, camera);
+    } else {
+      loop();
+    }
+  }).catch(() => {});   // no model: the space just stays empty
 
   return () => {
+    stopped = true;
     cancelAnimationFrame(frame);
     clearTimeout(timer);
     freeAll(scene, renderer);
   };
 }
 
-export function capybaraHeadPicture(size) {
+export async function capybaraHeadPicture(size) {
+  const gltf = await loadModel();
   const canvas = document.createElement("canvas");
   const { renderer, scene } = setUp(canvas, size, size);
+  addCapybara(scene, gltf).update(0);
   const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 50);
-  camera.position.set(3.6, 2.2, 2.6);
-  camera.lookAt(1.25, 1.45, 0);
+  camera.position.set(4.1, 1.95, 2.7);
+  camera.lookAt(1.45, 1.25, 0);
   renderer.render(scene, camera);
   const picture = canvas.toDataURL("image/png");
   freeAll(scene, renderer);

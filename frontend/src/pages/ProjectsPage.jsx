@@ -16,6 +16,7 @@ import EmptyState from "../components/ui/EmptyState";
 import Modal from "../components/ui/Modal";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
+import "./ProjectsFlat.css";   // TRY-OUT: flat foreground over the 3D world (remove this line and "projects-flat" below to undo)
 
 // icon: simple line drawings (24 x 24, drawn in the text color), the same style as the landing page icons
 const views = [
@@ -203,7 +204,7 @@ function ProjectsPage() {
   }
 
   return (
-    <div className="projects">
+    <div className="projects projects-flat">
       <IsoWorld framing="underwater" />
       {/* Green top bar */}
       <header className="projects-bar">

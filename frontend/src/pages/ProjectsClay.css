@@ -1,0 +1,400 @@
+/* SAVED, NOT IN USE: the "soft clay" Projects style. To switch back, copy this file over ProjectsFlat.css.
+/* ============================================================
+   TRY-OUT: a "soft clay" foreground on the Projects page only.
+   The 3D underwater world stays behind; everything in front (top bar, sidebar, cards, buttons) is solid,
+   rounded and slightly puffy, like soft clay toys: a sandy-cream body, a gentle highlight on the top-left,
+   a soft shade on the bottom-right, a thin edge underneath and a soft shadow on the "floor".
+   Buttons are puffy too and press in when clicked. Text uses Outfit (loaded in index.html).
+
+   To undo: in ProjectsPage.jsx, delete the "ProjectsFlat.css" import and the "projects-flat" class.
+   (Deep-sea slabs is the next style to try.)
+   ============================================================ */
+.projects-flat {
+  --clay: linear-gradient(160deg, #fffaf0, #f3e8d4 55%, #eadbc0);
+  --clay-hover: linear-gradient(160deg, #fffdf6, #f7eedd 55%, #efe2ca);
+  --clay-edge: #d6c29e;
+  --clay-shadow:
+    inset 5px 6px 10px rgba(255, 255, 255, 0.85),
+    inset -6px -8px 14px rgba(170, 138, 92, 0.22),
+    0 4px 0 var(--clay-edge),
+    0 16px 30px rgba(4, 22, 44, 0.38);
+  --clay-radius: 26px;
+  --ink: #1e3346;
+  --ink-soft: #5e7080;
+  --teal: linear-gradient(160deg, #6fe0ea, #33bccd 60%, #26a6ba);
+  --teal-edge: #1a8296;
+  --green: linear-gradient(160deg, #8fe363, #55c443 60%, #43b03a);
+  --green-edge: #2f8a2f;
+  --font: "Outfit", "Nunito Sans", system-ui, sans-serif;
+}
+
+/* The shared clay look */
+.projects-flat .projects-bar,
+.projects-flat .projects-sidebar,
+.projects-flat .project-card,
+.projects-flat .project-card-popup,
+.projects-flat .ui-empty,
+.projects-flat .projects-error.wood-panel {
+  border: 0;
+  background: var(--clay);
+  box-shadow: var(--clay-shadow);
+  color: var(--ink);
+}
+
+/* ---------- Top bar: a floating clay strip ---------- */
+.projects-flat .projects-bar {
+  height: 64px;
+  margin: 14px 20px 0;
+  padding: 0 14px 0 22px;
+  border-radius: 22px;
+}
+
+.projects-flat .projects-brand {
+  gap: 12px;
+  color: var(--ink);
+  font-size: 24px;
+  text-shadow: none;
+}
+
+.projects-flat .projects-leaf {
+  width: 24px;
+  height: 21px;
+  filter: brightness(0) saturate(100%) invert(18%) sepia(22%) saturate(900%) hue-rotate(170deg);   /* the cream leaf, tinted dark to sit on clay */
+}
+
+.projects-flat .projects-bar .user-avatar {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: var(--teal);
+  box-shadow: inset 2px 3px 5px rgba(255, 255, 255, 0.55), inset -2px -3px 6px rgba(10, 80, 100, 0.3), 0 3px 0 var(--teal-edge);
+  color: #ffffff;
+  font-family: var(--font);
+  font-size: 17px;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(10, 80, 100, 0.5);
+}
+
+/* ---------- Sidebar: one clay panel; the open view is a puffy teal pill ---------- */
+.projects-flat .projects-sidebar {
+  gap: 6px;
+  width: auto;
+  align-self: flex-start;
+  margin: var(--cards-top, 64px) 0 0 20px;
+  padding: 10px;
+  border-radius: var(--clay-radius);
+}
+
+.projects-flat .projects-filter,
+.projects-flat .projects-filter:hover,
+.projects-flat .projects-filter:active,
+.projects-flat .projects-filter.active {
+  width: 212px;
+  height: 48px;
+  gap: 12px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--ink-soft);
+  box-shadow: none;
+  translate: none;
+  filter: none;
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 16px;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s, transform 0.12s;
+}
+
+.projects-flat .projects-filter:hover {
+  background: rgba(200, 176, 136, 0.18);
+  color: var(--ink);
+}
+
+.projects-flat .projects-filter.active {
+  background: var(--teal);
+  color: #ffffff;
+  box-shadow: inset 3px 4px 7px rgba(255, 255, 255, 0.5), inset -3px -4px 8px rgba(10, 80, 100, 0.28), 0 4px 0 var(--teal-edge), 0 8px 14px rgba(10, 80, 100, 0.25);
+  text-shadow: 0 1px 0 rgba(10, 80, 100, 0.45);
+  font-weight: 600;
+}
+
+.projects-flat .projects-filter:active {
+  transform: translateY(2px);
+}
+
+.projects-flat .projects-filter-icon {
+  width: 19px;
+  height: 19px;
+}
+
+/* ---------- Heading: sits on the water, so it stays white ---------- */
+.projects-flat .projects-title {
+  color: #ffffff;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: clamp(36px, 3.4vw, 58px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  -webkit-text-stroke: 0;
+  text-shadow: 0 3px 0 rgba(8, 40, 80, 0.35), 0 8px 24px rgba(4, 22, 44, 0.45);
+}
+
+.projects-flat .projects-subtitle {
+  margin: 10px 0 0 2px;
+  color: rgba(236, 246, 255, 0.9);
+  font-family: var(--font);
+  font-weight: 400;
+  font-size: 17px;
+  text-shadow: 0 2px 12px rgba(4, 22, 44, 0.55);
+}
+
+.projects-flat .projects-actions {
+  align-items: center;
+  gap: 14px;
+}
+
+/* Search: a clay pill pressed inward (it's a place to type into) */
+.projects-flat .projects-search {
+  width: 290px;
+  height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #efe3cc, #f8f0e1);
+  box-shadow: inset 3px 4px 8px rgba(160, 128, 84, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.8), 0 10px 22px rgba(4, 22, 44, 0.3);
+}
+
+.projects-flat .projects-search:focus-within {
+  outline: 3px solid #6fe0ea;
+  outline-offset: 2px;
+}
+
+.projects-flat .projects-search img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.projects-flat .projects-search input {
+  color: var(--ink);
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.projects-flat .projects-search input::placeholder {
+  color: #8a8578;
+}
+
+/* "+ New Project": a puffy green button that presses in */
+.projects-flat .projects-new,
+.projects-flat .projects-new:hover,
+.projects-flat .projects-new:active {
+  height: 48px;
+  padding: 0 24px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #ffffff;
+  box-shadow: inset 3px 4px 7px rgba(255, 255, 255, 0.5), inset -3px -4px 8px rgba(30, 90, 30, 0.3), 0 5px 0 var(--green-edge), 0 12px 22px rgba(4, 22, 44, 0.35);
+  translate: none;
+  text-shadow: 0 1px 0 rgba(30, 90, 30, 0.55);
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 16px;
+  transition: transform 0.12s, box-shadow 0.12s, filter 0.15s;
+}
+
+.projects-flat .projects-new:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.projects-flat .projects-new:active {
+  transform: translateY(4px);
+  box-shadow: inset 3px 4px 7px rgba(255, 255, 255, 0.4), inset -3px -4px 8px rgba(30, 90, 30, 0.3), 0 1px 0 var(--green-edge), 0 5px 10px rgba(4, 22, 44, 0.3);
+}
+
+.projects-flat .projects-filter:focus-visible,
+.projects-flat .projects-new:focus-visible {
+  outline: 3px solid #6fe0ea;
+  outline-offset: 3px;
+}
+
+/* ---------- Cards: clay tiles ---------- */
+.projects-flat .projects-grid {
+  column-gap: 28px;
+  row-gap: 30px;
+  padding: 6px 6px 34px;
+}
+
+.projects-flat .projects-grid > * {
+  animation: none;
+}
+
+.projects-flat .project-card {
+  aspect-ratio: auto;
+  border-radius: var(--clay-radius);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.projects-flat .project-card::before {
+  display: none;
+}
+
+.projects-flat .project-card:hover {
+  translate: none;
+  transform: translateY(-5px);
+  background: var(--clay-hover);
+  box-shadow:
+    inset 5px 6px 10px rgba(255, 255, 255, 0.9),
+    inset -6px -8px 14px rgba(170, 138, 92, 0.2),
+    0 4px 0 var(--clay-edge),
+    0 26px 40px rgba(4, 22, 44, 0.42);
+}
+
+.projects-flat .project-card-open {
+  padding: 12px 12px 16px;
+  border-radius: var(--clay-radius);
+}
+
+.projects-flat .project-card-thumb {
+  flex: none;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  background: #e2d4b8;
+  box-shadow: inset 2px 3px 6px rgba(120, 90, 50, 0.35);   /* the picture sits in a little pressed-in tray */
+}
+
+.projects-flat .project-card-name {
+  margin: 14px 6px 0;
+  color: var(--ink);
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.projects-flat .project-card-meta {
+  margin: 3px 6px 0;
+  color: var(--ink-soft);
+  font-family: var(--font);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.projects-flat .project-card-star {
+  color: #e0a21a;
+}
+
+.projects-flat .project-card-menu {
+  top: 20px;
+  right: 20px;
+}
+
+.projects-flat .project-card-dots {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--clay);
+  box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.9), inset -2px -3px 5px rgba(170, 138, 92, 0.3), 0 2px 0 var(--clay-edge), 0 6px 10px rgba(4, 22, 44, 0.35);
+  color: var(--ink);
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.projects-flat .project-card-dots:hover {
+  filter: brightness(1.03);
+}
+
+.projects-flat .project-card-popup {
+  padding: 8px;
+  border-radius: 18px;
+}
+
+.projects-flat .project-card-popup button {
+  border-radius: 12px;
+  color: var(--ink);
+  font-family: var(--font);
+  font-weight: 500;
+}
+
+.projects-flat .project-card-popup button:hover {
+  background: rgba(200, 176, 136, 0.25);
+}
+
+.projects-flat .project-card-popup button.danger {
+  color: #c4462f;
+}
+
+/* Dashed "New Project" tile: a softer, see-through clay with a puffy teal "+" */
+.projects-flat .project-card-new {
+  aspect-ratio: auto;
+  min-height: 240px;
+  gap: 6px;
+  border: 2.5px dashed rgba(255, 250, 240, 0.75);
+  border-radius: var(--clay-radius);
+  background: rgba(255, 248, 235, 0.22);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #ffffff;
+  font-family: var(--font);
+  text-shadow: 0 2px 10px rgba(4, 22, 44, 0.5);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.projects-flat .project-card-new:hover {
+  translate: none;
+  transform: translateY(-5px);
+  background: rgba(255, 248, 235, 0.34);
+}
+
+.projects-flat .project-card-new-plus {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: var(--teal);
+  box-shadow: inset 3px 4px 7px rgba(255, 255, 255, 0.5), inset -3px -4px 8px rgba(10, 80, 100, 0.3), 0 4px 0 var(--teal-edge), 0 10px 18px rgba(4, 22, 44, 0.3);
+  text-shadow: none;
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 28px;
+}
+
+.projects-flat .project-card-new-title {
+  font-weight: 600;
+  font-size: 19px;
+}
+
+.projects-flat .project-card-new-text {
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--font);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.projects-flat .project-card-new:focus-visible,
+.projects-flat .project-card-open:focus-visible {
+  outline: 3px solid #6fe0ea;
+  outline-offset: 3px;
+}
+
+/* ---------- Empty / error messages ---------- */
+.projects-flat .ui-empty,
+.projects-flat .projects-error.wood-panel {
+  border-radius: var(--clay-radius);
+  font-family: var(--font);
+}
+
+.projects-flat .ui-empty-icon {
+  color: #26a6ba;
+}
+
+.projects-flat .ui-empty-text,
+.projects-flat .projects-error p {
+  color: var(--ink-soft);
+}

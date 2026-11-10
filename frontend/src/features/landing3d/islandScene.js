@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
 // The 3D world behind Landing and Projects: a rainforest island in the sea, seen from an isometric camera.
 // One big video screen feeds a river, and clip cards ride it down the waterfalls: one video becomes many clips.
-// Everything is drawn from code (no image files), so colors and sizes can be changed right here.
+// The island itself is made in Blender (frontend/blender/island.py); the sea, water, cards and animals are drawn here.
 //
 // createIslandScene(canvas, { still, framing }) starts it and returns a function that stops it and frees its memory.
 // In the world: +x is down-right on screen, +z is down-left, +y is up.
@@ -215,43 +217,6 @@ function isRiver(x) {
   return x > RIVER_MIN_X && x < RIVER_MAX_X;
 }
 
-function buildGround(root, random) {
-  const columns = [];
-  for (let x = -GRID; x <= GRID; x += 1) {
-    for (let z = -GRID; z <= GRID; z += 1) {
-      if (isLand(x, z)) columns.push({ x, z });
-    }
-  }
-  // One shape drawn many times: much faster than hundreds of separate boxes
-  const boxShape = new RoundedBoxGeometry(1, 1, 1, 2, 0.05);
-  const blockMaterial = new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: false });
-  const blocks = withShadow(new THREE.InstancedMesh(boxShape, blockMaterial, columns.length * 3));
-  const matrix = new THREE.Matrix4();
-  const color = new THREE.Color();
-  let count = 0;
-
-  function addBlock(x, z, bottom, top, tint, size = 1.001) {
-    matrix.makeScale(size, top - bottom, size);
-    matrix.setPosition(x, (top + bottom) / 2, z);
-    blocks.setMatrixAt(count, matrix);
-    blocks.setColorAt(count, color.set(tint));
-    count += 1;
-  }
-
-  for (const { x, z } of columns) {
-    const depth = SEA_LEVEL - 2;   // every column reaches below the water
-    const river = isRiver(x);
-    const top = groundHeight(z) - (river ? 0.34 : 0);
-    addBlock(x, z, depth, Math.min(0.2, top - 0.9), pick(COLORS.deepRock, random));
-    addBlock(x, z, Math.min(0.2, top - 0.9), top - (river ? 0 : 0.42), river ? "#5e5a58" : pick(top - 1 > 1 ? COLORS.rock : COLORS.dirt, random));
-    if (!river) addBlock(x, z, top - 0.42, top + (random() - 0.5) * 0.05, pick(COLORS.grass, random), 1.012);
-  }
-  blocks.count = count;
-  blocks.instanceMatrix.needsUpdate = true;
-  blocks.instanceColor.needsUpdate = true;
-  root.add(blocks);
-}
-
 // ---------- The sea ----------
 
 const SEA_VERTEX = `
@@ -454,21 +419,7 @@ function buildWater(root, random) {
 function buildScreen(root) {
   const group = new THREE.Group();
   group.position.set(RIVER_X, HIGH, RIVER_BACK - 0.05);
-  const wood = material(COLORS.wood);
-  const dark = material(COLORS.woodDark);
-
-  for (const x of [-1.72, 1.72]) {
-    const post = withShadow(new THREE.Mesh(new THREE.BoxGeometry(0.26, 2.7, 0.26), dark));
-    post.position.set(x, 1.3, 0);
-    group.add(post);
-  }
-  const frame = withShadow(new THREE.Mesh(new RoundedBoxGeometry(3.5, 2.12, 0.22, 2, 0.06), wood));
-  frame.position.set(0, 1.72, 0);
-  group.add(frame);
-  const roof = withShadow(new THREE.Mesh(new THREE.BoxGeometry(3.95, 0.16, 0.72), dark));
-  roof.position.set(0, 2.92, 0.04);
-  roof.rotation.x = 0.18;
-  group.add(roof);
+  // The wooden posts, frame and roof come from the Blender island (frontend/blender/island.py)
 
   const screenMaterial = new THREE.MeshBasicMaterial({ map: screenTexture(), toneMapped: false });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.14, 1.8), screenMaterial);
@@ -550,276 +501,6 @@ function buildClipCards(root, random) {
 }
 
 // ---------- Plants and things ----------
-
-function buildPlants(root, random) {
-  const swaying = [];
-  const trunkMaterial = material(COLORS.trunk);
-  const leafMaterials = COLORS.leaves.map((color) => material(color));
-  const brightMaterials = COLORS.brightLeaves.map((color) => material(color));
-  const doubleLeaf = (color) => material(color, { side: THREE.DoubleSide });
-  const leafSheets = [...COLORS.leaves, ...COLORS.brightLeaves].map(doubleLeaf);
-
-  function sway(group, amount, speed) {
-    swaying.push({ group, amount, speed, phase: random() * 6.28, baseX: group.rotation.x, baseZ: group.rotation.z });
-  }
-
-  function place(group, x, z) {
-    group.position.set(x, groundHeight(z), z);
-    root.add(group);
-  }
-
-  function tree(x, z, size = 1, fruit = null) {
-    const group = new THREE.Group();
-    const height = 1.5 * size;
-    const trunk = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.12 * size, 0.24 * size, height, 6), trunkMaterial));
-    trunk.position.y = height / 2;
-    group.add(trunk);
-    const crown = new THREE.Group();
-    crown.position.y = height;
-    const blobs = [[0, 0.42, 0, 0.82], [0.48, 0.14, 0.14, 0.56], [-0.42, 0.2, 0.22, 0.6], [0.04, 0.2, -0.46, 0.56], [0.08, 0.92, 0.02, 0.5]];
-    for (const [bx, by, bz, radius] of blobs) {
-      const useBright = by > 0.8;
-      const blob = withShadow(new THREE.Mesh(lumpyBall(radius * size, random), useBright ? pick(brightMaterials, random) : pick(leafMaterials, random)));
-      blob.position.set(bx * size, by * size, bz * size);
-      crown.add(blob);
-    }
-    if (fruit) {   // a few round fruits sitting on the outside of the leaves
-      const fruitMaterial = material(fruit);
-      for (let i = 0; i < 7; i += 1) {
-        const [bx, by, bz, radius] = blobs[i % 4];
-        const angle = random() * Math.PI * 2;
-        const lift = 0.15 + random() * 0.5;
-        const out = Math.sqrt(1 - lift * lift) * radius * size * 0.97;
-        const piece = new THREE.Mesh(new THREE.IcosahedronGeometry(0.075 * size, 1), fruitMaterial);
-        piece.position.set(bx * size + Math.cos(angle) * out, by * size + lift * radius * size * 0.97, bz * size + Math.sin(angle) * out);
-        crown.add(piece);
-      }
-    }
-    group.add(crown);
-    sway(crown, 0.022, 0.8 + random() * 0.4);
-    place(group, x, z);
-  }
-
-  function palm(x, z, size = 1) {
-    const group = new THREE.Group();
-    const steps = 5;
-    let lean = 0;
-    let height = 0;
-    for (let i = 0; i < steps; i += 1) {
-      const piece = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.1 * size * (1 - i * 0.08), 0.13 * size * (1 - i * 0.08), 0.5 * size, 6), trunkMaterial));
-      lean = i * 0.055 * size;
-      piece.position.set(lean, height + 0.25 * size, 0);
-      piece.rotation.z = -0.1;
-      group.add(piece);
-      height += 0.47 * size;
-    }
-    const crown = new THREE.Group();
-    crown.position.set(lean + 0.06, height, 0);
-    const count = 8;
-    for (let i = 0; i < count; i += 1) {
-      const frond = withShadow(new THREE.Mesh(leafShape(1.35 * size, 0.46 * size, 0.72 * size), pick(leafSheets, random)));
-      frond.rotation.order = "YXZ";
-      frond.rotation.y = (i / count) * Math.PI * 2;
-      frond.rotation.x = -0.34;
-      crown.add(frond);
-    }
-    const coconut = material("#6b4423");
-    for (const [cx, cz] of [[0.11, 0.05], [-0.07, 0.1], [0.02, -0.12]]) {
-      const nut = withShadow(new THREE.Mesh(new THREE.IcosahedronGeometry(0.1 * size, 1), coconut));
-      nut.position.set(cx * size, -0.1 * size, cz * size);
-      crown.add(nut);
-    }
-    group.add(crown);
-    sway(crown, 0.05, 1.05 + random() * 0.5);
-    place(group, x, z);
-  }
-
-  function leafyPlant(x, z, size = 1, bright = false) {
-    const group = new THREE.Group();
-    const count = 6 + Math.floor(random() * 3);
-    for (let i = 0; i < count; i += 1) {
-      const holder = new THREE.Group();
-      holder.rotation.y = (i / count) * Math.PI * 2 + random() * 0.4;
-      const color = bright ? COLORS.brightLeaves[i % 2] : COLORS.leaves[i % 4];
-      const leaf = withShadow(new THREE.Mesh(leafShape((0.74 + random() * 0.32) * size, 0.42 * size, 0.42 * size), doubleLeaf(color)));
-      leaf.rotation.x = -0.72;
-      holder.add(leaf);
-      group.add(holder);
-      sway(holder, 0.05, 1.3 + random() * 0.8);
-    }
-    place(group, x, z);
-  }
-
-  function rock(x, z, size = 0.4) {
-    const mesh = withShadow(new THREE.Mesh(lumpyBall(size, random, 0.2, 0), material(pick(COLORS.rock, random))));
-    mesh.scale.y = 0.72;
-    mesh.position.set(x, groundHeight(z) + size * 0.32, z);
-    root.add(mesh);
-  }
-
-  function mushroom(x, z, size = 1) {
-    const group = new THREE.Group();
-    const stem = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.05 * size, 0.07 * size, 0.2 * size, 6), material(COLORS.cream)));
-    stem.position.y = 0.1 * size;
-    group.add(stem);
-    const cap = withShadow(new THREE.Mesh(new THREE.SphereGeometry(0.16 * size, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), material("#ef5b4a")));
-    cap.position.y = 0.18 * size;
-    group.add(cap);
-    place(group, x, z);
-  }
-
-  function flowers(x, z, color) {
-    const group = new THREE.Group();
-    for (let i = 0; i < 5; i += 1) {
-      const bloom = new THREE.Mesh(new THREE.IcosahedronGeometry(0.075, 0), material(color));
-      bloom.position.set((random() - 0.5) * 0.65, 0.09 + random() * 0.08, (random() - 0.5) * 0.65);
-      group.add(bloom);
-    }
-    place(group, x, z);
-  }
-
-  // Back step
-  tree(-3.6, -4.5, 1.3, "#f0912e");   // an orange tree
-  tree(-1.3, -5.2, 1.08);
-  tree(-5.1, -2.9, 0.95);
-  tree(5.4, -2.8, 0.85);   // low enough not to block the video screen
-  palm(3.5, -3.2, 0.92);
-  leafyPlant(-1.8, -3.15, 0.95, true);
-  leafyPlant(3.3, -5.3, 0.85);
-  rock(0, -3.2, 0.34);
-  rock(2.95, -2.95, 0.28);
-  mushroom(-0.4, -4.2, 1.3);
-  flowers(-3, -3.1, "#ff9ec7");
-
-  // The outer ring of the bigger island
-  tree(-6.6, -5.4, 1.15);
-  palm(-4.2, -7.6, 1.05);
-  tree(4.3, -6.5, 1.1, "#f0912e");
-  palm(7.2, -4.8, 1);
-  leafyPlant(-7.8, -3.4, 1);
-  leafyPlant(3.4, -8.2, 0.9, true);
-  mushroom(-5.4, -6.8, 1.2);
-  flowers(6, -6.2, "#ff9ec7");
-
-  // Middle step
-  tree(-5.5, 0.1, 1.22);
-  palm(-3.1, 1.75, 1.15);
-  palm(5.6, -0.6, 1.1);
-  tree(4.1, -1.7, 0.9);
-  leafyPlant(3.6, 1.8, 1.08, true);
-  leafyPlant(-0.4, -1.7, 0.9);
-  leafyPlant(-4.9, 2.1, 0.9);
-  rock(-0.1, 1.8, 0.36);
-  rock(3, -0.3, 0.26);
-  mushroom(5.2, 2, 1.2);
-  mushroom(5.5, 1.6, 0.85);
-  flowers(-2.2, -1.5, "#ffd34d");
-
-  tree(-8.2, -0.8, 1.1);
-  palm(-8, 1.8, 1.05);
-  tree(8.3, -1.2, 1);
-  leafyPlant(8, 1.6, 1.05, true);
-  rock(-6.8, 2.2, 0.34);
-  flowers(7.2, 0.2, "#ffd34d");
-
-  // Front step
-  palm(-1.9, 5.1, 0.98);
-  tree(4.6, 4.1, 0.86, "#e94a3f");   // a red-fruit tree
-  leafyPlant(-3.4, 3.8, 1.2);
-  leafyPlant(3.4, 5.5, 1.18, true);
-  leafyPlant(-0.3, 3.3, 0.72, true);
-  rock(0.05, 5.8, 0.3);
-  rock(3.3, 3.2, 0.32);
-  mushroom(-4.7, 3.2, 1.3);
-  flowers(5.3, 3.1, "#ff9ec7");
-  flowers(-2.4, 3.15, "#ffd34d");
-  palm(-6.4, 5.2, 1.1);
-  tree(-3.3, 6.9, 1);
-  leafyPlant(-1.4, 7.8, 1.05, true);
-  tree(5.4, 6.8, 0.95, "#e94a3f");
-  leafyPlant(3.4, 7, 0.95);
-  mushroom(-5.4, 7, 1.2);
-  rock(6.6, 3.2, 0.3);
-
-  return (time) => {
-    for (const item of swaying) {
-      item.group.rotation.x = item.baseX + Math.sin(time * item.speed + item.phase) * item.amount;
-      item.group.rotation.z = item.baseZ + Math.cos(time * item.speed * 0.8 + item.phase) * item.amount;
-    }
-  };
-}
-
-function buildHutAndBridge(root) {
-  const wood = material(COLORS.wood);
-  const dark = material(COLORS.woodDark);
-
-  // A little hut on stilts
-  const hut = new THREE.Group();
-  hut.position.set(-2.1, MID, 0);
-  for (const [x, z] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) {
-    const stilt = withShadow(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.42, 0.14), dark));
-    stilt.position.set(x, 0.21, z);
-    hut.add(stilt);
-  }
-  const deck = withShadow(new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 1.8), dark));
-  deck.position.y = 0.46;
-  hut.add(deck);
-  const walls = withShadow(new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.86, 1.26), wood));
-  walls.position.y = 0.94;
-  hut.add(walls);
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.58, 0.02), material("#3f2815"));
-  door.position.set(0.1, 0.82, 0.64);
-  hut.add(door);
-  const window_ = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.28, 0.32), new THREE.MeshBasicMaterial({ color: "#ffdf8a", toneMapped: false }));
-  window_.position.set(0.64, 1, 0);
-  hut.add(window_);
-  const roof = withShadow(new THREE.Mesh(new THREE.ConeGeometry(1.32, 0.86, 4), material(COLORS.thatch)));
-  roof.position.y = 1.8;
-  roof.rotation.y = Math.PI / 4;
-  hut.add(roof);
-  const thatchUnder = withShadow(new THREE.Mesh(new THREE.ConeGeometry(1.5, 0.38, 4), material("#c99a45")));
-  thatchUnder.position.y = 1.5;
-  thatchUnder.rotation.y = Math.PI / 4;
-  hut.add(thatchUnder);
-  const ridge = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.22, 4), material("#a7772f"));
-  ridge.position.y = 2.3;
-  ridge.rotation.y = Math.PI / 4;
-  hut.add(ridge);
-  // A little ladder from the deck down to the grass, in front of the door
-  const ladderTilt = -0.59;
-  for (const x of [-0.25, 0.45]) {
-    const rail = withShadow(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.66, 0.06), dark));
-    rail.position.set(x, 0.27, 1.07);
-    rail.rotation.x = ladderTilt;
-    hut.add(rail);
-  }
-  for (let step = 0; step < 3; step += 1) {
-    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.05), wood);
-    const along = (step + 1) / 4;
-    rung.position.set(0.1, 0.52 - along * 0.52, 0.9 + along * 0.35);
-    hut.add(rung);
-  }
-  root.add(hut);
-
-  // A plank bridge over the river
-  const bridge = new THREE.Group();
-  const span = RIVER_MAX_X - RIVER_MIN_X + 0.7;
-  for (let i = 0; i < 9; i += 1) {
-    const along = i / 8;
-    const plank = withShadow(new THREE.Mesh(new THREE.BoxGeometry(span / 9, 0.08, 0.92), i % 2 ? wood : dark));
-    plank.position.set(RIVER_X - span / 2 + along * span, MID + 0.1 + Math.sin(along * Math.PI) * 0.26, 0.3);
-    plank.rotation.z = Math.cos(along * Math.PI) * 0.34;
-    bridge.add(plank);
-    if (i % 2 === 0) {
-      for (const z of [-0.14, 0.74]) {
-        const post = withShadow(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.34, 0.07), dark));
-        post.position.set(plank.position.x, plank.position.y + 0.18, z);
-        bridge.add(post);
-      }
-    }
-  }
-  root.add(bridge);
-}
 
 function buildCrystals(root, random) {
   const shape = new THREE.OctahedronGeometry(0.2, 0);
@@ -941,106 +622,10 @@ export function instanced(root, geometry, baseMaterial, items, shadows = false) 
   root.add(mesh);
 }
 
-// Spots to keep clear of grass and pebbles: the hut, the screen, the bridge and the campfire
-function isBusy(x, z) {
-  return (x > -3.2 && x < -1 && z > -1.1 && z < 1.4) || (x > -0.2 && x < 3.2 && z > -0.3 && z < 0.9) || (x > -4.2 && x < -3 && z > -1.5 && z < -0.3) || (z < RIVER_BACK + 0.8 && x > -0.5 && x < 3.5);
-}
-
-function buildGroundDetails(root, random) {
-  const tufts = [];
-  const pebbles = [];
-  const blooms = [];
-  const stones = [];
-  const moss = [];
-  for (let x = -GRID; x <= GRID; x += 1) {
-    for (let z = -GRID; z <= GRID; z += 1) {
-      if (!isLand(x, z) || isRiver(x)) continue;
-      const top = groundHeight(z);
-
-      // Grass tufts, pebbles and flowers on the tile
-      const tuftCount = random() < 0.75 ? 1 + Math.floor(random() * 2) : 0;
-      for (let t = 0; t < tuftCount; t += 1) {
-        const tx = x + (random() - 0.5) * 0.8;
-        const tz = z + (random() - 0.5) * 0.8;
-        if (isBusy(tx, tz)) continue;
-        const shade = pick(["#4caa3a", "#5cbf42", "#3f9a36", "#7acc4c"], random);
-        for (let blade = 0; blade < 4; blade += 1) {
-          const angle = (blade / 4) * Math.PI * 2 + random();
-          tufts.push({ x: tx + Math.cos(angle) * 0.04, y: top + 0.1, z: tz + Math.sin(angle) * 0.04, rx: Math.sin(angle) * 0.35, rz: -Math.cos(angle) * 0.35, sy: 0.8 + random() * 0.6, color: shade });
-        }
-      }
-      if (random() < 0.28) {
-        const px = x + (random() - 0.5) * 0.8;
-        const pz = z + (random() - 0.5) * 0.8;
-        if (!isBusy(px, pz)) pebbles.push({ x: px, y: top + 0.03, z: pz, ry: random() * 3, sx: 0.7 + random() * 0.8, sy: 0.6, sz: 0.7 + random() * 0.6, color: pick(["#8d8984", "#a19c95", "#77736e"], random) });
-      }
-      if (random() < 0.22) {
-        const fx = x + (random() - 0.5) * 0.8;
-        const fz = z + (random() - 0.5) * 0.8;
-        const color = pick(["#ffffff", "#ffd34d", "#ff9ec7", "#c9a7ff"], random);
-        if (!isBusy(fx, fz)) for (let f = 0; f < 3; f += 1) blooms.push({ x: fx + (random() - 0.5) * 0.25, y: top + 0.05, z: fz + (random() - 0.5) * 0.25, color });
-      }
-
-      // The cliff walls you can see (facing +x and +z): stones poking out, and moss hanging over the top
-      for (const [dx, dz] of [[1, 0], [0, 1]]) {
-        const nx = x + dx;
-        const nz = z + dz;
-        const below = isLand(nx, nz) ? (isRiver(nx) ? groundHeight(nz) - 0.34 : groundHeight(nz)) : SEA_LEVEL;
-        const drop = top - below;
-        if (drop < 0.6) continue;
-        const across = (u) => (dx ? [x + 0.5 + 0.03, z + u] : [x + u, z + 0.5 + 0.03]);
-        const stoneCount = Math.round(drop * 1.4 + random());
-        for (let i = 0; i < stoneCount; i += 1) {
-          const [sx, sz] = across((random() - 0.5) * 0.8);
-          const y = below + 0.15 + random() * Math.max(0.05, drop - 0.75);
-          const size = 0.07 + random() * 0.08;
-          stones.push({ x: sx, y, z: sz, ry: dx ? Math.PI / 2 : 0, rz: (random() - 0.5) * 0.6, sx: size * 2.2, sy: size, sz: size * 0.8, color: y > top - 0.9 ? pick(["#7a5230", "#6e4a2b"], random) : pick(["#5d5956", "#86817b", "#4f4c49"], random) });
-        }
-        if (random() < 0.6) {
-          const drips = 1 + Math.floor(random() * 2);
-          for (let i = 0; i < drips; i += 1) {
-            const [mx, mz] = across((random() - 0.5) * 0.7);
-            const length = 0.12 + random() * 0.32;
-            moss.push({ x: mx - dx * 0.01, y: top - 0.4 - length / 2, z: mz - dz * 0.01, ry: dx ? Math.PI / 2 : 0, sx: 0.14 + random() * 0.26, sy: length, sz: 0.05, color: pick(["#3f9a36", "#4caa3a", "#2f8a3a"], random) });
-          }
-        }
-      }
-    }
-  }
-  instanced(root, new THREE.ConeGeometry(0.035, 0.24, 4), material("#ffffff"), tufts);
-  instanced(root, new THREE.DodecahedronGeometry(0.07, 0), material("#ffffff"), pebbles);
-  instanced(root, new THREE.IcosahedronGeometry(0.045, 0), material("#ffffff"), blooms);
-  instanced(root, new THREE.BoxGeometry(1, 1, 1), material("#ffffff"), stones);
-  instanced(root, new THREE.BoxGeometry(1, 1, 1), material("#ffffff"), moss);
-
-  // Stepping stones: from the hut's ladder to the bridge, and from the bridge on toward the trees
-  const path = [];
-  const trail = (from, to, count) => {
-    for (let i = 0; i < count; i += 1) {
-      const along = i / (count - 1);
-      path.push({ x: from[0] + (to[0] - from[0]) * along + (random() - 0.5) * 0.12, y: MID + 0.02, z: from[1] + (to[1] - from[1]) * along + (random() - 0.5) * 0.12, ry: random() * 3, sx: 0.85 + random() * 0.3, sz: 0.85 + random() * 0.3, color: pick(["#e3cf9b", "#d6bf86", "#ecdcae"], random) });
-    }
-  };
-  trail([-1.95, 1.55], [-0.05, 0.6], 6);
-  trail([3.05, 0.6], [4.3, 1.3], 4);
-  instanced(root, new THREE.CylinderGeometry(0.17, 0.19, 0.06, 7), material("#ffffff"), path);
-}
-
-function buildCampfire(root, random) {
+function buildCampfire(root) {
   const fire = new THREE.Group();
   fire.position.set(-3.6, MID, -0.9);
-  for (let i = 0; i < 8; i += 1) {
-    const angle = (i / 8) * Math.PI * 2;
-    const rock = new THREE.Mesh(lumpyBall(0.08, random, 0.2, 0), material(pick(COLORS.rock, random)));
-    rock.position.set(Math.cos(angle) * 0.28, 0.05, Math.sin(angle) * 0.28);
-    fire.add(rock);
-  }
-  for (let i = 0; i < 3; i += 1) {
-    const log = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.42, 6), material(COLORS.woodDark)));
-    log.position.y = 0.08;
-    log.rotation.set(Math.PI / 2 - 0.25, (i / 3) * Math.PI, 0);
-    fire.add(log);
-  }
+  // The ring of stones and the logs come from the Blender island; code adds the flames, glow and smoke
   const outer = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.42, 6), new THREE.MeshBasicMaterial({ color: "#ff8a1f", toneMapped: false }));
   outer.position.y = 0.3;
   const inner = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 6), new THREE.MeshBasicMaterial({ color: "#ffe066", toneMapped: false }));
@@ -1071,35 +656,13 @@ function buildCampfire(root, random) {
   };
 }
 
-function buildDockAndBoat(root) {
+function buildBoat(root) {
   // The pier sticks out from the low step of the island on the right, with a ladder up the cliff
   let edgeX = GRID;
   while (edgeX > 0 && !isLand(edgeX, 4)) edgeX -= 1;
   const start = edgeX + 0.5;
   const wood = material(COLORS.wood);
-  const dark = material(COLORS.woodDark);
-  const dock = new THREE.Group();
-  for (let i = 0; i < 8; i += 1) {
-    const plank = withShadow(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.8), i % 2 ? wood : dark));
-    plank.position.set(start + 0.14 + i * 0.26, SEA_LEVEL + 0.3, 4);
-    dock.add(plank);
-  }
-  for (const [x, z] of [[start + 0.3, 3.65], [start + 0.3, 4.35], [start + 1.9, 3.65], [start + 1.9, 4.35]]) {
-    const post = withShadow(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.7, 6), dark));
-    post.position.set(x, SEA_LEVEL + 0.1, z);
-    dock.add(post);
-  }
-  for (const z of [3.8, 4.2]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, LOW - SEA_LEVEL + 0.1, 0.05), dark);
-    rail.position.set(start + 0.03, (LOW + SEA_LEVEL + 0.5) / 2, z);
-    dock.add(rail);
-  }
-  for (let y = SEA_LEVEL + 0.55; y < LOW; y += 0.28) {
-    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.45), wood);
-    rung.position.set(start + 0.03, y, 4);
-    dock.add(rung);
-  }
-  root.add(dock);
+  // The pier and the ladder up the cliff come from the Blender island; code adds the bobbing boat
 
   // A little rowboat tied up at the end, bobbing on the waves
   const boat = new THREE.Group();
@@ -1216,6 +779,48 @@ function buildCritters(root) {
   };
 }
 
+// ---------- The island itself, made in Blender ----------
+
+// Everything solid and still - ground, cliffs, trees, plants, rocks, hut, bridge, dock, screen frame -
+// is built by frontend/blender/island.py (with soft shadows baked in) and saved as public/models/island.glb.
+// Plants that sway are separate objects with "sway" and "speed" numbers (glTF extras -> userData).
+const ISLAND_URL = "/models/island.glb";
+let islandPromise = null;
+function loadIslandModel() {
+  if (!islandPromise) {
+    const draco = new DRACOLoader().setDecoderPath("/draco/");   // the island is Draco-compressed
+    islandPromise = new GLTFLoader().setDRACOLoader(draco).loadAsync(ISLAND_URL).finally(() => draco.dispose());
+    islandPromise.catch(() => { islandPromise = null; });   // let a later visit try again
+  }
+  return islandPromise;
+}
+
+function loadIsland(root, onReady) {
+  const swaying = [];
+  let island = null;
+  loadIslandModel().then((gltf) => {
+    island = gltf.scene.clone(true);
+    island.traverse((object) => {
+      if (object.isMesh) {
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+      if (object.userData.sway) {
+        swaying.push({ object, amount: object.userData.sway, speed: object.userData.speed ?? 1,
+          phase: Math.random() * 6.28, baseX: object.rotation.x, baseZ: object.rotation.z });
+      }
+    });
+    root.add(island);
+    onReady();
+  }).catch(() => {});   // no island file: the sea, river and cards still show
+  return (time) => {
+    for (const item of swaying) {
+      item.object.rotation.x = item.baseX + Math.sin(time * item.speed + item.phase) * item.amount;
+      item.object.rotation.z = item.baseZ + Math.cos(time * item.speed * 0.8 + item.phase) * item.amount;
+    }
+  };
+}
+
 // ---------- Putting it together ----------
 
 export function createIslandScene(canvas, { still = false, framing = "hero" } = {}) {
@@ -1246,21 +851,18 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
   const random = makeRandom(20261105);
   const root = new THREE.Group();
   scene.add(root);
-  buildGround(root, random);
-  buildHutAndBridge(root);
-  buildGroundDetails(root, random);
   const updates = [
+    loadIsland(root, () => { if (still) draw(); }),
     buildWater(root, random),
     buildScreen(root),
     buildClipCards(root, random),
-    buildPlants(root, random),
     buildCrystals(root, random),
     buildVines(root, random),
     buildBirds(root),
     buildClouds(scene, random),
     buildSea(root, random, renderer.getPixelRatio()),
-    buildCampfire(root, random),
-    buildDockAndBoat(root),
+    buildCampfire(root),
+    buildBoat(root),
     buildCritters(root),
   ];
 

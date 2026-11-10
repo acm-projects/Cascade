@@ -103,47 +103,6 @@
   outline-offset: 3px;
 }
 
-/* 3 little cream blocks with a label under each */
-.landing-features {
-  display: flex;
-  gap: min(2.6vw, 42px);
-  margin-top: 2.4vh;
-  padding: 0;
-  list-style: none;
-}
-
-.landing-features li {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1vh;
-  color: #ffffff;
-  font-family: var(--font-ui);
-  font-weight: 800;
-  font-size: min(1vw, 1.7vh);
-  text-shadow:
-    0 0.15vh 0 #0b4257,
-    0 0 0.8vh rgba(6, 60, 90, 0.85);
-}
-
-.landing-feature-icon {
-  display: grid;
-  place-items: center;
-  width: min(3.5vw, 6vh);
-  aspect-ratio: 1;
-  border-radius: 22%;
-  background: linear-gradient(180deg, var(--surface-light), var(--surface));
-  box-shadow:
-    0 0.6vh 0 var(--surface-edge),
-    0 1.4vh 1.6vh rgba(10, 60, 50, 0.25);
-  color: #17643a;
-}
-
-.landing-feature-icon svg {
-  width: 56%;
-  height: 56%;
-}
-
 /* Narrow screens: words on top, centered, with the island below */
 @media (max-aspect-ratio: 115/100) {
   .landing {
@@ -160,6 +119,4 @@
   .landing-headline { font-size: min(5.6vw, 3.4vh); }
   .landing-sub { font-size: min(3.5vw, 2vh); }
   .landing-start { font-size: min(4.4vw, 2.8vh); }
-  .landing-features li { font-size: min(2.8vw, 1.5vh); }
-  .landing-feature-icon { width: min(10vw, 6vh); }
 }
