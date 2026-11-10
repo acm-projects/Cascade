@@ -1,15 +1,16 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// Small 3D views of the capybara mascot, with a see-through background.
-// The capybara itself is made in Blender: frontend/blender/capybara.py builds it and exports
-// public/models/capybara.glb, with its "Idle" animation (breathing, a lazy nod, blinks and an ear flick).
+// Small 3D views of the frog mascot, with a see-through background.
+// The frog is made in Blender: frontend/blender/frog.py builds it and exports public/models/frog.glb,
+// with an "Idle" clip (breathing, a puffing throat, blinks) and a "Leap" clip (the "How it works" page uses it too).
+// (The earlier capybara mascot is still in frontend/blender/capybara.py and public/models/capybara.glb.)
 //
-// createMascotScene(canvas, { still }) - the whole capybara, playing its idle animation at about
-//   30 frames a second. Returns a function that stops it and frees its memory.
-// capybaraHeadPicture(size) - draws the capybara's head once and resolves to a picture (a data URL),
+// createMascotScene(canvas, { still }) - the whole frog idling at about 30 frames a second, with a little
+//   hop on the spot every few seconds. Returns a function that stops it and frees its memory.
+// mascotHeadPicture(size) - draws the frog's face once and resolves to a picture (a data URL),
 //   for small badges. No 3D keeps running afterwards.
-const MODEL_URL = "/models/capybara.glb";
+const MODEL_URL = "/models/frog.glb";
 
 // Download the model once; every view makes its own copy of it
 let modelPromise = null;
@@ -48,21 +49,23 @@ function setUp(canvas, width, height) {
   return { renderer, scene };
 }
 
-// Put a copy of the Blender capybara in the scene, with its idle animation ready to play
-function addCapybara(scene, gltf) {
-  const capybara = gltf.scene.clone(true);
-  capybara.traverse((object) => {
+// Put a copy of the Blender frog in the scene, with its idle loop playing and the hop ready
+function addMascot(scene, gltf) {
+  const frog = gltf.scene.clone(true);
+  frog.traverse((object) => {
     if (object.isMesh) {
       object.castShadow = true;
       object.receiveShadow = true;
     }
   });
-  scene.add(capybara);
-  // Blender exports the idle loop as one clip per moving part (body, head, eyes, ears).
-  // They are all the same length, so playing them together keeps them in step.
-  const mixer = new THREE.AnimationMixer(capybara);
-  for (const clip of gltf.animations) mixer.clipAction(clip).play();
-  return mixer;
+  frog.rotation.y = 0.45;   // turned a little toward the side, so it reads as 3D
+  scene.add(frog);
+  const mixer = new THREE.AnimationMixer(frog);
+  const clip = (name) => gltf.animations.find((item) => item.name === name);
+  mixer.clipAction(clip("Idle")).play();
+  const hop = mixer.clipAction(clip("Leap"));
+  hop.setLoop(THREE.LoopOnce, 1);
+  return { mixer, hop };
 }
 
 function freeAll(scene, renderer) {
@@ -80,24 +83,31 @@ export function createMascotScene(canvas, { still = false } = {}) {
   const width = canvas.clientWidth || 160;
   const height = canvas.clientHeight || 130;
   const { renderer, scene } = setUp(canvas, width, height);
-  // A three-quarter view from the front-right, a little above, like the island's camera
+  // From the front, a little above
   const camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 50);
-  camera.position.set(3.6, 2.4, 5.4);
-  camera.lookAt(0.4, 0.8, 0);
+  camera.position.set(0.35, 1.4, 3.0);
+  camera.lookAt(0, 0.4, 0);
 
   let stopped = false;
   let mixer = null;
+  let hop = null;
+  let nextHop = 4;
   let frame = 0;
   let timer = 0;
   const clock = new THREE.Clock();
   function loop() {
     mixer.update(clock.getDelta());
+    // Every 6 to 10 seconds, a little hop on the spot
+    if (clock.elapsedTime > nextHop) {
+      hop.reset().play();
+      nextHop = clock.elapsedTime + 6 + Math.random() * 4;
+    }
     renderer.render(scene, camera);
     timer = setTimeout(() => { frame = requestAnimationFrame(loop); }, 1000 / 30 - 4);
   }
   loadModel().then((gltf) => {
     if (stopped) return;
-    mixer = addCapybara(scene, gltf);
+    ({ mixer, hop } = addMascot(scene, gltf));
     if (still) {
       mixer.update(0);
       renderer.render(scene, camera);
@@ -114,14 +124,15 @@ export function createMascotScene(canvas, { still = false } = {}) {
   };
 }
 
-export async function capybaraHeadPicture(size) {
+export async function mascotHeadPicture(size) {
   const gltf = await loadModel();
   const canvas = document.createElement("canvas");
   const { renderer, scene } = setUp(canvas, size, size);
-  addCapybara(scene, gltf).update(0);
-  const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 50);
-  camera.position.set(4.1, 1.95, 2.7);
-  camera.lookAt(1.45, 1.25, 0);
+  addMascot(scene, gltf).mixer.update(0);
+  // Close on the frog's face and big eyes
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+  camera.position.set(0.55, 1.15, 2.3);
+  camera.lookAt(0.05, 0.6, 0);
   renderer.render(scene, camera);
   const picture = canvas.toDataURL("image/png");
   freeAll(scene, renderer);

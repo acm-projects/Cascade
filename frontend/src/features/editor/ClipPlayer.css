@@ -105,7 +105,7 @@
   font-family: var(--font-ui);
 }
 
-/* While a clip loads: a dark screen with a gently rocking leaf (see ClipLoading.jsx) */
+/* While a clip loads: a plain dark screen (see ClipLoading.jsx) */
 .clip-loading {
   flex: 1;
   width: 100%;

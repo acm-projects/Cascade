@@ -741,14 +741,26 @@ function buildCritters(root) {
   beak.position.set(0, -0.01, 0.1);
   head.add(beak);
   parrot.add(head);
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.14), material("#2d6cdf"));
-  wing.position.set(0.11, -0.02, -0.02);
-  parrot.add(wing);
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.04), material("#2d6cdf"));
-  tail.position.set(0, -0.22, -0.06);
-  tail.rotation.x = -0.4;
+  const blue = material("#2d6cdf");
+  for (const side of [1, -1]) {   // a folded wing on each side, tucked against the body
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.17, 0.13), blue);
+    wing.position.set(side * 0.1, -0.02, -0.02);
+    wing.rotation.x = 0.15;
+    parrot.add(wing);
+  }
+  // The tail sweeps back and down behind it, over the back of the roof
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.03), blue);
+  tail.position.set(0, -0.08, -0.13);
+  tail.rotation.x = 1.1;
   parrot.add(tail);
-  parrot.position.set(RIVER_X + 1.25, HIGH + 3.18, -6);
+  // Two little yellow feet gripping the roof
+  for (const side of [1, -1]) {
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.06, 0.06), material("#ffcf3d"));
+    foot.position.set(side * 0.045, -0.18, 0.02);
+    parrot.add(foot);
+  }
+  // Perched on the screen's roof (the frame stands at z = RIVER_BACK - 0.05; its roof top is 3 above HIGH)
+  parrot.position.set(RIVER_X + 1.25, HIGH + 3.2, RIVER_BACK - 0.02);
   parrot.rotation.y = 0.6;
   root.add(parrot);
 

@@ -28,8 +28,8 @@
 }
 
 .topnav-leaf {
-  width: 28px;
-  height: 28px;
+  width: 38px;   /* the Cascade logo (assets/icons/cascade-logo.svg) */
+  height: 38px;
 }
 
 .topnav-name {

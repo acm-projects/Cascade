@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./ChatPanel.css";
 import leafCream from "../../assets/icons/leaf-cream.svg";
-import Capybara from "../../components/Capybara";
+import Mascot from "../../components/Mascot";
 import { MAX_CLIPS, requestedClipCount } from './clipCount';
 
 const MIN_CLIPS = 1;
@@ -64,7 +64,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
   return (
     <section className="chat-panel wood-panel" aria-label="AI assistant chat">
       <header className="chat-panel-header">
-        <span className="chat-panel-avatar"><Capybara variant="head" size={44} /></span>
+        <span className="chat-panel-avatar"><Mascot variant="head" size={44} /></span>
         <div>
           <h2>AI Assistant</h2>
           <p>Tell me what to find and how many clips you want.</p>
@@ -101,7 +101,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
           </div>
         ))}
         {/* The mascot sits in the empty space under the messages (it scrolls away once the chat fills up) */}
-        <Capybara className="chat-panel-mascot" size={messages.length ? 150 : 180} />
+        <Mascot className="chat-panel-mascot" size={messages.length ? 150 : 180} />
       </div>
 
       <form className="chat-panel-form" onSubmit={(e) => { e.preventDefault(); send(); }}>

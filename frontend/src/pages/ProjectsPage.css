@@ -35,8 +35,49 @@
 }
 
 .projects-leaf {
-  width: calc(48 * var(--u));
-  height: calc(41 * var(--u));
+  width: calc(50 * var(--u));   /* the Cascade logo */
+  height: calc(50 * var(--u));
+}
+
+/* Right side of the bar: the site links, then the user's avatar */
+.projects-bar-right {
+  display: flex;
+  align-items: center;
+  gap: calc(28 * var(--u));
+}
+
+.projects-nav {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+}
+
+/* "How it works" and "Discover" - they look like links but don't go anywhere yet */
+.projects-nav-link {
+  padding: calc(10 * var(--u)) calc(20 * var(--u));
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff8e4;
+  font-family: var(--font-display);
+  font-size: calc(24 * var(--u));
+  text-shadow: 0 calc(2 * var(--u)) 0 var(--bar-edge);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 150ms ease-out, transform 150ms ease-out;
+}
+
+.projects-nav-link:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.projects-nav-link:active {
+  transform: translateY(1px);
+}
+
+.projects-nav-link:focus-visible {
+  outline: 3px solid #fff8e4;
+  outline-offset: 2px;
 }
 
 /* ---------- Sidebar + main area ---------- */
@@ -154,6 +195,15 @@
   align-items: flex-start;
   gap: calc(26 * var(--u));
   margin-top: calc(12 * var(--u));
+}
+
+/* "Empty trash" (only in Trash): the same height and corners as the search box beside it */
+.projects .projects-empty-trash {
+  height: calc(68 * var(--u));
+  padding: 0 calc(24 * var(--u));
+  border-radius: calc(18 * var(--u));
+  font-size: calc(22 * var(--u));
+  white-space: nowrap;
 }
 
 /* Search: a little well cut into a cream block */

@@ -4,9 +4,10 @@
   width: 100%;
   height: 100%;
 
-  /* The canvas is water: lily pads and vines float on it */
-  --xy-background-color: #35b9dc;
-  --xy-background-pattern-color: rgba(243, 255, 253, 0.42);
+  /* The canvas is a sunny jungle clearing: moss green with patches of light and leaf shadows
+     (drawn by .studio-canvas below), so React Flow's own background stays see-through */
+  --xy-background-color: transparent;
+  --xy-background-pattern-color: rgba(250, 255, 240, 0.4);
 
   /* Boxes: cream with a wood outline (ticket 3.2 replaces these with custom designs) */
   --xy-node-background-color: var(--color-cream-card);
@@ -32,9 +33,9 @@
   --xy-controls-button-color: var(--color-wood-dark);
   --xy-controls-button-border-color: color-mix(in srgb, var(--color-wood-dark) 30%, transparent);
   --xy-controls-box-shadow: var(--shadow-soft);
-  --xy-minimap-background-color: #8fe3ea;
-  --xy-minimap-node-background-color: #2f8f4a;
-  --xy-minimap-mask-background-color: rgba(10, 80, 120, 0.3);
+  --xy-minimap-background-color: #d3e6c4;
+  --xy-minimap-node-background-color: #2a6b38;
+  --xy-minimap-mask-background-color: rgba(30, 70, 35, 0.25);
 }
 
 /* Default boxes: a little bigger and rounder than React Flow's */
@@ -54,4 +55,64 @@
   overflow: hidden;
   border-radius: 12px;
   box-shadow: 0 4px 0 rgba(8, 70, 100, 0.55);
+}
+
+/* ---------- The clearing: moss, sunlight and shade, under everything on the canvas ---------- */
+.studio-canvas {
+  position: relative;
+  isolation: isolate;
+  background:
+    /* darker moss toward the edges, so the middle feels open and lit */
+    radial-gradient(ellipse 75% 70% at 50% 45%, transparent 55%, rgba(40, 80, 35, 0.28) 100%),
+    /* a few big, faint patches of deeper and lighter moss */
+    radial-gradient(circle at 18% 78%, rgba(70, 120, 55, 0.22), transparent 32%),
+    radial-gradient(circle at 82% 22%, rgba(70, 120, 55, 0.18), transparent 30%),
+    radial-gradient(circle at 62% 70%, rgba(214, 236, 170, 0.35), transparent 28%),
+    #a6c98f;
+}
+
+/* Patches of sunlight coming through the trees, drifting very slowly */
+.studio-canvas::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  z-index: -1;   /* behind React Flow, which sets its own z-index of 0 */
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 14% 10% at 30% 30%, rgba(255, 250, 205, 0.45), transparent 70%),
+    radial-gradient(ellipse 9% 7% at 38% 40%, rgba(255, 250, 205, 0.35), transparent 70%),
+    radial-gradient(ellipse 18% 12% at 70% 55%, rgba(255, 250, 205, 0.38), transparent 70%),
+    radial-gradient(ellipse 8% 6% at 60% 46%, rgba(255, 250, 205, 0.3), transparent 70%),
+    radial-gradient(ellipse 12% 9% at 45% 80%, rgba(255, 250, 205, 0.32), transparent 70%),
+    radial-gradient(ellipse 10% 8% at 85% 85%, rgba(255, 250, 205, 0.28), transparent 70%);
+  animation: studio-sun-drift 26s ease-in-out infinite alternate;
+}
+
+/* Leaf shadows from the canopy, hanging in from two corners */
+.studio-canvas::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;   /* behind the boxes and vines */
+  pointer-events: none;
+  background:
+    url("../../assets/studio/canopy-top-left.svg") left top / min(420px, 40%) auto no-repeat,
+    url("../../assets/studio/canopy-bottom-right.svg") right bottom / min(420px, 40%) auto no-repeat;
+  animation: studio-leaf-sway 9s ease-in-out infinite alternate;
+  transform-origin: 0 0;
+}
+
+@keyframes studio-sun-drift {
+  from { transform: translate(0, 0); opacity: 0.85; }
+  to { transform: translate(3%, 2%); opacity: 1; }
+}
+
+@keyframes studio-leaf-sway {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(0.6deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-canvas::before,
+  .studio-canvas::after { animation: none; }
 }

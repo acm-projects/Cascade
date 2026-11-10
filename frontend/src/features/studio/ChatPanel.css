@@ -7,7 +7,7 @@
   color: var(--color-wood-text);
 }
 
-/* The capybara head badge next to the title */
+/* The frog head badge next to the title */
 .chat-panel-header {
   display: flex;
   align-items: center;
@@ -27,7 +27,7 @@
 }
 
 
-/* The big capybara: pushed to the bottom of the message area */
+/* The big frog: pushed to the bottom of the message area */
 .chat-panel-mascot {
   flex: none;
   align-self: center;

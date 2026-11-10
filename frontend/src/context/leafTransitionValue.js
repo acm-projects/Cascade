@@ -7,7 +7,8 @@ export const LeafTransitionContext = createContext(null);
 //   leafNavigate("/somewhere", { state, ready, style });
 // "ready" is optional: a promise to wait for while the screen is covered (like downloading the next page).
 // "style" is "push" (the default: the underwater camera pushes forward, used when opening a project)
-// or "dive" (the island camera zooms down into the sea, used by Landing's Get Started).
+// "dive" (the island camera zooms down into the sea, used by Landing's Get Started)
+// or "rise" (the underwater camera swims up to the surface, used by "How it works").
 export function useLeafNavigate() {
   return useContext(LeafTransitionContext);
 }

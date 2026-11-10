@@ -219,7 +219,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const preview = draft.error ? (
     <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
   ) : info && state ? (
-    <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+    <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
       framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
   ) : (
     <ClipLoading />
@@ -333,7 +333,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
             {draft.error ? (
               <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
-              <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
                 framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
             ) : (
               <ClipLoading />

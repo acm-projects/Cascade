@@ -1,0 +1,13 @@
+/* The 3D frog mascot (Mascot.jsx). The box keeps its size while the 3D is loading, so nothing jumps. */
+.mascot {
+  display: block;
+  flex: none;
+}
+
+.mascot-holder,
+.mascot-canvas,
+.mascot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

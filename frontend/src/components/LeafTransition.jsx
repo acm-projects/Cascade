@@ -8,11 +8,14 @@ import { LeafTransitionContext } from "../context/leafTransitionValue";
 //          waterfall meets the sea, the view sinks into deep blue, then on Projects the camera keeps sinking to the sea floor.
 //   "push" (Projects -> AI Studio): the cards fade, the underwater camera pushes forward into the beam of light,
 //          and AI Studio appears out of the water.
+//   "rise" (Projects -> How it works): the underwater camera swims up to the bright surface, then on How it works
+//          the camera comes down onto the pond from above.
 // The 3D scenes do the camera part when they hear a "cascade:camera" event. This file fades the page out,
 // covers the swap with a wash of water, and fades it away again.
 const MOVES = {
   dive: { camera: 1000, washFrom: 650, hold: 100, reveal: 800, color: "dive" },
   push: { camera: 800, washFrom: 450, hold: 80, reveal: 550, color: "push" },
+  rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
 
@@ -20,7 +23,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// One cartoon leaf drawing. The Editor's preview (features/editor/PreviewLeaves.jsx) uses it too.
+// One cartoon leaf drawing.
 export function Leaf({ color, preserveAspectRatio }) {
   return (
     <svg viewBox="0 0 100 160" preserveAspectRatio={preserveAspectRatio}>
@@ -67,11 +70,12 @@ function LeafTransition({ children }) {
     setStyle(chosen);
     setPhase("cover");
     document.documentElement.classList.add("is-camera-moving");   // fades the page's words and buttons
-    window.dispatchEvent(new CustomEvent("cascade:camera", { detail: { move: chosen === "dive" ? "dive" : "forward", duration: move.camera } }));
+    window.dispatchEvent(new CustomEvent("cascade:camera", { detail: { move: { dive: "dive", rise: "rise" }[chosen] ?? "forward", duration: move.camera } }));
 
     const nextPageReady = Promise.race([Promise.resolve(ready).catch(() => {}), wait(MAX_WAIT_MS)]);
     await Promise.all([wait(move.camera), nextPageReady]);
     if (chosen === "dive") window.cascadeCameraArrive = performance.now();   // Projects' camera sinks down as it appears
+    if (chosen === "rise") window.cascadePondArrive = performance.now();     // the pond's camera comes down as it appears
     navigate(to, { state });
     document.documentElement.classList.remove("is-camera-moving");
     await wait(move.hold);

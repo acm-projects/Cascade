@@ -1,0 +1,28 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cascade's logo: a chunky leaf whose vein is a waterfall pouring over three ledges,
+       like the tiered falls on the Landing island. Right half of the leaf steps down in three greens. -->
+  <defs>
+    <clipPath id="cascade-logo-leaf">
+      <path d="M13 53C5 35 15 12 54 7C57 34 42 52 13 53Z" />
+    </clipPath>
+  </defs>
+  <!-- stem -->
+  <path d="M14 52L7 59" stroke="#12324f" stroke-width="5" stroke-linecap="round" />
+  <!-- leaf -->
+  <path d="M13 53C5 35 15 12 54 7C57 34 42 52 13 53Z" fill="#3aa847" />
+  <g clip-path="url(#cascade-logo-leaf)">
+    <!-- the three tiers on the far side of the falls, light at the top to deeper at the bottom -->
+    <path d="M54 4L47 14H39V64H64V4Z" fill="#8fe05a" />
+    <path d="M39 24H29V64H39Z" fill="#6fd04f" />
+    <path d="M29 34H19V64H29Z" fill="#55c04a" />
+  </g>
+  <!-- the water: it rounds over each lip, then drops -->
+  <path d="M47 14H42Q39 14 39 17V24H32Q29 24 29 27V34H22Q19 34 19 37V46L14 51"
+        stroke="#12324f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M47 14H42Q39 14 39 17V24H32Q29 24 29 27V34H22Q19 34 19 37V46L14 51"
+        stroke="#c8f1ff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- a little sparkle on the top fall -->
+  <path d="M41.2 17.5V21" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" />
+  <!-- outline -->
+  <path d="M13 53C5 35 15 12 54 7C57 34 42 52 13 53Z" stroke="#12324f" stroke-width="3.5" stroke-linejoin="round" />
+</svg>

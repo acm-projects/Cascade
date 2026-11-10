@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import "./ProjectsPage.css";
-import leafCream from "../assets/icons/leaf-cream.svg";
+import logo from "../assets/icons/cascade-logo.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/projectContextValue";
 import { useLeafNavigate } from "../context/leafTransitionValue";
@@ -208,10 +208,20 @@ function ProjectsPage() {
       {/* Green top bar */}
       <header className="projects-bar">
         <div className="projects-brand">
-          <img src={leafCream} alt="" className="projects-leaf" />
+          <img src={logo} alt="" className="projects-leaf" />
           <span>Cascade</span>
         </div>
-        <UserAvatar />
+        <div className="projects-bar-right">
+          {/* "Discover" is a placeholder: it looks like a link but doesn't go anywhere yet */}
+          <nav className="projects-nav" aria-label="Site">
+            <Link to="/how-it-works" className="projects-nav-link" onClick={(event) => {
+              event.preventDefault();
+              leafNavigate("/how-it-works", { style: "rise", ready: import("./HowItWorksPage") });
+            }}>How it works</Link>
+            <button type="button" className="projects-nav-link" title="Coming soon">Discover</button>
+          </nav>
+          <UserAvatar />
+        </div>
       </header>
 
       <div className="projects-body" ref={bodyRef}>
@@ -241,7 +251,7 @@ function ProjectsPage() {
             </div>
 
             <div className="projects-actions">
-              {view.id === "trash" && <Button size="sm" disabled={loading || deleting || updating.size > 0 || trashedProjects.length === 0}
+              {view.id === "trash" && <Button className="projects-empty-trash" disabled={loading || deleting || updating.size > 0 || trashedProjects.length === 0}
                 onClick={() => setEmptyTrashOpen(true)}>Empty trash</Button>}
               <label className="projects-search">
                 <img src={searchIcon} alt="" />

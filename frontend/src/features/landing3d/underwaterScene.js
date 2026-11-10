@@ -507,13 +507,18 @@ export function createUnderwaterScene(canvas, { still = false } = {}) {
   }
 
   // Camera moves: "arrive" sinks down from just under the surface (right after the dive from Landing),
-  // "forward" pushes into the beam of light (when you open a project). See components/LeafTransition.jsx.
+  // "forward" pushes into the beam of light (when you open a project), "rise" swims up to the bright surface
+  // (when you open "How it works"). See components/LeafTransition.jsx.
   const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
   const arrivedAt = window.cascadeCameraArrive;
   let arrive = !still && arrivedAt && performance.now() - arrivedAt < 2500 ? { start: performance.now(), duration: 1800 } : null;
   let forward = null;
+  let rise = null;
   function handleCamera(event) {
-    if (event.detail?.move === "forward" && !still) forward = { start: performance.now(), duration: event.detail.duration ?? 800 };
+    if (still) return;
+    const move = { start: performance.now(), duration: event.detail?.duration ?? 800 };
+    if (event.detail?.move === "forward") forward = move;
+    if (event.detail?.move === "rise") rise = move;
   }
 
   let frame = 0;
@@ -540,6 +545,13 @@ export function createUnderwaterScene(canvas, { still = false } = {}) {
       camera.position.z += (0 - camera.position.z) * pushed;
       camera.position.y += (6 - camera.position.y) * pushed;
       target.y += (8 - target.y) * pushed;
+    }
+    if (rise) {
+      // The reverse of "arrive": up past the pillars to just under the surface, tipping the view up toward the light
+      const lifted = ease(Math.min(1, (performance.now() - rise.start) / rise.duration));
+      camera.position.y += (24 - camera.position.y) * lifted;
+      camera.position.z += (8 - camera.position.z) * lifted;
+      target.y += (30 - target.y) * lifted;
     }
     camera.lookAt(target);
     renderer.render(scene, camera);

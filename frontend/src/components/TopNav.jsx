@@ -1,7 +1,7 @@
 import { Link, NavLink, useParams } from "react-router-dom";
 import UserAvatar from "./UserAvatar";
 import "./TopNav.css";
-import leafIcon from "../assets/icons/leaf-cream.svg";
+import logo from "../assets/icons/cascade-logo.svg";
 
 const steps = [
   { id: "studio", label: "AI Studio" },
@@ -30,7 +30,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
   return (
     <header className="topnav">
       <Link to="/projects" className="topnav-brand" title="Back to your projects">
-        <img src={leafIcon} alt="" className="topnav-leaf" />
+        <img src={logo} alt="" className="topnav-leaf" />
         <span className="topnav-name">Cascade</span>
       </Link>
 

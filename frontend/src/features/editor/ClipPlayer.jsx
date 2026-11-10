@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 import ClipLoading from "./ClipLoading";
-import PreviewLeaves from "./PreviewLeaves";
 import { formatTime } from "../../utils/time";
 import { clipMediaPath } from "./clips";
 import { dragFraming, frameSize } from "./playerMath";
@@ -18,12 +17,11 @@ const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 
 //   framing    - optional { patch, recordUndo } from useClipDraft: in Fill mode you can then drag the video
 //                to choose what stays in the frame (one undo step per drag)
 //   onOpenTrends, trendsOpen - optional: show a Trends button that opens the Trends popup
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenTrends, trendsOpen, leafLoading = false, saveStatus }) {
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenTrends, trendsOpen, saveStatus }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const [url, setUrl] = useState(null);
-  const [readySource, setReadySource] = useState(null);
   const [render, setRender] = useState(null); // { key, url } or { key, error } for the last finished server render
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
@@ -141,7 +139,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
   }
 
   if (error) return <div className="clip-player-message" role="alert">{error.message || error}</div>;
-  if (!url && !leafLoading) return <ClipLoading />;
+  if (!url) return <ClipLoading />;
 
   const { composition } = state;
   const audioOnly = info.has_video === false;
@@ -202,7 +200,6 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
           {audioOnly ? <>
             <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}><Icon name="headphones" /> Audio recording</p>
             <audio muted={muted} onEnded={handleEnded} ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
-              onCanPlay={e => setReadySource(e.currentTarget.getAttribute("src"))}
               onError={() => setError(new Error("Unable to load the preview. Please try again."))}
               onLoadedMetadata={e => {e.target.currentTime=showEdited || view === "original" ? 0 : state.start;}}
               onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
@@ -217,7 +214,6 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
               objectPosition: `${composition.x * 100}% ${composition.y * 100}%`,
             }}
             onLoadedMetadata={(e) => (e.target.currentTime = showEdited || view === "original" ? 0 : state.start)}
-            onCanPlay={e => setReadySource(e.currentTarget.getAttribute("src"))}
             onError={() => setError(new Error("Unable to load the preview. Please try again."))}
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
@@ -225,7 +221,6 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
             onPause={() => setPlaying(false)}
             onClick={togglePlay}
           />}
-          {leafLoading && <PreviewLeaves loading={readySource !== (showEdited ? rendered : url) || (view === "edited" && rendering)} />}
         </div>
       </div>
       {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? 'Rendering edited preview… Original source shown until ready.' : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
