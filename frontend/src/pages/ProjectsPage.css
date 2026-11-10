@@ -1,42 +1,44 @@
-/* Sizes are Figma pixels: calc(N * var(--u)) */
+/* Sizes are Figma pixels: calc(N * var(--u)).
+   Isometric look: no outlines. Things are chunky blocks with a thick edge underneath that press down when clicked. */
 .projects {
   display: flex;
   flex-direction: column;
   position: relative;
   height: 100vh;
   overflow: hidden;
-  isolation: isolate;   /* keeps the moving jungle (components/JungleLeaves) behind everything on this page */
-  background-size: cover;
-  background-position: center;
-  background-color: var(--color-leaf-mist);
+  isolation: isolate;   /* keeps the 3D world (features/landing3d/IsoWorld) behind everything on this page */
 }
 
-/* ---------- Green top bar (Figma: 119 tall, dark green gradient) ---------- */
+/* ---------- Top bar: a dark green block ---------- */
 .projects-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: calc(98 * var(--u));
+  height: calc(92 * var(--u));
   padding: 0 calc(42 * var(--u)) 0 calc(40 * var(--u));
-  background: linear-gradient(90deg, color-mix(in srgb, var(--color-jungle-deep) 93%, transparent) 7%, color-mix(in srgb, var(--color-jungle) 93%, transparent) 100%);
+  background: linear-gradient(180deg, var(--bar-light), var(--bar-dark));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.18),
+    0 calc(7 * var(--u)) 0 var(--bar-edge),
+    0 calc(16 * var(--u)) calc(24 * var(--u)) rgba(10, 60, 50, 0.3);
   flex-shrink: 0;
 }
 
 .projects-brand {
   display: flex;
   align-items: center;
-  gap: calc(26 * var(--u));
-  color: var(--color-cream);
+  gap: calc(22 * var(--u));
+  color: #fff8e4;
   font-family: var(--font-display);
-  font-size: calc(48 * var(--u));
-  text-decoration: none;
+  font-size: calc(46 * var(--u));
+  text-shadow: 0 calc(3 * var(--u)) 0 var(--bar-edge);
 }
 
 .projects-brand:hover { opacity: 0.85; }
 
 .projects-leaf {
-  width: calc(51 * var(--u));
-  height: calc(43 * var(--u));
+  width: calc(48 * var(--u));
+  height: calc(41 * var(--u));
 }
 
 /* ---------- Sidebar + main area ---------- */
@@ -46,61 +48,65 @@
   display: flex;
 }
 
-/* Left sidebar: 396 wide */
 .projects-sidebar {
   display: flex;
   flex-direction: column;
-  gap: calc(14 * var(--u));
-  width: calc(396 * var(--u));
-  padding: calc(251 * var(--u)) 0 0 calc(34 * var(--u));
+  gap: calc(24 * var(--u));
+  width: calc(360 * var(--u));
+  padding: var(--cards-top, calc(64 * var(--u))) 0 0 calc(34 * var(--u));   /* --cards-top: set by ProjectsPage.jsx, so it lines up with the cards */
   flex-shrink: 0;
 }
 
-/* Wooden pill buttons: 294 x 72 */
-/* Sidebar buttons: the same pill buttons as the Editor's tool tabs (cream, dark outline, a little "ledge"
-   underneath so they read as pressable); the open view is green and pressed in */
+/* Sidebar buttons: cream blocks. The open one is green and pressed down. */
 .projects-filter {
+  --edge: var(--surface-edge);
+  --depth: max(4px, calc(8 * var(--u)));
   display: flex;
   align-items: center;
   gap: calc(14 * var(--u));
-  width: calc(330 * var(--u));
-  height: calc(76 * var(--u));
-  padding: 0 calc(28 * var(--u));
-  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
-  border-radius: var(--radius-pill);
-  background: var(--color-cream-card);
-  color: var(--color-wood-text);
-  box-shadow: 0 max(3px, calc(5 * var(--u))) 0 var(--color-wood-dark);
+  width: calc(310 * var(--u));
+  height: calc(72 * var(--u));
+  padding: 0 calc(26 * var(--u));
+  border: 0;
+  border-radius: calc(20 * var(--u));
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
+  color: var(--surface-ink);
+  box-shadow:
+    0 var(--depth) 0 var(--edge),
+    0 calc(var(--depth) + 8px) 14px rgba(10, 60, 50, 0.25);
   font-family: var(--font-heading);
   font-weight: 500;
-  font-size: calc(34 * var(--u));
+  font-size: calc(32 * var(--u));
   cursor: pointer;
   transition: translate 0.1s, box-shadow 0.1s, filter 0.15s;
 }
 
-/* Icon on the left, then the label (text is left-aligned) */
 .projects-filter-icon {
   flex-shrink: 0;
-  width: calc(36 * var(--u));
-  height: calc(36 * var(--u));
+  width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
 }
 
 .projects-filter:hover {
-  filter: brightness(1.05);
-  translate: 0 -1px;
-  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 var(--color-wood-dark);
+  filter: brightness(1.04);
+  translate: 0 -2px;
+  box-shadow:
+    0 calc(var(--depth) + 2px) 0 var(--edge),
+    0 calc(var(--depth) + 12px) 16px rgba(10, 60, 50, 0.28);
 }
 
-/* Pressed in: the open view, or while clicking */
 .projects-filter:active,
 .projects-filter.active {
-  translate: 0 max(2px, calc(3 * var(--u)));
-  box-shadow: 0 max(1px, calc(2 * var(--u))) 0 var(--color-wood-dark);
+  translate: 0 calc(var(--depth) * 0.55);
+  box-shadow:
+    0 calc(var(--depth) * 0.45) 0 var(--edge),
+    0 calc(var(--depth) * 0.45 + 4px) 8px rgba(10, 60, 50, 0.22);
 }
 
 .projects-filter.active {
-  background: var(--color-leaf);
-  color: var(--color-jungle-deep);
+  --edge: #2a7d33;
+  background: linear-gradient(180deg, #84dc4f, #4cb83e);
+  color: var(--bar-edge);
 }
 
 .projects-main {
@@ -108,9 +114,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  /* Title, subtitle and cards shifted right (bigger gap after the sidebar, like Figma) and low enough
-     that the title clears the hanging leaf */
-  padding: calc(104 * var(--u)) calc(80 * var(--u)) 0 calc(150 * var(--u));
+  padding: calc(50 * var(--u)) calc(70 * var(--u)) 0 calc(60 * var(--u));
 }
 
 .projects-header {
@@ -120,43 +124,59 @@
   gap: calc(24 * var(--u));
 }
 
+/* Chunky letters with stacked shadows for the 3D edge, the same as the Landing title */
 .projects-title {
-  color: var(--color-wood-text);
+  color: #fffdf3;
   font-family: var(--font-title);
   font-weight: 600;
-  font-size: calc(84 * var(--u));   /* letters 71 tall, the same size as the Figma title */
-  line-height: 1;   /* The Last Trunks has tall letters; a tight line keeps them off the subtitle */
+  font-size: calc(80 * var(--u));
+  line-height: 1;
+  -webkit-text-stroke: calc(3 * var(--u)) #0d4a3a;
+  paint-order: stroke fill;
+  text-shadow:
+    0 calc(2 * var(--u)) 0 #0d4a3a,
+    0 calc(4 * var(--u)) 0 #0d4a3a,
+    0 calc(6 * var(--u)) 0 #0d4a3a,
+    0 calc(16 * var(--u)) calc(18 * var(--u)) rgba(10, 60, 70, 0.3);
 }
 
 .projects-subtitle {
-  margin: calc(18 * var(--u)) 0 0 calc(20 * var(--u));   /* Figma: subtitle at 459 across, just under the title */
+  margin: calc(16 * var(--u)) 0 0 calc(4 * var(--u));
+  color: #ffffff;
   font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: calc(32 * var(--u));
+  font-weight: 800;
+  font-size: calc(26 * var(--u));
+  text-shadow:
+    0 calc(2 * var(--u)) 0 #0b4257,
+    0 0 calc(10 * var(--u)) rgba(6, 60, 90, 0.85);
 }
 
 .projects-actions {
   display: flex;
   align-items: flex-start;
-  gap: calc(36 * var(--u));
-  margin-top: calc(29 * var(--u));
+  gap: calc(26 * var(--u));
+  margin-top: calc(12 * var(--u));
 }
 
-/* Search box: wood texture, 292 x 71, dark brown outline */
-/* Search and + New Project: the same pill style as the sidebar / Editor tabs (cream, dark outline, ledge),
-   but keeping their squarer corners */
+/* Search: a little well cut into a cream block */
 .projects-search {
   display: flex;
   align-items: center;
   gap: calc(12 * var(--u));
-  width: calc(292 * var(--u));
-  height: calc(71 * var(--u));
-  padding: 0 calc(14 * var(--u));
-  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
-  border-radius: calc(10 * var(--u));
-  background: var(--color-cream-card);
-  box-shadow: 0 max(3px, calc(5 * var(--u))) 0 var(--color-wood-dark);
-  margin-top: calc(5 * var(--u));
+  width: calc(310 * var(--u));
+  height: calc(68 * var(--u));
+  padding: 0 calc(18 * var(--u));
+  border-radius: calc(18 * var(--u));
+  background: var(--surface-light);
+  box-shadow:
+    inset 0 calc(4 * var(--u)) 0 color-mix(in srgb, var(--surface-base) 22%, transparent),
+    0 calc(5 * var(--u)) 0 var(--surface-edge),
+    0 calc(14 * var(--u)) 14px rgba(10, 60, 50, 0.22);
+}
+
+.projects-search:focus-within {
+  outline: 3px solid #0d4a3a;
+  outline-offset: 2px;
 }
 
 .projects-search img {
@@ -170,40 +190,53 @@
   border: none;
   outline: none;
   background: transparent;
+  color: #3f2a12;
   font-family: var(--font-ui);
   font-weight: 700;
-  font-size: calc(20 * var(--u));
+  font-size: calc(21 * var(--u));
 }
 
 .projects-search input::placeholder {
-  color: color-mix(in srgb, var(--color-wood-dark) 85%, transparent);
+  color: rgba(74, 52, 25, 0.68);
 }
 
-/* "+ New Project": green wood, 195 x 76 */
+/* "+ New Project": the same pressable green block as Get Started */
 .projects-new {
-  width: calc(195 * var(--u));
-  height: calc(76 * var(--u));
-  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
-  border-radius: calc(10 * var(--u));
-  background: var(--color-leaf);
-  color: var(--color-jungle-deep);
-  box-shadow: 0 max(3px, calc(5 * var(--u))) 0 var(--color-wood-dark);
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: calc(24 * var(--u));
+  --depth: max(4px, calc(8 * var(--u)));
+  height: calc(68 * var(--u));
+  padding: 0 calc(26 * var(--u));
+  border: 0;
+  border-radius: calc(18 * var(--u));
+  background: linear-gradient(180deg, #84dc4f, #4cb83e 60%, #3fa836);
+  color: #fff;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 var(--depth) 0 #1d6b34,
+    0 calc(var(--depth) + 8px) 14px rgba(10, 60, 50, 0.28);
+  font-family: var(--font-heading);
+  font-size: calc(27 * var(--u));
+  text-shadow: 0 2px 0 #1d6b34;
+  white-space: nowrap;
   cursor: pointer;
   transition: translate 0.1s, box-shadow 0.1s, filter 0.15s;
 }
 
 .projects-new:hover {
-  filter: brightness(1.05);
-  translate: 0 -1px;
-  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 var(--color-wood-dark);
+  filter: brightness(1.07);
+  translate: 0 -2px;
 }
 
 .projects-new:active {
-  translate: 0 max(2px, calc(3 * var(--u)));
-  box-shadow: 0 max(1px, calc(2 * var(--u))) 0 var(--color-wood-dark);
+  translate: 0 calc(var(--depth) * 0.75);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 calc(var(--depth) * 0.25) 0 #1d6b34;
+}
+
+.projects-filter:focus-visible,
+.projects-new:focus-visible {
+  outline: 3px solid #0d4a3a;
+  outline-offset: 3px;
 }
 
 /* ---------- Main area below the header: scrolls on its own ---------- */
@@ -211,18 +244,18 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  margin-top: calc(94 * var(--u));
+  margin-top: calc(40 * var(--u));
   padding-bottom: calc(40 * var(--u));
 }
 
-/* Project cards: 3 per row on the Figma frame (382 x 292, gaps 43 / 42). The cards live in ProjectCard.css */
+/* Project cards: the cards themselves live in ProjectCard.css */
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));   /* always 3 per row, stretched to fill the width */
-  column-gap: calc(43 * var(--u));
-  row-gap: calc(42 * var(--u));
+  column-gap: calc(40 * var(--u));
+  row-gap: calc(50 * var(--u));
   align-content: start;
-  padding: calc(8 * var(--u));          /* room for the hover grow */
+  padding: calc(10 * var(--u)) calc(10 * var(--u)) calc(30 * var(--u));   /* room for the thick edges and hover lift */
 }
 
 /* Narrow windows: always 2 columns */
@@ -270,4 +303,59 @@
   justify-content: flex-end;
   gap: var(--space-1);
   margin-top: var(--space-3);
+}
+
+/* ---------- Messages over the 3D world sit on a cream block, so they stay easy to read ---------- */
+.projects .ui-empty,
+.projects-error.wood-panel {
+  width: fit-content;
+  max-width: min(520px, 100%);
+  margin: calc(30 * var(--u)) auto;
+  border: 0;
+  border-radius: calc(24 * var(--u));
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
+  box-shadow:
+    0 calc(6 * var(--u)) 0 var(--surface-edge),
+    0 calc(14 * var(--u)) 0 var(--surface-base),
+    0 calc(28 * var(--u)) calc(26 * var(--u)) rgba(10, 60, 50, 0.3);
+  color: var(--surface-ink);
+}
+
+.projects .ui-empty-icon {
+  color: #17643a;
+}
+
+.projects .ui-empty-text {
+  color: var(--surface-ink-soft);
+}
+
+.projects-state .ui-spinner {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-top-color: #ffffff;
+}
+
+/* ---------- Underwater: the cards drift gently up and down, each on its own timing ---------- */
+.projects-grid > * {
+  animation: projects-float 5.5s ease-in-out infinite alternate;
+}
+
+.projects-grid > :nth-child(3n + 2) {
+  animation-duration: 6.4s;
+  animation-delay: -2.1s;
+}
+
+.projects-grid > :nth-child(3n) {
+  animation-duration: 5s;
+  animation-delay: -3.7s;
+}
+
+@keyframes projects-float {
+  from { transform: translateY(-4px) rotate(-0.35deg); }
+  to { transform: translateY(4px) rotate(0.35deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects-grid > * {
+    animation: none;
+  }
 }

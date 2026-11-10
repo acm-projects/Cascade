@@ -1,5 +1,6 @@
 .env
 .env.*
+.run-logs/
 !.env.example
 .DS_Store
 __pycache__/

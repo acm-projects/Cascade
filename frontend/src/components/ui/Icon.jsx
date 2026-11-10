@@ -32,6 +32,7 @@ const PATHS = {
   send: <><path d="M4 12 20 4l-4 16-4-6Z" /><path d="m12 14 8-10" /></>,
   target: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="2" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></>,
   grid: <><rect x="4" y="4" width="7" height="7" rx="1" /><rect x="13" y="4" width="7" height="7" rx="1" /><rect x="4" y="13" width="7" height="7" rx="1" /><rect x="13" y="13" width="7" height="7" rx="1" /></>,
+  arrowRight: <path d="M4 12h15M13 6l6 6-6 6" />,
   undo: <path d="M9 7 5 11l4 4M5 11h10a4 4 0 0 1 0 8h-3" />,
   redo: <path d="m15 7 4 4-4 4M19 11H9a4 4 0 0 0 0 8h3" />,
   chevronDown: <path d="m6 9 6 6 6-6" />,

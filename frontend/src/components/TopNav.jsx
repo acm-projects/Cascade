@@ -5,9 +5,9 @@ import "./WorkflowNav.css";
 import leafIcon from "../assets/icons/leaf-cream.svg";
 
 const steps = [
-  { id: "studio", number: 1, label: "AI Studio" },
-  { id: "editor", number: 2, label: "Editor" },
-  { id: "export", number: 3, label: "Export" },
+  { id: "studio", label: "AI Studio" },
+  { id: "editor", label: "Editor" },
+  { id: "export", label: "Export" },
 ];
 
 
@@ -43,7 +43,6 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
           const className = `topnav-step${step.id === active ? " active" : ""}`;
           const content = (
             <>
-              <span className="topnav-step-number">{step.number}</span>
               {step.label}
             </>
           );

@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import "./ProjectsPage.css";
-import bg from "../assets/figma/projects-bg.jpg";
 import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/projectContextValue";
 import { useLeafNavigate } from "../context/leafTransitionValue";
 import useApi from "../api/useApi";
 import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
-import JungleLeaves from "../components/JungleLeaves";
+import IsoWorld from "../features/landing3d/IsoWorld";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
@@ -58,6 +57,27 @@ function ProjectsPage() {
   // Each load gets a number, so if Retry is clicked twice only the newest answer is used.
   // (The page starts with loading = true, so this only sets state once the answer arrives.)
   const loadCount = useRef(0);
+
+  // Line the sidebar's buttons up with the first row of project cards, wherever the title and search end up
+  // (they move as the window changes size). The sidebar reads --cards-top in ProjectsPage.css.
+  const bodyRef = useRef(null);
+  const contentRef = useRef(null);
+  useEffect(() => {
+    const body = bodyRef.current;
+    const content = contentRef.current;
+    if (!body || !content) return undefined;
+    function lineUp() {
+      const grid = content.querySelector(".projects-grid");
+      const gridPadding = grid ? parseFloat(getComputedStyle(grid).paddingTop) : 0;
+      const top = content.getBoundingClientRect().top - body.getBoundingClientRect().top + gridPadding;
+      body.style.setProperty("--cards-top", `${top}px`);
+    }
+    lineUp();
+    const observer = new ResizeObserver(lineUp);
+    observer.observe(body);
+    if (content.previousElementSibling) observer.observe(content.previousElementSibling);   // the title and search row
+    return () => observer.disconnect();
+  }, [loading]);
 
   const loadProjects = useCallback(() => {
     const thisLoad = ++loadCount.current;
@@ -195,8 +215,8 @@ function ProjectsPage() {
   }
 
   return (
-    <div className="projects" style={{ backgroundImage: `url(${bg})` }}>
-      <JungleLeaves />
+    <div className="projects">
+      <IsoWorld framing="underwater" />
       {/* Green top bar */}
       <header className="projects-bar">
         <Link to="/" className="projects-brand" title="Back to the home page">
@@ -206,7 +226,7 @@ function ProjectsPage() {
         <UserAvatar />
       </header>
 
-      <div className="projects-body">
+      <div className="projects-body" ref={bodyRef}>
         {/* Left sidebar: wooden view buttons */}
         <nav className="projects-sidebar" aria-label="Project views">
           {views.map((v) => (
@@ -255,7 +275,7 @@ function ProjectsPage() {
             </div>
           </div>
 
-          <div className="projects-content">{renderContent()}</div>
+          <div className="projects-content" ref={contentRef}>{renderContent()}</div>
         </main>
       </div>
 

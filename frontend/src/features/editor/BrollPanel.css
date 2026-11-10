@@ -21,5 +21,4 @@
 @media (prefers-reduced-motion:reduce) { .broll-drawer { animation:none; } }
 
 
-/* Inline editor tool: the shared tab panel supplies its surface and scrolling. */
-.broll-drawer.broll-inline { padding: 0; overflow: visible; box-shadow: none; animation: none; }
+.broll-inline { padding: 0; overflow: visible; box-shadow: none; animation: none; }

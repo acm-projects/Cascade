@@ -1,18 +1,35 @@
-/* Sizes are Figma pixels: calc(N * var(--u)). Card: 382 x 292, in the same style as the sidebar buttons
-   (cream, dark outline, a little "ledge" underneath), with the wood card's rounded corners */
+/* Sizes are Figma pixels: calc(N * var(--u)). A card is a chunky block: a strip of grass on top,
+   a cream face, and a thick edge of cream and soil underneath. */
 .project-card {
   position: relative;
-  aspect-ratio: 382 / 292;   /* keeps the Figma card shape as the cards stretch to fill the row */
-  border: max(2px, calc(3 * var(--u))) solid var(--color-wood-dark);
-  border-radius: calc(22 * var(--u));
-  background: var(--color-cream-card);
-  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 var(--color-wood-dark);
-  transition: translate 0.12s, box-shadow 0.12s;
+  aspect-ratio: 382 / 292;   /* keeps the card shape as the cards stretch to fill the row */
+  border-radius: calc(24 * var(--u));
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
+  box-shadow:
+    0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge),
+    0 max(7px, calc(14 * var(--u))) 0 var(--surface-base),
+    0 max(14px, calc(28 * var(--u))) calc(26 * var(--u)) rgba(10, 60, 50, 0.3);
+  transition: translate 0.14s, box-shadow 0.14s;
+}
+
+/* The grass */
+.project-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(20 * var(--u));
+  border-radius: calc(24 * var(--u)) calc(24 * var(--u)) 0 0;
+  background: linear-gradient(180deg, var(--card-cap-light), var(--card-cap));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), 0 2px 0 var(--card-cap-edge);
+  pointer-events: none;
 }
 
 .project-card:hover {
-  translate: 0 -2px;
-  box-shadow: 0 max(5px, calc(8 * var(--u))) 0 var(--color-wood-dark);
+  translate: 0 -5px;
+  box-shadow:
+    0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge),
+    0 max(7px, calc(14 * var(--u))) 0 var(--surface-base),
+    0 max(22px, calc(44 * var(--u))) calc(34 * var(--u)) rgba(10, 60, 50, 0.32);
 }
 
 /* The whole card is one big "open" button */
@@ -22,9 +39,9 @@
   align-items: flex-start;
   width: 100%;
   height: 100%;
-  padding: calc(26 * var(--u)) calc(28 * var(--u));
+  padding: calc(36 * var(--u)) calc(26 * var(--u)) calc(18 * var(--u));
   border: none;
-  border-radius: calc(16 * var(--u));
+  border-radius: calc(24 * var(--u));
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -34,10 +51,12 @@
   display: grid;
   place-items: center;
   width: 100%;
-  height: calc(150 * var(--u));
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
-  border-radius: calc(10 * var(--u));
-  background: color-mix(in srgb, var(--color-wood-dark) 25%, transparent);
+  border-radius: calc(14 * var(--u));
+  background: linear-gradient(160deg, #cfe9c4, #a9d8b4);
+  box-shadow: inset 0 calc(3 * var(--u)) calc(6 * var(--u)) rgba(30, 60, 40, 0.3);
 }
 
 .project-card-thumb img {
@@ -51,14 +70,15 @@
   width: calc(60 * var(--u));
   height: calc(60 * var(--u));
   object-fit: contain;
-  opacity: 0.55;
+  opacity: 0.6;
 }
 
 .project-card-name {
   max-width: 100%;
-  margin-top: calc(14 * var(--u));
+  margin-top: calc(12 * var(--u));
+  flex-shrink: 0;
   overflow: hidden;
-  color: var(--color-wood-text);
+  color: var(--surface-ink);
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: calc(30 * var(--u));
@@ -67,16 +87,17 @@
 }
 
 .project-card-meta {
-  color: color-mix(in srgb, var(--color-wood-text) 75%, transparent);
+  flex-shrink: 0;
+  color: var(--surface-ink-soft);
   font-family: var(--font-ui);
-  font-weight: 600;
+  font-weight: 700;
   font-size: calc(18 * var(--u));
 }
 
 /* ---------- The … menu, top-right corner ---------- */
 .project-card-menu {
   position: absolute;
-  top: calc(32 * var(--u));
+  top: calc(44 * var(--u));
   right: calc(34 * var(--u));
 }
 
@@ -86,9 +107,10 @@
   min-width: 24px;
   min-height: 20px;
   border: none;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-cream-card) 85%, transparent);
-  color: var(--color-wood-dark);
+  border-radius: calc(10 * var(--u));
+  background: var(--surface-light);
+  box-shadow: 0 calc(3 * var(--u)) 0 var(--surface-edge), 0 calc(6 * var(--u)) 8px rgba(10, 40, 30, 0.3);
+  color: var(--surface-ink);
   font-family: var(--font-display);
   font-size: calc(26 * var(--u));
   line-height: 1;
@@ -106,9 +128,11 @@
   z-index: 10;
   display: flex;
   flex-direction: column;
-  min-width: 120px;
+  min-width: 136px;
   padding: 6px;
-  box-shadow: var(--shadow-soft);
+  border-radius: 14px;
+  background: var(--surface-light);
+  box-shadow: 0 5px 0 var(--surface-edge), 0 14px 20px rgba(10, 40, 30, 0.35);
 }
 
 .project-card-popup button {
@@ -139,20 +163,25 @@
   align-items: center;
   justify-content: center;
   gap: calc(10 * var(--u));
-  aspect-ratio: 382 / 292;   /* keeps the Figma card shape as the cards stretch to fill the row */
-  border: max(2px, calc(4 * var(--u))) dashed var(--color-wood-dark);
-  border-radius: calc(22 * var(--u));
-  background: color-mix(in srgb, var(--color-cream-card) 70%, transparent);
-  color: var(--color-wood-text);
-  box-shadow: 0 max(4px, calc(6 * var(--u))) 0 color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
+  aspect-ratio: 382 / 292;   /* keeps the card shape as the cards stretch to fill the row */
+  border: max(2px, calc(4 * var(--u))) dashed var(--surface-ink-soft);
+  border-radius: calc(24 * var(--u));
+  background: color-mix(in srgb, var(--surface-light) 88%, transparent);
+  color: var(--surface-ink);
   font-family: var(--font-heading);
   cursor: pointer;
-  transition: translate 0.12s, box-shadow 0.12s, background 0.15s;
+  transition: translate 0.14s, background 0.15s;
 }
 
 .project-card-new:hover {
-  translate: 0 -2px;
-  background: color-mix(in srgb, var(--color-cream-card) 90%, transparent);
+  translate: 0 -5px;
+  background: color-mix(in srgb, var(--surface-light) 97%, transparent);
+}
+
+.project-card-new:focus-visible,
+.project-card-open:focus-visible {
+  outline: 3px solid #0d4a3a;
+  outline-offset: 3px;
 }
 
 .project-card-new-plus {
@@ -168,9 +197,8 @@
 
 .project-card-new-text {
   font-family: var(--font-ui);
-  font-weight: 600;
+  font-weight: 700;
   font-size: calc(18 * var(--u));
-  opacity: 0.75;
 }
 
 .project-card:has(.project-card-popup) { z-index: 2; }

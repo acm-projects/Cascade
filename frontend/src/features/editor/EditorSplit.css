@@ -1,6 +1,6 @@
 /* The "split" Editor layout: Abhishri's arrangement (from davebranch) in Cascade's own look.
-   Video on the left, tools on the right, timeline underneath, using the usual leaf background,
-   wood panels and buttons. Everything here only applies to this layout. */
+   Video on the left, tools on the right, timeline underneath, as chunky blocks on the pixel sea.
+   Everything here only applies to this layout. */
 
 /* ---------- Grid: video on the left; tool bar, clips and tabs on the right; timeline underneath ---------- */
 .es-body {
@@ -13,9 +13,9 @@
   grid-template-areas:
     "preview panel"
     "timeline timeline";
-  gap: 12px;
+  gap: 22px 18px;
   overflow-y: auto;
-  padding: calc(20 * var(--u)) calc(24 * var(--u)) calc(24 * var(--u));
+  padding: calc(14 * var(--u)) calc(24 * var(--u)) 28px;
 }
 
 .es-preview,
@@ -24,6 +24,7 @@
   border: var(--panel-border);
   border-radius: var(--panel-radius);
   background: var(--panel-bg);
+  box-shadow: var(--panel-edge);
 }
 
 /* ---------- Video ---------- */
@@ -215,159 +216,92 @@
   }
 }
 
-/* The toolbar and clip selector share the containing panel surface. */
-.es-panel .es-tools,
-.es-panel .er-clip-tabs {
-  border: 0;
-  box-shadow: none;
-  background: transparent;
+/* Updated editing workflow, using this branch's isometric surfaces and colors. */
+.editor-split .es-body {
+  grid-template-rows: minmax(200px, 1fr) auto;
+  grid-template-areas: "preview panel" "timeline timeline";
 }
-
-/* Compact clip selector beside the preview. */
-.es-clip-rail {
-  grid-area: clips;
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
+.editor-split .es-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "clips" "player";
+  padding: 16px;
+  gap: 12px;
 }
+.es-clip-rail { grid-area: clips; min-width: 0; overflow-x: auto; overflow-y: hidden; }
 .editor-split .es-clip-rail .er-clip-tabs {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  overflow: visible;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: flex-start;
+  width: max-content; min-width: 100%; gap: 8px; padding: 0 0 4px;
+  border: 0; background: transparent; box-shadow: none;
 }
 .editor-split .es-clip-rail .er-clip-tab {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  min-width: 0;
-  max-width: none;
-  padding: 0;
-  border-radius: 8px;
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 36px; height: 36px; min-width: 0; max-width: none;
+  padding: 0; border: 0; border-radius: 8px;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--color-wood-dark) 50%, var(--color-cream-card));
 }
-.editor-split .es-clip-rail .er-clip-tab-name {
-  font-size: 14px;
-  line-height: 1;
+.editor-split .es-clip-rail .er-clip-tab.active { background: var(--color-leaf) var(--wood-green) center / cover; }
+.editor-split .es-clip-rail .er-clip-tab-name { font: 700 14px/1 var(--font-ui); }
+.es-preview-player { grid-area: player; position: relative; min-width: 0; min-height: 0; }
+.es-panel-workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 120px; overflow: hidden; }
+.es-panel-workspace > .editor-panel-content { grid-column: 1; grid-row: 1; min-width: 0; }
+.editor-split .es-panel .editor-panel-tabs {
+  grid-column: 2; grid-row: 1; flex-direction: column; flex-wrap: nowrap;
+  gap: 10px; padding: 12px; overflow-y: auto;
+  border-bottom: 0; border-left: 1px solid color-mix(in srgb, var(--color-wood-dark) 20%, transparent);
 }
-
-/* Export and history actions sit directly above the tool tabs. */
-.es-panel .es-export {
-  width: 100%;
-  min-width: 0;
-  padding: 8px 4px;
-  font-size: 12px;
-  white-space: normal;
-}
-.es-history {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-}
-.es-history .editor-history-btn { min-width: 0; padding: 6px; }
-.es-save-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-/* Clip navigation and save feedback belong to the preview panel. */
-.es-preview {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "clips saved" "clips player";
-  gap: 8px;
-  padding: 12px;
-}
-.es-preview > .es-clip-rail { padding-top: 0; }
-.es-preview > .es-save-status {
-  grid-area: saved;
-  margin: 0;
-  min-width: 0;
-}
-.es-preview-player {
-  grid-area: player;
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-}
-
-.es-panel .editor-panel-tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-.es-tab-label {
-  font: 700 10px/1.2 var(--font-ui);
-  white-space: normal;
-  text-align: center;
-}
-
-/* Use the same panel spacing and compact controls as Export. */
-.editor-split .es-body { gap: 16px; padding: 16px 20px 20px; }
-.editor-split .es-preview,
-.editor-split .es-panel,
-.editor-split .es-timeline { border-radius: calc(30 * var(--u)); }
-.editor-split .es-preview { padding: 16px; gap: 12px; }
-.editor-split .editor-save { font-size: 12px; font-weight: 500; }
-.editor-split .es-panel .es-export { font-family: var(--font-ui); font-size: 13px; padding: 9px 10px; }
-.editor-split .es-panel .editor-panel-tab { border-radius: 8px; box-shadow: none; transition: background .15s; }
+/* The side rail's buttons. Every state is listed, so the top-tab look above (stretchy, flat bottom) never leaks in on hover or click. */
+.editor-split .es-panel .editor-panel-tab,
 .editor-split .es-panel .editor-panel-tab:hover:not(:disabled),
-.editor-split .es-panel .editor-panel-tab.active { translate: none; }
-.editor-split .es-preview .clip-player-trends { align-self: flex-start; width: auto; font-family: var(--font-ui); font-weight: 600; font-size: 13px; padding: 8px 12px; }
+.editor-split .es-panel .editor-panel-tab:active:not(:disabled),
+.editor-split .es-panel .editor-panel-tab.active {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; flex: 0 0 auto; min-height: 44px; padding: 8px 4px;
+  border: 0; border-radius: 8px; background: var(--color-cream-card) var(--wood-cream) center / cover;
+  box-shadow: 0 3px 0 #d6bf8b;
+  translate: none; filter: none;
+}
+.editor-split .es-panel .editor-panel-tab:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+.editor-split .es-panel .editor-panel-tab:active:not(:disabled) {
+  translate: 0 2px;
+  box-shadow: 0 1px 0 #d6bf8b;
+}
+.editor-split .es-panel .editor-panel-tab.active,
+.editor-split .es-panel .editor-panel-tab.active:hover:not(:disabled),
+.editor-split .es-panel .editor-panel-tab.active:active:not(:disabled) {
+  translate: none;
+  background: var(--color-leaf) var(--wood-green) center / cover;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--color-jungle-deep) 45%, var(--color-leaf));
+}
+/* Keyboard focus ring drawn inside the button, so the rail's edge doesn't cut it off */
+.editor-split .es-panel .editor-panel-tab:focus-visible {
+  outline: 2px solid var(--color-jungle-deep);
+  outline-offset: -4px;
+}
+.es-tab-label { font: 700 11px/1.2 var(--font-ui); white-space: normal; text-align: center; }
+.editor-split .es-panel .es-export,
+.editor-split .es-panel .es-trends { width: 100%; flex-shrink: 0; padding: 9px 8px; font: 700 13px var(--font-ui); }
+.es-history { display: flex; justify-content: center; gap: 6px; }
+.es-history .editor-history-btn { min-width: 0; padding: 6px; }
+.editor-split .es-preview .clip-player-bar { padding: 0 0 12px; gap: 8px; }
+.editor-split .es-preview .clip-player-loop { margin-left: 0; }
+.editor-split .clip-player-version-controls { margin-left: auto; flex-wrap: nowrap; gap: 10px; }
+.editor-split .clip-player-version-controls > .editor-choice-row { padding: 0; gap: 6px; flex-wrap: nowrap; }
+.editor-split .clip-player-version-controls .editor-choice { padding: 6px 10px; font-size: 13px; }
+.editor-split .clip-player-save-status { flex-wrap: nowrap; white-space: nowrap; }
+.editor-split .editor-save { font-size: 12px; }
 @media (max-width: 760px) {
   .editor-split { height: auto; min-height: 100dvh; }
-  .editor-split .es-body { flex: none; padding: 14px; gap: 16px; overflow: visible; }
+  .editor-split .es-body {
+    flex: none; overflow: visible; padding: 14px 14px 28px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 380px minmax(280px, auto) auto;
+    grid-template-areas: "preview" "panel" "timeline";
+  }
+  .es-panel-workspace { grid-template-columns: minmax(0, 1fr) 104px; }
+  .es-panel-workspace > .editor-panel-content { max-height: 65dvh; }
+  .editor-split .es-panel .editor-panel-tabs { padding: 8px; }
 }
-
-/* Horizontal clip navigation above the preview. */
-.editor-split .es-preview {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
-  grid-template-areas: "clips" "saved" "player";
-}
-.editor-split .es-clip-rail { overflow-x: auto; overflow-y: hidden; }
-.editor-split .es-clip-rail .er-clip-tabs {
-  flex-direction: row;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-  width: max-content;
-  min-width: 100%;
-  padding-bottom: 4px;
-}
-.editor-split .es-panel .es-trends {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-top: 4px;
-  padding: 10px 8px;
-  font: 600 13px var(--font-ui);
-  white-space: nowrap;
-}
-.editor-split .es-panel .editor-panel-tabs { overflow-y: auto; }
-
-/* Keep save feedback alongside the preview version controls. */
-.editor-split .es-preview { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "clips" "player"; }
-.editor-split .clip-player-version-controls { order: 3; flex-shrink: 0; padding: 0 12px 10px; gap: 12px; }
-.editor-split .clip-player-version-controls > .editor-choice-row { position: static; padding: 0; gap: 6px; }
-.editor-split .clip-player-version-controls .editor-choice { padding: 6px 10px; font-size: 13px; }
-.editor-split .es-preview .clip-player-bar { padding: 0 12px; }
-
-/* Playback, save state and preview version share one compact control row. */
-.editor-split .clip-player-bar { gap: 8px; }
-.editor-split .clip-player-version-controls { order: initial; margin-left: auto; padding: 0; gap: 10px; flex-wrap: nowrap; }
-.editor-split .clip-player-save-status { flex-wrap: nowrap; white-space: nowrap; }
-.editor-split .clip-player-version-controls > .editor-choice-row { flex-wrap: nowrap; }
-.editor-split .es-preview .clip-player-bar { padding-bottom: 10px; }

@@ -2,11 +2,11 @@
 .session-bar {
   display: flex;
   align-items: center;
-  margin: 10px calc(24 * var(--u)) 0;
+  margin: 4px calc(24 * var(--u)) 0;
   padding: 6px 12px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-cream-card) 80%, transparent);
-  box-shadow: var(--shadow-soft);
+  border-radius: var(--radius-lg);
+  background: var(--wood-cream);
+  box-shadow: 0 4px 0 var(--surface-edge), 0 8px 0 var(--surface-base), 0 14px 14px rgba(10, 50, 60, 0.28);
 }
 
 .session-bar-picker {

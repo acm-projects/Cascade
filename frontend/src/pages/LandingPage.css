@@ -1,39 +1,163 @@
-/* The landing is a full-screen picture, so it uses plain vw/vh (not --u) to match Figma's layout exactly */
+/* The landing fills the screen, so it uses plain vw/vh (not --u).
+   Sky behind, 3D island over it (features/landing3d), words on top. */
 .landing {
   position: relative;
   height: 100vh;
   overflow: hidden;
-  background-size: cover;
-  background-position: center;
+  isolation: isolate;   /* keeps the 3D world behind the words */
 }
 
-/* "CASCADE": The Last Trunks (--font-title), white, with a dark fuzzy outline */
+/* Left side: title, headline, button and features, stacked */
+.landing-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: min(2.2vh, 1.4vw);
+  width: min(40vw, 680px);
+  margin-left: 6vw;
+}
+
+/* "CASCADE": chunky letters, with stacked shadows for the 3D edge */
 .landing-title {
-  position: absolute;
-  left: 50%;
-  top: 37%;
-  translate: -50% -50%;
-  color: white;
+  color: #fffdf3;
   font-family: var(--font-title);
   font-weight: normal;
-  font-size: min(14.8vw, 23vh);           /* 256px on the 1728 x 1117 Figma frame */
+  font-size: min(7.6vw, 14vh);
+  line-height: 1;
   letter-spacing: 0.02em;
-  white-space: nowrap;
-  -webkit-text-stroke: min(0.55vw, 0.85vh) var(--color-lake-ink);
-  paint-order: stroke fill;               /* draw the outline behind the white */
-  text-shadow: 0 0.6vh 1.4vh rgba(20, 40, 50, 0.35);
+  -webkit-text-stroke: min(0.3vw, 0.5vh) #0d4a3a;
+  paint-order: stroke fill;
+  text-shadow:
+    0 0.25vh 0 #0d4a3a,
+    0 0.5vh 0 #0d4a3a,
+    0 0.75vh 0 #0d4a3a,
+    0 1vh 0 #0d4a3a,
+    0 2.2vh 2.4vh rgba(10, 60, 70, 0.35);
 }
 
-/* "Get Started": wood plank, centered near the bottom (349 x 85 at y 957 in Figma) */
+.landing-headline {
+  color: #fffdf3;
+  font-family: var(--font-heading);
+  font-size: min(2.9vw, 5vh);
+  line-height: 1.15;
+  text-shadow:
+    0 0.25vh 0 #0b4257,
+    0 0 1.2vh rgba(6, 60, 90, 0.75);
+}
+
+.landing-sub {
+  max-width: 32em;
+  color: #ffffff;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: min(1.3vw, 2.2vh);
+  line-height: 1.4;
+  text-shadow:
+    0 0.15vh 0 #0b4257,
+    0 0 0.9vh rgba(6, 60, 90, 0.85);
+}
+
+/* A chunky 3D button: the dark edge underneath stays put and the green top presses down into it */
 .landing-start {
-  position: absolute;
-  left: 50%;
-  top: 85.7%;
-  translate: -50% 0;
-  min-width: 20vw;
-  font-size: min(2.3vw, 3.6vh);           /* 40px on the Figma frame */
+  --press-depth: min(0.9vh, 8px);
+  display: inline-block;
+  margin-top: 1.2vh;
+  padding-bottom: var(--press-depth);
+  border-radius: 1.6vh;
+  background: #1d6b34;
+  box-shadow: 0 1.6vh 2.4vh rgba(10, 60, 50, 0.32);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: min(1.9vw, 3.1vh);
+  text-decoration: none;
+  transition: box-shadow 0.12s;
 }
 
-.landing-start:hover {
-  scale: 1.05;
+.landing-start-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.55em 1.2em;
+  border-radius: 1.6vh;
+  background: linear-gradient(180deg, #84dc4f, #4cb83e 60%, #3fa836);
+  box-shadow: inset 0 0.3vh 0 rgba(255, 255, 255, 0.5);
+  text-shadow: 0 0.2vh 0 #1d6b34;
+  transition: translate 0.12s, filter 0.12s;
+}
+
+.landing-start:hover .landing-start-top {
+  translate: 0 calc(var(--press-depth) * 0.3);
+  filter: brightness(1.07);
+}
+
+.landing-start:active .landing-start-top {
+  translate: 0 var(--press-depth);
+}
+
+.landing-start:focus-visible {
+  outline: 3px solid #fffdf3;
+  outline-offset: 3px;
+}
+
+/* 3 little cream blocks with a label under each */
+.landing-features {
+  display: flex;
+  gap: min(2.6vw, 42px);
+  margin-top: 2.4vh;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-features li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+  color: #ffffff;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: min(1vw, 1.7vh);
+  text-shadow:
+    0 0.15vh 0 #0b4257,
+    0 0 0.8vh rgba(6, 60, 90, 0.85);
+}
+
+.landing-feature-icon {
+  display: grid;
+  place-items: center;
+  width: min(3.5vw, 6vh);
+  aspect-ratio: 1;
+  border-radius: 22%;
+  background: linear-gradient(180deg, var(--surface-light), var(--surface));
+  box-shadow:
+    0 0.6vh 0 var(--surface-edge),
+    0 1.4vh 1.6vh rgba(10, 60, 50, 0.25);
+  color: #17643a;
+}
+
+.landing-feature-icon svg {
+  width: 56%;
+  height: 56%;
+}
+
+/* Narrow screens: words on top, centered, with the island below */
+@media (max-aspect-ratio: 115/100) {
+  .landing {
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .landing-copy {
+    align-items: center;
+    width: auto;
+    margin: 5vh 6vw 0;
+    text-align: center;
+  }
+  .landing-title { font-size: min(15vw, 9vh); }
+  .landing-headline { font-size: min(5.6vw, 3.4vh); }
+  .landing-sub { font-size: min(3.5vw, 2vh); }
+  .landing-start { font-size: min(4.4vw, 2.8vh); }
+  .landing-features li { font-size: min(2.8vw, 1.5vh); }
+  .landing-feature-icon { width: min(10vw, 6vh); }
 }

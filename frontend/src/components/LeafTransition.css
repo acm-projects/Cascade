@@ -1,69 +1,42 @@
-/* Leaves gust in from the left until the screen is covered, the page changes behind them,
-   then they blow away to the right. Timings match the numbers in LeafTransition.jsx:
-   each leaf takes 380ms, and the last one starts about 240ms in. */
-.leaf-transition {
+/* Camera-move page changes (see LeafTransition.jsx).
+   While the camera moves, the page's words and buttons fade away, then a wash of water covers the swap and clears. */
+.is-camera-moving :is(.landing-copy, .projects-bar, .projects-body) {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.camera-transition {
   position: fixed;
   inset: 0;
-  z-index: 1000;   /* above pages and pop-ups; also stops clicks while it plays */
-  overflow: hidden;
+  z-index: 1000;   /* above the pages; also stops clicks while the camera moves */
 }
 
-/* Deep green behind the leaves, so no gap between them can show the page changing */
-.leaf-transition-backdrop {
-  position: absolute;
-  inset: 0;
-  background: #0a4426;
+/* Into the deep sea: the same colors as the top of the underwater scene */
+.camera-transition-dive {
+  background: linear-gradient(180deg, #2fb4dc 0%, #1663a8 45%, #0b3a6e 100%);
 }
 
-.leaf-transition-cover .leaf-transition-backdrop {
-  animation: leaf-backdrop-in 240ms ease-in 340ms both;
+/* Out of the water into a work page: the pixel-sea colors of AI Studio, the Editor and Export */
+.camera-transition-push {
+  background: linear-gradient(160deg, #7ff0ec, #3fc2dc 35%, #1f9fd6 75%);
 }
 
-.leaf-transition-reveal .leaf-transition-backdrop {
-  animation: leaf-backdrop-out 220ms ease-out both;
+.camera-transition-cover {
+  animation: camera-wash-in var(--wash-for) ease-in var(--wash-from) both;
 }
 
-.leaf-transition-leaf {
-  position: absolute;
-  width: 27vmax;
-  will-change: transform;
+.camera-transition-reveal {
+  animation: camera-wash-out var(--reveal-for) ease-out both;
 }
 
-.leaf-transition-leaf svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.leaf-transition-cover .leaf-transition-leaf {
-  animation: leaf-in 380ms cubic-bezier(0.2, 0.75, 0.3, 1) var(--leaf-delay) both;
-}
-
-.leaf-transition-reveal .leaf-transition-leaf {
-  animation: leaf-out 380ms cubic-bezier(0.6, 0, 0.8, 0.4) var(--leaf-delay) both;
-}
-
-@keyframes leaf-in {
-  from { transform: translate(-50%, -50%) translate(-135vw, 22vh) rotate(calc(var(--leaf-rotate) - 80deg)); }
-  to { transform: translate(-50%, -50%) rotate(var(--leaf-rotate)); }
-}
-
-@keyframes leaf-out {
-  from { transform: translate(-50%, -50%) rotate(var(--leaf-rotate)); }
-  to { transform: translate(-50%, -50%) translate(135vw, -22vh) rotate(calc(var(--leaf-rotate) + 80deg)); }
-}
-
-@keyframes leaf-backdrop-in {
+@keyframes camera-wash-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes leaf-backdrop-out {
+@keyframes camera-wash-out {
   from { opacity: 1; }
   to { opacity: 0; }
 }
 
-/* Mirror the entire gust so its stagger and travel both start on the right. */
-.leaf-transition-backward {
-  transform: scaleX(-1);
-}
+.leaf-transition-backward { transform: scaleX(-1); }

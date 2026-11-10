@@ -16,18 +16,22 @@
 .studio-body {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  gap: 16px;
+  gap: 18px;
   min-height: 0;
-  padding: 12px calc(24 * var(--u)) calc(20 * var(--u));
+  padding: 18px calc(24 * var(--u)) 26px;
 }
 
-/* Wooden frame around the canvas */
+/* The canvas is a block of water, with a thick edge like everything else */
 .studio-canvas-frame {
   min-height: 0;
   overflow: hidden;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--panel-edge);
+}
+
+.chat-panel.wood-panel {
+  box-shadow: var(--panel-edge);
 }
 
 .studio-empty {

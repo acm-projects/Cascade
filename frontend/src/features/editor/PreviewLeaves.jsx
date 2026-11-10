@@ -3,9 +3,9 @@ import { Leaf } from "../../components/LeafTransition";
 import "./PreviewLeaves.css";
 
 const colors = [
-  { base: "#0f7a3e", light: "#1f9550" },
-  { base: "#1f8f4a", light: "#35ad5e" },
-  { base: "#7cc52f", light: "#a3d637" },
+  { base: "#178244", light: "#2a9c58", edge: "#0b5029" },
+  { base: "#1f8f4a", light: "#35ad5e", edge: "#0f5c32" },
+  { base: "#74c02f", light: "#98d63c", edge: "#478a22" },
 ];
 
 export default function PreviewLeaves({ loading = true }) {

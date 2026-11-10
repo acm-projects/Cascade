@@ -21,8 +21,9 @@
 .export-youtube,
 .export-social {
   min-height: 0;
+  box-shadow: var(--panel-edge);
   border: var(--panel-border);
-  border-radius: calc(30 * var(--u));
+  border-radius: var(--panel-radius);
   background: var(--panel-bg);
 }
 
@@ -447,11 +448,7 @@
   .export-player { height: 380px; }
   .export-stage-head { flex-wrap: wrap; gap: 8px; }
   .export-actions .btn { flex: 1 1 160px; white-space: normal; }
-  .export .topnav { height: auto; min-height: 70px; flex-wrap: wrap; gap: 10px; padding: 12px; margin: 10px 14px 0; }
-  .export .topnav-title { flex: 1; min-width: 0; }
-  .export .topnav-steps { position: static; order: 5; width: 100%; margin: 0; justify-content: space-between; }
-  .export .topnav-step { flex: 1; min-width: 0; width: auto; padding: 6px; gap: 5px; font-size: 16px; }
-  .export .topnav-user { display: none; }
+
 }
 
 /* Review layout: compact options, tall preview, and publishing side by side. */
@@ -520,17 +517,6 @@
 
 /* Compact export navigation and secondary controls. */
 
-
-
-
-
-
-
-
-
-
-
-
 .export-footer { align-items: flex-start; }
 .export-download-controls .export-actions { align-items: flex-start; }
 .export-download-controls .export-actions .btn { width: auto; flex: none; }
@@ -538,7 +524,6 @@
 .export-help summary { cursor: pointer; padding: 4px 0; }
 .export-help p { margin-top: 6px; line-height: 1.5; }
 .export-status { border: 0; background: transparent; padding: 0 4px; color: var(--color-text-muted); }
-
 
 /* Preview information and navigation belong to the same card. */
 .export-preview-heading { min-width: 0; display: flex; align-items: baseline; gap: 10px; }
