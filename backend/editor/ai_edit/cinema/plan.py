@@ -14,7 +14,7 @@ class Span(BaseModel):
     model_config = ConfigDict(extra='ignore')
     from_word: int = Field(ge=0)
     to_word: int = Field(ge=0)
-    role: Literal['hook', 'question', 'answer', 'payoff'] = 'answer'
+    role: Literal['hook', 'question', 'answer', 'payoff'] = 'answer'   # a hook may repeat a line that also plays later
 
 
 class Moment(BaseModel):
@@ -37,7 +37,7 @@ class Broll(BaseModel):
     from_word: int = Field(ge=0)
     to_word: int = Field(ge=0)
     query: str = Field(min_length=2, max_length=90)
-    look: Literal['full', 'card', 'mono', 'band'] = 'full'
+    look: Literal['full', 'card', 'mono', 'band'] = 'full'   # card and band render full screen (the owner wants b-roll to fill the frame)
     tone: Tone | None = None
 
 
@@ -61,7 +61,7 @@ class CinemaPlan(BaseModel):
     broll: list[Broll] = Field(default_factory=list, max_length=24)
     silence_before: int | None = None
     opener: Opener = Field(default_factory=Opener)
-    end_line: str = Field(default='', max_length=70)
+    end_line: str = Field(default='', max_length=90)    # the closing message, shown on its own before the stamp
 
     @model_validator(mode='after')
     def _tidy(self):
@@ -82,10 +82,12 @@ def check(plan, words):
     for k, s in enumerate(plan.story):
         if not s.from_word <= s.to_word < n: raise ValueError(f'story {k}: needs from_word <= to_word < {n}')
         span = set(range(s.from_word, s.to_word+1))
+        if s.role == 'hook':
+            if k: raise ValueError('story: a hook can only come first')
+            continue
         if span & seen: raise ValueError(f'story {k}: overlaps an earlier story span; each word plays once')
         seen |= span
-    for m in plan.moments:
-        if m.word not in seen: raise ValueError(f'moment on word {m.word} is not in the story')
+    plan.moments = [m for m in plan.moments if m.word in seen]
     for b in plan.broll:
         if not b.from_word <= b.to_word < n: raise ValueError('broll: from_word <= to_word required')
     if plan.silence_before is not None and plan.silence_before not in seen:
@@ -162,9 +164,10 @@ def auto(words, duration_goal=55.):
             t = words[i]['s']
             if t-last_moment > 9 and len(moments) < 5 and len(p) <= 11 and i > (question[-1] if question else -1):
                 moments.append(Moment(word=i, style='behind' if len(moments) % 2 == 0 else 'outline', tone=tone)); last_moment = t
-            if t-last_broll > 6 and len(broll) < 6 and tone in ('water', 'life', 'danger', 'earth'):
-                j = min(i+6, kept[-1])
-                broll.append(Broll(from_word=i, to_word=j, query=f'{p} cinematic', look='full', tone=tone)); last_broll = t
+            if t-last_broll > 3.5 and len(broll) < 12 and tone in ('water', 'life', 'danger', 'earth', 'money'):
+                j = min(i+5, kept[-1])
+                frame = {'water': 'water close up', 'life': 'rainforest', 'danger': 'smoke fire', 'earth': 'earth aerial', 'money': 'close up'}[tone]
+                broll.append(Broll(from_word=i, to_word=j, query=f'{p} {frame} cinematic', look='full', tone=tone)); last_broll = t
     payoff = next((s for s in reversed(sents) if s[-1] <= end and s[0] >= start and len(s) >= 3), None)
     plan = CinemaPlan(title='Cascade cut', story=story, drop=drop, keywords=keywords, moments=moments, broll=broll,
                       silence_before=payoff[0] if payoff else None,

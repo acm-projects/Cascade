@@ -1,7 +1,6 @@
-"""The Cascade stamp: the little signature at the end of every edit, like an app's watermark but made
-to be loved. Modelled on END INSPO (liquid wipe, a hand-written signature drawing itself) and made
-ours: a single water drop falls into the dark, splashes into a crown and ripples, and "Cascade"
-writes itself in light while drops run off the letters. 2.7 seconds."""
+"""The Cascade stamp, the signature at the end of every edit: a wet blue paint stroke sweeps across
+the dark, flicks drops of water off its end, and "Cascade" is brushed over it in white. No music,
+only the splash. 2.5 seconds."""
 import math
 
 import numpy as np
@@ -9,132 +8,120 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from . import look
 
-DURATION = 2.7
-AQUA = (110, 222, 255)
-CENTER = (540, 900)
-IMPACT = .45
+DURATION = 2.5
+DEEP, AQUA = np.array((18, 74, 160), np.float32), np.array((96, 206, 255), np.float32)
 
 
-def _ease(x):
+def _ease(x, p=3):
     x = min(1, max(0, x))
-    return 1-(1-x)**3
+    return 1-(1-x)**p
 
 
-def _word():
-    f = look.SCRIPT(300)
-    text = 'Cascade'
-    w = int(f.getlength(text))+120
-    ascent, descent = f.getmetrics()
-    img = Image.new('L', (w, ascent+descent+120), 0)
-    ImageDraw.Draw(img).text((60, 50), text, font=f, fill=255)
-    box = img.getbbox()
-    img = img.crop((box[0]-30, box[1]-30, box[2]+30, box[3]+30))
-    mask = np.asarray(img).astype(np.float32)/255.
-    h, w = mask.shape
-    # white core fading to aqua at the bottom of the letters
-    grad = np.linspace(0, 1, h)[:, None, None]
-    color = np.array(look.WHITE, np.float32)*(1-grad*.55)+np.array(AQUA, np.float32)*grad*.55
-    glow = np.asarray(img.filter(ImageFilter.GaussianBlur(14))).astype(np.float32)/255.
-    return mask, glow, color, (w, h)
-
-
-def _drops_from_letters(mask, count=6, seed=3):
+def _stroke(w, h, seed=5):
+    """A loaded paint brush dragged once: a heavy wet start, a body whose width breathes, and dry
+    bristle streaks breaking up at the end. Blues from deep to aqua, with a darker wet edge."""
     rng = np.random.default_rng(seed)
-    h, w = mask.shape
-    cols = np.where(mask[int(h*.55):].max(0) > .6)[0]
-    picks = rng.choice(cols, size=min(count, len(cols)), replace=False) if len(cols) else []
-    out = []
-    for c in picks:
-        rows = np.where(mask[:, c] > .6)[0]
-        out.append((int(c), int(rows.max()), rng.uniform(1.25, 1.75), rng.uniform(4, 7)))
-    return out
+    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    xs = np.linspace(0, w, 220)
+    breathe = 1+.12*np.sin(xs/w*7.1+1.3)+.07*np.sin(xs/w*17.3)        # the stroke's width varies along it
+    bend = np.sin(xs/w*math.pi*1.1-.2)*h*.07                           # a gentle arc
+    for _ in range(170):
+        band = rng.uniform(-.48, .48)
+        thick = rng.uniform(3, 11)*h/240
+        mix = rng.uniform(0, 1)**.8
+        color = DEEP*(1-mix)+AQUA*mix
+        alpha = rng.uniform(.45, 1.)
+        start = rng.uniform(0, .05)*w+abs(band)*w*.07                     # a rounded, loaded start
+        stop = w*(1-rng.uniform(0, .3)*(abs(band)*1.4+.3))                 # outer bristles run dry first
+        pts = []
+        for x, br, bn in zip(xs, breathe, bend):
+            if x < start or x > stop: continue
+            if x > w*.7 and rng.random() < .035:                          # dry-brush breaks toward the end
+                if len(pts) > 1: d.line(pts, fill=tuple(int(c) for c in color)+(int(255*alpha),), width=max(1, int(thick)))
+                pts = []
+                continue
+            pts.append((x, h/2+band*h*.8*br+bn+rng.normal(0, .5)))
+        if len(pts) > 1: d.line(pts, fill=tuple(int(c) for c in color)+(int(255*alpha),), width=max(1, int(thick)))
+    # a few lighter highlights where the paint is thick
+    for _ in range(18):
+        y = h/2+rng.uniform(-.3, .3)*h
+        x0 = rng.uniform(.05, .5)*w
+        d.line([(x0, y), (x0+rng.uniform(.1, .35)*w, y+rng.normal(0, 2))], fill=(190, 236, 255, int(rng.uniform(60, 140))), width=max(1, int(2*h/240)))
+    soft = img.filter(ImageFilter.GaussianBlur(1.1))
+    a = np.asarray(soft).astype(np.float32)
+    edge = np.asarray(soft.split()[3].filter(ImageFilter.GaussianBlur(6))).astype(np.float32)/255.
+    rim = np.clip(edge-a[..., 3]/255., 0, 1)[..., None]
+    rgb = a[..., :3]*(1-rim*.5)+DEEP*.4*rim*.5
+    return np.dstack([rgb, np.maximum(a[..., 3], rim[..., 0]*70)]).astype(np.float32)
+
+
+def _splatter(w, h, cx, cy, seed=9):
+    rng = np.random.default_rng(seed)
+    drops = []
+    for _ in range(34):
+        ang = rng.uniform(-1.1, 1.1)
+        dist = rng.uniform(.02, .3)*w
+        drops.append((cx+math.cos(ang)*dist, cy+math.sin(ang)*dist*.6, rng.uniform(2, 11)*h/1080, rng.uniform(.06, .3), rng.uniform(0, 1)))
+    return drops
 
 
 def frames(background):
-    """Yield (H, W, 3) uint8 frames. `background` is the edit's last frame."""
-    rng = np.random.default_rng(12)
+    """Yield frames at the current output size. `background` is the edit's last frame."""
     W, H, FPS = look.W, look.H, look.FPS
+    u = look.unit()
     ink = np.zeros((H, W, 3), np.float32)+np.array(look.INK, np.float32)
     bg = background.astype(np.float32)
-    blur_bg = np.asarray(Image.fromarray(background).filter(ImageFilter.GaussianBlur(28))).astype(np.float32)
-    mask, glow, color, (ww, wh) = _word()
-    wx, wy = CENTER[0]-ww//2, CENTER[1]-wh//2-10
-    letter_drops = _drops_from_letters(mask)
-    crown = [(rng.uniform(-1, 1)*math.pi*.48-math.pi/2, rng.uniform(520, 980), rng.uniform(3, 9)) for _ in range(46)]
-    small = look.SANS(30, 600)
-    caption = look.text_sprite('EDITED BY', small, fill=(200, 236, 250), tracking=14, shadow=0)
-    total = int(DURATION*FPS)
-    for n in range(total):
+    sw, sh = int(W*(.78 if W > H else .92)), int(260*u)
+    stroke = _stroke(sw, sh)
+    sx, sy = (W-sw)//2, int(H*.5-sh/2)
+    f = look.BRUSH(200*u)
+    word = Image.new('L', (int(f.getlength('Cascade'))+80, int(260*u)), 0)
+    ImageDraw.Draw(word).text((40, 10), 'Cascade', font=f, fill=255)
+    box = word.getbbox()
+    word = np.asarray(word.crop(box)).astype(np.float32)/255.
+    wh, ww = word.shape
+    wx, wy = W//2-ww//2, int(H*.5-wh/2-8*u)
+    shadow = np.asarray(Image.fromarray((word*255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(10*u))).astype(np.float32)/255.
+    drops = _splatter(W, H, sx+sw*.93, sy+sh*.5)
+    caption = look.text_sprite('EDITED BY', look.TIGHT(28*u, 700), fill=(196, 230, 248), tracking=int(12*u), shadow=0)
+    for n in range(int(DURATION*FPS)):
         t = n/FPS
-        # 1. the film darkens into ink
-        k = _ease(t/.42)
-        frame = bg*(1-k)*(1-k*.4)+blur_bg*k*.25+ink*k
-        canvas = Image.fromarray(np.clip(frame, 0, 255).astype(np.uint8)).convert('RGBA')
-        layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-        d = ImageDraw.Draw(layer)
-        # 2. the drop falls
-        if t < IMPACT:
-            p = (t/IMPACT)**2
-            y = -60+(CENTER[1]+40+60)*p
-            stretch = 1+p*1.4
-            d.ellipse((CENTER[0]-13, y-13*stretch*1.6, CENTER[0]+13, y+13), fill=AQUA+(235,))
-            d.ellipse((CENTER[0]-5, y-8, CENTER[0]+1, y-1), fill=(255, 255, 255, 200))
-        else:
-            s = t-IMPACT
-            # 3. bloom at impact
-            if s < .35:
-                r = 80+s*900
-                a = int(140*(1-s/.35))
-                d.ellipse((CENTER[0]-r, CENTER[1]+40-r*.35, CENTER[0]+r, CENTER[1]+40+r*.35), fill=AQUA+(a//3,))
-            # 4. ripples
-            for j in range(3):
-                q = s-j*.16
-                if q <= 0: continue
-                rx = 40+q*620
-                a = int(200*max(0, 1-q/1.4))
-                if a <= 0: continue
-                d.ellipse((CENTER[0]-rx, CENTER[1]+40-rx*.22, CENTER[0]+rx, CENTER[1]+40+rx*.22), outline=AQUA+(a,), width=3)
-            # 5. the crown: drops thrown up and falling back
-            for ang, speed, size in crown:
-                if s > 1.25: break
-                x = CENTER[0]+math.cos(ang)*speed*.55*s
-                y = CENTER[1]+40+math.sin(ang)*speed*s+1300*s*s
-                a = int(255*max(0, 1-s/1.25))
-                r = size*(1-s*.4)
-                if a > 0 and r > .5: d.ellipse((x-r, y-r*1.25, x+r, y+r*1.25), fill=(225, 246, 255, a))
-        glowing = layer.filter(ImageFilter.GaussianBlur(6))
-        canvas = Image.alpha_composite(canvas, glowing)
-        canvas = Image.alpha_composite(canvas, layer)
-        out = np.asarray(canvas.convert('RGB')).astype(np.float32)
-        # 6. "Cascade" writes itself, left to right, with a soft leading edge
-        if t > .58:
-            reveal = _ease((t-.58)/1.0)
-            edge = reveal*(ww+80)-40
-            cols = np.clip((edge-np.arange(ww))/40+.5, 0, 1)[None, :]
-            lift = (1-_ease((t-.58)/.8))*14
-            y0 = int(wy+lift)
-            a = mask*cols
-            g = glow*cols*.75
-            region = out[y0:y0+wh, wx:wx+ww]
-            hh, wwr = region.shape[:2]
-            a, g, col = a[:hh, :wwr, None], g[:hh, :wwr, None], color[:hh]
-            region[:] = region*(1-g*.5)+np.array(AQUA, np.float32)*g*.5
-            region[:] = region*(1-a)+col*a
-            # drops running off the letters
-            if t > 1.45:
-                for cx, cy, start, size in letter_drops:
-                    q = t-start
-                    if q <= 0: continue
-                    x, y = wx+cx, y0+cy+q*q*900
-                    alpha = max(0, 1-q/1.1)
-                    yy, xx = int(y), int(x)
-                    r = int(size)
-                    if alpha <= 0 or yy+2*r >= H: continue
-                    patch = out[yy-2*r:yy+r, xx-r:xx+r]
-                    if patch.size: patch[:] = patch*(1-.85*alpha)+np.array((225, 246, 255), np.float32)*.85*alpha
-        frame8 = np.clip(out, 0, 255).astype(np.uint8)
-        if t > .95:
-            look.paste(frame8, caption, CENTER[0], wy-28, alpha=_ease((t-.95)/.5)*.85)
-        if t > DURATION-.28:
-            frame8 = (frame8*(1-(t-(DURATION-.28))/.28)).astype(np.uint8)
-        yield frame8
+        k = _ease(t/.35)
+        out = bg*(1-k)+ink*k
+        # the brush sweeps left to right; its leading edge is soft and wet
+        if t > .2:
+            head = _ease((t-.2)/.62, 2.4)*(sw+60)-30
+            cols = np.clip((head-np.arange(sw))/26+.5, 0, 1)[None, :, None]
+            a = stroke[..., 3:4]/255.*cols
+            region = out[sy:sy+sh, sx:sx+sw]
+            region[:] = region*(1-a)+stroke[..., :3]*a
+        # drops flicked off the end of the stroke
+        if t > .78:
+            q = t-.78
+            canvas = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+            d = ImageDraw.Draw(canvas)
+            for x, y, r, delay, mix in drops:
+                p = _ease((q-delay)/.25)
+                if p <= 0: continue
+                ox, oy = sx+sw*.93, sy+sh*.5
+                px, py = ox+(x-ox)*p, oy+(y-oy)*p+260*u*max(0, q-delay-.25)**2
+                color = tuple(int(c) for c in DEEP*(1-mix)+AQUA*mix)
+                d.ellipse((px-r, py-r, px+r, py+r), fill=color)
+            out = np.asarray(canvas).astype(np.float32)
+        # "Cascade", brushed on in white
+        if t > .7:
+            reveal = _ease((t-.7)/.75, 2)
+            edge = reveal*(ww+60)-30
+            cols = np.clip((edge-np.arange(ww))/30+.5, 0, 1)[None, :]
+            region = out[wy:wy+wh, wx:wx+ww]
+            sa = (shadow*cols*.55)[..., None]
+            region[:] = region*(1-sa)
+            a = (word*cols)[..., None]
+            region[:] = region*(1-a)+np.array(look.WHITE, np.float32)*a
+        frame = np.clip(out, 0, 255).astype(np.uint8)
+        if t > 1.1:
+            look.paste(frame, caption, W/2, sy-26*u, alpha=_ease((t-1.1)/.4)*.85)
+        if t > DURATION-.3:
+            frame = (frame*(1-(t-(DURATION-.3))/.3)).astype(np.uint8)
+        yield frame

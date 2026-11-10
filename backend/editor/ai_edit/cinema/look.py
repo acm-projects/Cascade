@@ -14,6 +14,18 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 FONTS = Path(__file__).parent/'fonts'
 W, H, FPS = 1080, 1920, 30
 
+
+def configure(width, height):
+    """Set the output frame size for this render (original aspect or a reel)."""
+    global W, H
+    W, H = int(width)//2*2, int(height)//2*2
+    vignette.cache_clear(); grain_bank.cache_clear()
+
+
+def unit():
+    """Type scale: 1 at 1080 px on the short side."""
+    return min(W, H)/1080
+
 TONES = {
     'water': (72, 198, 255),
     'life': (88, 227, 140),
@@ -57,6 +69,8 @@ def font(name, size, weight=None):
 
 
 SANS = lambda size, weight=650: font('Inter.ttf', size, weight)
+TIGHT = lambda size, weight=850: font('InterTight.ttf', int(size), weight)   # the caption face: heavy, tight, clean
+BRUSH = lambda size: font('KaushanScript-Regular.ttf', int(size))
 SERIF = lambda size: font('InstrumentSerif-Regular.ttf', size)
 ITALIC = lambda size: font('InstrumentSerif-Italic.ttf', size)
 HEAVY = lambda size: font('Anton-Regular.ttf', size)
@@ -123,11 +137,30 @@ def text_sprite(text, f, fill=WHITE, stroke=0, stroke_fill=None, shadow=.55, glo
     return Sprite(np.asarray(out), pad=pad, ascent=ascent, width=width)
 
 
-def fit_heavy(text, max_w, max_size=520, min_size=120):
-    """The largest heavy-font size that fits `max_w` pixels."""
+def chip(text, f, fill, color=None):
+    """A keyword set on a tight coloured block (TEXT INSPO / the owner's reference), crisp, no tilt."""
+    light = sum(fill)/3 > 170
+    ink = color or ((12, 14, 16) if light else WHITE)
+    word = text_sprite(text, f, fill=ink, shadow=0, tracking=-int(f.size*.02))
+    pad_x, pad_y = int(f.size*.16), int(f.size*.06)
+    ascent, descent = f.getmetrics()
+    w, h = int(word.width)+pad_x*2, ascent+descent//2+pad_y*2
+    total_w, total_h = w+word.pad*2, h+word.pad*2
+    img = Image.new('RGBA', (total_w, total_h), (0, 0, 0, 0))
+    shade = Image.new('RGBA', (total_w, total_h), (0, 0, 0, 0))
+    ImageDraw.Draw(shade).rounded_rectangle((word.pad, word.pad+4, word.pad+w, word.pad+h+4), int(f.size*.08), fill=(0, 0, 0, 120))
+    img = Image.alpha_composite(img, shade.filter(ImageFilter.GaussianBlur(8)))
+    ImageDraw.Draw(img).rounded_rectangle((word.pad, word.pad, word.pad+w, word.pad+h), int(f.size*.08), fill=tuple(fill)+(255,))
+    layer = Image.fromarray(word.rgba)
+    img.alpha_composite(layer, (word.pad+pad_x-word.pad, word.pad+pad_y-word.pad+int(f.size*.02)))
+    return Sprite(np.asarray(img), pad=word.pad, ascent=pad_y+ascent, width=w)
+
+
+def fit_heavy(text, max_w, max_size=520, min_size=60):
+    """The largest heavy caption-face size that fits `max_w` pixels."""
     size = max_size
-    while size > min_size and HEAVY(size).getlength(text) > max_w: size -= 12
-    return HEAVY(size)
+    while size > min_size and TIGHT(size, 900).getlength(text)*.97 > max_w: size -= 8
+    return TIGHT(size, 900)
 
 
 def paste(frame, sprite, x, y, alpha=1., scale=1.):
@@ -162,6 +195,7 @@ GRADES = {
 }
 
 
+@lru_cache(2)
 def vignette(strength=.38):
     y, x = np.mgrid[0:H, 0:W].astype(np.float32)
     r = np.sqrt(((x-W/2)/(W*.62))**2+((y-H/2)/(H*.6))**2)

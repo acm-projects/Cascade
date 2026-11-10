@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from backend.editor.ai_edit.cinema import plan as plans, score, speech, stamp
+from backend.editor.ai_edit.cinema import look, plan as plans, render, score, speech, stamp
 
 
 def words(text, step=.4, start=0.):
@@ -15,6 +15,11 @@ class Dialogue(unittest.TestCase):
         w = words('So um the the river is, you know, dying. I mean, it is uh gone.')
         found = {w[i]['w'] for i in speech.fillers(w)}
         self.assertEqual(found, {'um', 'the', 'you', 'know,', 'I', 'mean,', 'uh'})
+
+    def test_false_starts_go_but_repetition_on_purpose_stays(self):
+        w = words('But whenever you see, whenever I have seen a jaguar it is peaceful. Tongue out, big teeth out. See that deer, you can eat that deer.')
+        cut = {w[i]['w'] for i in speech.restarts(w)}
+        self.assertEqual(cut, {'whenever', 'you', 'see,'})
 
     def test_cut_squeezes_pauses_and_never_overlaps(self):
         w = words('The forest is burning', .4)+words('right now today', .4, start=6.)
@@ -58,11 +63,20 @@ class Sound(unittest.TestCase):
         self.assertLess(quiet, 1e-6)
         self.assertGreater(np.abs(music[int(14*score.SR):int(15*score.SR)]).max(), 1e-3)
 
-    def test_stamp_is_short_and_full_size(self):
-        frames = list(stamp.frames(np.zeros((1920, 1080, 3), np.uint8)))
+    def test_stamp_is_short_full_size_and_has_no_music(self):
+        look.configure(1920, 1080)
+        frames = list(stamp.frames(np.zeros((1080, 1920, 3), np.uint8)))
         self.assertEqual(len(frames), int(stamp.DURATION*30))
-        self.assertEqual(frames[40].shape, (1920, 1080, 3))
-        self.assertGreater(frames[50].mean(), frames[0].mean())   # the word is written by then
+        self.assertEqual(frames[40].shape, (1080, 1920, 3))
+        self.assertGreater(frames[50].mean(), frames[0].mean())   # the stroke and the word are painted by then
+        sound = score.stamp_audio()
+        tail = sound[int(1.9*score.SR):]
+        self.assertLess(np.abs(tail).max(), np.abs(sound).max()*.2)   # only the splash and its drops, nothing sustained
+
+    def test_original_shape_by_default_and_reel_on_request(self):
+        self.assertEqual(render.size_for(1282, 694), (1920, 1080))
+        self.assertEqual(render.size_for(1282, 694, '9:16'), (1080, 1920))
+        self.assertEqual(render.size_for(1080, 1920), (1080, 1920))
 
 
 if __name__ == '__main__':

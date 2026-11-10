@@ -251,19 +251,19 @@ def sound_design(total, events):
     return fx[:int(total*SR)]
 
 
-def stamp_audio(d=2.7):
-    """The Cascade sting: a drop falls, splashes, a soft major chord blooms."""
+def stamp_audio(d=2.5):
+    """The Cascade stamp's sound: no music, only water. A wet brush sweeps, then a splash and its drops."""
     N = int(d*SR)
     x = np.zeros((N, 2))
-    _add(x, .05, _level(_st(_drop(1500)), -30))
-    _add(x, .42, _level(_st(_drop(1100)), -26))
-    _add(x, .48, _level(np.stack([_splash(6), _splash(7)], 1), -26))
-    _add(x, .48, _level(_st(_thump(73.4, 1.2, .3)), -28))
-    bloom = _reverb(_pad(CHORDS['D'][1:], 2.1, 3, 2200), 3, .5, 4)
-    _add(x, .55, _level(bloom, -27))
-    for j, n in enumerate([74, 78, 81, 86]):
-        _add(x, .7+j*.11, _level(_st(_piano(n2f(n), 1.9, .5, j), (j-1.5)*.3), -33))
-    return _reverb(x, 2.2, .25, 8)*np.minimum(1, (N-np.arange(N))/(.4*SR))[:, None]
+    rng = np.random.default_rng(21)
+    n = int(.62*SR)
+    sweep = sosfilt(_bp(500, 3800), rng.standard_normal(n))*np.sin(np.linspace(0, np.pi, n))**1.4
+    _add(x, .2, _level(np.stack([sweep*(1-np.linspace(0, 1, n)*.6), sweep*(.4+np.linspace(0, 1, n)*.6)], 1), -32))
+    _add(x, .78, _level(np.stack([_splash(6, 1.2), _splash(7, 1.2)], 1), -24))
+    _add(x, .8, _level(_st(_thump(98, .4, .3)), -34))
+    for j in range(5):
+        _add(x, .95+j*.13+rng.uniform(0, .05), _level(_st(_drop(rng.uniform(1100, 2200)), rng.uniform(-.6, .6)), -36))
+    return _reverb(x, 1.4, .18, 8)*np.minimum(1, (N-np.arange(N))/(.3*SR))[:, None]
 
 
 def measure(path, ffmpeg='ffmpeg'):

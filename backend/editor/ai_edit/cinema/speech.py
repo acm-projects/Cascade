@@ -15,11 +15,11 @@ from dataclasses import dataclass, field
 import numpy as np
 
 FILLER_WORDS = {'um', 'umm', 'uh', 'uhh', 'uhm', 'erm', 'er', 'ah', 'ahh', 'hmm', 'hm', 'mm', 'mhm', 'mmm', 'eh', 'uh-huh'}
-MAX_PAUSE = .24       # a pause longer than this inside a kept line is squeezed
-BREATH = .07          # what is left either side of a squeezed pause
+MAX_PAUSE = .16       # a pause longer than this inside a kept line is squeezed
+BREATH = .05          # what is left either side of a squeezed pause
 PART_BREATH = .06     # extra room between two parts of the story
 LEAD_IN = .09         # room kept before the first sound of a word
-TAIL = .20            # how far an ending may run past the transcript's end time
+TAIL = .18            # how far an ending may run past the transcript's end time
 FADE = .012           # crossfade at every join
 
 
@@ -46,6 +46,27 @@ def fillers(words):
     return out
 
 
+def restarts(words):
+    """Word indices of false starts: a clause abandoned and started again right away ("whenever you see,
+    whenever I've seen", "It's always, it's peaceful"). Only the abandoned part (at most four words, ending
+    on a comma, starting a clause) is cut; repetition used on purpose ("see that deer, you can eat that deer",
+    "tongue out, big teeth out") is left alone."""
+    out = set()
+    n = len(words)
+    joins = {'but', 'and', 'so', 'or', 'because', 'then'}
+    for i in range(n):
+        p = plain(words[i]['w'])
+        if len(p) < 2 or p in FILLER_WORDS: continue
+        prev = words[i-1]['w'].rstrip() if i else '.'
+        if not (prev.endswith((',', '.', '?', '!')) or plain(prev) in joins): continue
+        for j in range(i+1, min(n, i+5)):
+            if words[j-1]['w'].rstrip().endswith(('.', '?', '!')): break
+            if plain(words[j]['w']) == p and words[j-1]['w'].rstrip().endswith(','):
+                if words[j]['s']-words[i]['s'] < 3: out.update(range(i, j))
+                break
+    return out
+
+
 @dataclass
 class Piece:
     a: float        # source seconds
@@ -65,6 +86,7 @@ class Edit:
     total: float
     word_out: dict = field(default_factory=dict)   # word index -> (start, end) in the edit
     order: list = field(default_factory=list)       # kept word indices in play order
+    timeline: list = field(default_factory=list)    # (word index, start, end) for every word as it plays (a hook plays twice)
 
     def to_out(self, src):
         """Edit time of a source second (None when that moment was cut)."""
@@ -124,7 +146,9 @@ def cut(words, ranges, drop, db, fps=100, duration=None):
     for p in pieces:
         for i in p.words:
             w = words[i]
-            edit.word_out[i] = (round(p.out+max(0, w['s']-p.a), 3), round(p.out+min(p.b, w['e'])-p.a, 3))
+            span = (round(p.out+max(0, w['s']-p.a), 3), round(p.out+min(p.b, w['e'])-p.a, 3))
+            edit.word_out[i] = span
+            edit.timeline.append((i, *span))
     return edit
 
 

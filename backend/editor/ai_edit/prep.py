@@ -93,7 +93,7 @@ def _transcribe(mono, x, db, folder):
             w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
             w.writeframes((np.clip(x[a*160:b*160], -1, 1)*32767).astype('<i2').tobytes())
         files.append(path)
-    command = [binary, '-m', model, '-l', 'en', '-ml', '1', '-sow', '-ojf', '-np']
+    command = [binary, '-m', model, '-l', 'en', '-ml', '1', '-sow', '-ojf', '-np', '--prompt', 'Um, uh, so, like, you know, I mean.']  # the prompt keeps ums in the transcript so they can be cut
     for path in files: command += ['-f', str(path)]
     subprocess.run(command, timeout=3600, **RUN)
     words = []

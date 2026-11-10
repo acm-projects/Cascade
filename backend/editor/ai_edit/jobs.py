@@ -198,8 +198,10 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
             out = folder/name; out.mkdir(parents=True, exist_ok=True)
             _write(out/'plan.json', plan.model_dump())
             local = [tools.folder()/'B-roll', tools.folder()/'Raw Footage']
+            composition = getattr(state, 'composition', None)
+            ratio = getattr(composition, 'ratio', 'original') or 'original'   # the clip's own shape unless the user picked one (Reel = 9:16)
             report = engine.make(source, prep['words'], plan, out/'edited.mp4.part.mp4', prep['cuts'], broll.resolver(stock, local),
-                                 lambda a, s: progress(.36+a*.6, s), tools.ffmpeg())
+                                 lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio)
             (out/'edited.mp4.part.mp4').replace(out/'edited.mp4')
             duration = preparation.probe(out/'edited.mp4')['duration']
             report.update(directed=directed)

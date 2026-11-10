@@ -13,15 +13,16 @@ def _words(text):
 
 
 def from_folder(query, folder, used):
-    """Best file in `folder` whose name shares the most words with the query."""
+    """Best file in `folder` whose name shares the most words with the query; an unused one wins a tie,
+    and a used one is taken again only when nothing else matches."""
     folder = Path(folder)
     if not folder.is_dir(): return None
     want = _words(query)-{'cinematic', 'footage', 'shot', 'close', 'aerial', 'view', 'slow', 'motion'}
     best, score = None, 0
     for f in sorted(folder.iterdir()):
-        if f.suffix.lower() not in VIDEO or str(f) in used: continue
-        s = len(want & _words(f.stem))
-        if s > score: best, score = f, s
+        if f.suffix.lower() not in VIDEO: continue
+        s = len(want & _words(f.stem))-(.5 if str(f) in used else 0)
+        if s > score and s >= .9: best, score = f, s
     if best: used.add(str(best))
     return str(best) if best else None
 

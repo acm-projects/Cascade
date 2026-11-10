@@ -1,6 +1,8 @@
 """The picture: every shot decoded and graded by FFmpeg, then composed frame by frame in NumPy:
-words that appear as they are spoken, giant words behind the speaker, b-roll that arrives on the
-word, the silence moment, and the Cascade stamp. Encoded once at the end."""
+captions that build as they are spoken and never vanish mid-thought, giant words behind the speaker,
+full-screen b-roll that arrives on the word, the quiet payoff, the closing message and the stamp.
+
+Frames keep the clip's own shape ("original", the default) unless the edit asks for a reel (9:16)."""
 import logging
 import math
 import subprocess
@@ -9,30 +11,42 @@ from pathlib import Path
 
 import numpy as np
 
-from . import look, stamp
-from .look import FPS, H, W
+from . import look
 
 LOG = logging.getLogger(__name__)
+FPS = look.FPS
 OPENER = 1.25          # seconds of opener before the first word plays
 VOICE_AT = 1.05        # where the first word lands when there is an opener
-PUNCH = (1.0, 1.13)    # zoom steps that hide a jump cut
+PUNCH = (1.0, 1.12)    # zoom steps that hide a jump cut
+
+
+def size_for(source_w, source_h, ratio='original'):
+    """Output frame size: the clip's own shape at 1080 lines, or a reel."""
+    if ratio in ('9:16', 'reel'): return 1080, 1920
+    if ratio == '1:1': return 1080, 1080
+    if ratio == '4:5': return 1080, 1350
+    if ratio == '16:9': return 1920, 1080
+    if ratio == '4:3': return 1440, 1080
+    aspect = source_w/source_h
+    if abs(aspect-16/9) < .09: return 1920, 1080
+    if aspect >= 1: return int(round(1080*aspect/2))*2, 1080
+    return 1080, int(round(1080/aspect/2))*2
 
 
 @dataclass
 class Shot:
     t0: float
     t1: float
-    kind: str                 # aroll | broll
+    kind: str                 # aroll | broll | still
     path: str
     src: float                # source second at t0
     rate: float = 1.0         # source seconds per edit second
     cx: float = .5
-    cy: float = .42
     zoom0: float = 1.
     zoom1: float = 1.03
     grade: str = 'cinema'
-    look: str = 'full'        # full | card | band | mono
-    face: tuple | None = None  # (x, y) of the face in the vertical frame
+    look: str = 'full'        # full | mono
+    face: tuple | None = None  # (x, y) of the face in output pixels
     tone: str = 'calm'
 
 
@@ -40,7 +54,7 @@ class Shot:
 class Overlay:
     t0: float
     t1: float
-    kind: str                 # caption | behind | outline | glow | slam | serif | flash
+    kind: str                 # behind | outline | glow | slam | quote | message | flash | title
     data: dict = field(default_factory=dict)
 
 
@@ -78,7 +92,7 @@ def grab(path, at, width=640, ffmpeg='ffmpeg'):
 
 
 def find_face(path, at, ffmpeg='ffmpeg'):
-    """(cx, cy) of the biggest face as fractions of the source frame, or None."""
+    """(cx, cy, width) of the biggest face as fractions of the source frame, or None."""
     try:
         frame = grab(path, at, 640, ffmpeg)
         if frame is None: return None
@@ -93,32 +107,36 @@ def find_face(path, at, ffmpeg='ffmpeg'):
         return None
 
 
-def _crop_box(sw, sh, cx, cy=.5):
-    """The 9:16 window (x, y, w, h) inside a source frame, centred on cx."""
-    if sw/sh > 9/16:
-        ch = sh//2*2; cw = int(ch*9/16)//2*2
+def crop_box(sw, sh, cx, target):
+    """The window (x, y, w, h) of aspect `target` inside a source frame, centred on cx."""
+    if sw/sh > target:
+        ch = sh//2*2; cw = int(ch*target)//2*2
     else:
-        cw = sw//2*2; ch = int(cw*16/9)//2*2
+        cw = sw//2*2; ch = int(cw/target)//2*2
     x = int(min(max(0, sw*cx-cw/2), sw-cw))
-    y = int(min(max(0, sh*cy-ch/2), sh-ch))
+    y = int(max(0, (sh-ch)*.4))
     return x, y, cw, ch
 
 
+def face_in_output(face, sw, sh):
+    """Where a source face lands in the output frame, after the crop."""
+    if not face: return None
+    x, y, cw, ch = crop_box(sw, sh, face[0], look.W/look.H)
+    return ((face[0]*sw-x)/cw*look.W, (face[1]*sh-y)/ch*look.H)
+
+
 class Reader:
-    """Frames of one shot, graded and framed to 1080x1920 (or the card/band size)."""
+    """Frames of one shot, graded and framed to the output size."""
     def __init__(self, shot, ffmpeg='ffmpeg'):
         info = probe(shot.path)
         sw, sh = info['width'], info['height']
         length = (shot.t1-shot.t0)*shot.rate+.2
         grade = look.GRADES['mono' if shot.look == 'mono' else shot.grade]
         speed = f'setpts=PTS/{shot.rate:.4f},' if abs(shot.rate-1) > .01 else ''
-        if shot.look in ('card', 'band'):
-            self.size = (940, 705) if shot.look == 'card' else (W, int(W*sh/sw)//2*2)
-            vf = f"{speed}fps={FPS},scale={self.size[0]}:{self.size[1]}:force_original_aspect_ratio=increase:flags=lanczos,crop={self.size[0]}:{self.size[1]},{grade}"
-        else:
-            x, y, cw, ch = _crop_box(sw, sh, shot.cx)
-            self.size = (W, H)
-            vf = f"{speed}fps={FPS},crop={cw}:{ch}:{x}:{y},scale={W}:{H}:flags=lanczos,unsharp=5:5:0.55,{grade}"
+        x, y, cw, ch = crop_box(sw, sh, shot.cx, look.W/look.H)
+        self.size = (look.W, look.H)
+        sharpen = 'unsharp=5:5:0.5,' if cw < look.W*.8 else ''
+        vf = f"{speed}fps={FPS},crop={cw}:{ch}:{x}:{y},scale={look.W}:{look.H}:flags=lanczos,{sharpen}{grade}"
         cmd = [ffmpeg, '-nostdin', '-v', 'error', '-ss', f'{max(0, shot.src):.3f}', '-t', f'{length:.3f}', '-i', str(shot.path),
                '-vf', vf, '-an', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -139,92 +157,107 @@ class Reader:
             pass
 
 
-def _zoom(frame, z, cx=W/2, cy=H*.42):
+def _zoom(frame, z, cx=None, cy=None):
     if abs(z-1) < .002: return frame
     import cv2
+    h, w = frame.shape[:2]
+    cx = w/2 if cx is None else cx
+    cy = h*.42 if cy is None else cy
     m = np.array([[z, 0, (1-z)*cx], [0, z, (1-z)*cy]], np.float32)
-    return cv2.warpAffine(frame, m, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+    return cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
 
 
 def _blur(frame, k=61):
     import cv2
-    small = cv2.resize(frame, (W//6, H//6), interpolation=cv2.INTER_AREA)
+    h, w = frame.shape[:2]
+    small = cv2.resize(frame, (max(8, w//6), max(8, h//6)), interpolation=cv2.INTER_AREA)
     small = cv2.GaussianBlur(small, (0, 0), k/12)
-    return cv2.resize(small, (W, H), interpolation=cv2.INTER_LINEAR)
+    return cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
 
 
-_CARD_MASK = {}
-
-
-def _card_mask(w, h, r=38):
-    key = (w, h, r)
-    if key not in _CARD_MASK:
-        from PIL import Image, ImageDraw, ImageFilter
-        m = Image.new('L', (w, h), 0)
-        ImageDraw.Draw(m).rounded_rectangle((0, 0, w-1, h-1), r, fill=255)
-        _CARD_MASK[key] = np.asarray(m.filter(ImageFilter.GaussianBlur(1.2))).astype(np.float32)[..., None]/255.
-    return _CARD_MASK[key]
+def _ease(x):
+    x = min(1, max(0, x))
+    return 1-(1-x)**3
 
 
 # ---------------------------------------------------------------- captions
 
 class Captions:
-    """Phrases of up to three words, low-centre, each word arriving as it is spoken: a blur that settles
-    upward. The keyword of a phrase is set in italic serif, larger, in the colour of what it means."""
-    Y = 1400
+    """The owner's reference (Entrepreneurs House): a block of heavy, tight words beside the speaker in
+    the empty side of the frame, building word by word as it is spoken, one keyword set on a coloured
+    chip. A block stays up until the next one replaces it, so the text never blinks on and off
+    between words or pauses."""
 
-    def __init__(self, words, edit, offset, keywords, hidden):
+    def __init__(self, words, edit, offset, keywords, placement):
+        self.offset, self.placement = offset, placement
+        u = look.unit()
+        self.size = (82 if look.W > look.H else 78)*u
+        line = edit.timeline     # (word, start, end) as played
+        self.at = [a+offset for _, a, _ in line]
         self.items = []
-        order = edit.order
-        phrase = []
+        block = []
         def close():
-            if phrase: self.items.append(list(phrase)); phrase.clear()
-        for n, i in enumerate(order):
-            if i in hidden: close(); continue
-            w = words[i]
-            phrase.append(i)
-            text = w['w']
-            nxt = order[n+1] if n+1 < len(order) else None
-            gap = (edit.word_out[nxt][0]-edit.word_out[i][1]) if nxt is not None else 9
-            if len(phrase) >= 3 or text.endswith(('.', '?', '!', ',')) or gap > .3 or sum(len(words[j]['w']) for j in phrase) > 16: close()
+            if block: self.items.append(list(block)); block.clear()
+        for n, (i, a, b) in enumerate(line):
+            block.append(n)
+            text = words[i]['w']
+            gap = (line[n+1][1]-b) if n+1 < len(line) else 9
+            if text.rstrip().endswith(('.', '?', '!')) or len(block) >= 7 or (text.endswith(',') and len(block) >= 3) or gap > .7 or gap < -.01: close()
         close()
         self.sprites = {}
-        for group in self.items:
-            for i in group:
-                raw = words[i]['w'].strip()
-                clean = raw.strip('.,!?;:"“”').replace('…', '')
-                if not clean: clean = raw
-                if i in keywords:
-                    sp = look.text_sprite(clean, look.ITALIC(124), fill=look.TONES[keywords[i]], shadow=.6, glow=look.TONES[keywords[i]])
-                else:
-                    sp = look.text_sprite(clean, look.SANS(76, 720), fill=look.WHITE, shadow=.7)
-                sp = sp.baseline()
-                self.sprites[i] = (sp, sp.blurred(5), sp.blurred(2.2))
-        self.edit, self.offset = edit, offset
+        f = look.TIGHT(self.size, 860)
+        fk = look.TIGHT(self.size*1.12, 900)
+        for n, (i, _, _) in enumerate(line):
+            raw = words[i]['w'].strip()
+            clean = raw.strip('.,!?;:"“”').replace('…', '') or raw
+            sp = look.chip(clean, fk, look.TONES[keywords[i]]) if i in keywords else \
+                look.text_sprite(clean, f, fill=look.WHITE, shadow=.75, tracking=-int(self.size*.025))
+            self.sprites[n] = sp.baseline()
         self.spans = []
         for k, group in enumerate(self.items):
-            t0 = edit.word_out[group[0]][0]+offset-.04
+            t0 = self.at[group[0]]-.06
             nxt = self.items[k+1] if k+1 < len(self.items) else None
-            t1 = min(edit.word_out[group[-1]][1]+offset+.45, (edit.word_out[nxt[0]][0]+offset-.04) if nxt else 9e9)
+            end = line[group[-1]][2]+offset
+            t1 = (self.at[nxt[0]]-.06) if nxt else end+.9
+            if t1-end > 1.6: t1 = end+1.2   # a long silence after: let it go, rather than hang
             self.spans.append((t0, t1))
+        self._layouts = {}
+
+    def _layout(self, k, t):
+        """Lines of (word, x, baseline y) for block k, laid out once in the side of the frame the speaker leaves free."""
+        if k in self._layouts: return self._layouts[k]
+        group = self.items[k]
+        align, x0, y_mid, max_w = self.placement(self.spans[k][0])
+        space = self.size*.24
+        lines, line, width = [], [], 0
+        for i in group:
+            w = self.sprites[i].width
+            if line and width+space+w > max_w:
+                lines.append((line, width)); line, width = [], 0
+            width = width+(space if line else 0)+w
+            line.append(i)
+        if line: lines.append((line, width))
+        lead = self.size*1.02
+        top = y_mid-(len(lines)-1)*lead/2
+        out = []
+        for n, (line, width) in enumerate(lines):
+            x = x0 if align == 'left' else x0-width if align == 'right' else x0-width/2
+            for i in line:
+                out.append((i, x, top+n*lead))
+                x += self.sprites[i].width+space
+        self._layouts[k] = out
+        return out
 
     def draw(self, frame, t, mute):
-        for (t0, t1), group in zip(self.spans, self.items):
+        if any(a <= t < b for a, b in mute): return
+        for k, ((t0, t1), group) in enumerate(zip(self.spans, self.items)):
             if not t0 <= t < t1: continue
-            if any(a <= t < b for a, b in mute): return
-            space = 24
-            widths = [self.sprites[i][0].width for i in group]
-            total = sum(widths)+space*(len(group)-1)
-            x = W/2-total/2
-            out = 1-min(1, max(0, (t-(t1-.08))/.08))
-            for i, w in zip(group, widths):
-                start = self.edit.word_out[i][0]+self.offset-.05
-                if t >= start:
-                    k = min(1, (t-start)/.14)
-                    sharp, soft, mid = self.sprites[i]
-                    sprite = soft if k < .35 else mid if k < .75 else sharp
-                    look.paste(frame, sprite, x, self.Y+(1-k)**2*26, alpha=min(1, k*1.4)*out)
-                x += w+space
+            leave = 1-_ease((t-(t1-.07))/.07) if t > t1-.07 else 1
+            for i, x, y in self._layout(k, t):
+                start = self.at[i]-.06
+                if t < start: continue
+                p = _ease((t-start)/.12)
+                look.paste(frame, self.sprites[i], x, y+(1-p)*self.size*.22, alpha=p*leave)
 
 
 # ---------------------------------------------------------------- the composer
@@ -236,76 +269,45 @@ class Composer:
         self.total, self.matter, self.ffmpeg = total, matter, ffmpeg
         self.progress = progress or (lambda a, s: None)
         self.sprites = {}
+        self.last = None
 
     def _sprite(self, key, make):
         if key not in self.sprites: self.sprites[key] = make()
         return self.sprites[key]
 
-    def _base(self, shot, reader, t, under):
+    def _base(self, shot, reader, t):
         frame = reader.next()
         k = (t-shot.t0)/max(.01, shot.t1-shot.t0)
-        if shot.look == 'card':
-            bg = _blur(under if under is not None else np.zeros((H, W, 3), np.uint8))
-            bg = (bg*.45).astype(np.uint8)
-            h, w = frame.shape[:2]
-            z = 1+.04*k
-            import cv2
-            card = cv2.resize(frame, (int(w*z), int(h*z)))[int(h*(z-1)/2):int(h*(z-1)/2)+h, int(w*(z-1)/2):int(w*(z-1)/2)+w]
-            y0, x0 = int(H*.36-h/2), (W-w)//2
-            m = _card_mask(w, h)
-            key = ('shadow', w, h, y0, x0)
-            if key not in self.sprites:
-                self.sprites[key] = _blur(np.pad(np.full((h, w, 1), 255, np.uint8), ((y0, H-y0-h), (x0, W-x0-w), (0, 0))).repeat(3, 2), 41).astype(np.float32)/255.*.6
-            bg = (bg*(1-self.sprites[key])).astype(np.uint8)
-            region = bg[y0:y0+h, x0:x0+w]
-            region[:] = (region*(1-m)+card*m).astype(np.uint8)
-            return bg
-        if shot.look == 'band':
-            h = frame.shape[0]
-            import cv2
-            bg = _blur(cv2.resize(frame, (W, H)))
-            bg = (bg*.35).astype(np.uint8)
-            y0 = int(H*.4-h/2)
-            bg[y0:y0+h] = frame
-            return bg
         z = shot.zoom0+(shot.zoom1-shot.zoom0)*k
-        cy = shot.face[1] if shot.face else H*.42
-        return _zoom(frame, z, W/2, cy)
+        if shot.face: return _zoom(frame, z, shot.face[0], shot.face[1])
+        return _zoom(frame, z)
 
     def frames(self):
-        """Yield every frame of the edit (without the stamp)."""
         n_total = int(round(self.total*FPS))
-        shot_i, reader, previous = -1, None, None
-        last_under = None
-        mattes = {}
         try:
             first = int(round(self.start*FPS))
-            # open whatever shot covers the first frame (or the first shot, if a gap comes first)
             shot_i = max(0, max((k for k, s in enumerate(self.shots) if s.t0 <= first/FPS+1e-6), default=0))
             reader = Reader(self.shots[shot_i], self.ffmpeg)
             for n in range(first, n_total):
                 t = n/FPS
                 while shot_i+1 < len(self.shots) and self.shots[shot_i+1].t0 <= t+1e-6:
                     shot_i += 1
-                    if reader: reader.close()
+                    reader.close()
                     reader = Reader(self.shots[shot_i], self.ffmpeg)
                     if self.matter: self.matter.reset()
-                shot = self.shots[max(0, shot_i)]
-                frame = self._base(shot, reader, t, last_under)
-                if shot.kind == 'aroll' and shot.look == 'full': last_under = frame
+                shot = self.shots[shot_i]
+                frame = self._base(shot, reader, t)
                 active = [o for o in self.overlays if o.t0 <= t < o.t1]
                 frame = self._compose(frame, t, active, shot)
-                # entry punch for b-roll: a short zoom settle with motion blur
                 since = t-shot.t0
-                if shot.kind == 'broll' and since < .14 and shot.look == 'full':
-                    k = 1-since/.14
-                    frame = ((_zoom(frame, 1+.08*k).astype(np.uint16)+_zoom(frame, 1+.16*k)+frame)//3).astype(np.uint8)
+                if shot.kind == 'broll' and since < .16:   # b-roll lands with a short zoom settle and motion blur
+                    k = 1-since/.16
+                    frame = ((_zoom(frame, 1+.06*k).astype(np.uint16)+_zoom(frame, 1+.12*k)+frame)//3).astype(np.uint8)
                 if n % 30 == 0: self.progress(n/max(1, n_total), 'Composing the picture…')
-                previous = frame
+                self.last = frame
                 yield frame
         finally:
-            if reader: reader.close()
-        self.last = previous
+            reader.close()
 
     def _matte(self, frame):
         try:
@@ -316,133 +318,138 @@ class Composer:
             return None
 
     def _compose(self, frame, t, active, shot):
-        frame = frame.copy() if not frame.flags.writeable else frame
+        W, H, u = look.W, look.H, look.unit()
         kinds = {o.kind for o in active}
-        need_matte = shot.kind == 'aroll' and shot.look == 'full' and kinds & {'behind', 'outline', 'glow'}
+        need_matte = shot.kind == 'aroll' and kinds & {'behind', 'outline', 'glow'}
         person = self._matte(frame) if need_matte else None
         mute = []
-        # the silence / serif moment: picture falls back, small serif words take the screen
         for o in active:
-            if o.kind == 'serif':
-                k = min(1, (t-o.t0)/.35)
-                gray = frame.mean(2, keepdims=True)
-                frame[:] = np.clip((frame*(1-.85*k)+gray*.85*k)*(1-.55*k), 0, 255).astype(np.uint8)
+            if o.kind in ('quote', 'message'):   # the picture falls back so the words can land
+                k = _ease((t-o.t0)/.4)
+                frame[:] = (frame*(1-.62*k)).astype(np.uint8)
         for o in active:
-            if o.kind in ('behind', 'outline') and person is not None:
+            if o.kind in ('behind', 'outline', 'soft'):
                 text, tone = o.data['text'], o.data['tone']
-                solid = self._sprite(('behind', text, tone), lambda: look.text_sprite(text, look.fit_heavy(text, 1000), fill=look.TONES[tone], shadow=.35))
-                k = min(1, (t-o.t0)/.22)
+                f = look.fit_heavy(text, W*.92, int(min(H*.34, W*.42)))
+                solid = self._sprite(('behind', text, tone, W), lambda: look.text_sprite(text, f, fill=look.TONES[tone], shadow=.35, tracking=-int(f.size*.03)))
+                k = _ease((t-o.t0)/.22)
                 out = min(1, max(0, (o.t1-t)/.2))
-                y = o.data.get('y', H*.33)
-                bg = frame.copy()
-                look.paste(bg, solid, W/2, y, alpha=k*out, scale=1.12-.12*(1-(1-k)**3))
-                a = person[..., None]
-                frame[:] = (bg*(1-a)+frame*a).astype(np.uint8)
-                if o.kind == 'outline':
-                    line = self._sprite(('outline', text, tone), lambda: look.text_sprite(text, look.fit_heavy(text, 1000), fill=look.TONES[tone], stroke=5, shadow=0, outline_only=True))
-                    look.paste(frame, line, W/2, y, alpha=.9*k*out, scale=1.12-.12*(1-(1-k)**3))
+                y = o.data.get('y', H*.3)
+                scale = 1.08-.08*k
+                if person is not None and o.kind != 'soft':
+                    bg = frame.copy()
+                    look.paste(bg, solid, W/2, y, alpha=k*out, scale=scale)
+                    a = person[..., None]
+                    frame[:] = (bg*(1-a)+frame*a).astype(np.uint8)
+                    if o.kind == 'outline':
+                        line = self._sprite(('outline', text, tone, W), lambda: look.text_sprite(text, f, fill=look.TONES[tone], stroke=max(3, int(5*u)), shadow=0, outline_only=True, tracking=-int(f.size*.03)))
+                        look.paste(frame, line, W/2, y, alpha=.9*k*out, scale=scale)
+                else:
+                    look.paste(frame, solid, W/2, H*.2, alpha=.95*k*out, scale=scale)
             elif o.kind == 'glow' and person is not None:
                 import cv2
                 tone = look.TONES[o.data['tone']]
                 k = min(1, (t-o.t0)/.3)*min(1, max(0, (o.t1-t)/.3))
-                rim = np.clip((cv2.GaussianBlur(person, (0, 0), 26)-person)*2.6, 0, 1)[..., None]*k
+                rim = np.clip((cv2.GaussianBlur(person, (0, 0), 26*u)-person)*2.6, 0, 1)[..., None]*k
                 frame[:] = np.clip(frame+rim*np.array(tone, np.float32), 0, 255).astype(np.uint8)
         for o in active:
             if o.kind == 'slam':
                 k = min(1, (t-o.t0)/.08)
                 frame[:] = (frame*(1-.92*k)+np.array(look.INK)*.92*k).astype(np.uint8)
                 text, tone = o.data['text'], o.data['tone']
-                big = self._sprite(('slam', text, tone), lambda: look.text_sprite(text, look.fit_heavy(text, 960, 420), fill=look.TONES[tone], glow=look.TONES[tone], shadow=.4))
-                s = (t-o.t0)
-                scale = 1.08-.08*min(1, s/.3)
+                f = look.fit_heavy(text, W*.86, int(min(H*.3, W*.36)))
+                big = self._sprite(('slam', text, tone, W), lambda: look.text_sprite(text, f, fill=look.TONES[tone], glow=look.TONES[tone], shadow=.4, tracking=-int(f.size*.03)))
+                s = t-o.t0
+                scale = 1.06-.06*_ease(s/.3)
                 if s < .14:
-                    shift = int(18*(1-s/.14))
+                    shift = int(16*u*(1-s/.14))
                     layer = np.zeros_like(frame)
-                    look.paste(layer, big, W/2, H*.46, scale=scale)
+                    look.paste(layer, big, W/2, H*.48, scale=scale)
                     frame[..., 0] = np.maximum(frame[..., 0], np.roll(layer[..., 0], shift, 1))
                     frame[..., 1] = np.maximum(frame[..., 1], layer[..., 1])
                     frame[..., 2] = np.maximum(frame[..., 2], np.roll(layer[..., 2], -shift, 1))
                 else:
-                    look.paste(frame, big, W/2, H*.46, scale=scale)
+                    look.paste(frame, big, W/2, H*.48, scale=scale)
                 mute.append((o.t0, o.t1))
-            elif o.kind == 'serif':
+            elif o.kind in ('quote', 'message'):
                 mute.append((o.t0, o.t1))
-                self._serif(frame, t, o)
+                self._words(frame, t, o)
             elif o.kind == 'flash':
                 k = 1-abs((t-(o.t0+o.t1)/2)/((o.t1-o.t0)/2))
-                frame[:] = np.clip(frame.astype(np.int16)+int(120*max(0, k)), 0, 255).astype(np.uint8)
-            elif o.kind == 'slam_soft':
-                text, tone = o.data['text'], o.data['tone']
-                solid = self._sprite(('behind', text, tone), lambda: look.text_sprite(text, look.fit_heavy(text, 1000), fill=look.TONES[tone], shadow=.5))
-                k = min(1, (t-o.t0)/.22)*min(1, max(0, (o.t1-t)/.2))
-                look.paste(frame, solid, W/2, H*.2, alpha=.95*k, scale=1.08-.08*k)
+                frame[:] = np.clip(frame.astype(np.int16)+int(110*max(0, k)), 0, 255).astype(np.uint8)
             elif o.kind == 'title':
                 text = o.data['text']
-                sp = self._sprite(('title', text), lambda: look.text_sprite(text.upper(), look.SANS(40, 650), fill=(232, 238, 234), tracking=14, shadow=.7))
+                sp = self._sprite(('title', text, W), lambda: look.text_sprite(text.upper(), look.TIGHT(34*u, 700), fill=(236, 240, 236), tracking=int(10*u), shadow=.7))
                 k = min(1, (t-o.t0)/.4)*min(1, max(0, (o.t1-t)/.4))
-                look.paste(frame, sp, W/2, H*.12, alpha=.9*k)
+                look.paste(frame, sp, W/2, H*.08, alpha=.92*k)
         if self.captions: self.captions.draw(frame, t, mute)
         return frame
 
-    def _serif(self, frame, t, o):
-        """Words of the payoff line stacked one under another, centred, each appearing as it is spoken."""
+    def _words(self, frame, t, o):
+        """The payoff (quote) or the closing message: centred, word by word, each word as it is spoken."""
+        W, H, u = look.W, look.H, look.unit()
         items = o.data['words']   # [(text, at, tone)]
-        size = 92 if len(items) <= 6 else 78
-        lines, line = [], []
+        size = (78 if o.kind == 'quote' else 84)*u
+        f = look.TIGHT(size, 820)
+        space = size*.26
+        max_w = W*(.8 if W > H else .86)
+        sprites = []
         for text, at, tone in items:
-            line.append((text, at, tone))
-            if len(line) >= (2 if len(items) > 6 else 1) or text.endswith((',', '.')): lines.append(line); line = []
-        if line: lines.append(line)
-        lines = lines[-6:]
-        y = H*.5-(len(lines)-1)*size*.62
-        for row in lines:
-            pieces = []
-            for text, at, tone in row:
-                clean = text.strip('.,!?')
-                f = look.ITALIC(size) if tone else look.SERIF(size)
-                pieces.append((self._sprite(('serif', clean, tone, size), lambda: look.text_sprite(clean, f, fill=look.TONES[tone] if tone else look.WHITE, shadow=.5, glow=look.TONES[tone] if tone else None).baseline()), at))
-            total = sum(p.width for p, _ in pieces)+24*(len(pieces)-1)
-            x = W/2-total/2
-            for sprite, at in pieces:
+            clean = text.strip(',') if o.kind == 'message' else text.strip('.,!?')
+            key = ('words', clean, tone, int(size))
+            sprites.append((self._sprite(key, lambda: (look.chip(clean, look.TIGHT(size*1.04, 880), look.TONES[tone]) if tone
+                                                       else look.text_sprite(clean, f, fill=look.WHITE, shadow=.6, tracking=-int(size*.02))).baseline()), at))
+        lines, line, width = [], [], 0
+        for (sp, at), (text, _, _) in zip(sprites, items):
+            if line and width+space+sp.width > max_w: lines.append((line, width)); line, width = [], 0
+            width = width+(space if line else 0)+sp.width; line.append((sp, at))
+            if o.kind == 'message' and text.endswith(('.', '!', '?')): lines.append((line, width)); line, width = [], 0
+        if line: lines.append((line, width))
+        y = H*.5-(len(lines)-1)*size*.6
+        fade = min(1, max(0, (o.t1-t)/.25))
+        for line, width in lines:
+            x = W/2-width/2
+            for sp, at in line:
                 if t >= at-.06:
-                    k = min(1, (t-at+.06)/.3)
-                    look.paste(frame, sprite.blurred(4*(1-k)) if k < .6 else sprite, x, y+(1-k)*14, alpha=k)
-                x += sprite.width+24
-            y += size*1.24
+                    k = _ease((t-at+.06)/.25)
+                    look.paste(frame, sp, x, y+(1-k)*size*.25, alpha=k*fade)
+                x += sp.width+space
+            y += size*1.2
 
 
 def opener_frames(word, footage, duration=OPENER, ffmpeg='ffmpeg'):
     """TEXT INSPO's text-as-mask opener: the word filled with footage on black, then we fly through it."""
-    from PIL import Image
     import cv2
+    W, H = look.W, look.H
     shot = Shot(0, duration, 'broll', footage, 0, look='full', grade='forest')
     info = probe(footage)
     shot.src = max(0, min(info['duration']-duration-.2, info['duration']*.3))
     reader = Reader(shot, ffmpeg)
-    sprite = look.text_sprite(word, look.fit_heavy(word, 980, 460), fill=(255, 255, 255), shadow=0)
+    f = look.fit_heavy(word, W*.9, int(min(H*.42, W*.4)))
+    sprite = look.text_sprite(word, f, fill=(255, 255, 255), shadow=0, tracking=-int(f.size*.03))
     alpha = sprite.rgba[..., 3]
     mask = np.zeros((H, W), np.uint8)
-    y0, x0 = int(H*.46-sprite.h/2), int(W/2-sprite.w/2)
+    y0, x0 = int(H*.48-sprite.h/2), int(W/2-sprite.w/2)
     ys, xs = max(0, y0), max(0, x0)
-    mask[ys:ys+sprite.h-(ys-y0), xs:xs+sprite.w-(xs-x0)] = alpha[ys-y0:, xs-x0:][:H-ys, :W-xs]
+    part = alpha[ys-y0:, xs-x0:][:H-ys, :W-xs]
+    mask[ys:ys+part.shape[0], xs:xs+part.shape[1]] = part
     try:
         for n in range(int(duration*FPS)):
             t = n/FPS
             frame = reader.next()
-            if t < .62: z = 1+.05*t
-            else: z = 1.03*math.exp((t-.62)*4.6)
-            m = cv2.warpAffine(mask, np.array([[z, 0, (1-z)*W/2], [0, z, (1-z)*H*.46]], np.float32), (W, H)).astype(np.float32)[..., None]/255.
+            z = 1+.05*t if t < .62 else 1.03*math.exp((t-.62)*4.6)
+            m = cv2.warpAffine(mask, np.array([[z, 0, (1-z)*W/2], [0, z, (1-z)*H*.48]], np.float32), (W, H)).astype(np.float32)[..., None]/255.
             reveal = min(1, max(0, (z-6)/5))
             m = m*(1-reveal)+reveal
-            fade_in = min(1, t/.25)
-            yield (frame*m*fade_in).astype(np.uint8)
+            lit = np.clip(frame.astype(np.float32)*1.35+12, 0, 255)
+            yield (lit*m*min(1, t/.25)).astype(np.uint8)
     finally:
         reader.close()
 
 
 def encode(frames_iter, audio, out, ffmpeg='ffmpeg'):
-    cmd = [ffmpeg, '-nostdin', '-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS), '-i', '-',
-           '-i', str(audio), '-map', '0:v', '-map', '1:a', '-vf', 'vignette=angle=0.5:mode=forward,noise=c0s=5:c0f=t+u',
+    cmd = [ffmpeg, '-nostdin', '-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{look.W}x{look.H}', '-r', str(FPS), '-i', '-',
+           '-i', str(audio), '-map', '0:v', '-map', '1:a', '-vf', 'vignette=angle=0.45:mode=forward,noise=c0s=4:c0f=t+u',
            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '256k',
            '-movflags', '+faststart', '-shortest', str(out)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
