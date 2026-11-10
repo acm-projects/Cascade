@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import look
+from . import look, settings
 
 LOG = logging.getLogger(__name__)
 FPS = look.FPS
@@ -20,8 +20,13 @@ VOICE_AT = 1.05        # where the first word lands when there is an opener
 PUNCH = (1.0, 1.12)    # zoom steps that hide a jump cut
 
 
-def size_for(source_w, source_h, ratio='original'):
-    """Output frame size: the clip's own shape at 1080 lines, or a reel."""
+def size_for(source_w, source_h, ratio='original', lines=1080):
+    """Output frame size: the clip's own shape, or a reel. `lines` is the short side (1080; tests use less)."""
+    w, h = _size_for(source_w, source_h, ratio)
+    return int(round(w*lines/1080/2))*2, int(round(h*lines/1080/2))*2
+
+
+def _size_for(source_w, source_h, ratio):
     if ratio in ('9:16', 'reel'): return 1080, 1920
     if ratio == '1:1': return 1080, 1080
     if ratio == '4:5': return 1080, 1350
@@ -191,7 +196,7 @@ class Captions:
     def __init__(self, words, edit, offset, keywords, placement):
         self.offset, self.placement = offset, placement
         u = look.unit()
-        self.size = (82 if look.W > look.H else 78)*u
+        self.size = settings.get('captions.size_wide' if look.W > look.H else 'captions.size_tall', 80)*u
         line = edit.timeline     # (word, start, end) as played
         self.at = [a+offset for _, a, _ in line]
         self.items = []
@@ -202,7 +207,8 @@ class Captions:
             block.append(n)
             text = words[i]['w']
             gap = (line[n+1][1]-b) if n+1 < len(line) else 9
-            if text.rstrip().endswith(('.', '?', '!')) or len(block) >= 7 or (text.endswith(',') and len(block) >= 3) or gap > .7 or gap < -.01: close()
+            jump = n+1 < len(line) and not 0 < line[n+1][0]-i <= 12   # the story moves to another part of the clip: never share a block
+            if text.rstrip().endswith(('.', '?', '!')) or len(block) >= settings.get('captions.max_words', 7) or (text.endswith(',') and len(block) >= 3) or gap > .7 or gap < -.01 or jump: close()
         close()
         self.sprites = {}
         f = look.TIGHT(self.size, 860)
@@ -389,7 +395,7 @@ class Composer:
         """The payoff (quote) or the closing message: centred, word by word, each word as it is spoken."""
         W, H, u = look.W, look.H, look.unit()
         items = o.data['words']   # [(text, at, tone)]
-        size = (78 if o.kind == 'quote' else 84)*u
+        size = (78 if o.kind == 'quote' else 72)*u
         f = look.TIGHT(size, 820)
         space = size*.26
         max_w = W*(.8 if W > H else .86)

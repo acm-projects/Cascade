@@ -60,7 +60,7 @@ def _json(text):
     return json.loads(text[start:end+1])
 
 
-def ask(system, prompt, images=(), timeout=300):
+def ask(system, prompt, images=(), timeout=300, model=None):
     """Parsed JSON object from Claude. `images` are (file name, JPEG bytes) pairs Claude can Read.
     Raises UsageLimit when the subscription's usage limit is reached, HTTPException(503) otherwise."""
     claude = binary()
@@ -76,7 +76,8 @@ def ask(system, prompt, images=(), timeout=300):
         try:
             run = subprocess.run([claude, '-p', task, '--output-format', 'json', '--append-system-prompt', system,
                                   '--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk',
-                                  '--no-session-persistence', '--setting-sources', '', '--strict-mcp-config'],
+                                  '--no-session-persistence', '--setting-sources', '', '--strict-mcp-config',
+                                  *(['--model', model] if model else [])],   # None: the subscription's default model
                                  cwd=work, env=subscription_env(), capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             raise HTTPException(504, 'Claude took too long to plan this edit.') from None

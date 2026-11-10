@@ -169,62 +169,72 @@ def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock,
 
 
 def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message, stock, job, progress):
-    """The Cinema engine (cinema/): clean dialogue, designed moments, original score, Cascade stamp."""
+    """The Cinema engine (cinema/). An AI planner (any model, see cinema/planner.py) or the rule-based director
+    decides the plan; the engine renders it. Simple follow-ups change the saved project with no AI at all."""
     from ..storage import media
-    from .cinema import broll, director as cine_director, engine, plan as cine_plan
+    from .cinema import broll, engine, planner, project, revise
+    def finish(status, text, **more):
+        job.update(status=status, message=text, finished=time.time(), **more)
+        _write(folder/'job.json', job)
     try:
         with RENDER_SLOT, media(jid, clip) as source:
             progress(.02, 'Getting the clip ready…')
             prep_dir = folder/'prep'
             prep = preparation.prepare(source, info.get('cues', []), prep_dir, progress, separate=False)
             windows = _windows(state)
-            current = None
-            if state.ai_edit:
-                saved = _read(folder/state.ai_edit.version/'plan.json')
-                try:
-                    current = cine_plan.CinemaPlan.model_validate(saved) if saved and 'story' in saved else None
-                except ValueError:
-                    current = None
-            progress(.3, 'Claude is watching the clip and directing the edit…' if not current else 'Claude is revising the edit…')
-            directed = 'Claude'
-            try:
-                plan = (cine_director.revise(message, current, prep_dir, prep, windows, chat) if current
-                        else cine_director.plan_edit(message, prep_dir, prep, windows, chat))
-            except Exception as exc:  # no Claude, usage limit, or no usable plan: the rule-based director still makes the edit
-                LOG.info('Cinema: Claude unavailable (%s); using the rule-based director', getattr(exc, 'detail', exc))
-                plan = current or cine_plan.auto(prep['words'])
-                directed = 'rules'
+            current = project.load(folder/state.ai_edit.version) if state.ai_edit else None
+            notes = []
+            if current is None:
+                progress(.3, 'Watching the clip and planning the edit…')
+                plan, who = planner.plan_edit(message, prep_dir, prep, windows, chat)
+                if who == 'rules' and planner.choice() != 'rules':
+                    notes.append("No AI planner was available, so Cascade's built-in director made this cut. Sign in to Claude Code for a story-led edit.")
+            else:
+                plan, done, left = revise.apply(message, current)   # switches and simple timeline changes need no AI
+                who = 'no AI needed'
+                if left or not done:
+                    progress(.3, 'Planning the change…')
+                    try:
+                        plan, who = planner.revise(message, plan, prep_dir, prep, windows, chat)
+                    except planner.Unavailable as exc:
+                        if not done:   # nothing we can do without a planner: keep the draft exactly as it is
+                            text = (f'NOT CHANGED: this change needs the AI planner, which is not available right now ({exc}) '
+                                    'Your edit is saved and still plays and exports. Without the planner you can still ask for: reel or original shape, '
+                                    'music up, down or off, captions on or off, less or no b-roll, a new title or closing message in quotes, shorter, or no sign-off.')
+                            _publish(pid, jid, index, user, state, None, None, text)
+                            return finish('failed', text)
+                        notes.append('Not done, because the AI planner is not available right now: '+'; '.join(left)+'.')
+                if done: notes.insert(0, 'Changed: '+', '.join(done)+'.')
             name = _next_version(folder)
             out = folder/name; out.mkdir(parents=True, exist_ok=True)
-            _write(out/'plan.json', plan.model_dump())
-            local = [tools.folder()/'B-roll', tools.folder()/'Raw Footage']
             composition = getattr(state, 'composition', None)
             ratio = getattr(composition, 'ratio', 'original') or 'original'   # the clip's own shape unless the user picked one (Reel = 9:16)
-            report = engine.make(source, prep['words'], plan, out/'edited.mp4.part.mp4', prep['cuts'], broll.resolver(stock, local),
+            local = [tools.folder()/'B-roll', tools.folder()/'Raw Footage']
+            find = broll.resolver(stock, local)
+            report = engine.make(source, prep['words'], plan, out/'edited.part.mp4', prep['cuts'], find,
                                  lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio)
-            (out/'edited.mp4.part.mp4').replace(out/'edited.mp4')
+            (out/'edited.part.mp4').replace(out/'edited.mp4')
             duration = preparation.probe(out/'edited.mp4')['duration']
-            report.update(directed=directed)
+            report.update(directed=who)
+            project.save(out, plan, dict(report), who, message, {'job': jid, 'clip': index, 'duration': prep['duration'], 'credits': find.credits})
+            report.pop('timeline', None)
             _write(out/'report.json', report)
             history = [*versions(folder), {'version': name, 'title': plan.title, 'request': message[:500], 'duration': duration, 'created': time.time()}]
             _write(folder/'versions.json', history)
-            text = '\n'.join([plan.reply or f'{plan.title} is ready.', '',
-                               f"{name} · {report['seconds']} s · cut {report['removed_fillers']} ums and stumbles"
+            text = '\n'.join([(plan.reply if current is None or who not in ('no AI needed',) else '') or f'{plan.title} is ready.', *notes, '',
+                               f"{name} · {report['seconds']} s · {report['size']} · cut {report['removed_fillers']} ums and stumbles"
                                f"{', '+str(report['removed_interjections'])+' interjections' if report['removed_interjections'] else ''} · "
-                               f"{report['broll']} b-roll shots · {report['moments']} designed moments · {report['lufs']} LUFS.",
-                               *(["Claude was not available, so Cascade's own director made this cut."] if directed == 'rules' else []),
+                               f"{report['broll']} b-roll shots · {report['lufs']} LUFS · planned by {who}.",
                                'Ask for any change here.'])[:4000]
             _publish(pid, jid, index, user, state, name, duration, text)
-            job.update(status='done', progress=1, stage='Done', version=name, duration=duration, message=text, finished=time.time())
-            _write(folder/'job.json', job)
+            finish('done', text, progress=1, stage='Done', version=name, duration=duration)
     except Exception as exc:
         why = getattr(exc, 'detail', None) or str(exc) or exc.__class__.__name__
         LOG.warning('Cinema edit failed', exc_info=True)
         if not isinstance(exc, (HTTPException, ValueError)): why = 'Something went wrong while making this edit. Try the request again.'
         text = f'NOT CHANGED: {str(why)[:600]}'+(' The last working edit is still in place.' if state.ai_edit else '')
         _publish(pid, jid, index, user, state, None, None, text)
-        job.update(status='failed', message=text, finished=time.time())
-        _write(folder/'job.json', job)
+        finish('failed', text)
     finally:
         with GUARD: RUNNING.pop(str(folder), None)
 

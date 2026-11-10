@@ -14,13 +14,15 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-FILLER_WORDS = {'um', 'umm', 'uh', 'uhh', 'uhm', 'erm', 'er', 'ah', 'ahh', 'hmm', 'hm', 'mm', 'mhm', 'mmm', 'eh', 'uh-huh'}
-MAX_PAUSE = .16       # a pause longer than this inside a kept line is squeezed
+from . import settings
+
+FILLER_WORDS = set(settings.get('dialogue.filler_words'))   # every number below lives in style.json
+MAX_PAUSE = settings.get('dialogue.max_pause', .16)       # a pause longer than this inside a kept line is squeezed
 BREATH = .05          # what is left either side of a squeezed pause
-PART_BREATH = .06     # extra room between two parts of the story
-LEAD_IN = .09         # room kept before the first sound of a word
-TAIL = .18            # how far an ending may run past the transcript's end time
-FADE = .012           # crossfade at every join
+PART_BREATH = settings.get('dialogue.part_breath', .06)     # extra room between two parts of the story
+LEAD_IN = settings.get('dialogue.lead_in', .09)         # room kept before the first sound of a word
+TAIL = settings.get('dialogue.tail', .18)            # how far an ending may run past the transcript's end time
+FADE = settings.get('dialogue.fade', .012)           # crossfade at every join
 
 
 def plain(word):
@@ -36,7 +38,10 @@ def fillers(words):
             out.add(n); continue
         nxt = plain(words[n+1]['w']) if n+1 < len(words) else ''
         # a stutter: the same word twice in a row ("this, this", "the the"); keep the second
-        if p and p == nxt and p not in ('very', 'really', 'so', 'no', 'bye', 'ha') and words[n+1]['s']-word['e'] < .6:
+        prev = plain(words[n-1]['w']) if n else ''
+        after = plain(words[n+2]['w']) if n+2 < len(words) else ''
+        said_three_times = p in (prev, after) and p == nxt   # "stealing, stealing, stealing" is emphasis, not a stutter
+        if p and p == nxt and not said_three_times and p not in ('very', 'really', 'so', 'no', 'bye', 'ha') and words[n+1]['s']-word['e'] < .6:
             out.add(n); continue
         # "you know," and "I mean," set off by commas are asides
         if p == 'you' and nxt == 'know' and (words[n+1]['w'].endswith(',') or (n and words[n-1]['w'].endswith(','))):

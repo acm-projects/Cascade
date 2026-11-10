@@ -63,3 +63,13 @@ Studied frame by frame (contact sheets at 2-4 fps) and by ear (loudness, tempo, 
 6. GRADE: crushed blacks, teal shadows + warm skin, lifted greens for forest, slight grain + vignette; desaturate to near-B&W for "loss" moments, then bloom color back for "hope".
 7. SOUND: dialog on top always (ducked bed −18 dB under speech); dark ambient pad + sub pedal; nature ambience bed (rain/forest/river); sub-boom downsweep on the big cuts; whoosh on transitions only; hard music drop-out before the payoff line. No stock "ding/boing/swoosh" pack sounds.
 8. END STAMP (2.5s): water drop → splash ripple → liquid wipe → "Cascade" handwritten stroke-draw → droplets fall off the letters; rising pluck + water splash + sub.
+
+## REFERENCE VIDEO (the owner's attachment, 10 Nov: "Entrepreneurs House" podcast trailer, 41 s, 16:9)
+Reviewed as frames (1 and 4 per second), a word-timed transcript and a spectrogram. Not by ear.
+- 0.0 s cold open on the single strongest line, taken from the END of the conversation: "You're broke. It's like arithmetic." The same line closes the piece at 38 s (bookend).
+- 0-4 s first speaker; 4-16 s second speaker ("Entrepreneurship will expose every insecurity…"); 16-27 s third ("you're just a firefighter"); 27-33 s fourth; 33-38 s fifth. One thought per speaker, no overlap, no question left hanging.
+- Pauses between words are about a quarter of a second or less everywhere; nobody says um.
+- Stays 16:9. Captions are heavy, tight sans, white, set in the empty side of the frame beside the speaker, building word by word; one keyword per block sits on a coloured chip. A block stays until the next replaces it.
+- Each cut to a new speaker lands on the first word of their sentence; the picture changes every 2-4 s.
+- Sound: a low sustained bed under everything, ducked under voices, with a rise into each speaker change.
+=> Taken into Cascade: the "hook" story role (cold open that may repeat later), original aspect by default, the caption block system, 0.16 s maximum pause.

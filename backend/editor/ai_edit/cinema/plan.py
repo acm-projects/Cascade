@@ -48,6 +48,17 @@ class Opener(BaseModel):
     query: str = Field(default='', max_length=90)   # footage that fills the word
 
 
+class Settings(BaseModel):
+    """Switches a follow-up can flip without any AI (see revise.py). They are part of the saved project."""
+    model_config = ConfigDict(extra='ignore')
+    ratio: Literal['original', '9:16', '1:1', '4:5', '16:9'] | None = None   # None: whatever the Editor's Aspect Ratio tab says
+    captions: bool = True
+    music: bool = True
+    music_db: float = Field(default=0, ge=-18, le=12)    # louder (+) or quieter (-) than the house level
+    broll: bool = True
+    stamp: bool = True
+
+
 class CinemaPlan(BaseModel):
     model_config = ConfigDict(extra='ignore')
     reply: str = Field(default='', max_length=1500)
@@ -61,6 +72,7 @@ class CinemaPlan(BaseModel):
     broll: list[Broll] = Field(default_factory=list, max_length=24)
     silence_before: int | None = None
     opener: Opener = Field(default_factory=Opener)
+    settings: Settings = Field(default_factory=Settings)
     end_line: str = Field(default='', max_length=90)    # the closing message, shown on its own before the stamp
 
     @model_validator(mode='after')

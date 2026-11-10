@@ -2,16 +2,17 @@
 import logging
 import re
 import subprocess
+import time
 from pathlib import Path
 
 import numpy as np
 
-from . import look, render, score, speakers, speech, stamp
+from . import look, render, score, settings, speakers, speech, stamp
 from .render import Overlay, Shot
 
 LOG = logging.getLogger(__name__)
-TAIL = .5         # room after the last word
-MESSAGE = 3.4     # the closing message, on its own, before the stamp
+TAIL = settings.get('pacing.tail_seconds', .5)            # room after the last word
+MESSAGE = settings.get('pacing.message_seconds', 3.4)     # the closing message, on its own, before the stamp
 
 
 def _audio(path, sr, ffmpeg='ffmpeg'):
@@ -38,12 +39,19 @@ def camera_cuts(source, ffmpeg='ffmpeg', threshold=.16):
     return [t for n, t in enumerate(found) if not n or t-found[n-1] > .4]
 
 
-def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmpeg='ffmpeg', use_matte=True, ratio='original'):
-    """Render `plan` over `source` to `out` (mp4). Returns a report dict."""
+def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmpeg='ffmpeg', use_matte=True, ratio='original', lines=1080):
+    """Render `plan` over `source` to `out` (mp4). Deterministic: the same plan and footage give the same film,
+    and no AI model is called. Returns a report with per-stage timings and the resolved timeline."""
+    clock, timings = time.time(), {}
+    def lap(name):
+        nonlocal clock
+        timings[name] = round(time.time()-clock, 1); clock = time.time()
+    options = plan.settings
+    ratio = options.ratio or ratio or 'original'
     progress = progress or (lambda a, s: None)
     out = Path(out); out.parent.mkdir(parents=True, exist_ok=True)
     info = render.probe(source)
-    look.configure(*render.size_for(info['width'], info['height'], ratio))
+    look.configure(*render.size_for(info['width'], info['height'], ratio, lines))
     W, H = look.W, look.H
     wide = W > H
 
@@ -83,6 +91,7 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         return offset+p.out+((max(p.a, w['s']) if k == 0 else min(p.b, w['e']))-p.a)
     in_story = lambda i: i in later or i in edit.word_out
 
+    lap('dialogue')
     # --- 2. the speaker, framed: one shot per piece, split where the source cuts camera
     progress(.1, 'Framing every shot on the speaker…')
     cuts = sorted(set(round(c, 2) for c in list(cuts)+camera_cuts(source, ffmpeg)))
@@ -106,6 +115,7 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
             zoom ^= 1    # a jump in the source behind a continuous edit: punch in or out to hide it
         s.zoom0 = render.PUNCH[zoom]; s.zoom1 = s.zoom0+.03
 
+    lap('framing')
     # --- 3. designed moments
     overlays, events = [], []
     held = []        # windows that must stay on the speaker
@@ -142,8 +152,8 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         if not any(o.kind == 'quote' for o in overlays):
             pos = order.index(plan.silence_before)
             sent = order[pos:]                      # the payoff runs to the last word
-            if len(sent) > 16: sent = _sentence(words, order, plan.silence_before)
-            if len(sent) <= 16:
+            if len(sent) > 18: sent = _sentence(words, order, plan.silence_before)
+            if len(sent) <= 18:
                 overlays.append(Overlay(T(sent[0])-.25, T(sent[-1], 1)+.6, 'quote', {'words': [(words[i]['w'], T(i), kw.get(i)) for i in sent]}))
     if hook_pieces:   # after the cold open, a flash and a hit, then the story starts
         end_hook = offset+hook_pieces[-1].out+hook_pieces[-1].length
@@ -153,11 +163,11 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
     # --- 4. b-roll: full screen, arriving just before its word, never over a giant-word moment
     progress(.18, 'Finding b-roll for what is said…')
     placed, used_paths = [], []
-    for b in plan.broll:
+    for b in (plan.broll if options.broll else []):
         if not in_story(b.from_word): continue
         to = b.to_word if in_story(b.to_word) else b.from_word
         t0 = T(b.from_word)-.12
-        t1 = max(t0+1.5, min(t0+3.4, T(to, 1)+.1))
+        t1 = max(t0+settings.get('broll.min_seconds', 1.5), min(t0+settings.get('broll.max_seconds', 3.4), T(to, 1)+.1))
         t1 = min(t1, speech_end)
         for a, z in sorted(held+placed):
             if a < t1 and t0 < z and z+1.1 <= t1: t0 = z+.02
@@ -201,20 +211,24 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         shots = first
     if plan.title:
         overlays.append(Overlay(start+.15, start+2.2, 'title', {'text': plan.title}))
-    captions = render.Captions(words, edit, offset, kw, _placement(shots, wide))
+    captions = render.Captions(words, edit, offset, kw, _placement(shots, wide)) if options.captions else None
+    lap('broll')
 
     # --- 5. sound: voice on top, the score under it (silent before the payoff), no music under the stamp
     progress(.24, 'Composing the score…')
-    total = main_end+stamp.DURATION
+    total = main_end+(stamp.DURATION if options.stamp else 0)
     voice = np.zeros((int(total*score.SR), 2), np.float32)
     v = speech.render_voice(samples, score.SR, edit)
     i = int(offset*score.SR); voice[i:i+len(v)] = v[:len(voice)-i]
     hook_end = T(question[1], 1) if question and in_story(question[1]) else offset+3
     music = score.compose(main_end, {'silence': silence, 'end': main_end, 'hook_end': hook_end}, plan.mood)
+    if not options.music: music = music*0
     if opener_path: events.append((.05, 'moment', 'water'))
     fx = score.sound_design(total, events)
     wav = out.with_suffix('.mix.wav')
-    lufs, peak = score.mix(voice, music, fx, 0, wav, ffmpeg, music_under=-17., stamp=score.stamp_audio(stamp.DURATION), stamp_at=main_end)
+    lufs, peak = score.mix(voice, music, fx, 0, wav, ffmpeg, music_under=settings.get('mix.music_under_voice_db', -17.)+options.music_db,
+                           stamp=score.stamp_audio(stamp.DURATION) if options.stamp else None, stamp_at=main_end)
+    lap('sound')
 
     # --- 6. picture
     progress(.3, 'Composing the picture…')
@@ -235,15 +249,23 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
             yield from render.opener_frames(plan.opener.word.upper(), opener_path, render.OPENER, ffmpeg)
         yield from composer.frames()
         last = composer.last if composer.last is not None else np.zeros((H, W, 3), np.uint8)
-        yield from stamp.frames(last)
+        if options.stamp: yield from stamp.frames(last)
     render.encode(all_frames(), wav, out, ffmpeg)
     wav.unlink(missing_ok=True)
+    lap('picture')
     progress(1, 'Done')
+    timeline = {
+        'size': [W, H], 'fps': look.FPS, 'voice_starts': offset, 'speech_ends': round(speech_end, 3), 'ends': round(total, 3),
+        'dialogue': [{'source_from': p.a, 'source_to': p.b, 'at': round(offset+p.out, 3), 'words': [p.words[0], p.words[-1]], 'part': p.part} for p in edit.pieces],
+        'shots': [{'from': round(s.t0, 3), 'to': round(s.t1, 3), 'kind': s.kind, 'file': Path(s.path).name, 'source_from': round(s.src, 3), 'look': s.look} for s in shots],
+        'overlays': [{'from': round(o.t0, 3), 'to': round(o.t1, 3), 'kind': o.kind, **({'text': o.data['text']} if 'text' in o.data else {})} for o in overlays],
+        'music_silence': [round(x, 3) for x in silence] if silence else None,
+    }
     broll_seconds = sum(z-a for a, z in placed)
     return {'seconds': round(total, 1), 'spoken_seconds': round(edit.total, 1), 'pieces': len(edit.pieces),
             'removed_fillers': len(removed_fillers & set(range(len(words)))), 'removed_interjections': len(removed_others),
             'broll': len(placed), 'broll_share': round(broll_seconds/max(1, edit.total)*100), 'moments': len(plan.moments),
-            'lufs': lufs, 'peak': peak, 'cut_out': matter is not None, 'size': f'{W}x{H}'}
+            'lufs': lufs, 'peak': peak, 'cut_out': matter is not None, 'size': f'{W}x{H}', 'timings': timings, 'timeline': timeline}
 
 
 def kw_tone(word):
@@ -265,7 +287,7 @@ def _placement(shots, wide):
     return place
 
 
-def _keep_moving(shots, longest=3.2):
+def _keep_moving(shots, longest=settings.get('pacing.longest_hold_seconds', 3.2)):
     """A visual change every 2-3 s: a long hold on the speaker becomes punch-in steps on the same take."""
     out = []
     for s in shots:

@@ -27,7 +27,7 @@ def from_folder(query, folder, used):
     return str(best) if best else None
 
 
-def from_stock(query, store, used):
+def from_stock(query, store, used, credits=None):
     if store is None: return None
     try:
         from ..picture import ranked
@@ -40,6 +40,8 @@ def from_stock(query, store, used):
                 try:
                     path = store.media(pick['id'])
                     used.add(pick['id'])
+                    if credits is not None:
+                        credits.append({'query': query, 'id': pick['id'], 'source': pick.get('source_url') or pick.get('url') or '', 'license': 'Pexels License'})
                     return str(path)
                 except Exception:
                     continue
@@ -49,12 +51,16 @@ def from_stock(query, store, used):
 
 
 def resolver(store=None, folders=()):
-    used = set()
+    """find(query) -> path or None. `find.credits` lists where every shot came from; it is saved with the project."""
+    used, credits = set(), []
     def find(query):
-        found = from_stock(query, store, used)
+        found = from_stock(query, store, used, credits)
         if found: return found
         for folder in folders:
             found = from_folder(query, folder, used)
-            if found: return found
+            if found:
+                credits.append({'query': query, 'file': Path(found).name, 'source': 'local folder'})
+                return found
         return None
+    find.credits = credits
     return find

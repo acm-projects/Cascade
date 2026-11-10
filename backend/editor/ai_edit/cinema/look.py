@@ -11,6 +11,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from . import settings
+
 FONTS = Path(__file__).parent/'fonts'
 W, H, FPS = 1080, 1920, 30
 
@@ -26,28 +28,10 @@ def unit():
     """Type scale: 1 at 1080 px on the short side."""
     return min(W, H)/1080
 
-TONES = {
-    'water': (72, 198, 255),
-    'life': (88, 227, 140),
-    'hope': (126, 240, 196),
-    'danger': (255, 64, 52),
-    'money': (245, 197, 66),
-    'earth': (255, 168, 76),
-    'calm': (244, 241, 234),
-}
+TONES = {name: tuple(rgb) for name, rgb in settings.get('tones').items()}        # colours and the words that pick them: style.json
 WHITE = (247, 245, 240)
 INK = (6, 9, 12)
-
-# Words that pick their own colour when the plan does not say (lower case, stems).
-TONE_WORDS = {
-    'water': ('water', 'river', 'rain', 'ocean', 'sea', 'flood', 'stream', 'wave', 'ice', 'glacier', 'blue', 'lake', 'swim'),
-    'life': ('forest', 'tree', 'jungle', 'rainforest', 'amazon', 'green', 'life', 'alive', 'grow', 'leaf', 'leaves', 'plant',
-             'animal', 'jaguar', 'species', 'wild', 'nature', 'breathe', 'oxygen', 'baby', 'mother', 'peace', 'peaceful'),
-    'danger': ('fire', 'burn', 'kill', 'die', 'dead', 'death', 'destroy', 'cut', 'chainsaw', 'gone', 'lost', 'loss', 'extinct',
-               'crush', 'bite', 'skull', 'danger', 'dangerous', 'blood', 'heat', 'smoke', 'collapse', 'never', 'teeth', 'hungry', 'prey'),
-    'money': ('money', 'dollar', 'profit', 'cattle', 'beef', 'gold', 'pay', 'cost', 'rich', 'greed', 'billion', 'million', 'price'),
-    'earth': ('earth', 'planet', 'world', 'sun', 'home', 'everyone', 'everything'),
-}
+TONE_WORDS = {name: tuple(stems) for name, stems in settings.get('tone_words').items()}
 
 
 def tone_of(word, default='calm'):
