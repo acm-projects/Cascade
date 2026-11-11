@@ -365,12 +365,70 @@ button.ta-stamp:hover { background: color-mix(in srgb, var(--ta-edit) 20%, #fff)
 
 .ta-sheet button:focus-visible, .ta-sheet a:focus-visible, .ta-sheet [tabindex]:focus-visible { outline: 3px solid var(--color-leaf); outline-offset: 2px; }
 
+/* ---------- Guide (the capybara), steps, trending list, summary ---------- */
+.ta-hero-compact { grid-template-columns: minmax(0, 1.5fr) minmax(220px, .8fr); align-items: center; }
+.ta-hero-compact h1 span { display: inline; }
+.ta-guide { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.ta-guide-mascot { flex: none; }
+.ta-bubble {
+  position: relative; padding: 12px 16px; border-radius: 16px 16px 16px 4px; background: #fff; color: var(--ta-ink);
+  font: 600 .95rem/1.45 var(--font-body); box-shadow: var(--ta-shadow); border: 1px solid var(--ta-line); max-width: 62ch;
+}
+.ta-bubble strong { font-weight: 800; }
+.ta-guide-big { flex-direction: column; align-items: center; justify-self: center; gap: 4px; text-align: left; max-width: 340px; }
+.ta-guide-big .ta-bubble { border-radius: 16px; font-size: .92rem; }
+.ta-guide-big .ta-bubble::before {
+  content: ""; position: absolute; left: 50%; top: -8px; width: 14px; height: 14px; background: #fff; border-left: 1px solid var(--ta-line); border-top: 1px solid var(--ta-line);
+  transform: translateX(-50%) rotate(45deg);
+}
+.ta-guide-big .ta-guide-mascot { order: -1; }
+.ta-guide-warn .ta-bubble { border-color: color-mix(in srgb, var(--ta-warn) 55%, #fff); background: #fffaf0; }
+.ta-guide-done .ta-bubble { background: #f3fbf4; border-color: color-mix(in srgb, var(--ta-edit) 40%, #fff); font-size: 1rem; }
+
+.ta-step-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center; padding-top: 6px; border-top: 2px solid var(--ta-line); padding-top: 22px; }
+.ta-step-no { grid-row: 1; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--ta-ink); color: #fff; font: 800 1.1rem var(--font-ui); }
+.ta-step-head h2 { font: clamp(1.4rem, 2.2cqw, 2rem) / 1.1 var(--font-heading); color: var(--ta-ink); }
+.ta-step-head .ta-guide { grid-column: 1 / -1; margin-top: 8px; }
+.ta-small { font-size: .82rem; margin-top: 4px; }
+
+.ta-verdict { display: grid; gap: 16px; }
+.ta-verdict-list { display: grid; gap: 10px; padding: 16px 18px; border-radius: var(--ta-radius); background: var(--ta-card); border: 1px solid var(--ta-line); box-shadow: var(--ta-shadow); }
+.ta-verdict-list h3 { font: 800 .8rem var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ta-soft); }
+.ta-verdict-list ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: v; }
+.ta-verdict-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; counter-increment: v; }
+.ta-verdict-list li::before { content: counter(v); grid-row: 1 / 3; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ta-edit); color: #fff; font: 800 .85rem var(--font-ui); }
+.ta-verdict-list li span { color: var(--ta-soft); line-height: 1.45; font-size: .93rem; }
+
+.ta-viral { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.ta-viral li {
+  --series: var(--ta-ref); display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px 16px; align-items: center;
+  padding: 12px 16px; border-radius: 14px; background: var(--ta-card); border: 2px solid var(--ta-line); box-shadow: var(--ta-shadow); transition: border-color .15s, transform .15s;
+}
+.ta-viral li.is-active { border-color: var(--series); }
+.ta-viral-main { display: flex; align-items: center; gap: 12px; min-width: 0; border: 0; background: none; padding: 0; text-align: left; color: inherit; cursor: pointer; font: inherit; }
+.ta-viral-rank { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--series); color: #fff; font: 800 1rem var(--font-ui); }
+.ta-viral-text { display: grid; min-width: 0; }
+.ta-viral-text strong { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+.ta-viral-text small { color: var(--ta-soft); }
+.ta-viral-bar { position: relative; height: 30px; border-radius: 8px; background: var(--surface-light); overflow: hidden; }
+.ta-viral-bar i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--series) 70%, #fff); border-radius: 8px; transition: width .6s cubic-bezier(.2, .7, .2, 1); }
+.ta-viral-bar span { position: relative; display: block; line-height: 30px; padding: 0 10px; font: 800 .78rem var(--font-ui); color: var(--ta-ink); }
+.ta-viral-facts { grid-column: 1 / 3; display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: .84rem; color: var(--ta-soft); }
+.ta-viral-facts b { color: var(--ta-ink); }
+.ta-viral-link { grid-column: 3; grid-row: 1 / 3; display: inline-flex; align-items: center; gap: 6px; font: 800 .82rem var(--font-ui); color: var(--ta-ink); text-decoration: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--ta-line); background: var(--surface-light); }
+.ta-viral-link:hover { background: var(--surface); }
+
 /* ---------- Responsive ---------- */
 @container (max-width: 1100px) {
   .ta-findings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ta-captions { grid-template-columns: minmax(0, 1fr); }
 }
 @container (max-width: 900px) {
+  .ta-hero-compact { grid-template-columns: minmax(0, 1fr); }
+  .ta-guide-big { flex-direction: row; max-width: none; }
+  .ta-guide-big .ta-bubble::before { display: none; }
+  .ta-viral li { grid-template-columns: minmax(0, 1fr); }
+  .ta-viral-facts, .ta-viral-link { grid-column: auto; grid-row: auto; justify-self: start; }
   .ta-hero { grid-template-columns: minmax(0, 1fr); }
   .ta-float-stage { min-height: 220px; max-width: 560px; }
   .ta-analysis, .ta-advice-grid, .ta-review-grid { grid-template-columns: minmax(0, 1fr); }

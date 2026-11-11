@@ -11,7 +11,8 @@ import useApi from '../../../api/useApi';
 import Icon from '../../../components/ui/Icon';
 import { problemText, referenceLearning, same, viewData } from '../trendsView';
 import { timelineClock } from '../reelTiming';
-import TrendIntro from './TrendIntro';
+import Guide, { Step } from './TrendGuide';
+import Viral from './TrendViral';
 import { EditVideo, ReferenceFacts, ReferenceVideo } from './TrendVideos';
 import { AudioChart, PacingChart, ShotTimeline } from './TrendCharts';
 import { ChangePreview, Improvements, Strengths } from './TrendReview';
@@ -23,7 +24,23 @@ import './TrendAnalysis.css';
 const DEFAULT_GOAL = 'Help me improve this clip’s editing.';
 const EDIT_COLOR = 'var(--ta-edit)';
 const REF_COLORS = ['var(--ta-ref)', 'var(--ta-ref-2)', 'var(--ta-ref-3)', 'var(--ta-ref-4)'];
-const PLATFORMS = [['youtube', 'YouTube', true], ['tiktok', 'TikTok', false], ['instagram', 'Instagram', false]];
+
+/** Server errors in plain words: never raw JSON, never a stack of field names. */
+function friendly(e) {
+  const m = String(e?.message || e || '').trim();
+  if (/extra_forbidden|Extra inputs|Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Cascade’s server isn’t answering with the latest code. Restart the backend (Ctrl+C, then start it again), then press Analyze.';
+  if (/^[[{]/.test(m)) return 'Something went wrong starting the analysis. Please try again.';
+  return m || 'Something went wrong. Please try again.';
+}
+/** Why no trending video could be used, from the saved diagnostics. */
+function whyNone(failures = []) {
+  const codes = new Set(failures.map(f => f.code));
+  if (codes.has('youtube_bot_challenge')) return 'YouTube asked this computer to prove it isn’t a bot, so videos couldn’t be downloaded.';
+  if (codes.has('rate_limited') || codes.has('quota_or_credit_exhausted')) return 'YouTube or the AI service is limiting requests right now.';
+  if (codes.has('no_recent_results')) return 'Nothing recent matched this topic.';
+  if (codes.size) return 'The videos found couldn’t be downloaded or analyzed.';
+  return '';
+}
 
 /** A section that fades up once when it scrolls into view. */
 function Reveal({ scrollRef, as: Tag = 'section', className = '', children, ...rest }) {
@@ -77,10 +94,8 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
   const [error, setError] = useState(''), [starting, setStarting] = useState(false);
   const [topic, setTopic] = useState(''), [links, setLinks] = useState([]), [linkDraft, setLinkDraft] = useState('');
   const [adding, setAdding] = useState(false), [linkError, setLinkError] = useState('');
-  const [platform, setPlatform] = useState('youtube');
   const [active, setActive] = useState(0);
   const [audio, setAudio] = useState('edit'); // whose sound is on
-  const [thumbnail, setThumbnail] = useState(null);
   const [accepted, setAccepted] = useState([]);
   const [startAt, setStartAt] = useState(null); // open the next reference at this second
   const alive = useRef(true);
@@ -90,29 +105,24 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
     alive.current = true; let cancelled = false;
     api.getTrends(projectId, clip.job_id, clip.clip_index)
       .then(data => { if (!cancelled) { setRecord(data); setTopic(data.topic_override || ''); } })
-      .catch(e => !cancelled && setError(e.message));
+      .catch(e => !cancelled && setError(friendly(e)));
     return () => { cancelled = true; alive.current = false; };
   }, [api, projectId, clip.job_id, clip.clip_index]);
   useEffect(() => {
     if (record?.status !== 'running') return undefined;
     const timer = setTimeout(() => api.getTrends(projectId, clip.job_id, clip.clip_index, record.id)
       .then(data => { if (alive.current) { setRecord(data); setError(''); } })
-      .catch(e => { if (alive.current) { setError(e.message); setRecord(r => ({ ...r, status: 'error' })); } }), 1600);
+      .catch(e => { if (alive.current) { setError(friendly(e)); setRecord(r => ({ ...r, status: 'error' })); } }), 1600);
     return () => clearTimeout(timer);
   }, [api, projectId, clip.job_id, clip.clip_index, record]);
-  useEffect(() => {
-    let url, live = true;
-    api.getClipThumbnail(projectId, clip.job_id, clip.clip_index).then(blob => { url = URL.createObjectURL(blob); if (live) setThumbnail(url); }).catch(() => {});
-    return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [api, projectId, clip.job_id, clip.clip_index]);
 
   async function analyze(force = false) {
     setStarting(true); setError(''); if (record?.result) setPrevious(record);
     try {
       await flush?.();
-      const data = await api.analyzeTrends(projectId, clip.job_id, clip.clip_index, { state, goal: record?.goal || DEFAULT_GOAL, topic: topic.trim(), references: links, force });
+      const data = await api.analyzeTrends(projectId, clip.job_id, clip.clip_index, { state, goal: record?.goal || DEFAULT_GOAL, topic: topic.trim(), ...(links.length ? { references: links } : {}), force });
       if (alive.current) { setRecord(data); setActive(0); }
-    } catch (e) { if (alive.current) setError(e.message); }
+    } catch (e) { if (alive.current) setError(friendly(e)); }
     finally { if (alive.current) setStarting(false); }
   }
 
@@ -221,17 +231,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
     setLinks(l => (l.includes(value) ? l : [...l, value])); setLinkDraft(''); setLinkError(''); setAdding(false);
   }
 
-  // ---------- intro panel content (real when we have it, labeled "Sample" when we don't) ----------
-  const samplePace = [1, 3, 2, 4, 2, 3, 1];
-  const editPace = editM?.cuts ? Array.from({ length: Math.min(8, Math.max(1, Math.ceil(editM.span / 5))) }, (_, i) => editM.cuts.filter(c => c >= i * 5 && c < (i + 1) * 5).length) : null;
-  const introCaption = cues[0]?.text || 'Here’s the one thing that changed everything';
   const c = state.captions || {};
-  const intro = {
-    pace: { values: editPace || samplePace, sample: !editPace },
-    caption: { text: introCaption.split(/\s+/).slice(0, c.max_words || 6).join(' '), sample: !cues[0],
-      style: { color: c.color, fontWeight: c.bold ? 800 : 600, textShadow: c.thickness ? `0 0 3px ${c.stroke}` : 'none', fontFamily: c.font } },
-    insight: top[0] ? { title: top[0].title, range: top[0].range } : { title: 'Bring the hook forward', range: [0, 5], sample: true },
-  };
   const bindTarget = key => el => { targets.current[key] = el; };
   const timelineRows = [
     { id: 'edit', label: 'Your edit', color: EDIT_COLOR, cuts: editM?.cuts ?? null, span: editM?.span ?? duration, onSeek: seekEdit },
@@ -258,6 +258,44 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
       {!running && <button type="button" className="btn btn-small btn-primary" onClick={() => analyze()} disabled={!state}><Icon name="sparkles" /> Analyze clip</button>}
     </section>
     : <>
+      {/* The short version, from the guide */}
+      <Reveal scrollRef={scrollRef} className="ta-section ta-verdict" aria-labelledby="ta-verdict-title">
+        <Guide tone="done"><strong>Here’s what I found.</strong> {view.summary}</Guide>
+        {top.length > 0 && <div className="ta-verdict-list"><h3 id="ta-verdict-title">The changes I’d make first</h3>
+          <ol>{top.map(sug => <li key={sug.index}><b>{sug.title}</b><span>{sug.benefit || sug.shortText}</span></li>)}</ol></div>}
+      </Reveal>
+
+      <Step number={1} title="What’s trending right now" id="ta-trend-title">
+        {examples.length ? `I looked at currently trending videos on “${result.search_topic || analysis.topic}” and ranked them by how fast they’re gaining views. Tap one to compare it with your edit.` : 'I couldn’t use any trending videos this time, so the rest is based on your edit alone.'}
+      </Step>
+      <Reveal scrollRef={scrollRef} className="ta-section" aria-labelledby="ta-trend-title">
+        {examples.length > 0 ? <Viral references={examples} active={Math.min(active, examples.length - 1)} colors={REF_COLORS} onPick={i => { setStartAt(null); setActive(i); }} />
+          : <p className="ta-unavailable">{whyNone(result.failures) || 'No recent videos matched.'} Try a broader topic, add a reference link above, or press Analyze again in a few minutes.</p>}
+        <p className="ta-muted ta-small">“Views per hour” is a ranking proxy for what’s trending, not a measure of quality. All numbers are as YouTube reports them.</p>
+      </Reveal>
+
+      <Step number={2} title="What the most viral ones share" id="ta-share-title">
+        {multiple ? 'These are the patterns that repeat across the videos above.' : 'One video isn’t a trend, so I’m showing what this one does. Add more reference links for repeated patterns.'}
+      </Step>
+      {/* 7. Reference patterns */}
+      <Reveal scrollRef={scrollRef} className="ta-section" aria-labelledby="ta-patterns-title">
+        <header className="ta-section-head"><div><small className="ta-eyebrow">{modeLabel}</small><h2 id="ta-patterns-title">{multiple ? 'What the trend has in common' : 'What this reference does'}</h2></div>
+          <p className="ta-muted ta-head-note">{multiple ? `Repeated across ${examples.length} relevant videos.` : 'One reference isn’t a trend. Add more references to see repeated patterns.'}</p></header>
+        <ul className="ta-patterns">
+          {fastOpen.of > 0 && <li><b>{fastOpen.hits} of {fastOpen.of}</b> {fastOpen.of === 1 ? 'reference' : 'references'} change shot within the first 3 seconds <small>measured</small></li>}
+          {quickShots.of > 0 && <li><b>{quickShots.hits} of {quickShots.of}</b> average a new shot every 2.5 s or faster <small>measured</small></li>}
+          {vertical.of > 0 && <li><b>{vertical.hits} of {vertical.of}</b> are vertical (9:16-style) videos <small>measured</small></li>}
+          {view.patterns.map(p => <li key={p}>{p} <small>observed</small></li>)}
+          {!fastOpen.of && !quickShots.of && !view.patterns.length && <li className="ta-muted">No repeated patterns could be established from these references.</li>}
+        </ul>
+        {tutorials.length > 0 && <div className="ta-observations"><h4>Technique notes <span className="ta-muted">· from tutorials; explanations, not trend evidence</span></h4>
+          <ul>{tutorials.flatMap(t => referenceLearning(t).map(x => <li key={t.id + x}>{x}</li>))}</ul></div>}
+      </Reveal>
+
+
+      <Step number={3} title="How your edit compares" id="ta-compare-step">
+        Your edit sits next to the top trending video. The charts show cuts, pacing and sound for both.
+      </Step>
       {/* 2. Video comparison workspace */}
       <Reveal scrollRef={scrollRef} className="ta-section ta-workspace" aria-labelledby="ta-compare-title">
         <header className="ta-section-head" ref={workspace}>
@@ -348,6 +386,10 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
         </>}
       </Reveal>
 
+
+      <Step number={4} title="What I’d change" id="ta-change-step">
+        Review each idea, preview it on your clip, and accept the ones you like. Nothing changes until you accept, and Undo in the Editor reverses it. These ideas aren’t a promise of more views.
+      </Step>
       {/* 5. What's working / What to improve + 6. Review changes */}
       <Reveal scrollRef={scrollRef} className="ta-section ta-advice" aria-labelledby="ta-advice-title">
         {shown => <>
@@ -364,21 +406,6 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
         </>}
       </Reveal>
 
-      {/* 7. Reference patterns */}
-      <Reveal scrollRef={scrollRef} className="ta-section" aria-labelledby="ta-patterns-title">
-        <header className="ta-section-head"><div><small className="ta-eyebrow">{modeLabel}</small><h2 id="ta-patterns-title">{multiple ? 'What the trend has in common' : 'What this reference does'}</h2></div>
-          <p className="ta-muted ta-head-note">{multiple ? `Repeated across ${examples.length} relevant videos.` : 'One reference isn’t a trend. Add more references to see repeated patterns.'}</p></header>
-        <ul className="ta-patterns">
-          {fastOpen.of > 0 && <li><b>{fastOpen.hits} of {fastOpen.of}</b> {fastOpen.of === 1 ? 'reference' : 'references'} change shot within the first 3 seconds <small>measured</small></li>}
-          {quickShots.of > 0 && <li><b>{quickShots.hits} of {quickShots.of}</b> average a new shot every 2.5 s or faster <small>measured</small></li>}
-          {vertical.of > 0 && <li><b>{vertical.hits} of {vertical.of}</b> are vertical (9:16-style) videos <small>measured</small></li>}
-          {view.patterns.map(p => <li key={p}>{p} <small>observed</small></li>)}
-          {!fastOpen.of && !quickShots.of && !view.patterns.length && <li className="ta-muted">No repeated patterns could be established from these references.</li>}
-        </ul>
-        {tutorials.length > 0 && <div className="ta-observations"><h4>Technique notes <span className="ta-muted">· from tutorials; explanations, not trend evidence</span></h4>
-          <ul>{tutorials.flatMap(t => referenceLearning(t).map(x => <li key={t.id + x}>{x}</li>))}</ul></div>}
-      </Reveal>
-
       <footer className="ta-footnote">
         <p>{result.coverage || 'YouTube references only.'} This is guidance, not a prediction of how your clip will perform.</p>
         {view.evidenceWarning && <p>{view.evidenceWarning}</p>}
@@ -392,10 +419,11 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
       <button type="button" className="btn btn-small" onClick={onClose} aria-label="Close trend analysis"><Icon name="close" /> Close</button>
     </div>
     <div className="ta-scroll" ref={scrollRef}>
-      <TrendIntro scrollRef={scrollRef} targets={targets} simple={simple} settle={finished} thumbnail={thumbnail} title={clip.title} {...intro}>
-        <small className="ta-eyebrow ta-eyebrow-light">Trends · {clip.title || 'This clip'}</small>
-        <h1 id="ta-title">Understand the trend. <span>Refine your edit.</span></h1>
-        <p className="ta-lede">Compare your video with relevant references and discover what to improve.</p>
+      <header className="ta-hero ta-hero-compact">
+        <div className="ta-hero-copy">
+          <small className="ta-eyebrow ta-eyebrow-light">Trends · {clip.title || 'This clip'}</small>
+          <h1 id="ta-title">What’s working right now. <span>Make your edit better.</span></h1>
+          <p className="ta-lede">Cascade looks at currently trending videos on your topic, finds what the most viral ones have in common, compares them with your edit, and suggests specific changes.</p>
         <form className="ta-controls" onSubmit={e => { e.preventDefault(); analyze(); }}>
           <label className="ta-field"><span>Edited video</span>
             <select value={`${clip.job_id}:${clip.clip_index}`} onChange={e => onSelectClip?.(clips.find(x => `${x.job_id}:${x.clip_index}` === e.target.value))} disabled={!onSelectClip || clips.length < 2}>
@@ -403,10 +431,6 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
             </select></label>
           <label className="ta-field ta-field-grow"><span>Topic</span>
             <input value={topic} onChange={e => setTopic(e.target.value)} maxLength={160} placeholder={analysis?.topic || 'Detected from your clip'} /></label>
-          <fieldset className="ta-field ta-platforms"><legend>Platform</legend>
-            <div>{PLATFORMS.map(([id, label, available]) => <button type="button" key={id} aria-pressed={platform === id} disabled={!available}
-              title={available ? undefined : `${label} isn’t connected yet`} onClick={() => setPlatform(id)}>{label}{!available && <small>Soon</small>}</button>)}</div>
-          </fieldset>
           <div className="ta-control-actions">
             <button type="button" className="btn btn-small" onClick={() => setAdding(a => !a)} aria-expanded={adding}><Icon name="plus" /> Add Reference</button>
             <button type="submit" className="btn btn-small btn-primary" disabled={running || !state}><Icon name="sparkles" /> {running ? 'Analyzing…' : finished ? 'Analyze again' : 'Analyze'}</button>
@@ -422,7 +446,14 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
         {links.length > 0 && <ul className="ta-chips" aria-label="References you added">{links.map(l => <li key={l}>{l.replace(/^https?:\/\/(www\.)?/, '').slice(0, 38)}
           <button type="button" aria-label={`Remove ${l}`} onClick={() => setLinks(x => x.filter(y => y !== l))}><Icon name="close" /></button></li>)}
           <li className="ta-muted">Used on the next Analyze</li></ul>}
-      </TrendIntro>
+        </div>
+        <Guide big live tone={problem && !running ? 'warn' : 'info'}>
+          {running ? <>I’m on it. {record?.message || 'Starting…'}</>
+            : problem ? <>That didn’t work, but your clip is safe. {problem}</>
+            : finished ? <>All done! I found {examples.length ? `${examples.length} trending video${examples.length === 1 ? '' : 's'}` : 'no trending videos this time'} and compared them with your edit. Scroll down, I’ll walk you through it.</>
+            : <>Hi, I’m your Cascade guide! Pick a topic (or leave it blank) and press Analyze. I’ll look at what’s trending, find what the most viral videos share, and show you how to improve your edit.</>}
+        </Guide>
+      </header>
       <main className="ta-main">{status}{body}</main>
     </div>
    </div>
