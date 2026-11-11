@@ -21,6 +21,11 @@ export function getTrends(token, projectId, jobId, index, researchId) {
 export function analyzeTrends(token, projectId, jobId, index, body) {
   return apiFetch(clipPath(projectId, jobId, index) + '/trends', { token, method: 'POST', body });
 }
+/** POST …/trends/apply  body: { state, research_id, suggestion } → { state, outcomes, message }.
+ *  Returns the edit one suggestion would produce; nothing is saved until the page calls change(). */
+export function applyTrends(token, projectId, jobId, index, body) {
+  return apiFetch(clipPath(projectId, jobId, index) + '/trends/apply', { token, method: 'POST', body });
+}
 
 /**
  * GET /api/projects/{projectId}/editor[?selected_only=true]

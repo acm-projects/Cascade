@@ -64,6 +64,7 @@ function EditorPage() {
   const [projectName, setProjectName] = useState(null);
   const flushCurrent = useRef(null);
   const registerFlush = useCallback(value => { flushCurrent.current = value; }, []);
+  const [trendsFor, setTrendsFor] = useState(null); // reopen Trend Analysis after picking another clip from inside it
   const toast = useToast();
 
   useEffect(() => {
@@ -95,8 +96,8 @@ function EditorPage() {
   const hasClips = Boolean(clips?.length);
 
   // Save the clip you're on, then open another one
-  async function selectClip(clip) {
-    try { await flushCurrent.current?.(); setCurrentKey(clipKey(clip)); } catch (e) { toast.show(e.message, "error"); }
+  async function selectClip(clip, { trends = false } = {}) {
+    try { await flushCurrent.current?.(); setTrendsFor(trends ? clipKey(clip) : null); setCurrentKey(clipKey(clip)); } catch (e) { toast.show(e.message, "error"); }
   }
 
   const sidebar = (
@@ -159,6 +160,7 @@ function EditorPage() {
         <div className="editor-empty">{body}</div>
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
+          clips={clips} openTrends={trendsFor === currentKey} onSelectClipForTrends={clip => selectClip(clip, { trends: true })}
           registerFlush={registerFlush} onExport={() => navigate(`/projects/${projectId}/export`)} />
       )}
     </div>
@@ -166,12 +168,12 @@ function EditorPage() {
 }
 
 // Everything for the clip being edited. It has key={clip key}, so switching clips loads that clip's own draft.
-function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, registerFlush }) {
+function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, registerFlush, clips, openTrends, onSelectClipForTrends }) {
   const api = useApi();
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [panelTab, setPanelTab] = useState("Trim");
-  const [trendsOpen, setTrendsOpen] = useState(false);
+  const [trendsOpen, setTrendsOpen] = useState(Boolean(openTrends));
   const [chatChanges, setChatChanges] = useState({});
   const [editorResult, setEditorResult] = useState(null);
   const aiTransactions = useRef([]);
@@ -350,7 +352,9 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
       clip={clip} result={editorResult} status={aiStatus} cues={info?.cues} job={jobRunning ? aiJob : null} aiEdit={state.ai_edit}
       onUseTimeline={() => change(s => ({ ...s, ai_edit: null }))} />
   );
-  const trendsModal = trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onClose={() => setTrendsOpen(false)} />;
+  const trendsModal = trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush}
+    change={change} clips={clips} onSelectClip={onSelectClipForTrends} onClose={() => setTrendsOpen(false)}
+    onOpenEditor={(t) => { setTrendsOpen(false); if (Number.isFinite(t)) setTimeout(() => player.current?.seek(t), 50); }} />;
 
   // ---------- New layout (Figma "Editor Page – Revamp") ----------
   if (layout === "revamp") {

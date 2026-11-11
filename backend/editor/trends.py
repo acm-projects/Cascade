@@ -27,13 +27,14 @@ TTL = 21600
 POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix='clip-trends')
 LOCK = threading.RLock()
 RUNNING = set()
-REVISION = 'youtube-clip-v4-analysis-1'
+REVISION = 'youtube-clip-v5-measured-1'
 
 class ResearchInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     state: Edit
     topic: str = Field(default='', max_length=160)
     goal: str = Field(default='',max_length=600)
+    references: list[str] = Field(default_factory=list,max_length=3)  # YouTube links the user added
     force: bool = False
 
 class ApplyInput(BaseModel):
@@ -83,6 +84,25 @@ def version(state):
 
 def folder(pid,jid,index,user):
     return draft_path(pid,jid,index,user).parent/'trends'/f'{jid}-{index}'
+
+YOUTUBE_ID=re.compile(r'(?:youtu\.be/|youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/))([A-Za-z0-9_-]{11})')
+def reference_ids(links):
+    """YouTube ids from links the user pasted. Anything else is rejected with a clear message."""
+    ids=[]
+    for link in links:
+        link=link.strip()
+        match=YOUTUBE_ID.search(link) or (re.fullmatch(r'[A-Za-z0-9_-]{11}',link) and re.match(r'(.*)',link))
+        if not match:raise HTTPException(422,'Only YouTube links can be added as references right now.')
+        vid=match.group(1)
+        if vid not in ids:ids.append(vid)
+    return ids
+
+def measured(path):
+    """FFmpeg measurements (cuts, loudness, size). Never fails research: missing data is shown as unavailable."""
+    try:
+        from backend.trends.measure import measure_video
+        return measure_video(path)
+    except Exception:return {}
 
 def infer_topic(clip,info):
     text=' '.join(c['text'] for c in info['cues'][:8])
@@ -166,7 +186,8 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
     if len(topic)<3:raise HTTPException(422,'Enter a topic with at least three characters.')
     from backend.trends.claude_route import model as selected_model
     model=selected_model();root=folder(pid,jid,index,user);edit_version=version(body.state)
-    key=hashlib.sha256(f'{REVISION}|{model}|{edit_version}|{topic.casefold()}|{goal.casefold()}'.encode()).hexdigest()
+    added=reference_ids(body.references)
+    key=hashlib.sha256(f'{REVISION}|{model}|{edit_version}|{topic.casefold()}|{goal.casefold()}|{",".join(added)}'.encode()).hexdigest()
     with LOCK:
         for path in root.glob('*.json') if root.exists() else []:
             record=read_record(path)
@@ -175,7 +196,7 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
                 return record
         record={'id':uuid.uuid4().hex,'status':'running','message':'Rendering the selected edit for YouTube research…','source':'YouTube','topic':topic,'goal':goal,'topic_override':body.topic if topic==body.topic.strip() else '',
                 'project_id':pid,'job_id':jid,'clip_index':index,'edit_version':edit_version,'edit_state':body.state.model_dump(mode='json'),
-                'cache_key':key,'model':model,'started_at':time.time(),'revision':REVISION}
+                'cache_key':key,'model':model,'started_at':time.time(),'revision':REVISION,'added_references':added}
         RUNNING.add(record['id']);put(root,record)
         try:POOL.submit(run,pid,jid,index,user,body.state.model_copy(deep=True),record,root)
         except Exception:
@@ -218,22 +239,34 @@ def collect(pid,jid,index,user,state,record,progress):
                 except StageError as exc:
                     failures.append(exc.detail);speech={'status':'transcription_failed','message':'Audio transcription failed. Dialogue presence is unknown; do not treat this as a dialogue-free clip.','cue_count':0}
             frames=stage('video_frames',pipeline.extract_frames,Path(response.path),work)
+            progress('Measuring cuts and loudness in your edit…')
+            edit_measured=measured(Path(response.path))
             own=stage('ai_clip_analysis',pipeline.extract_tags,frames,transcript)
             search_topic=derive_search(clip,info,record.get('goal',''),record.get('topic_override',''),own)
-            for kind,query,limit in [('example',search_topic+' short edit',2),('tutorial',search_topic+' editing tutorial',1)]:
-                progress('Searching recent YouTube '+kind+'s…')
-                try:videos=stage('discovery',youtube_trends.get_trending_videos,query,limit=limit)
-                except Exception as exc:
-                    failure_details=exc.failures if isinstance(exc,ResearchFailure) else [exc.detail if isinstance(exc,StageError) else failure(exc,'discovery')]
-                    failures.extend({'kind':kind,**d} for d in failure_details);continue
-                if not videos:failures.append({'kind':kind,'stage':'discovery','code':'no_recent_results','reason':'No matching dated references within the 14-day window.'})
-                if not videos:
-                    broader='dialogue video editing tutorial' if kind=='tutorial' else 'comedy dialogue edit'
-                    progress('No recent exact-topic results; searching '+broader+' on YouTube…')
-                    try:videos=stage('discovery',youtube_trends.get_trending_videos,broader,limit=limit)
+            added=record.get('added_references') or []
+            for kind,query,limit in [('added',None,len(added)),('example',search_topic+' short edit',2),('tutorial',search_topic+' editing tutorial',1)]:
+                if kind=='added':
+                    if not added:continue
+                    progress('Checking the references you added…')
+                    videos=[]
+                    for vid in added:
+                        try:videos.append({**stage('discovery_metadata',youtube_trends.video_metadata,vid,reference=vid),'user_added':True})
+                        except Exception as exc:failures.append({'kind':'example',**(exc.detail if isinstance(exc,StageError) else failure(exc,'discovery_metadata',vid))})
+                    kind='example'
+                else:
+                    progress('Searching recent YouTube '+kind+'s…')
+                    try:videos=stage('discovery',youtube_trends.get_trending_videos,query,limit=limit)
                     except Exception as exc:
                         failure_details=exc.failures if isinstance(exc,ResearchFailure) else [exc.detail if isinstance(exc,StageError) else failure(exc,'discovery')]
-                        failures.extend({'kind':kind,**d} for d in failure_details)
+                        failures.extend({'kind':kind,**d} for d in failure_details);continue
+                    if not videos:failures.append({'kind':kind,'stage':'discovery','code':'no_recent_results','reason':'No matching dated references within the 14-day window.'})
+                    if not videos:
+                        broader='dialogue video editing tutorial' if kind=='tutorial' else 'comedy dialogue edit'
+                        progress('No recent exact-topic results; searching '+broader+' on YouTube…')
+                        try:videos=stage('discovery',youtube_trends.get_trending_videos,broader,limit=limit)
+                        except Exception as exc:
+                            failure_details=exc.failures if isinstance(exc,ResearchFailure) else [exc.detail if isinstance(exc,StageError) else failure(exc,'discovery')]
+                            failures.extend({'kind':kind,**d} for d in failure_details)
                 for video in videos:
                     failures.extend({'kind':kind,**d} for d in video.get('discovery_failures',[]))
                     if any(r['video_id']==video['video_id'] for r in refs):continue
@@ -246,6 +279,10 @@ def collect(pid,jid,index,user,state,record,progress):
                         if reference_kind=='example':
                             analysis=pipeline.analyze_youtube_video(video['video_id'],work)['tags'];examples.append(analysis)
                             evidence={'observed_tags':analysis}
+                            downloaded=next((p for p in (work/video['video_id']).glob(video['video_id']+'.*') if p.suffix in ('.mp4','.webm','.mkv','.mov')),None)
+                            if downloaded:
+                                progress('Measuring cuts and loudness in '+video['title'][:60]+'…')
+                                evidence['measured']=measured(downloaded)
                         else:evidence=tutorial(video['video_id'],sub)
                         refs.append({**video,'kind':reference_kind,'id':video['video_id'],'url':'https://www.youtube.com/watch?v='+video['video_id'],**evidence})
                     except Exception as exc:
@@ -289,7 +326,7 @@ def collect(pid,jid,index,user,state,record,progress):
                 ref['supports_suggestions']=[i for i,s in enumerate(findings.suggestions) if ref['id'] in s.source_ids]
                 ref['analysis_status']='analyzed'
             return {**findings.model_dump(),'references':refs,'your_video_tags':own,'comparison':_compare_tags(own,examples),'speech_evidence':speech,
-                    'observed_patterns':patterns,'search_topic':search_topic,
+                    'observed_patterns':patterns,'search_topic':search_topic,'edit_measured':edit_measured,'checked_at':time.time(),
                     'failures':failures,'coverage':'YouTube only; up to two recent examples and one tutorial from the past 14 days. '
                     'Views/hour is a ranking proxy. Five sampled frames cannot prove every edit or sound. Tutorials explain techniques; they are not observed style evidence.',
                     'output_duration':clock.duration}

@@ -111,6 +111,28 @@ class ClipTrendsTests(unittest.TestCase):
         tutorial.assert_called_once()
         self.assertNotIn('observed_tags',result['references'][1])
         self.assertEqual(result['references'][1]['kind'],'tutorial')
+    def test_reference_links_are_accepted_checked_and_analyzed_first(self):
+        """A pasted YouTube link is sent with Analyze, rejected when it isn't YouTube, and compared as the user's own reference."""
+        def inline(fn,*args):fn(*args)
+        link='https://youtube.com/shorts/b5wlE9YvhlE?si=Y4jkpW1fhcSCP-A-'
+        with patch.object(trends.POOL,'submit',side_effect=inline),patch.object(trends,'collect',return_value=fixture_result()):
+            ok=self.client.post(self.base,headers=self.headers,json={'state':self.state,'references':[link]})
+        self.assertEqual(ok.status_code,202,ok.text);self.assertEqual(ok.json()['added_references'],['b5wlE9YvhlE'])
+        bad=self.client.post(self.base,headers=self.headers,json={'state':self.state,'references':['https://example.com/watch?v=abcdefghijk']})
+        self.assertEqual(bad.status_code,422)
+        from backend.trends import pipeline,youtube_trends
+        from backend import cascade_llm
+        s=Edit(**self.state);s.start=.2;s.end=9.5
+        meta={'video_id':'b5wlE9YvhlE','title':'Mine','url':'x','channel':'C','view_count':5,'published_at':None,'like_count':3}
+        parts=self.url.split('/');pid,jid,index=parts[3],parts[5],int(parts[6])
+        from backend.editor.runtime import load_json,jobs_dir
+        user=load_json(jobs_dir()/jid/'owner.json')['user_id']
+        ref_findings={**findings(),'suggestions':[{**x,'source_ids':['b5wlE9YvhlE']} for x in findings()['suggestions']]}
+        with patch.object(youtube_trends,'video_metadata',return_value=meta),patch.object(youtube_trends,'get_trending_videos',return_value=[]),patch.object(pipeline,'extract_tags',return_value={'pacing':'fast'}), \
+             patch.object(pipeline,'analyze_youtube_video',return_value={'tags':{'pacing':'fast'}}),patch.object(cascade_llm,'structured_json',return_value=SimpleNamespace(data=ref_findings)):
+            result=trends.collect(pid,jid,index,user,s,{'topic':'t','added_references':['b5wlE9YvhlE']},lambda m:None)
+        mine=result['references'][0]
+        self.assertEqual(mine['id'],'b5wlE9YvhlE');self.assertTrue(mine['user_added']);self.assertEqual(mine['kind'],'example')
     def test_comparison_counts_majority_not_lexical_max(self):
         r=_compare_tags({'tone':'other'},[{'tone':'funny'},{'tone':'funny'},{'tone':'serious'}])
         self.assertIn("'funny'",r['missing_traits'][0])

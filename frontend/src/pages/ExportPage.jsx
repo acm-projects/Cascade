@@ -181,6 +181,7 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [trendsOpen, setTrendsOpen] = useState(false);
+  const navigate = useNavigate();
   const { info, state, error, patch } = draft;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
@@ -276,7 +277,8 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
     <aside className="export-publishing" aria-label="Publishing tools">
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
-        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onClose={() => setTrendsOpen(false)} />}
+        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} change={draft.change}
+          onClose={() => setTrendsOpen(false)} onOpenEditor={async () => { await draft.flush(); navigate(`/projects/${projectId}/editor`); }} />}
         {!isAudioClip(clip) && <section className="export-youtube" aria-label="YouTube tools">
           {state && <Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends analysis</Button>}
           <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />

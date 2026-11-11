@@ -76,6 +76,7 @@ def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
                 "url": f"https://www.youtube.com/watch?v={video_id}",
                 "view_count": int(stats.get("viewCount", 0)),
                 "published_at": snippet.get("publishedAt", ""),
+                **{key: int(stats[api]) for key, api in (("like_count", "likeCount"), ("comment_count", "commentCount")) if str(stats.get(api, "")).isdigit()},
             }
         )
     return results
@@ -107,7 +108,7 @@ def public_search(topic,limit=5):
                 if published.date()<cutoff.date() or (info.get('duration') or 0)>600:
                     logging.getLogger('cascade.trends').info('reference=%s excluded=outside_date_or_duration_window upload_day=%s duration=%s',entry['id'],date,info.get('duration'));continue
                 results.append({'video_id':entry['id'],'title':info.get('title',''),'channel':info.get('channel') or info.get('uploader',''),
-                    'url':'https://www.youtube.com/watch?v='+entry['id'],'view_count':info.get('view_count') or 0,
+                    'url':'https://www.youtube.com/watch?v='+entry['id'],'view_count':info.get('view_count') or 0,**_engagement(info),
                     'published_at':published.isoformat(),'publication_precision':'day','discovery_provider':'youtube-public-search'})
                 if len(results)>=limit:break
             except Exception as exc:
@@ -119,6 +120,30 @@ def public_search(topic,limit=5):
     results.sort(key=lambda r:_velocity({'statistics':{'viewCount':r['view_count']},'snippet':{'publishedAt':r['published_at']}}),reverse=True)
     if results and failures:results[0]['discovery_failures']=failures
     return results
+
+
+def _engagement(info):
+    """Likes, comments and length exactly as YouTube reports them (missing ones are left out)."""
+    out={}
+    for key in ('like_count','comment_count','duration'):
+        if isinstance(info.get(key),(int,float)):out[key]=info[key]
+    return out
+
+
+def video_metadata(video_id: str) -> dict[str, Any]:
+    """One video the user added by link: real YouTube metadata, no date window (they chose it)."""
+    import re
+    import yt_dlp
+    from .diagnostics import ydl_options
+    if not re.fullmatch(r'[A-Za-z0-9_-]{11}',video_id):raise ValueError('Not a YouTube video id.')
+    with yt_dlp.YoutubeDL({**ydl_options(),'skip_download':True,'noplaylist':True}) as y:
+        info=y.extract_info('https://www.youtube.com/watch?v='+video_id,download=False)
+    if (info.get('duration') or 0)>600:raise RuntimeError('References longer than 10 minutes can’t be analyzed.')
+    date=info.get('upload_date')
+    published=datetime.strptime(date,'%Y%m%d').replace(tzinfo=timezone.utc).isoformat() if date else None
+    return {'video_id':video_id,'title':info.get('title',''),'channel':info.get('channel') or info.get('uploader',''),
+            'url':'https://www.youtube.com/watch?v='+video_id,'view_count':info.get('view_count') or 0,**_engagement(info),
+            'published_at':published,'publication_precision':'day' if published else None,'discovery_provider':'user-link'}
 
 
 def _recent_iso(days: int) -> str:
