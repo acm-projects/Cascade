@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import WaterFlow from "../components/WaterFlow";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -270,15 +271,16 @@ function StudioPage() {
   if (!studio) {
     return (
       <div className="studio studio-no-session leaf-page">
+        <WaterFlow />
         {topNav}
         <div className="studio-empty">
           {error ? (
             <div className="studio-empty-card wood-panel">
-              <EmptyState icon="cloud" title="Couldn't open AI Studio" text={error.message}
+              <EmptyState icon="cloud" title="Couldn't open Canvas" text={error.message}
                 action={{ label: "Retry", onClick: refresh }} />
             </div>
           ) : (
-            <Spinner size={48} label="Opening AI Studio" />
+            <Spinner size={48} label="Opening Canvas" />
           )}
         </div>
       </div>
@@ -332,6 +334,7 @@ function StudioPage() {
 
   return (
     <div className="studio leaf-page">
+      <WaterFlow />
       {topNav}
       <SessionBar sessions={studio.sessions} activeId={session.id}
         onSwitch={switchSession} onCreate={createSession} onRename={renameSession}>

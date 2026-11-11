@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import WaterFlow from "../components/WaterFlow";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
@@ -85,13 +86,14 @@ function ExportPage() {
   else if (!clips) message = <Spinner size={48} label="Loading your clips" />;
   else if (!clips.length) {
     message = (
-      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips in AI Studio and edit them, then export them here."
-        action={{ label: "Go to AI Studio", onClick: () => navigate(`/projects/${projectId}/studio`) }} />
+      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips in Canvas and edit them, then export them here."
+        action={{ label: "Go to Canvas", onClick: () => navigate(`/projects/${projectId}/studio`) }} />
     );
   }
 
   return (
     <div className="export leaf-page">
+      <WaterFlow />
       <TopNav projectTitle={projectName} active="export" canOpenEditor canOpenExport />
       {message ? (
         <div className="export-empty">{message}</div>
@@ -279,11 +281,15 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
         {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} change={draft.change}
           onClose={() => setTrendsOpen(false)} onOpenEditor={async () => { await draft.flush(); navigate(`/projects/${projectId}/editor`); }} />}
-        {!isAudioClip(clip) && <section className="export-youtube" aria-label="YouTube tools">
-          {state && <Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends analysis</Button>}
+        {!isAudioClip(clip) && state && (
+          <Button size="sm" className="export-trends-button" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>
+            <Icon name="compass" /> Trends analysis
+          </Button>
+        )}
+        {!isAudioClip(clip) && <section className="export-publish" aria-label="Publish">
           <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />
+          <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />
         </section>}
-        {!isAudioClip(clip) && <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />}
         <div className="export-post">
           <h3 className="export-social-title">{isAudioClip(clip) ? <><Icon name="headphones" /> Share audio</> : <><Icon name="phone" /> Share clip</>}</h3>
           <p className="export-social-note">

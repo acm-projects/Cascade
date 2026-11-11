@@ -5,7 +5,7 @@ import "./WorkflowNav.css";
 import leafIcon from "../assets/icons/leaf-cream.svg";
 
 const steps = [
-  { id: "studio", label: "AI Studio" },
+  { id: "studio", label: "Canvas" },
   { id: "editor", label: "Editor" },
   { id: "export", label: "Export" },
 ];

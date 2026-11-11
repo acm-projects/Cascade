@@ -20,7 +20,15 @@ import usePreview from './usePreview';
 import { clock, countWhere, editCues, editFindings, kept, measuredVideo, musicSpans, range, secs } from './trendMetrics';
 import { useCountUp, useReveal, useSimpleMotion } from './motion';
 import './TrendAnalysis.css';
+import WaterFlow from '../../../components/WaterFlow';
+import { setSeaDepth } from '../../../components/seaDepth';
 
+// What kind of video this is. Each choice searches YouTube Shorts for that kind (the searches live in the backend).
+const TOPICS = [
+  ['podcast / interview', 'Podcast / interview'], ['travel vlog', 'Travel vlog'], ['comedy / skit', 'Comedy / skit'],
+  ['talking head / explainer', 'Talking head / explainer'], ['food / cooking', 'Food / cooking'],
+  ['fitness / lifestyle', 'Fitness / lifestyle'], ['gaming', 'Gaming'], ['tech / product review', 'Tech / product review'],
+];
 const DEFAULT_GOAL = 'Help me improve this clip’s editing.';
 const EDIT_COLOR = 'var(--ta-edit)';
 const REF_COLORS = ['var(--ta-ref)', 'var(--ta-ref-2)', 'var(--ta-ref-3)', 'var(--ta-ref-4)'];
@@ -92,7 +100,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
   const targets = useRef({});
   const [record, setRecord] = useState(null), [previous, setPrevious] = useState(null);
   const [error, setError] = useState(''), [starting, setStarting] = useState(false);
-  const [topic, setTopic] = useState(''), [links, setLinks] = useState([]), [linkDraft, setLinkDraft] = useState('');
+  const [topic, setTopic] = useState(''), [choice, setChoice] = useState(''), [links, setLinks] = useState([]), [linkDraft, setLinkDraft] = useState('');
   const [adding, setAdding] = useState(false), [linkError, setLinkError] = useState('');
   const [active, setActive] = useState(0);
   const [audio, setAudio] = useState('edit'); // whose sound is on
@@ -101,10 +109,13 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
   const alive = useRef(true);
 
   // ---------- data (same endpoints the Trends popup used) ----------
+  // While Trends is open, the page's sea behind it zooms in and sinks deeper (components/seaDepth.js)
+  useEffect(() => { setSeaDepth(1); return () => setSeaDepth(0); }, []);
+
   useEffect(() => {
     alive.current = true; let cancelled = false;
     api.getTrends(projectId, clip.job_id, clip.clip_index)
-      .then(data => { if (!cancelled) { setRecord(data); setTopic(data.topic_override || ''); } })
+      .then(data => { if (!cancelled) { setRecord(data); { const saved = data.topic_override || ''; const known = TOPICS.some(([key]) => key === saved.toLowerCase()); setChoice(known ? saved.toLowerCase() : saved ? 'other' : ''); setTopic(known ? '' : saved); } } })
       .catch(e => !cancelled && setError(friendly(e)));
     return () => { cancelled = true; alive.current = false; };
   }, [api, projectId, clip.job_id, clip.clip_index]);
@@ -120,7 +131,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
     setStarting(true); setError(''); if (record?.result) setPrevious(record);
     try {
       await flush?.();
-      const data = await api.analyzeTrends(projectId, clip.job_id, clip.clip_index, { state, goal: record?.goal || DEFAULT_GOAL, topic: topic.trim(), ...(links.length ? { references: links } : {}), force });
+      const data = await api.analyzeTrends(projectId, clip.job_id, clip.clip_index, { state, goal: record?.goal || DEFAULT_GOAL, topic: choice === 'other' ? topic.trim() : choice, ...(links.length ? { references: links } : {}), force });
       if (alive.current) { setRecord(data); setActive(0); }
     } catch (e) { if (alive.current) setError(friendly(e)); }
     finally { if (alive.current) setStarting(false); }
@@ -270,7 +281,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
       </Step>
       <Reveal scrollRef={scrollRef} className="ta-section" aria-labelledby="ta-trend-title">
         {examples.length > 0 ? <Viral references={examples} active={Math.min(active, examples.length - 1)} colors={REF_COLORS} onPick={i => { setStartAt(null); setActive(i); }} />
-          : <p className="ta-unavailable">{whyNone(result.failures) || 'No recent videos matched.'} Try a broader topic, add a reference link above, or press Analyze again in a few minutes.</p>}
+          : <p className="ta-unavailable">{whyNone(result.failures) || 'No recent videos matched.'} Try another type of video, add a reference link above, or press Analyze again in a few minutes.</p>}
         <p className="ta-muted ta-small">“Views per hour” is a ranking proxy for what’s trending, not a measure of quality. All numbers are as YouTube reports them.</p>
       </Reveal>
 
@@ -322,7 +333,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
               <ReferenceVideo key={reference.id} ref={refVideo} reference={reference} start={startAt} audible={audio === 'reference'} onPlay={playing} />
               <button type="button" className="ta-sound" aria-pressed={audio === 'reference'} onClick={() => playing('reference')}><Icon name={audio === 'reference' ? 'volume' : 'mute'} /> {audio === 'reference' ? 'Sound on' : 'Hear this one'}</button>
               <ReferenceFacts reference={reference} checkedAt={checkedAt} topic={result.search_topic || analysis.topic} />
-            </> : <div className="ta-unavailable ta-panel-empty"><Icon name="youtube" size={28} /><p>No example videos could be analyzed in this run{tutorials.length ? ' (only tutorials were found)' : ''}. Try again, change the topic, or add a reference link.</p></div>}
+            </> : <div className="ta-unavailable ta-panel-empty"><Icon name="youtube" size={28} /><p>No example videos could be analyzed in this run{tutorials.length ? ' (only tutorials were found)' : ''}. Try again, pick another type of video, or add a reference link.</p></div>}
           </article>
         </div>
       </Reveal>
@@ -420,6 +431,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
     </div>
     <div className="ta-scroll" ref={scrollRef}>
       <header className="ta-hero ta-hero-compact">
+        <WaterFlow within deep />
         <div className="ta-hero-copy">
           <small className="ta-eyebrow ta-eyebrow-light">Trends · {clip.title || 'This clip'}</small>
           <h1 id="ta-title">What’s working right now. <span>Make your edit better.</span></h1>
@@ -429,8 +441,14 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
             <select value={`${clip.job_id}:${clip.clip_index}`} onChange={e => onSelectClip?.(clips.find(x => `${x.job_id}:${x.clip_index}` === e.target.value))} disabled={!onSelectClip || clips.length < 2}>
               {(clips.length ? clips : [clip]).map((x, i) => <option key={`${x.job_id}:${x.clip_index}`} value={`${x.job_id}:${x.clip_index}`}>{i + 1}. {x.title || 'Clip'}</option>)}
             </select></label>
-          <label className="ta-field ta-field-grow"><span>Topic</span>
-            <input value={topic} onChange={e => setTopic(e.target.value)} maxLength={160} placeholder={analysis?.topic || 'Detected from your clip'} /></label>
+          <label className="ta-field ta-field-grow"><span>Type of video</span>
+            <select value={choice} onChange={e => setChoice(e.target.value)}>
+              <option value="">Detect from my clip</option>
+              {TOPICS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              <option value="other">Other…</option>
+            </select></label>
+          {choice === 'other' && <label className="ta-field ta-field-grow"><span>What to search for</span>
+            <input value={topic} onChange={e => setTopic(e.target.value)} maxLength={160} placeholder="e.g. street food tour, wedding speech" /></label>}
           <div className="ta-control-actions">
             <button type="button" className="btn btn-small" onClick={() => setAdding(a => !a)} aria-expanded={adding}><Icon name="plus" /> Add Reference</button>
             <button type="submit" className="btn btn-small btn-primary" disabled={running || !state}><Icon name="sparkles" /> {running ? 'Analyzing…' : finished ? 'Analyze again' : 'Analyze'}</button>
@@ -451,7 +469,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
           {running ? <>I’m on it. {record?.message || 'Starting…'}</>
             : problem ? <>That didn’t work, but your clip is safe. {problem}</>
             : finished ? <>All done! I found {examples.length ? `${examples.length} trending video${examples.length === 1 ? '' : 's'}` : 'no trending videos this time'} and compared them with your edit. Scroll down, I’ll walk you through it.</>
-            : <>Hi, I’m your Cascade guide! Pick a topic (or leave it blank) and press Analyze. I’ll look at what’s trending, find what the most viral videos share, and show you how to improve your edit.</>}
+            : <>Hi, I’m your Cascade guide! Pick the type of video and press Analyze. I’ll look at what’s trending, find what the most viral videos share, and show you how to improve your edit.</>}
         </Guide>
       </header>
       <main className="ta-main">{status}{body}</main>

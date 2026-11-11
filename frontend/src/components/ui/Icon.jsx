@@ -40,6 +40,7 @@ const PATHS = {
   external: <><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></>,
   compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5Z" /></>,
   youtube: <><rect x="2" y="5" width="20" height="14" rx="4" /><path d="M10 9v6l5-3Z" fill="currentColor" /></>,
+  linkedin: <><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 10v7M8 7v.01M12 17v-7M12 13a3 3 0 0 1 6 0v4" /></>,
   tree: <><path d="M12 22v-6M12 3 6 11h3l-4 5h14l-4-5h3Z" /></>,
 };
 

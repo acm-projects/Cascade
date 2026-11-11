@@ -8,7 +8,6 @@ export default function ExportSettings({ settings, onChange, downloads, selected
     <label className="export-check"><input type="checkbox" checked={settings.includeCaptions}
       disabled={downloads.working} onChange={e => onChange({ ...settings, includeCaptions: e.target.checked })}/>
       Include captions</label>
-    <details className="export-help"><summary>Format details</summary><p>{audioOnly ? 'Audio exports are MP3. Enabled transcript captions are included as VTT files in ZIP downloads; they cannot be burned into audio.' : 'Applies to MP4 and ZIP downloads. Smaller videos stay at their current size. Burned-in captions remain.'}</p></details>
     {selectedCount > 10 && <p role="note">Rendering more than 10 clips may take a few minutes.</p>}
     {downloads.progressText && <p role="status" aria-live="polite">{downloads.progressText}</p>}
     {downloads.error && <div role="alert">{downloads.error} <button type="button" disabled={downloads.working} onClick={downloads.retry}>Retry download</button></div>}

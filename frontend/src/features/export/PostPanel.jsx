@@ -73,12 +73,17 @@ function PostPanel({ projectId, clip, onChange }) {
     setBusy(action);
     try {
       const result = await api.generatePost(projectId, clip.job_id, clip.clip_index, action, current());
-      const next = action === "tags" ? { ...post } : { ...post, caption: result.caption };
-      const tags = action === "rewrite" ? tagText : result.hashtags.join(" ");
-      setPost(next);
-      setTagText(tags);
-      setDirty(true);
-      onChange?.({ ...next, hashtags: tags.split(/[\s,]+/).filter(Boolean) });
+      // Fill the fields straight in: "generate" writes the title, caption and hashtags; "rewrite" the
+      // caption; "tags" the hashtags. Then save, so YouTube/LinkedIn use them right away.
+      const next = { ...post };
+      if (action !== "tags") next.caption = result.caption;
+      if (action === "generate" && result.name) next.name = result.name;
+      const hashtags = action === "rewrite" ? current().hashtags : result.hashtags;
+      const saved = await api.savePost(projectId, clip.job_id, clip.clip_index, { ...next, hashtags });
+      setPost(saved);
+      setTagText(saved.hashtags.join(" "));
+      setDirty(false);
+      onChange?.(saved);
     } catch (err) {
       toast.show(err.message, "error");
     } finally {

@@ -34,7 +34,7 @@ function App() {
           <Route
             path="/projects/:projectId/studio/:sessionId?"
             element={
-              <Suspense fallback={<div className="page-loading"><Spinner size={48} label="Loading AI Studio" /></div>}>
+              <Suspense fallback={<div className="page-loading"><Spinner size={48} label="Loading Canvas" /></div>}>
                 <StudioPage />
               </Suspense>
             }

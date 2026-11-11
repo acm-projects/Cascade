@@ -410,7 +410,7 @@ def register(app, integration, selected, export, export_model):
         except (sqlite3.Error, OSError):
             oauth_failure(stage, 'storage_error', hint='Check the backend social database path and filesystem permissions.')
         logger.warning('YouTube OAuth connected successfully')
-        return HTMLResponse('YouTube connected. Return to Cascade and click Refresh connection. You may close this tab.')
+        return HTMLResponse('YouTube connected. Cascade will start your upload now. You can close this tab.')
 
     def job_key(pid, jid, index, user):
         return user+':'+pid+':'+jid+':'+str(index)

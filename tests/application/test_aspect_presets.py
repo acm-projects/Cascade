@@ -59,3 +59,19 @@ class AspectPresetTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TopicSearchTests(unittest.TestCase):
+    def test_menu_choices_search_real_kinds_of_video(self):
+        from backend.editor import trends
+        self.assertIn('podcast clip', trends.search_queries('Podcast / interview'))
+        self.assertTrue(all('podcast' not in q for q in trends.search_queries('travel vlog')))
+        self.assertEqual(trends.search_queries('street food tour'), ['street food tour', 'street food tour viral'])
+        self.assertEqual(trends.search_queries(''), ['viral shorts'])
+
+    def test_automatic_topic_follows_the_clip(self):
+        from backend.editor import trends
+        talk = {'cues': [{'text': 'welcome back to the show'}]}
+        self.assertEqual(trends.derive_search({'title': 'Episode 4'}, talk), 'podcast / interview')
+        self.assertEqual(trends.derive_search({'title': 'Bali trip vlog'}, {'cues': []}), 'travel vlog')
+        self.assertEqual(trends.derive_search({'title': 'x'}, talk, override='gaming'), 'gaming')

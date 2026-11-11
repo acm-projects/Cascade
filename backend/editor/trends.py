@@ -122,13 +122,60 @@ def infer_topic(clip,info):
     stop={'the','and','this','that','with','have','your','from','just','what','there','they'}
     return ' '.join(dict.fromkeys(w for w in words if len(w)>3 and w.lower() not in stop))[:120] or 'talking head storytelling'
 
+# What the person picks in the Topic menu -> real YouTube Shorts searches for that kind of video.
+CATEGORIES={
+    'podcast / interview':['podcast clip','podcast interview moment','podcast highlights'],
+    'travel vlog':['travel vlog','travel reel cinematic','travel shorts'],
+    'comedy / skit':['funny skit','comedy shorts','funny reaction clip'],
+    'talking head / explainer':['talking head explainer','educational shorts','storytime shorts'],
+    'food / cooking':['cooking shorts','food recipe reel','restaurant food review'],
+    'fitness / lifestyle':['workout shorts','fitness motivation','day in my life'],
+    'gaming':['gaming highlights','gaming clip','gaming funny moments'],
+    'tech / product review':['tech review shorts','gadget review','product unboxing'],
+}
+
+def search_queries(topic):
+    """Searches to run for a topic: the curated ones for a menu choice, otherwise what the person typed."""
+    known=CATEGORIES.get(topic.strip().lower())
+    if known:return list(known)
+    topic=topic.strip()
+    return [topic,topic+' viral'] if topic else ['viral shorts']
+
+# The main word for each menu choice, combined with the clip's own subject for a more specific search
+CATEGORY_NOUN={'podcast / interview':'podcast','travel vlog':'travel vlog','comedy / skit':'comedy','talking head / explainer':'explained',
+    'food / cooking':'cooking','fitness / lifestyle':'fitness','gaming':'gaming','tech / product review':'tech review'}
+FILLER=set("""the and this that with have your from just what there they them then than were been will would could should about because
+really think know like going want people thing things very much some more into over also when where which while their here these those said
+says saying gonna wanna yeah okay right well even only make made being doing does dont didnt cant wont youre thats theyre whats were ive
+something anything everything actually literally kind sort maybe always never every other another still where shorts clip viral moment reel
+video videos time back come came take took give gave look looking need talk talking tell said whether able great quote wanna"""
+    .split())
+
+def clip_keywords(clip,info,limit=4):
+    """The words that say what this clip is about: its title counts most, then the most repeated words it says."""
+    from collections import Counter
+    # subject words only: no filler, no contractions (we're, it's), no -ing verbs (saying, passing)
+    words=lambda text:[w.lower() for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}(?!')",text)
+                       if w.lower() not in FILLER and not w.lower().endswith('ing') and "'" not in w]
+    counts=Counter(words(' '.join(c['text'] for c in info['cues'][:60])))
+    for w in words(clip.get('title','')):counts[w]+=5
+    return [w for w,n in counts.most_common(limit) if n>1 or w in words(clip.get('title',''))]
+
+def relevance(video,terms):
+    """How many of the clip's subject words and the topic's words a found video mentions (title, tags, description)."""
+    text=' '.join([video.get('title',''),' '.join(video.get('tags') or []),video.get('description','')]).lower()
+    return sum(1 for term in terms if re.search(r'\b'+re.escape(term),text))
+
 def derive_search(clip,info,goal='',override='',tags=None):
     instruction=bool(re.search(r'tell me|improve (?:this|my)|based on trends|make this|help me|research this',override,re.I))
     topic='' if instruction else override.strip()
     if not topic:
-        context=' '.join([clip.get('title',''),' '.join(c['text'] for c in info['cues'][:8]),str((tags or {}).get('tone',''))]).lower()
-        topic='comedy reaction editing' if re.search(r'teddy|bear|comedy|humor|funny',context) else ('dialogue storytelling editing' if info['cues'] else 'visual storytelling editing')
-        if re.search(r'flashy|crazy|high.energy',goal,re.I):topic='high energy '+topic
+        context=' '.join([clip.get('title',''),' '.join(c['text'] for c in info['cues'][:12])]).lower()
+        rules=[('travel vlog',r'travel|trip|vlog|flight|hotel|beach|hike|city tour'),('food / cooking',r'recipe|cook|food|restaurant|eat|taste'),
+               ('gaming',r'game|gaming|stream|level|boss'),('fitness / lifestyle',r'workout|gym|fitness|routine'),
+               ('comedy / skit',r'teddy|bear|comedy|humor|funny|skit|prank'),('tech / product review',r'review|unbox|phone|laptop|gadget')]
+        topic=next((name for name,pattern in rules if re.search(pattern,context)),'')
+        if not topic:topic='podcast / interview' if info['cues'] else 'travel vlog'
     return topic[:160]
 
 def speech_evidence(info):
@@ -262,15 +309,30 @@ def collect(pid,jid,index,user,state,record,progress):
                     except Exception as exc:failures.append({'kind':'example',**(exc.detail if isinstance(exc,StageError) else failure(exc,'discovery_metadata',vid))})
                 with ThreadPoolExecutor(max_workers=len(added)) as pool:videos.extend(v for v in pool.map(meta,added) if v)
             progress('Searching this week’s trending YouTube Shorts…')
-            found=[]
-            for query in (search_topic,'comedy dialogue edit'):
-                try:found=stage('discovery',youtube_trends.get_trending_videos,query,limit=3)
+            queries=search_queries(search_topic)
+            # two more searches for this clip's own subject (e.g. "podcast children"), so references are on-topic.
+            # One subject word each: longer searches rarely match anything uploaded this week.
+            keywords=clip_keywords(clip,info)
+            noun=CATEGORY_NOUN.get(search_topic.lower(),search_topic)
+            queries.extend(f'{noun} {word}'.strip() for word in keywords[:2])
+            terms=list(dict.fromkeys(keywords+[w for q in search_queries(search_topic) for w in q.lower().split() if w not in FILLER]))
+            def discover(query):
+                try:return stage('discovery',youtube_trends.get_trending_videos,query,limit=5),[]
                 except Exception as exc:
-                    failure_details=exc.failures if isinstance(exc,ResearchFailure) else [exc.detail if isinstance(exc,StageError) else failure(exc,'discovery')]
-                    failures.extend({'kind':'example',**d} for d in failure_details);continue
-                if found:break
-                failures.append({'kind':'example','stage':'discovery','code':'no_recent_results','reason':'No matching Shorts within the 14-day window.'})
-                progress('No recent exact-topic Shorts; trying a broader search…')
+                    details=exc.failures if isinstance(exc,ResearchFailure) else [exc.detail if isinstance(exc,StageError) else failure(exc,'discovery')]
+                    return [],[{'kind':'example',**d} for d in details]
+            with ThreadPoolExecutor(max_workers=len(queries)) as pool:results=list(pool.map(discover,queries))
+            found=[];seen=set()
+            for items,problems in results:
+                failures.extend(problems)
+                for item in items:
+                    if item['video_id'] not in seen:seen.add(item['video_id']);found.append(item)
+            # most relevant to this clip first; among equally relevant ones, the most-watched per hour.
+            # If anything matched the clip at all, the videos that match nothing are left out.
+            found.sort(key=lambda v:(-relevance(v,terms),-(views_per_hour(v) or 0)))
+            if found and relevance(found[0],terms):found=[v for v in found if relevance(v,terms)]
+            found=found[:3]
+            if not found:failures.append({'kind':'example','stage':'discovery','code':'no_recent_results','reason':'No matching Shorts within the 14-day window.'})
             videos.extend(found)
             chosen=[]
             for video in videos:
