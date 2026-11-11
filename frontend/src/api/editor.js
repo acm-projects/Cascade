@@ -6,7 +6,7 @@ import { apiFetch } from "./client";
 // An "edit" (the draft state) looks like:
 //   { start, end,                                   seconds, trimmed inside the clip
 //     captions:    { enabled, font, size, color, stroke, thickness, background, opacity, position, bold },
-//     composition: { ratio: "original" | "9:16" | "1:1" | "4:5" | "16:9" | "4:3", mode: "fit" | "fill", x, y, background },
+//     composition: { ratio: "original" | "9:16" | "1:1" | "4:5" | "16:9" | "4:3" | "16:10" | "21:9", mode: "fit" | "fill", x, y, background },
 //     effects:     { brightness, contrast, saturation, grayscale },
 //     reframe:     { enabled, focus, selection, analysis_id },
 //     texts: { [cueId]: "caption text" },  broll: [ ...b-roll segments ] }
@@ -131,6 +131,15 @@ export function startReframe(token, projectId, jobId, index, body) {
  */
 export function getReframe(token, projectId, jobId, index, analysisId) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/reframe/${encodeURIComponent(analysisId)}`, { token });
+}
+
+/**
+ * POST .../editor/{jobId}/{index}/reframe/{analysisId}/plan   body: { composition, focus, selection }
+ * Where the crop should sit over time, following whoever is talking.
+ * @returns {Promise<{ points: { t, x, y }[] }>} x / y are 0-1 positions of the crop inside the picture, by source second
+ */
+export function getReframePlan(token, projectId, jobId, index, analysisId, body) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/reframe/${encodeURIComponent(analysisId)}/plan`, { token, method: "POST", body });
 }
 
 export function listAudioAssets(token, projectId, jobId, index) {

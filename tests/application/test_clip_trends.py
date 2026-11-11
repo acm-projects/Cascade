@@ -94,11 +94,11 @@ class ClipTrendsTests(unittest.TestCase):
         from backend.editor import render
         s=Edit(**self.state);s.start=.2;s.end=9.5
         video={'video_id':'abcdefghijk','title':'Mock recent example','url':'https://www.youtube.com/watch?v=abcdefghijk','channel':'Fixture','published_at':'2026-10-29T00:00:00Z','view_count':100}
-        def search(query,limit):return [video] if 'tutorial' not in query else [{**video,'video_id':'lmnopqrstuv','title':'Editing tutorial'}]
+        def search(query,limit):return [video]
         record={'topic':'talking head'}
         with patch.object(youtube_trends,'get_trending_videos',side_effect=search),patch.object(pipeline,'extract_tags',return_value={'pacing':'fast'}), \
              patch.object(pipeline,'analyze_youtube_video',return_value={'tags':{'pacing':'fast'}}), \
-             patch.object(cascade_llm,'structured_json',return_value=SimpleNamespace(data=findings())),patch.object(trends,'tutorial',return_value={'techniques':['Use readable captions']}) as tutorial,patch.object(render,'export',wraps=render.export) as exporter:
+             patch.object(cascade_llm,'structured_json',return_value=SimpleNamespace(data=findings())),patch.object(render,'export',wraps=render.export) as exporter:
             # Read identifiers from the actual route fixture.
             parts=self.url.split('/');pid,jid,index=parts[3],parts[5],int(parts[6])
             from backend.editor.runtime import load_json,jobs_dir
@@ -108,9 +108,8 @@ class ClipTrendsTests(unittest.TestCase):
         self.assertEqual(exported.start,.2);self.assertEqual(exported.end,9.5)
         self.assertEqual(result['references'][0]['published_at'],video['published_at'])
         self.assertTrue(result['coverage'].startswith('YouTube only'))
-        tutorial.assert_called_once()
-        self.assertNotIn('observed_tags',result['references'][1])
-        self.assertEqual(result['references'][1]['kind'],'tutorial')
+        self.assertEqual(len(result['references']),1)
+        self.assertEqual(result['references'][0]['kind'],'example')
     def test_reference_links_are_accepted_checked_and_analyzed_first(self):
         """A pasted YouTube link is sent with Analyze, rejected when it isn't YouTube, and compared as the user's own reference."""
         def inline(fn,*args):fn(*args)

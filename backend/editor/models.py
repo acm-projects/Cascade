@@ -28,7 +28,7 @@ class Captions(BaseModel):
 
 class Composition(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
-    ratio: Literal['original','9:16','1:1','4:5','16:9','4:3'] = 'original'
+    ratio: Literal['original','9:16','1:1','4:5','16:9','4:3','16:10','21:9'] = 'original'
     mode: Literal['fit','fill'] = 'fit'
     x: float = Field(default=.5, ge=0, le=1)
     y: float = Field(default=.5, ge=0, le=1)
@@ -191,7 +191,8 @@ class CaptionImage(BaseModel):
 
 
 class ExportInput(Edit):
-    resolution: Literal['original', '1080p', '720p'] = 'original'
+    resolution: Literal['original', '1080p', '720p', '540p', '480p'] = 'original'
+    preview: bool = False  # the Editor's quick preview: small, fast, and never waits for speaker tracking
     overlays: list[CaptionImage] | None = Field(default=None, max_length=1000)
 
 

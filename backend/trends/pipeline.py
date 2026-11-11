@@ -80,7 +80,7 @@ def download_video(video_id: str, dest_dir: Path) -> Path:
         "fragment_retries": 1,
         "noplaylist": True,
         "match_filter": duration_filter,
-        "format": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]/best",
+        "format": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]/best",
         "merge_output_format": "mp4",
         "outtmpl": out_template,
         "quiet": True,

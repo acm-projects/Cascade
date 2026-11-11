@@ -100,7 +100,7 @@ def turn(pid, jid, index, user, clip, body, info, stock, audio_store):
     with GUARD: RUNNING[str(folder)] = thread
     thread.start()
     verb = 'Changing the edit' if current else 'Editing this clip'
-    return _reply(body.state, f'{verb} now, at no extra cost. You can keep working or switch clips; it stays tied to this clip and will appear in the Edited preview when it is ready.', job)
+    return _reply(body.state, f'{verb} now. You can keep working or switch clips. It will show up in the Edited preview when it's ready.', job)
 
 
 def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock, audio_store, job):

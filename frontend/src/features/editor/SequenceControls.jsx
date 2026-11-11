@@ -10,7 +10,7 @@ export default function SequenceControls({ state, change, player }) {
   const sequence = state.fablecut;
   if (!sequence) return null;
   const occ = sequence.engine === OCC;
-  const engineName = occ ? 'OpenChatCut' : 'FableCut';
+  const engineName = 'AI';
   const setSequence = values => change(s => ({ ...s, fablecut: { ...s.fablecut, ...values } }));
   const base = timelineClock({ ...state, fablecut: null });
   const spans = sequence.shots.reduce((all, shot, index) => {
@@ -23,7 +23,7 @@ export default function SequenceControls({ state, change, player }) {
     change(s => ({ ...s, fablecut: { ...s.fablecut, shots: s.fablecut.shots.map((shot, i) => i === index ? { ...shot, ...values } : shot) } }));
   }
   return <section className="ai-sequence" aria-label={`${engineName} sequence`}>
-    <b>{engineName} sequence</b><span> · played in this order · source times below</span>
+    <b>AI sequence</b><span> · played in this order · source times below</span>
     <label>Sequence frame <select value={sequence.ratio} onChange={e => change(s => ({ ...s, fablecut: { ...s.fablecut, ratio: e.target.value } }))}>
       <option value="9:16">{occ ? '9:16 portrait' : '9:16 portrait crop'}</option><option value="original">Manual frame</option>
     </select></label>
@@ -55,7 +55,7 @@ export default function SequenceControls({ state, change, player }) {
         return { ...s, fablecut: { ...s.fablecut, shots } };
       })}>Move shot {index + 1} earlier</button>
     </div>)}</div></details>
-    <p>Manual edits remain underneath this sequence. Word timing is estimated; {occ ? 'slow-motion shots use a constant speed with muted action audio' : 'ramped action audio is muted'}. The source ruler stays in source time.</p>
+    <p>Manual edits remain underneath this sequence. </p>
     <p>{sequence.music_asset_id ? 'AI music bed on edited time; existing manual music takes priority.' : 'No AI music bed.'} {sequence.sound_design ? (occ ? 'Whooshes on transitions and impacts on punch-ins.' : 'Selective impacts, whooshes and a build riser.') : 'No AI sound effects.'}</p>
     <button type="button" onClick={() => change(s => ({ ...s, fablecut: null }))}>Remove AI sequence</button>
   </section>;

@@ -28,7 +28,7 @@ const REF_COLORS = ['var(--ta-ref)', 'var(--ta-ref-2)', 'var(--ta-ref-3)', 'var(
 /** Server errors in plain words: never raw JSON, never a stack of field names. */
 function friendly(e) {
   const m = String(e?.message || e || '').trim();
-  if (/extra_forbidden|Extra inputs|Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Cascade’s server isn’t answering with the latest code. Restart the backend (Ctrl+C, then start it again), then press Analyze.';
+  if (/extra_forbidden|Extra inputs|Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Couldn’t reach Cascade just now. Please try again in a moment.';
   if (/^[[{]/.test(m)) return 'Something went wrong starting the analysis. Please try again.';
   return m || 'Something went wrong. Please try again.';
 }
@@ -337,7 +337,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
               refText={hookStyle && <span className="ta-observation">Observed: {hookStyle}</span>}
               note={`When your first spoken line begins.${top.find(s => s.technique === 'hook' && s.range) ? ` AI located the main point at ${clock(top.find(s => s.technique === 'hook').range[1])}.` : ''}`} />
             <Finding shown={shown} cardRef={bindTarget('pace')} label="Average shot length" value={editM?.avgShot} unit=" s"
-              refText={rangeText(avgRange)} note={editM?.cuts ? `${editM.cuts.length} shot changes in ${secs(editM.span, 0)} of your edit. Shot changes detected by FFmpeg.` : 'Analyze again to measure shot changes.'} />
+              refText={rangeText(avgRange)} note={editM?.cuts ? `${editM.cuts.length} shot changes in ${secs(editM.span, 0)} of your edit.` : 'Analyze again to measure shot changes.'} />
             <Finding shown={shown} cardRef={bindTarget('caption')} label="Caption coverage" value={f.captionCoverage == null ? null : f.captionCoverage * 100} unit="%" format={v => Math.round(v).toString()}
               empty={info?.cues?.length ? 'Not measured' : 'No captions'} refText={<span className="ta-na">Not measured — on-screen text in YouTube videos isn’t detected</span>}
               note="Share of your runtime with a caption line on screen." />

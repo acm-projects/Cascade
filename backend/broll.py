@@ -17,6 +17,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 LOCK = threading.RLock()
+_KEYS = {}
+
+
+def keylock(key):
+    """One lock per search or download, so different ones run at the same time and only repeats of the same one wait."""
+    with LOCK:
+        return _KEYS.setdefault(str(key), threading.Lock())
 MAX_BYTES = 250 * 1024 * 1024  # 4K b-roll for AI edits can be large
 CACHE_BYTES = 1024 * 1024 * 1024
 TTL = 24 * 60 * 60
@@ -117,9 +124,10 @@ class Store:
         if orientation not in (None, 'portrait', 'landscape', 'square'): orientation = None
         cache_key = hashlib.sha256(json.dumps([query.casefold(), page] + ([orientation, hd] if orientation or hd else [])).encode()).hexdigest()
         path = self.folder/'search'/f'{cache_key}.json'
-        with LOCK:
-            if path.is_file() and time.time()-path.stat().st_mtime < TTL:
-                return json.loads(path.read_text())
+        with keylock(path):
+            with LOCK:
+                if path.is_file() and time.time()-path.stat().st_mtime < TTL:
+                    return json.loads(path.read_text())
             try:
                 response = httpx.get('https://api.pexels.com/v1/videos/search',
                                      params={'query': query, 'page': page, 'per_page': 12, **({'orientation': orientation} if orientation else {}), **({'size': 'large'} if hd else {})},
@@ -133,40 +141,41 @@ class Store:
                 data = response.json()
                 if not isinstance(data,dict) or not isinstance(data.get('videos'),list):
                     raise ValueError('Invalid provider response')
-                registry = self.registry()
-                results = []
-                for video in data['videos'][:12]:
-                    if not isinstance(video,dict): continue
-                    try:
-                        limit = 3840 if hd else 1920
-                        files = [f for f in video.get('video_files', []) if f.get('file_type') == 'video/mp4'
-                                 and 0 < int(f.get('width') or 0) <= limit and 0 < int(f.get('height') or 0) <= limit]
-                        if not files:
+                with LOCK:
+                    registry = self.registry()
+                    results = []
+                    for video in data['videos'][:12]:
+                        if not isinstance(video,dict): continue
+                        try:
+                            limit = 3840 if hd else 1920
+                            files = [f for f in video.get('video_files', []) if f.get('file_type') == 'video/mp4'
+                                     and 0 < int(f.get('width') or 0) <= limit and 0 < int(f.get('height') or 0) <= limit]
+                            if not files:
+                                continue
+                            if hd:  # sharp in a vertical 1080x1920 frame: a portrait clip ~1080 wide, or a landscape clip ~2160 tall (4K)
+                                need = lambda f: 1080 if f['height'] > f['width'] else 2160
+                                rendition = min(files, key=lambda f: (min(f['width'], f['height']) < need(f)*.66, abs(min(f['width'], f['height'])-need(f))))
+                            else:
+                                rendition = min(files, key=lambda f: abs(max(f['width'], f['height'])-1280))
+                            asset = Asset(id=f"px-{int(video['id'])}-{int(rendition['id'])}", provider_id=int(video['id']),
+                                          creator=str(video['user']['name']), creator_url=provider_url(video['user']['url'], 'page'),
+                                          source_url=provider_url(video['url'], 'page'), duration=video['duration'],
+                                          width=rendition['width'], height=rendition['height']).model_dump()
+                            # Keep verified metadata stable for already-saved drafts.
+                            registry.setdefault(asset['id'], {'asset': asset, 'video': provider_url(rendition['link'], 'video'),
+                                                              'image': provider_url(video['image'], 'image')})
+                            results.append(registry[asset['id']]['asset'])
+                        except (KeyError, ValueError, TypeError, HTTPException):
                             continue
-                        if hd:  # sharp in a vertical 1080x1920 frame: a portrait clip ~1080 wide, or a landscape clip ~2160 tall (4K)
-                            need = lambda f: 1080 if f['height'] > f['width'] else 2160
-                            rendition = min(files, key=lambda f: (min(f['width'], f['height']) < need(f)*.66, abs(min(f['width'], f['height'])-need(f))))
-                        else:
-                            rendition = min(files, key=lambda f: abs(max(f['width'], f['height'])-1280))
-                        asset = Asset(id=f"px-{int(video['id'])}-{int(rendition['id'])}", provider_id=int(video['id']),
-                                      creator=str(video['user']['name']), creator_url=provider_url(video['user']['url'], 'page'),
-                                      source_url=provider_url(video['url'], 'page'), duration=video['duration'],
-                                      width=rendition['width'], height=rendition['height']).model_dump()
-                        # Keep verified metadata stable for already-saved drafts.
-                        registry.setdefault(asset['id'], {'asset': asset, 'video': provider_url(rendition['link'], 'video'),
-                                                          'image': provider_url(video['image'], 'image')})
-                        results.append(registry[asset['id']]['asset'])
-                    except (KeyError, ValueError, TypeError, HTTPException):
-                        continue
-                if len(registry) > 2000:
-                    raise HTTPException(409, 'This clip has reached its stock search limit. Use an existing result.')
-                write_json(self.folder/'assets.json', registry)
-                result = {'results': results, 'page': page, 'query': query,
-                          'has_more': bool(data.get('next_page')) and page < 100}
-                write_json(path, result)
-                for old in sorted(path.parent.glob('*.json'), key=lambda p:p.stat().st_mtime)[:-100]:
-                    old.unlink(missing_ok=True)
-                return result
+                    if len(registry) > 2000:
+                        raise HTTPException(409, 'This clip has reached its stock search limit. Use an existing result.')
+                    write_json(self.folder/'assets.json', registry)
+                    result = {'results': results, 'page': page, 'query': query,
+                              'has_more': bool(data.get('next_page')) and page < 100}
+                    write_json(path, result)
+                    for old in sorted(path.parent.glob('*.json'), key=lambda p:p.stat().st_mtime)[:-100]:
+                        old.unlink(missing_ok=True)
+                    return result
             except (httpx.HTTPError, ValueError, TypeError, KeyError):
                 # Never echo provider bodies, exception strings, headers, or request objects.
                 raise HTTPException(502, 'Could not reach Pexels or read its response. Retry shortly.')
@@ -182,6 +191,9 @@ class Store:
             used_bytes=sum(p.stat().st_size for p in self.folder.glob('*') if p.is_file())
             if used_bytes >= CACHE_BYTES:
                 raise HTTPException(409, 'This clip’s stock cache is full. Existing downloaded footage remains available.')
+        with keylock(target):
+            if target.is_file():
+                return target
             tmp = None
             try:
                 with tempfile.NamedTemporaryFile(dir=self.folder, delete=False) as output:

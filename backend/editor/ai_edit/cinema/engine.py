@@ -68,6 +68,9 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
     edit = speech.cut(words, [(s.from_word, s.to_word) for s in plan.story], drop, db, duration=info['duration'])
     if not edit.pieces: raise ValueError('Nothing was left to play after cleaning the dialogue.')
     finder = find_broll or (lambda q: None)
+    if hasattr(finder, 'prefetch'):   # fetch every b-roll clip while the dialogue is cut and framed
+        finder.prefetch(([plan.opener.query or f'{plan.opener.word.lower()} aerial'] if plan.opener.style == 'mask' and plan.opener.word else [])
+                        + [b.query for b in (plan.broll if options.broll else [])])
     hook_pieces = [p for p in edit.pieces if p.part == 0] if plan.story[0].role == 'hook' else []
     order = [i for p in edit.pieces if p.part > 0 or not hook_pieces for i in p.words]
 

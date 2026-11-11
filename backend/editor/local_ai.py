@@ -49,7 +49,7 @@ class Directive(BaseModel):
     query: str | None = Field(default=None, max_length=160)
     cue_index: int | None = Field(default=None, ge=0)
     text: str | None = Field(default=None, max_length=300)
-    ratio: Literal['original', '9:16', '1:1', '4:5', '16:9', '4:3'] | None = None
+    ratio: Literal['original', '9:16', '1:1', '4:5', '16:9', '4:3', '16:10', '21:9'] | None = None
     fade_in: float | None = Field(default=None, ge=0, le=5)
     fade_out: float | None = Field(default=None, ge=0, le=5)
 

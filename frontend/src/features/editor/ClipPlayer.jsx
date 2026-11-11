@@ -7,9 +7,10 @@ import { clipMediaPath } from "./clips";
 import { dragFraming, frameSize } from "./playerMath";
 import "./ClipPlayer.css";
 import { timelineClock } from "./reelTiming";
+import { ratioOf } from "./aspectRatios";
+import useFramingPlan, { framingAt } from "./useFramingPlan";
 import Icon from "../../components/ui/Icon";
 
-const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 4 / 3 };
 // Live preview of one clip with its edits: plays only the trimmed part (looping), in the chosen
 // aspect-ratio frame, with the captions drawn on top. The real render happens on Export.
 //   clip  - { job_id, clip_index } ; info - { duration, width, height, cues } ; state - the draft
@@ -43,6 +44,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const renderError = current?.error ?? '';
   const rendering = advanced && !current;
   const showEdited = view === "edited" && !!rendered;
+  // Until the server's render of this exact edit arrives, the shape is shown instantly by cropping the video itself
+  const cropNow = view === "edited" && !showEdited && state.composition.mode === "fill";
   // Fan-edit previews first compute subject cutouts locally; show that progress while rendering.
   useEffect(() => {
     if (!rendering || !styled) return;
@@ -57,7 +60,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
     if (!advanced) return;
     let active = true, objectUrl;
     const timer = setTimeout(() => {
-      api.exportClip(projectId, clip.job_id, clip.clip_index, JSON.parse(snapshot)).then(blob => {
+      api.exportClip(projectId, clip.job_id, clip.clip_index, { ...JSON.parse(snapshot), preview: true, resolution: '540p' }).then(blob => {
         if (!active) return;
         objectUrl = URL.createObjectURL(blob); setRender({ key: renderKey, url: objectUrl });
       }).catch(e => { if (active) setRender({ key: renderKey, error: e.message }); });
@@ -72,6 +75,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const drag = useRef(null);        // the Fill-mode drag in progress
   const justDragged = useRef(false); // so letting go after a drag doesn't also play/pause
   const [stage, setStage] = useState({ width: 0, height: 0 });
+  const [fileShape, setFileShape] = useState(null); // an AI edit's own width / height, once its file has loaded
+  const framingPlan = useFramingPlan(projectId, clip, state, info);
 
   // Download the clip with the sign-in token (videos can't send it themselves)
   useEffect(() => {
@@ -163,12 +168,27 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
     else video.pause();
   }
 
+  // Instant Fill preview that follows the speaker: move the crop with the video's clock
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!cropNow || !framingPlan || !video) return undefined;
+    let frame = 0;
+    const move = () => {
+      const at = framingAt(framingPlan, video.currentTime);
+      if (at) video.style.objectPosition = `${at.x * 100}% ${at.y * 100}%`;
+      frame = requestAnimationFrame(move);
+    };
+    frame = requestAnimationFrame(move);
+    return () => { cancelAnimationFrame(frame); video.style.objectPosition = ""; };
+  }, [cropNow, framingPlan, url]);
+
   if (error) return <div className="clip-player-message" role="alert">{error.message || error}</div>;
   if (!url && !leafLoading) return <ClipLoading />;
 
   const { composition } = state;
   const audioOnly = info.has_video === false;
-  const ratio = view === "original" ? info.width / info.height : state.ai_edit ? 9 / 16 : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
+  const aiShape = composition.ratio !== "original" ? ratioOf(composition.ratio) : fileShape || 9 / 16;
+  const ratio = view === "original" ? info.width / info.height : state.ai_edit ? aiShape : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : ratioOf(composition.ratio);
   // The biggest frame of this shape that fits the space
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
 
@@ -236,10 +256,10 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
             muted={muted}
             className="clip-player-video"
             style={{
-              objectFit: "contain",
+              objectFit: cropNow ? "cover" : "contain",
               objectPosition: `${composition.x * 100}% ${composition.y * 100}%`,
             }}
-            onLoadedMetadata={(e) => (e.target.currentTime = showEdited || view === "original" ? 0 : state.start)}
+            onLoadedMetadata={(e) => { if (state.ai_edit && e.target.videoWidth) setFileShape(e.target.videoWidth / e.target.videoHeight); e.target.currentTime = showEdited || view === "original" ? 0 : state.start; }}
             onCanPlay={e => setReadySource(e.currentTarget.getAttribute("src"))}
             onError={() => setError(new Error("Unable to load the preview. Please try again."))}
             onTimeUpdate={handleTimeUpdate}

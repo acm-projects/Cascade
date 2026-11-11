@@ -1,5 +1,6 @@
 // "Your Edit" and "Trending Reference", side by side in equal panels.
 // Each plays on its own; "Compare openings" restarts both. Only one of them is ever heard.
+import { ratioOf } from '../aspectRatios';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import useApi from '../../../api/useApi';
 import Icon from '../../../components/ui/Icon';
@@ -7,7 +8,6 @@ import { clipMediaPath } from '../clips';
 import { timelineClock } from '../reelTiming';
 import { aspect, clock } from './trendMetrics';
 
-const RATIOS = { '9:16': 9 / 16, '1:1': 1, '4:5': 4 / 5, '16:9': 16 / 9, '4:3': 4 / 3 };
 const number = n => (Number.isFinite(n) ? Intl.NumberFormat(undefined, { notation: n >= 10000 ? 'compact' : 'standard' }).format(n) : null);
 const day = iso => { const d = new Date(iso); return iso && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }) : null; };
 
@@ -39,7 +39,7 @@ export const EditVideo = forwardRef(function EditVideo({ projectId, clip, state,
     restart() { this.seek(0, true); },
     pause() { video.current?.pause(); },
   }), [rendered, time]);
-  const ratio = state.composition?.ratio && state.composition.ratio !== 'original' ? RATIOS[state.composition.ratio] : aspect(info?.width, info?.height, 16 / 9);
+  const ratio = state.composition?.ratio && state.composition.ratio !== 'original' ? ratioOf(state.composition.ratio) : aspect(info?.width, info?.height, 16 / 9);
   return <div className="ta-player" style={{ '--ar': ratio }}>
     {problem ? <p className="ta-unavailable" role="alert">This video couldn’t load: {problem}</p>
       : !source && !rendered ? <div className="ta-skeleton ta-player-frame" aria-label="Loading your edit" />

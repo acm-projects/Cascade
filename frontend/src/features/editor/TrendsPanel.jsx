@@ -115,7 +115,7 @@ export default function TrendsPanel({ projectId, clip, state, info, flush }) {
         {references.length > 0 && <section><h3>Sources</h3><div className="trends-sources">{references.map((ref, i) => <Source key={ref.id} reference={ref} number={i + 1} />)}</div></section>}
         <footer className="trends-footnote">
           <p>Based on {count(view.examples, 'example')} and {count(view.tutorials, 'tutorial')} from YouTube{skipped ? ` (${count(skipped, 'other video')} couldn’t be analyzed)` : ''}. This is guidance, not a prediction of how your clip will perform.</p>
-          <p>{analysis.researched_at ? `Updated ${seconds(analysis.researched_at)}` : ''}{analysis.model === 'claude-plan' ? ' · Analyzed by Claude, included in your plan' : ''}</p>
+          <p>{analysis.researched_at ? `Updated ${seconds(analysis.researched_at)}` : ''}</p>
         </footer>
       </>}
     </div>

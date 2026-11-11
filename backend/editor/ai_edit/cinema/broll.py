@@ -2,6 +2,8 @@
 relevance check the old engine used, then any local folder of footage."""
 import logging
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 LOG = logging.getLogger(__name__)
@@ -27,7 +29,8 @@ def from_folder(query, folder, used):
     return str(best) if best else None
 
 
-def from_stock(query, store, used, credits=None):
+def from_stock(query, store, used, credits=None, lock=None):
+    lock = lock or threading.Lock()
     if store is None: return None
     try:
         from ..picture import ranked
@@ -35,15 +38,19 @@ def from_stock(query, store, used, credits=None):
         return None
     try:
         for orientation in ('portrait', 'landscape'):
-            results = [a for a in store.search(query, orientation=orientation, hd=True).get('results', []) if a['id'] not in used]
+            with lock: taken = set(used)
+            results = [a for a in store.search(query, orientation=orientation, hd=True).get('results', []) if a['id'] not in taken]
             for pick in (ranked(query, results) or [])[:3]:
+                with lock:
+                    if pick['id'] in used: continue    # another shot just took it
+                    used.add(pick['id'])
                 try:
                     path = store.media(pick['id'])
-                    used.add(pick['id'])
                     if credits is not None:
-                        credits.append({'query': query, 'id': pick['id'], 'source': pick.get('source_url') or pick.get('url') or '', 'license': 'Pexels License'})
+                        with lock: credits.append({'query': query, 'id': pick['id'], 'source': pick.get('source_url') or pick.get('url') or '', 'license': 'Pexels License'})
                     return str(path)
                 except Exception:
+                    with lock: used.discard(pick['id'])
                     continue
     except Exception:
         LOG.info('stock search failed for %r', query, exc_info=True)
@@ -51,16 +58,33 @@ def from_stock(query, store, used, credits=None):
 
 
 def resolver(store=None, folders=()):
-    """find(query) -> path or None. `find.credits` lists where every shot came from; it is saved with the project."""
-    used, credits = set(), []
-    def find(query):
-        found = from_stock(query, store, used, credits)
+    """find(query) -> path or None. `find.credits` lists where every shot came from; it is saved with the project.
+    `find.prefetch(queries)` starts every search and download at once, so the edit finds each clip already waiting."""
+    used, credits, lock, pending = set(), [], threading.Lock(), {}
+    pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='broll')
+
+    def lookup(query):
+        found = from_stock(query, store, used, credits, lock)
         if found: return found
         for folder in folders:
-            found = from_folder(query, folder, used)
+            with lock: found = from_folder(query, folder, used)
             if found:
-                credits.append({'query': query, 'file': Path(found).name, 'source': 'local folder'})
+                with lock: credits.append({'query': query, 'file': Path(found).name, 'source': 'local folder'})
                 return found
         return None
+
+    def prefetch(queries):
+        for query in dict.fromkeys(q for q in queries if q):
+            if query not in pending: pending[query] = pool.submit(lookup, query)
+
+    def find(query):
+        job = pending.pop(query, None)
+        if job is not None:
+            try: return job.result()
+            except Exception:
+                LOG.info('b-roll prefetch failed for %r', query, exc_info=True)
+                return None
+        return lookup(query)
     find.credits = credits
+    find.prefetch = prefetch
     return find
