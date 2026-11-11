@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -19,6 +20,7 @@ from backend import main as app_main
 from backend.routers import clips as clip_routes
 from backend.core import jobs as core_jobs
 from backend.core import media as core_media
+from backend.core import storage as core_storage
 from backend.core import auth
 from backend.agent.website import SelectionError
 from backend.cascade_llm import LLMConfigError
@@ -79,6 +81,68 @@ class AgentEngineTests(unittest.TestCase):
         return core_jobs.jobs[JOB]
 
     # ------------------------------------------------------------------ the happy path
+    def test_clips_are_playable_while_parallel_cloud_uploads_are_blocked(self):
+        from backend.services import clip_backup
+        release, uploading = threading.Event(), threading.Event()
+        count_lock = threading.Lock()
+        active = maximum = 0
+        def upload(folder, job_id, filename, captions_filename, **kwargs):
+            nonlocal active, maximum
+            with count_lock:
+                active += 1
+                maximum = max(maximum, active)
+                if active == 3:
+                    uploading.set()
+            try:
+                if not release.wait(5):
+                    raise TimeoutError('Test did not release storage')
+                return {'s3_bucket': 'test', 'clip_s3_key': filename, 'captions_s3_key': captions_filename}
+            finally:
+                with count_lock:
+                    active -= 1
+        future = None
+        with (patch.object(core_storage, 'uses_local_storage', return_value=False),
+              patch('backend.services.source_backup.schedule'),
+              patch.object(core_storage, 'upload_clip_files', side_effect=upload)):
+            try:
+                job = self.run_job(fake_agent({}))
+                self.assertEqual(job['state'], 'done')
+                self.assertTrue(uploading.wait(3))
+                future = clip_backup._active[str((self.folder/'results.json').resolve())]
+                self.assertFalse(future.done())
+                self.assertEqual(job['backup_state'], 'pending')
+                self.assertEqual(len(job['clips']), 4)
+                response = self.client.get(f'/clips/{JOB}/clip_1.mp4', headers={**self.headers, 'Range': 'bytes=0-127'})
+                self.assertEqual(response.status_code, 206)
+                self.assertEqual(len(response.content), 128)
+                denied = self.client.get(f'/clips/{JOB}/clip_1.mp4', headers={'Authorization': 'Bearer another-user'})
+                self.assertEqual(denied.status_code, 404)
+            finally:
+                release.set()
+                if future is not None:
+                    future.result(timeout=5)
+        result = core_jobs.load_json(self.folder/'results.json')
+        self.assertEqual(result['backup_state'], 'complete')
+        self.assertEqual(maximum, 3)
+        self.assertTrue(all(c['backup_state'] == 'complete' for c in result['clips']))
+        self.assertTrue(all('clip_s3_key' not in c for c in job['clips']))
+
+    def test_explicit_trim_skips_ai_and_preserves_source_relative_captions(self):
+        owner = core_jobs.load_json(self.folder / 'owner.json')
+        owner.update(requested_clip_count=1, parent_clip={'start': 2., 'end': 11., 'title': 'Original'},
+                     exclude_windows=[[2., 11.]])
+        core_jobs.save_json(self.folder / 'owner.json', owner)
+        cache = self.folder / 'cached-transcript.json'
+        cache.write_text(json.dumps(TRANSCRIPT), encoding='utf-8')
+        with (patch('backend.agent.index.transcript_cache_paths', return_value=(cache, self.folder/'unused')),
+              patch.object(clip_routes, 'select_with_agent', side_effect=AssertionError('Unnecessary AI call'))):
+            clip_routes.process_upload(JOB, self.source, 'keep the first 8 seconds', 'both', 30)
+        result = core_jobs.load_json(self.folder / 'results.json')
+        self.assertEqual(result['selection_mode'], 'timestamp-edit')
+        self.assertEqual([(c['start'], c['end']) for c in result['clips']], [(2., 10.)])
+        captions = (self.folder/'clip_1.vtt').read_text(encoding='utf-8')
+        self.assertIn('00:00:01.000 --> 00:00:04.000', captions)
+
     def test_playable_prefix_is_published_before_the_batch_finishes(self):
         original = core_jobs.update_job
         published = []

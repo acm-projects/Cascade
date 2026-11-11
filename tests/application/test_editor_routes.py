@@ -29,6 +29,7 @@ class EditorRouteTests(unittest.TestCase):
             ('/trends', 'GET'), ('/trends', 'POST'), ('/trends/apply', 'POST'), ('/style-progress', 'GET'), ('/ai-edit', 'GET'))]
         # The AI Editor chat reports its engine and free-tier usage (no credentials).
         additions.append(['/api/projects/{pid}/editor/ai-status', ['GET']])
+        additions.append(['/api/projects/{project_id}/generations/{job_id}/backup/retry', ['POST']])
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
 
     def test_editor_modules_remain_small(self):

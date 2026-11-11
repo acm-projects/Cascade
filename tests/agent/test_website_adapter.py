@@ -111,7 +111,7 @@ def stubbed(monkeypatch):
 
 def run(rec, target=30, duration=120.0):
     return website.select_with_agent(
-        Path("video.mp4"), duration, "funny", target, rec.steps.append, rec.stages.append
+        Path("video.mp4"), duration, "funny footage", target, rec.steps.append, rec.stages.append
     )
 
 
@@ -154,7 +154,7 @@ def test_spoken_documentary_uses_batch_selection_without_summaries(stubbed, monk
     clips, _, meta = website.select_with_agent(Path('documentary.mp4'), 120, 'Find historical explanations in this documentary',
         30, rec.steps.append, rec.stages.append)
     assert len(clips) == 2
-    assert rec.index_kwargs == {'visual': False}
+    assert rec.index_kwargs == {'visual': False, 'embed_transcript': False}
     assert meta['selection_mode'] == 'transcript-batch'
     assert 'Transcript summaries' not in rec.stages
 
@@ -165,7 +165,7 @@ def test_clip_limits_follow_the_users_chosen_length(stubbed, target, low, high):
     stubbed(rec)
     run(rec, target=target)
     assert (rec.toolbox.min_clip_seconds, rec.toolbox.max_clip_seconds) == (low, high)
-    assert rec.run_kwargs == {"category": "funny", "target_seconds": float(target)}
+    assert rec.run_kwargs == {"category": "funny footage", "target_seconds": float(target)}
 
 
 def test_limits_never_exceed_the_global_cap_or_the_video(stubbed):

@@ -165,10 +165,14 @@ def build_index(
     progress: Callable[[str], None] | None = None,
     *,
     visual: bool = True,
+    embed_transcript: bool = True,
 ) -> VideoIndex:
     """Build independent transcript/visual indexes concurrently; callbacks stay on the caller thread."""
     from PIL import Image
-    from backend.video_search import router as vs
+    # Importing the search module imports the ML runtime. Batch transcript
+    # selection uses neither that runtime nor embeddings, even on a cold process.
+    if visual or embed_transcript:
+        from backend.video_search import router as vs
     from backend.media import probe_media
 
     emit = progress or (lambda msg: None)
@@ -180,22 +184,26 @@ def build_index(
         started = time.perf_counter()
         transcript_path, segemb_path = transcript_cache_paths(key, TRANSCRIPT_TAG)
         cost = 0.0
-        vs.load_models("speech", report)
-        if transcript_path.exists() and segemb_path.exists():
+        if transcript_path.exists():
             report("Loaded transcript from cache")
             transcript = json.loads(transcript_path.read_text())
-            embeddings = np.load(segemb_path)
         else:
             info = {}
             transcript = transcribe_media(video_path, work_dir, progress=report, info=info)
             cost = info.get("cost_usd", 0.0)
-            if transcript:
+            transcript_path.write_text(json.dumps(transcript))
+        embeddings = np.zeros((0, 1), dtype=np.float32)
+        if embed_transcript:
+            vs.load_models("speech", report)
+            if segemb_path.exists():
+                embeddings = np.load(segemb_path)
+            elif transcript:
                 report("Embedding transcript")
                 embeddings = vs.search_model.encode([s["text"] for s in transcript], normalize_embeddings=True)
             else:
                 embeddings = np.zeros((0, 1), dtype=np.float32)
-            transcript_path.write_text(json.dumps(transcript))
-            np.save(segemb_path, embeddings)
+            if not segemb_path.exists():
+                np.save(segemb_path, embeddings)
         timings['transcript_index_seconds'] = round(time.perf_counter() - started, 3)
         return transcript, embeddings, cost
 
@@ -255,8 +263,8 @@ def build_index(
         duration=duration, has_video=media_info['has_video'], frame_interval=interval,
         frame_times=frame_times, frame_embeddings=frame_embeddings,
         transcript=transcript, segment_embeddings=segment_embeddings,
-        encode_visual_query=(lambda q: vs.visual_model.encode(q, normalize_embeddings=True)),
-        encode_text_query=(lambda q: vs.search_model.encode(q, normalize_embeddings=True)),
+        encode_visual_query=(lambda q: vs.visual_model.encode(q, normalize_embeddings=True)) if frame_times else None,
+        encode_text_query=(lambda q: vs.search_model.encode(q, normalize_embeddings=True)) if embed_transcript else None,
         chunks=build_chunks(transcript), transcription_cost_usd=transcription_cost, video_key=key,
         index_mode='multimodal' if frame_times else 'transcript-first', timings=timings,
     )
