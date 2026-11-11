@@ -39,7 +39,7 @@ def process_upload(
     steps = []
     steps_elapsed = []  # seconds since the job started, one per step (shown beside each step)
     timer = StageTimer(lambda timings, active: job_service.update_job(
-        job_id, timings=timings, timing_stage=active, timing_stage_started_at=time.time()))
+        job_id, defer_persistence=True, timings=timings, timing_stage=active, timing_stage_started_at=time.time()))
 
     def progress(message):
         nonlocal stage
@@ -53,7 +53,7 @@ def process_upload(
         steps_elapsed.append(round(time.monotonic() - started, 1))
         del steps[:-MAX_STEPS], steps_elapsed[:-MAX_STEPS]
         # update_job also raises JobCancelled if the user stopped the job, so cancel works mid-agent.
-        job_service.update_job(job_id, message=message, steps_log=list(steps), steps_elapsed=list(steps_elapsed))
+        job_service.update_job(job_id, defer_persistence=True, message=message, steps_log=list(steps), steps_elapsed=list(steps_elapsed))
 
     try:
         job_service.update_job(
@@ -68,23 +68,26 @@ def process_upload(
         duration = media_info['duration']
         owner = job_service.load_json(folder/'owner.json')
         owner.update(media_info)
-        from backend.core.storage import upload_source_media
-        if owner.get('source_job', job_id) == job_id and not owner.get('source_s3_key'):
-            owner.update(upload_source_media(folder, job_id, owner))
         job_service.save_json(folder/'owner.json', owner)
+        if owner.get('source_job', job_id) == job_id and not owner.get('source_s3_key'):
+            from backend.services.source_backup import schedule
+            schedule(folder, job_id, owner)
         suffix = '.mp4' if media_info['has_video'] else '.mp3'
-        job_service.update_job(job_id, media_kind=media_info['media_kind'])
+        job_service.update_job(job_id, defer_persistence=True, media_kind=media_info['media_kind'])
 
         # The agent: Deepgram transcript, search index, and a multi-step selection of the best
         # moments across the whole video. Cutting, captions and storage below are unchanged.
-        selected, transcript, metadata = select_with_agent(
+        from backend.services.followup_edit import select as timestamp_edit
+        direct_edit = timestamp_edit(video_path, original_search, parent_context, requested_count, duration)
+        selected, transcript, metadata = direct_edit or select_with_agent(
             video_path, duration, search, target, progress, timer.start,
             **({'requested_count':requested_count} if requested_count!=4 else {}),
             **({'exclude_windows': owner['exclude_windows']} if owner.get('exclude_windows') else {}),
             **({'references': owner['parent_clips']} if len(owner.get('parent_clips', [])) > 1 else {}),
             **({'request_prompt': original_search} if parent_context else {}))
-        selected = followup_windows(selected, parent_context, original_search, duration, target, requested_count)
-        if owner.get('exclude_windows'):
+        if not direct_edit:
+            selected = followup_windows(selected, parent_context, original_search, duration, target, requested_count)
+        if owner.get('exclude_windows') and not direct_edit:
             before_exclusion = len(selected)
             selected = [clip for clip in selected if not any(
                 min(clip['end'], end) - max(clip['start'], start) > .5 * min(clip['end'] - clip['start'], end - start)
@@ -92,6 +95,11 @@ def process_upload(
             if len(selected) < before_exclusion:
                 metadata['selection_note'] = f'Found {len(selected)} new clips; others were already in this session.'
         metadata['requested_clip_count']=requested_count
+        with job_service.jobs_lock:
+            queued = job_service.jobs.get(job_id, {})
+            if 'submission_seconds' in queued:
+                metadata['submission_seconds'] = queued['submission_seconds']
+                metadata['queue_wait_seconds'] = round(max(0, queued.get('started_at', time.time()) - queued['queued_at']), 3)
         if len(selected)<requested_count:
             metadata['selection_note']=f'Found {len(selected)} of {requested_count} requested suitable clips. '+metadata.get('selection_note','')
 
@@ -110,32 +118,40 @@ def process_upload(
         threads = media_service.encoder_threads(workers)
         timer.start('Video rendering and storage')
         results = {}
+        cloud_backup = not storage_service.uses_local_storage()
+        metadata['backup_state'] = 'pending' if cloud_backup and selected else 'local'
 
-        # Encoding runs in parallel (CPU only); captions and storage happen on this thread as each
-        # clip finishes, so uploads overlap with the encodes still running. Progress, cancel and the
-        # optional job timeout are only ever checked here, never from the encoder threads.
+        def encode(selection, destination):
+            encoding_started = time.perf_counter()
+            media_service.render_clip(video_path, selection, destination, threads)
+            return round(time.perf_counter() - encoding_started, 3)
+
+        # Launch encoders without synchronous database or cloud waits. Locally
+        # playable clips are published as a stable prefix; cloud backup is a
+        # separate bounded batch after the final local result manifest is saved.
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {}
             for number, selection in enumerate(selected, start=1):
                 progress(f"Cutting clip {number}/{total}...")
                 filename = f"clip_{number}{suffix}"
-                futures[pool.submit(media_service.render_clip, video_path, selection, folder / filename, threads)] = number
+                futures[pool.submit(encode, selection, folder / filename)] = number
             try:
                 for future in as_completed(futures):
                     number = futures[future]
-                    future.result()
+                    encode_seconds = future.result()
                     selection = selected[number - 1]
                     filename = f"clip_{number}{suffix}"
                     captions_filename = f"clip_{number}.vtt"
                     media_service.write_captions(folder / captions_filename, transcript, selection["start"], selection["end"])
                     progress(f"Saving clip {number}/{total}...")
-                    storage = storage_service.upload_clip_files(folder, job_id, filename, captions_filename)
                     results[number] = {
                         **selection,
                         "clip_id": f"{job_id}:{number-1}",
                         "media_kind": media_info["media_kind"],
                         "has_video": media_info["has_video"],
-                        **storage,
+                        'storage': 'local',
+                        'backup_state': 'pending' if cloud_backup else 'local',
+                        'encode_seconds': encode_seconds,
                         "clip_url": f"/clips/{job_id}/{filename}",
                         "captions_url": f"/clips/{job_id}/{captions_filename}",
                     }
@@ -145,7 +161,7 @@ def process_upload(
                         ready.append(storage_service.public_clip(results[index]))
                     if ready and 'first_clip_ready_seconds' not in metadata:
                         metadata['first_clip_ready_seconds'] = round(time.monotonic() - started, 3)
-                    job_service.update_job(job_id, clips=ready, ready_clip_count=len(ready), requested_clip_count=requested_count)
+                    job_service.update_job(job_id, defer_persistence=True, clips=ready, ready_clip_count=len(ready), requested_clip_count=requested_count)
             except BaseException:
                 for future in futures:
                     future.cancel()  # clips not started yet are skipped; running encodes finish on their own
@@ -176,6 +192,16 @@ def process_upload(
             **metadata,
         )
 
+        if cloud_backup and clips:
+            # Playback and selection are already available. Cloud failures must
+            # not turn a successfully generated batch into a generation error.
+            try:
+                from backend.services.clip_backup import schedule
+                schedule(folder, job_id)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning('Could not schedule clip backup for job %s; local clips retained.', job_id)
+
     except Exception as error:
         traceback.print_exc()
         message = job_service.processing_error(error, stage)
@@ -197,6 +223,7 @@ def upload_video(
     parent_clip_index: int | None = Form(None, ge=0),
     canvas_context: str | None = Form(None),
 ):
+    submission_started = time.monotonic()
     with projects_store.lock:
         projects_store.require_project(project_id, request.state.user_id)
         from backend.generation import MAX_CLIPS
@@ -344,12 +371,11 @@ def upload_video(
                 },
             )
             # Reuse only analysis from the same verified account and project.
-            for previous in job_service.metadata_paths('*/owner.json'):
+            # Fetch this account's owner documents in one query. Loading every
+            # historical owner separately added an unmeasured database round trip
+            # per job before the generation worker could even start.
+            for previous, owner in job_service.metadata_documents('*/owner.json', request.state.user_id):
                 if previous.parent == folder:
-                    continue
-                try:
-                    owner = job_service.load_json(previous)
-                except (OSError, ValueError):
                     continue
                 if (owner.get('user_id') == request.state.user_id and owner.get('project_id') == project_id
                         and owner.get('video_sha256') == fingerprint.hexdigest()):
@@ -381,6 +407,9 @@ def upload_video(
                 projects_store.fail_feature(job_id, 'Could not save the studio request. No generation was started.')
                 raise
         try:
+            with job_service.jobs_lock:
+                job_service.jobs[job_id].update(
+                    submission_seconds=round(time.monotonic() - submission_started, 3), queued_at=time.time())
             job_service.worker.submit(process_upload if engine=='agent' else feature_workers.process_search,
                           job_id, video_path, search, mode if engine=='agent' else engine, clip_length)
         except Exception:

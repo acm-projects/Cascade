@@ -35,7 +35,7 @@ def test_fast_selection_handles_two_hours_plus_and_late_moments(monkeypatch):
     calls = []
     def structured(prompt, schema, **kwargs):
         calls.append(prompt)
-        return StructuredResult({'candidates': [candidate(t) for t in [40, 2000, 4000, 7500]]}, 100, 200)
+        return StructuredResult({'candidates': [candidate(t) for t in [40, 2000, 4000, 7760]]}, 100, 200)
     monkeypatch.setattr(fast_selection, 'structured_json', structured)
     result = fast_selection.run_transcript_selection(box, 'History documentary highlights', lambda _: None)
     assert len(calls) == 1
@@ -46,19 +46,19 @@ def test_fast_selection_handles_two_hours_plus_and_late_moments(monkeypatch):
 
 def test_fast_selection_retries_rejected_old_and_out_of_range_candidates(monkeypatch):
     box = ToolBox(long_index(), Path('unused'), target_clips=2, intent='specific', exclude_windows=[[40, 80]])
-    replies = iter([[candidate(40), candidate(7900), candidate(2000)], [candidate(7500)]])
+    replies = iter([[candidate(40), candidate(7900), candidate(2000)], [candidate(7760)]])
     monkeypatch.setattr(fast_selection, 'structured_json', lambda *a, **kw:
                         StructuredResult({'candidates': next(replies)}, 10, 20))
     result = fast_selection.run_transcript_selection(box, 'Find historical reforms', lambda _: None)
     assert result['iterations'] == 2
-    assert [clip['start'] for clip in result['suggestions']] == [2000, 7500]
+    assert [clip['start'] for clip in result['suggestions']] == [2000, 7760]
 
 
 def test_spoken_fast_path_preserves_explicit_visual_requests():
     assert transcript_first_request('Find key public healthcare explanations in this documentary')
     assert transcript_first_request('Find the historical turning points discussed in this interview')
     assert not transcript_first_request('Find battle footage in this history documentary')
-    assert not transcript_first_request('Find funny moments')
+    assert transcript_first_request('Find funny moments')
 
 
 def test_video_indexes_overlap_and_progress_callbacks_stay_on_caller(monkeypatch, tmp_path):

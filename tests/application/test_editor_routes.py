@@ -27,6 +27,7 @@ class EditorRouteTests(unittest.TestCase):
         additions = [[prefix + path, [method]] for path, method in (
             ('/audio', 'GET'), ('/audio', 'POST'), ('/audio/{asset_id}/media', 'GET'),
             ('/trends', 'GET'), ('/trends', 'POST'), ('/trends/apply', 'POST'))]
+        additions.append(['/api/projects/{project_id}/generations/{job_id}/backup/retry', ['POST']])
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
 
     def test_editor_modules_remain_small(self):

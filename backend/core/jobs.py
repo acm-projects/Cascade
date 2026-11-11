@@ -1,6 +1,7 @@
 """Background job state, ownership checks, metadata persistence, and public errors."""
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
+import logging
 import re
 import subprocess
 import time
@@ -17,6 +18,70 @@ from backend.core.config import JOBS_DIR
 worker = ThreadPoolExecutor(max_workers=1)
 jobs = {}
 jobs_lock = Lock()
+_progress_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='progress-save')
+_progress_guard = Lock()
+_progress_pending = {}
+_progress_versions = {}
+_progress_locks = {}
+_progress_running = False
+
+
+def _write_progress(key, spec):
+    from backend.services.projects_store import lock as project_lock
+    job_id, instance, store, path, version = spec
+    with _progress_guard:
+        write_lock = _progress_locks.setdefault(key, Lock())
+    # Deletion stages/removes job folders under this lock. Take it before the
+    # per-job writer lock so a late save cannot recreate a deleted directory.
+    with project_lock, write_lock:
+        with _progress_guard:
+            if _progress_versions.get(key) != version:
+                return
+        with jobs_lock:
+            if jobs.get(job_id) is not instance:
+                return
+            snapshot = dict(instance)
+        if path.parent.is_dir():
+            store.write(path, snapshot)
+
+
+def _flush_progress():
+    global _progress_running
+    while True:
+        # Coalesce bursts (including dispatching several encoders) without
+        # delaying in-memory status or clip availability.
+        time.sleep(.1)
+        with _progress_guard:
+            if not _progress_pending:
+                _progress_running = False
+                return
+            key, spec = _progress_pending.popitem()
+        try:
+            _write_progress(key, spec)
+        except Exception:
+            logging.getLogger(__name__).warning('Deferred progress save failed for job %s.', spec[0])
+
+
+def _persist_progress(job_id, instance, deferred):
+    global _progress_running
+    path = JOBS_DIR / job_id / 'progress.json'
+    if not path.parent.is_dir():
+        return
+    key, store = str(path.resolve()), metadata_store()
+    with _progress_guard:
+        version = _progress_versions.get(key, 0) + 1
+        _progress_versions[key] = version
+        spec = (job_id, instance, store, path, version)
+        if deferred:
+            _progress_pending[key] = spec
+            if not _progress_running:
+                _progress_running = True
+                _progress_executor.submit(_flush_progress)
+            return
+        _progress_pending.pop(key, None)
+    # Final success/error saves are synchronous. Versioning and the per-job
+    # writer lock prevent an older queued progress save overwriting them.
+    _write_progress(key, spec)
 
 
 def require_job_owner(job_id, user_id):
@@ -80,7 +145,7 @@ def initialize_metadata():
             cur.execute('SELECT 1')
 
 
-def update_job(job_id, **changes):
+def update_job(job_id, *, defer_persistence=False, **changes):
     with jobs_lock:
         job = jobs[job_id]
         if job.get('cancel_requested') and changes.get('state') not in ('error', 'done'):
@@ -92,10 +157,7 @@ def update_job(job_id, **changes):
             print(f"[{job_id}] {changes['message']}", flush=True)
         job.update(changes)
         job["updated_at"] = now
-        snapshot = dict(job)
-    folder = JOBS_DIR / job_id
-    if folder.is_dir():
-        save_json(folder / "progress.json", snapshot)
+    _persist_progress(job_id, job, defer_persistence)
 
 
 class JobCancelled(Exception):

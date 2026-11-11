@@ -29,7 +29,9 @@ function generationStatus(group) {
   const found = group.parent_clips?.length > 1
     ? `Combined context from ${group.parent_clips.length} clips: ${group.clips.length} of ${group.requested_clip_count || group.clips.length} results.`
     : `${group.parent_clips?.length ? "Added similar clips:" : "Found"} ${plural(group.clips.length, "clip")}.`;
-  return `${found} Pick the ones you like, then go to the Editor.${group.selection_note ? ` (${group.selection_note})` : ""}`;
+  const backup = group.backup_state === "pending" ? " Your clips are ready; cloud backup is running in the background."
+    : group.backup_state === "failed" ? " Your clips are available locally, but cloud backup needs a retry." : "";
+  return `${found} Pick the ones you like, then go to the Editor.${backup}${group.selection_note ? ` (${group.selection_note})` : ""}`;
 }
 
 // AI Studio, connected to Kashmine's Studio backend (backend/studio.py):
@@ -121,6 +123,15 @@ function StudioPage() {
   const retry = useCallback((jobId) => {
     api.retryGeneration(projectId, jobId, crypto.randomUUID()).then(refresh).catch((err) => toast.show(err.message, "error"));
   }, [api, projectId, refresh, toast]);
+
+  async function retryBackup(jobId) {
+    try {
+      await api.retryClipBackup(projectId, jobId);
+      await refresh();
+    } catch (err) {
+      toast.show(err.message, "error");
+    }
+  }
 
   const actions = useMemo(() => ({
     editorClips, pendingFile, sourceName,
@@ -339,7 +350,7 @@ function StudioPage() {
 
       <div className="studio-body">
         <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note}
-          focusRequest={chatFocus} onStop={stop} onRetry={retry} onReuse={setDraft}
+          focusRequest={chatFocus} onStop={stop} onRetry={retry} onRetryBackup={retryBackup} onReuse={setDraft}
           chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
 
         <div className="studio-canvas-frame">
