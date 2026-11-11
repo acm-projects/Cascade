@@ -34,3 +34,6 @@ frontend/legacy/studio-ui/node_modules/
 htmlcov/
 .test-tmp/
 cascade-*.log
+
+# Blender backup files
+*.blend1

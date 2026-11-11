@@ -311,6 +311,15 @@ button.timeline-label:hover {
   outline-offset: -1px;
 }
 
+/* Selected (Delete removes it): a dark ring, so it's clear what the key will remove */
+.timeline-cue.selected,
+.timeline-block.selected {
+  outline: 3px solid var(--color-jungle-deep);
+  outline-offset: 0;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-leaf) 55%, transparent);
+  z-index: 2;
+}
+
 .timeline-no-cues {
   display: flex;
   align-items: center;

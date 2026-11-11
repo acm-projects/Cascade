@@ -6,6 +6,7 @@ import "./Timeline.css";
 import BrollTrack from "./BrollTrack";
 import Icon from "../../components/ui/Icon";
 import { timelineClock } from "./reelTiming";
+import { cueText, setCueText } from "./captionStyles";
 
 const pct = (t, duration) => `${timeToX(t, duration, 100)}%`; // a time as a % across the track
 
@@ -31,14 +32,21 @@ function TrackRow({ kind, label, icon, onOpen, children }) {
 }
 
 // A lane of simple blocks (extra edits the AI or the tools added). Click a block to jump to it.
-function BlockLane({ label, items, duration, player, onOpen }) {
+// With onSelect (music and sound effects), clicking also selects it, so the Delete key can remove it.
+function BlockLane({ label, items, duration, player, onOpen, selectedId, onSelect }) {
   return (
     <div className="timeline-lane" aria-label={`${label} track`}>
       {items.map((item, i) => (
-        <button key={item.id || i} type="button" className="timeline-block"
+        <button key={item.id || i} type="button"
+          className={`timeline-block${onSelect ? " timeline-selectable" : ""}${onSelect && item.id === selectedId ? " selected" : ""}`}
           style={{ left: pct(item.start, duration), width: pct(item.duration, duration) }}
           title={`${label} ${item.start.toFixed(2)}–${(item.start + item.duration).toFixed(2)}s`}
-          onClick={() => { player.current?.seek(item.start); onOpen?.(); }}>
+          aria-pressed={onSelect ? item.id === selectedId : undefined}
+          onClick={() => {
+            player.current?.seek(item.start);
+            onOpen?.();
+            onSelect?.(item.id);
+          }}>
           {item.text || label}
         </button>
       ))}
@@ -53,6 +61,9 @@ function BlockLane({ label, items, duration, player, onOpen }) {
 //  - a playhead through every track that follows the video; click or drag on the ruler or video to jump/scrub
 //  - one block per caption line (click to jump there)
 //  - keyboard: "[" sets the start at the playhead, "]" sets the end
+//  - click a caption, music or sound effect block to select it, then Delete (or Backspace) removes it.
+//    A removed caption just has its words blanked (Undo, or "reset" in the Captions tool, brings it back).
+//    B-roll does the same in BrollTrack.jsx.
 // Props:
 //   projectId, clip, hasVideo - which clip to show frames from (no frames for audio recordings)
 //   duration, cues   - from the clip's info
@@ -69,6 +80,44 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
   useEffect(() => {
     latest.current = state;
   });
+
+  // The selected caption or audio block: { kind: "cue", index } or { kind: "audio", id }
+  const [picked, setSelected] = useState(null);
+  const selected = selectedBroll ? null : picked;   // picking a B-roll block lets go of this selection
+  const select = (item) => {
+    setSelected(item);
+    onSelectBroll?.(null);   // only one thing is selected at a time
+  };
+  // Clicking anywhere that isn't a block lets go of the selection
+  useEffect(() => {
+    function letGo(event) {
+      if (!event.target.closest?.(".timeline-cue, .timeline-selectable")) setSelected(null);
+    }
+    window.addEventListener("pointerdown", letGo);
+    return () => window.removeEventListener("pointerdown", letGo);
+  }, []);
+
+  // Delete / Backspace removes the selected caption or audio (not while typing in a box)
+  useEffect(() => {
+    function remove(event) {
+      if (!selected || disabled || event.defaultPrevented) return;
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+      event.preventDefault();
+      if (selected.kind === "cue") {
+        change((s) => ({ ...s, texts: setCueText(s.texts, selected.index, "") }));
+      } else {
+        change((s) => ({
+          ...s,
+          reel: s.reel ? { ...s.reel, beat_sync_current: false } : s.reel,   // same as "Remove audio" in the Music tool
+          audio: (s.audio || []).filter((item) => item.id !== selected.id),
+        }));
+      }
+      setSelected(null);
+    }
+    window.addEventListener("keydown", remove);
+    return () => window.removeEventListener("keydown", remove);
+  }, [selected, disabled, change]);
 
   const strip = useFilmstrip(projectId, clip, duration, hasVideo);
   const [trackSize, setTrackSize] = useState({ width: 0, height: 0 });
@@ -199,14 +248,18 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
           <div className="timeline-lane timeline-cues">
             {cues.length === 0 && <span className="timeline-no-cues">No captions in this clip</span>}
             {cues.map((cue, index) => {
-              const text = state.texts?.[index] ?? cue.text;
+              const text = cueText(state.texts, cues, index);
+              if (!text.trim()) return null;   // a removed (blanked) caption
+              const isSelected = selected?.kind === "cue" && selected.index === index;
               return (
                 <button key={index} type="button"
-                  className={`timeline-cue${index === focusedCue ? " active" : ""}`}
+                  className={`timeline-cue${index === focusedCue ? " active" : ""}${isSelected ? " selected" : ""}`}
+                  aria-pressed={isSelected}
                   style={{ left: pct(cue.start, duration), width: `${timeToX(cue.end - cue.start, duration, 100)}%` }}
                   title={`${formatTime(cue.start)} – ${text}`}
                   onClick={() => {
                     player.current?.seek(cue.start);
+                    select({ kind: "cue", index });
                     onCueClick?.(index);
                   }}>
                   {firstWords(text)}
@@ -248,7 +301,8 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
 
         <TrackRow kind="music" label="Music" icon="headphones" onOpen={() => onOpenTool?.("Music")}>
           {music.length ? (
-            <BlockLane label="Music" items={music} duration={duration} player={player} />
+            <BlockLane label="Music" items={music} duration={duration} player={player}
+              selectedId={selected?.kind === "audio" ? selected.id : null} onSelect={(id) => select({ kind: "audio", id })} />
           ) : (
             <div className="timeline-lane">
               <button type="button" className="timeline-add" onClick={() => onOpenTool?.("Music")}>
@@ -261,7 +315,8 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
         {extraLanes.map(([kind, name, icon, items]) => (
           <TrackRow key={name} kind={kind} label={name} icon={icon}>
             <BlockLane label={name} items={items} duration={duration} player={player}
-              onOpen={name === "AI effects" ? () => onOpenTool?.("AI Editor") : undefined} />
+              onOpen={name === "AI effects" ? () => onOpenTool?.("AI Editor") : undefined}
+              {...(kind === "sfx" && { selectedId: selected?.kind === "audio" ? selected.id : null, onSelect: (id) => select({ kind: "audio", id }) })} />
           </TrackRow>
         ))}
 
@@ -275,6 +330,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
         <span>Trim {time(state.start)} – {time(state.end)} · {time(timelineClock(state).duration)} long</span>
         <span className="timeline-keys">
           {selectedBroll ? "Drag to move · drag the edges to resize · Delete removes it"
+            : selected ? "Press Delete to remove it"
             : <>Drag the green handles · click to jump · <kbd>[</kbd> <kbd>]</kbd> trim at playhead</>}
         </span>
       </div>

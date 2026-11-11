@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./Capybara.css";
 
-// Cascade's mascot: a chunky low-poly 3D capybara (features/landing3d/capybaraModel.js).
+// Cascade's mascot: a chunky low-poly 3D capybara, made in Blender (frontend/blender/capybara.py).
 //   variant="full" - the whole capybara, idling: breathing, blinking, ear flicks (for empty spaces)
 //   variant="head" - a still picture of just its head (for small badges, like next to "AI Assistant")
 //   size           - width in pixels
@@ -15,27 +15,30 @@ function Capybara({ variant = "full", size = 96, className = "" }) {
   useEffect(() => {
     let stop = null;
     let cancelled = false;
+    const holder = holderRef.current;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     import("../features/landing3d/mascotScene").then(({ createMascotScene, capybaraHeadPicture }) => {
       if (cancelled) return;
       try {
         if (variant === "head") {
-          setHeadPicture(capybaraHeadPicture(size * 2));   // drawn at double size so it stays sharp
+          capybaraHeadPicture(size * 2)   // drawn at double size so it stays sharp
+            .then((picture) => { if (!cancelled) setHeadPicture(picture); })
+            .catch(() => {});
           return;
         }
         // A new canvas each time: once a canvas's 3D is shut down, it can't be started again
         const canvas = document.createElement("canvas");
         canvas.className = "capybara-canvas";
-        holderRef.current?.append(canvas);
+        holder?.append(canvas);
         stop = createMascotScene(canvas, { still });
       } catch {
-        holderRef.current?.replaceChildren();
+        holder?.replaceChildren();
       }
     }).catch(() => {});
     return () => {
       cancelled = true;
       stop?.();
-      holderRef.current?.replaceChildren();
+      holder?.replaceChildren();
     };
   }, [variant, size]);
 
