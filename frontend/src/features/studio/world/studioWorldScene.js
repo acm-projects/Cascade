@@ -97,6 +97,21 @@ function fallGeometry(width, drop, reach = 0.32) {
   return geometry;
 }
 
+// A continuous quarter-turn of water from the flat stream onto the falling sheet.
+// Its axis is Z (across the channel); the old cylinder turned about X and left
+// the soil behind the lip exposed when viewed from above.
+function waterfallLipGeometry(width) {
+  const geometry = new THREE.PlaneGeometry(width, 1, 8, 12);
+  const position = geometry.attributes.position;
+  for (let i = 0; i < position.count; i += 1) {
+    const across = position.getX(i);
+    const angle = (0.5 - position.getY(i)) * Math.PI / 2;
+    position.setXYZ(i, -0.18 + 0.34 * Math.sin(angle), -0.04 - 0.22 * (1 - Math.cos(angle)), across);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 // Many copies of one small shape in one draw: items [{ x, y, z, ry, s, sy, color }]
 function instances(group, geometry, items, shadows = false) {
   if (!items.length) return;
@@ -507,10 +522,13 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {} } 
       if (!kit) {
       const body = new THREE.Mesh(new THREE.BoxGeometry(width, height - 0.7, depth), material(pick(COLORS.deepRock, random)));
       body.position.set(middle, (height - 0.7) / 2, 0);
-      const dirtBand = new THREE.Mesh(new THREE.BoxGeometry(width, 0.48, depth), material(pick(COLORS.dirt, random)));
-      dirtBand.position.set(middle, height - 0.46, 0);
-      for (const mesh of [body, dirtBand]) { mesh.castShadow = true; mesh.receiveShadow = true; cliff.add(mesh); }
+      body.castShadow = true; body.receiveShadow = true; cliff.add(body);
+      const dirtMaterial = material(pick(COLORS.dirt, random));
       for (const side of [-1, 1]) {
+        const bankWidth = (depth - fallWidth) / 2;
+        const dirtBand = new THREE.Mesh(new THREE.BoxGeometry(width, 0.48, bankWidth), dirtMaterial);
+        dirtBand.position.set(middle, height - 0.46, side * (fallWidth / 2 + bankWidth / 2));
+        dirtBand.castShadow = true; dirtBand.receiveShadow = true; cliff.add(dirtBand);
         const cap = new THREE.Mesh(new THREE.BoxGeometry(width, 0.24, (depth - fallWidth) / 2), material(pick(COLORS.grass, random)));
         cap.position.set(middle, height - 0.1, side * (fallWidth / 2 + (depth - fallWidth) / 4));
         cap.castShadow = true;
@@ -542,9 +560,8 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {} } 
       inner.rotation.y = Math.PI / 2;
       inner.position.set(front + 0.01, height - 0.05, 0);
       // the water curling over the lip
-      const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, fallWidth, 10, 1, true, 0, Math.PI / 2), waterMaterial(runTexture));
-      lip.rotation.x = Math.PI / 2;
-      lip.position.set(front - 0.12, height - 0.18, 0);
+      const lip = new THREE.Mesh(waterfallLipGeometry(fallWidth), waterMaterial(runTexture));
+      lip.position.set(front, height, 0);
       cliff.add(sheet, inner, lip);
       // Foam where it lands, and white drops falling with it
       const puffs = i === CLIFF.length - 1 ? 14 : 8;

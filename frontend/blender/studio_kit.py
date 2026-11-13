@@ -195,7 +195,11 @@ def cliff(material):
         rock.add(kit.box_shape(width, height - 0.7, CLIFF_DEPTH), pick(C["deepRock"]), transform((middle, (height - 0.7) / 2, 0)))
         for layer in range(1, int(height / 1.1)):
             rock.add(kit.box_shape(width + 0.03, 0.18, CLIFF_DEPTH + 0.03), pick(C["rock"]), transform((middle, layer * 1.1 - 0.4, 0)))
-        rock.add(kit.box_shape(width, 0.48, CLIFF_DEPTH), pick(C["dirt"]), transform((middle, height - 0.46, 0)))
+        dirt_color = pick(C["dirt"])
+        # Soil belongs under the grassy banks, not across the open water channel.
+        for bank in (-1, 1):
+            rock.add(kit.box_shape(width, 0.48, side), dirt_color,
+                     transform((middle, height - 0.46, bank * (CHANNEL / 2 + side / 2))))
         # grass on top either side of the water channel, with tufts
         for s in (-1, 1):
             z = s * (CHANNEL / 2 + side / 2)

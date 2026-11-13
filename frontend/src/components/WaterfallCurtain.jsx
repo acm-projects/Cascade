@@ -40,7 +40,6 @@ function WaterfallCurtain({ phase, label }) {
     holderRef.current.append(canvas);
     try {
       sceneRef.current = createCurtainScene(canvas);
-      sceneRef.current.setPhase(phase);
     } catch {
       canvas.remove();
       setFlat(true);   // eslint-disable-line react-hooks/set-state-in-effect -- one-time fallback
@@ -50,11 +49,7 @@ function WaterfallCurtain({ phase, label }) {
       sceneRef.current = null;
       canvas.remove();
     };
-  }, [flat]);   // eslint-disable-line react-hooks/exhaustive-deps -- the phase is passed on below
-
-  useEffect(() => {
-    sceneRef.current?.setPhase(phase);
-  }, [phase]);
+  }, [flat]);
 
   // The flat pixel-art fallback
   useEffect(() => {
@@ -128,7 +123,9 @@ function WaterfallCurtain({ phase, label }) {
           <span className="waterfall-mist" />
         </div>
       ) : (
-        <div key="3d" ref={holderRef} className="waterfall-3d" />
+        <div className="waterfall-sheet waterfall-sheet-3d">
+          <div key="3d" ref={holderRef} className="waterfall-3d" />
+        </div>
       )}
       <div className="waterfall-label">
         <img src={logo} alt="" />

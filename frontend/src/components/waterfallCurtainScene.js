@@ -7,10 +7,7 @@ import { COLORS, lumpyBall, makeRandom, waterTexture } from "../features/landing
 // different distances, and mist rolling up from the bottom.
 //
 // createCurtainScene(canvas) returns
-//   setPhase(phase) - "cover" (pour down over the screen), "hold" (cover it), "reveal" (fall away off the bottom)
 //   stop()
-const COVER_MS = 650;
-const REVEAL_MS = 750;
 
 export function createCurtainScene(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -76,15 +73,22 @@ export function createCurtainScene(canvas) {
       curtain.add(sheet);
       sheets.push(sheet);
     }
-    // Chunky foam along the bottom (leading) edge and the top edge of the water
-    const foamMaterial = new THREE.MeshStandardMaterial({ color: COLORS.foam, roughness: 0.6, flatShading: true });
+    // Anchor foam to the visible canvas edges, not the oversized water planes.
+    // Account for perspective at each puff's depth so both rows stay in view.
+    const foamMaterial = new THREE.MeshStandardMaterial({
+      color: COLORS.foam, emissive: COLORS.foam, emissiveIntensity: 0.65,
+      roughness: 0.6, flatShading: true,
+    });
     for (const edge of [-1, 1]) {
       const count = Math.ceil(viewWidth * 2.2);
       for (let i = 0; i < count; i += 1) {
         const size = 0.25 + random() * 0.35;
         const mesh = new THREE.Mesh(lumpyBall(size, random, 0.2, 1), foamMaterial);
-        const x = -viewWidth * 0.62 + (i / count) * viewWidth * 1.24;
-        mesh.position.set(x, edge * sheetHeight / 2 + (random() - 0.5) * 0.3, 0.4 + random() * 0.5);
+        const z = 1.1 + random() * 0.4;
+        const depthScale = (camera.position.z - z) / camera.position.z;
+        const x = (-0.55 + (i / Math.max(1, count - 1)) * 1.1) * viewWidth * depthScale;
+        const y = edge * (viewHeight * depthScale / 2 - size * 0.4);
+        mesh.position.set(x, y + (random() - 0.5) * 0.12, z);
         curtain.add(mesh);
         foam.push({ mesh, baseY: mesh.position.y, phase: random() * 6, speed: 3 + random() * 3 });
       }
@@ -108,16 +112,14 @@ export function createCurtainScene(canvas) {
   }
 
   function resize() {
-    width = window.innerWidth;
-    height = window.innerHeight;
+    width = canvas.clientWidth || window.innerWidth;
+    height = canvas.clientHeight || window.innerHeight;
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     build();
   }
 
-  let phase = "cover";
-  let phaseStart = performance.now();
   const start = performance.now();
   let last = start;
   let frame = 0;
@@ -128,20 +130,8 @@ export function createCurtainScene(canvas) {
     const time = (now - start) / 1000;
     const delta = Math.min(0.05, (now - last) / 1000);
     last = now;
-    // Where the water is: above the screen -> covering it -> below the screen
-    const above = viewHeight / 2 + sheetHeight / 2 + 0.6;
-    let y = 0;
-    let mistAmount = 1;
-    if (phase === "cover") {
-      const p = Math.min(1, (now - phaseStart) / COVER_MS);
-      y = above * (1 - p * p);   // speeds up as it falls, like water
-      mistAmount = p;
-    } else if (phase === "reveal") {
-      const p = Math.min(1, (now - phaseStart) / REVEAL_MS);
-      y = -above * p * p;
-      mistAmount = 1 - p;
-    }
-    curtain.position.y = y;
+    // CSS moves the opaque wrapper. Keep all depths fixed relative to it, so
+    // perspective cannot make a back sheet peek out ahead of the front sheet.
     for (const { texture, speed } of textures) texture.offset.y = (texture.offset.y + delta * speed) % 1;
     for (const puff of foam) {
       const wave = Math.sin(time * puff.speed + puff.phase);
@@ -160,7 +150,7 @@ export function createCurtainScene(canvas) {
       const p = (time * 0.25 + m.phase) % 1;
       m.mesh.position.set(m.x, -viewHeight / 2 + p * 2.2, 1.5);
       m.mesh.scale.setScalar(0.8 + p * 1.2);
-      m.mesh.material.opacity = 0.22 * (1 - p) * mistAmount;
+      m.mesh.material.opacity = 0.22 * (1 - p);
     }
     renderer.render(scene, camera);
     frame = requestAnimationFrame(draw);
@@ -168,14 +158,9 @@ export function createCurtainScene(canvas) {
 
   resize();
   window.addEventListener("resize", resize);
-  frame = requestAnimationFrame(draw);
+  draw();   // draw before the browser paints the moving sheet for the first time
 
   return {
-    setPhase(next) {
-      if (next === phase) return;
-      phase = next;
-      phaseStart = performance.now();
-    },
     stop() {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", resize);
