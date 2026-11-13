@@ -125,6 +125,8 @@ def analyze(source,info,progress=lambda value,message:None,selection=None,focus=
             detector,detector_lock=metrics.call('face_model_load',_face_detector,str(path.resolve()),path.stat().st_mtime_ns,path.stat().st_size,width,height)
         from backend.subject_tracking import Subjects,RegionTracker
         subjects=metrics.call('object_model_load',Subjects,model_folder()/'yolox.onnx',metrics) if profile!='manual' else None;region=RegionTracker(selection) if selection else None
+        if subjects and profile in ('full','visual'):subjects.cadence=15  # people are found by the face model; the scene detector only fills gaps
+        last_faces=False;last_detections=None
         object_frames={}
         tracks={};next_id=0;frame_index=round(offset*FPS);observations=[{'t':round(i/FPS,4),'audio':False,'subjects':[],'region':None,'cut':False,'faces':[]} for i in range(frame_index)];batch=[];previous_gray=None
         def infer_batch(batch):
@@ -181,7 +183,9 @@ def analyze(source,info,progress=lambda value,message:None,selection=None,focus=
             while True:
                 ok,image=metrics.call('decode',capture.read)
                 if not ok:break
-                if subjects:objects,cut=metrics.call('subject_tracking_including_detection',subjects.update,image,frame_index)
+                if subjects:
+                    subjects.hold=last_faces and profile in ('full','visual')
+                    objects,cut=metrics.call('subject_tracking_including_detection',subjects.update,image,frame_index)
                 else:
                     gray=cv.cvtColor(image,cv.COLOR_BGR2GRAY)
                     cut=previous_gray is not None and float(np.mean(cv.absdiff(cv.resize(gray,(64,36)),cv.resize(previous_gray,(64,36)))))>48
@@ -191,7 +195,11 @@ def analyze(source,info,progress=lambda value,message:None,selection=None,focus=
                 object_frames[frame_index]={'subjects':objects,'region':manual,'cut':cut}
                 detections=None
                 if detector:
-                    with detector_lock:_,detections=metrics.call('face_detection',detector.detect,image)
+                    # Faces barely move in 40 ms: detect on every other frame and reuse the boxes in between (crops still come from the current frame).
+                    if frame_index%2==0 or cut or last_detections is None:
+                        with detector_lock:_,detections=metrics.call('face_detection',detector.detect,image)
+                        last_detections=detections
+                    else:detections=last_detections
                 face_start=perf_counter()
                 faces=[];used=set()
                 for row in sorted([] if detections is None else detections,key=lambda r:float(r[2]*r[3]),reverse=True)[:6]:
@@ -209,6 +217,7 @@ def analyze(source,info,progress=lambda value,message:None,selection=None,focus=
                     if not crop.size:continue
                     crop=cv.cvtColor(cv.resize(crop,(224,224)),cv.COLOR_BGR2GRAY)[56:168,56:168]
                     faces.append({'id':ident,'box':[x/width,y/height,w/width,h/height],'score':0.,'crop':crop})
+                last_faces=bool(faces)
                 metrics.seconds['face_tracking']+=perf_counter()-face_start;metrics.calls['face_tracking']+=1
                 batch.append((frame_index,faces));frame_index+=1
                 if frame_index%25==0:progress(min(.95,.1+.85*frame_index/FPS/duration),'Tracking '+('selected region' if region else 'subjects')+' locally…')

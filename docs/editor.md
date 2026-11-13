@@ -1,8 +1,8 @@
 Current UI behavior and verification are described in [Editor and Exports delivery update](editor-delivery.md). The implementation history below includes earlier controls that have since been replaced.
 
-All HTML view markup now lives in `web/index.html`; names such as `editor_C.html` below refer to preserved public routes. CSS and JavaScript files remain separate.
+All HTML view markup now lives in `frontend/legacy/web/index.html`; names such as `editor_C.html` below refer to preserved public routes. CSS and JavaScript files remain separate.
 
-Frontend filenames below live under `web/`; backend service filenames live under `backend/`. Public URLs are unchanged. Run test commands from the repository root.
+Frontend filenames below live under `frontend/legacy/web/`; backend service filenames live under `backend/`. Public URLs are unchanged. Run test commands from the repository root.
 
 # Editor implementation
 
@@ -44,8 +44,8 @@ Burned-in-caption detection relies on existing clip metadata/job kind. Those pix
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_editor.py' -v
-node tests/test_editor_state.cjs
-node tests/test_editor_flow.cjs
+node tests/javascript/test_editor_state.cjs
+node tests/javascript/test_editor_flow.cjs
 # Full suite also needs subtitle support for existing generation tests:
 env PATH="/opt/homebrew/opt/ffmpeg-full/bin:$PATH" python3 -m unittest discover -s tests -p 'test_*.py' -q
 ```
@@ -56,8 +56,8 @@ Real-browser tests use isolated temporary media/storage and a localhost-only fix
 # Start Chrome with a separate temporary profile:
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --no-first-run --remote-debugging-port=9333 --remote-allow-origins=http://localhost:9333 --user-data-dir=/tmp/cascade-editor-chrome about:blank
 # In separate terminals:
-python3 tests/editor_browser_server.py
-python3 tests/test_editor_browser.py
+python3 tests/browser/editor_browser_server.py
+python3 tests/browser/test_editor_browser.py
 ```
 
 Screenshots and export comparisons are written to `/tmp/cascade-editor-browser-artifacts`. These tests do not exercise live Clerk, cloud storage or paid AI. They use one landscape fixture and the laptop viewport sizes in the runner; they are not a claim of cross-browser/device coverage.
@@ -65,7 +65,7 @@ Screenshots and export comparisons are written to `/tmp/cascade-editor-browser-a
 Additional real-browser framing validation (with the fixture server/Chrome setup above):
 
 ```sh
-python3 tests/test_editor_aspect_browser.py
+python3 tests/browser/test_editor_aspect_browser.py
 ```
 
 This checks all six preset compositions, Fit background, Fill crop repositioning, real pointer crop gestures, the main Play/Pause control and timeline timing, caption bounds, comparison, independent clip state and reload, plus missing-media error visibility and recovery. It downloads actual Fit and Fill MP4s through the export button, probes dimensions/duration, and compares encoded frames with the corresponding live composition. Artifacts are in `/tmp/cascade-aspect-artifacts`. The source fixture is landscape; other browsers and portrait source media are not covered by that browser run.
@@ -81,13 +81,13 @@ The canvas retains its original clip cards without export checkboxes or an expor
 
 Repeated generation requests with the same source and normalized prompt share a Session and form distinct Waves. Follow-up ancestry remains authoritative; explicit session/wave IDs are respected. Caption-style variants stay under their generation Wave. Distinct real generation runs are retained, never silently collapsed or deleted. Legacy `history_id` is a generation request ID, not a Session identity. All clips retain their original job/index keys and drafts.
 
-`web/exports_C.js` loads each draft, preferring a newer local recovery snapshot when present, normalizes it, rasterizes its captions, and calls the existing authenticated editor `/export` endpoint. Thus each playable preview and active Download uses an actual edited MP4 with trim, framing, effects, captions, original audio, and B-roll. No original-media fallback is passed off as an edited preview. The front rounded video card has playback controls; adjacent cards partially show behind it. Arrows, horizontal swipe, and left/right keys change the active card and pause its predecessor. Aspect ratios are preserved with contain framing.
+`frontend/legacy/web/exports_C.js` loads each draft, preferring a newer local recovery snapshot when present, normalizes it, rasterizes its captions, and calls the existing authenticated editor `/export` endpoint. Thus each playable preview and active Download uses an actual edited MP4 with trim, framing, effects, captions, original audio, and B-roll. No original-media fallback is passed off as an edited preview. The front rounded video card has playback controls; adjacent cards partially show behind it. Arrows, horizontal swipe, and left/right keys change the active card and pause its predecessor. Aspect ratios are preserved with contain framing.
 
 Previews render on demand, with immediate neighbours prepared in the background. Each card deduplicates render requests and retains its rendered Blob for this page visit. Export All submits the same state/raster payloads to owner-checked `POST /api/projects/{pid}/editor/export-selected`, which renders entries sequentially into a ZIP (up to 100 clips per ZIP). Temporary files are cleaned up. Errors are displayed, retry is available, and action locks prevent repeat submissions while processing. Export is a snapshot of edits loaded for that page visit; return from the editor or refresh Exports to load later edits. No new paid AI calls are made by export.
 
 YouTube trend research is not an upload integration. The YouTube action honestly explains that account connection and upload backend work are required, and links to YouTube Studio for manually uploading a downloaded file.
 
-Additional verification: run `python3 -m tests.test_exports_browser` with `tests/editor_browser_server.py` and isolated headless Chrome on DevTools port 9333. This covers simplified controls, effects/history/restore, editor selection across groups and refresh, exactly selected stacked video previews, pause on navigation, arrows/keyboard/swipe, real MP4 and ZIP downloads, output framing/duration/audio, grayscale B-roll below colored captions, duplicate ZIP prevention, and honest YouTube setup. All fixture data lives in temporary directories and provider calls are mocked.
+Additional verification: run `python3 -m tests.browser.test_exports_browser` with `tests/browser/editor_browser_server.py` and isolated headless Chrome on DevTools port 9333. This covers simplified controls, effects/history/restore, editor selection across groups and refresh, exactly selected stacked video previews, pause on navigation, arrows/keyboard/swipe, real MP4 and ZIP downloads, output framing/duration/audio, grayscale B-roll below colored captions, duplicate ZIP prevention, and honest YouTube setup. All fixture data lives in temporary directories and provider calls are mocked.
 
 
 Follow Speaker now integrates with Fill to Frame, saved drafts, Chat, comparison, and every edited export. See [Auto Reframe processing, setup, limitations and verification](auto-reframe.md).
@@ -102,8 +102,8 @@ and exports each live in their own module under `backend/editor/`. The old
 implementation. Request-time service imports keep app startup free of circular
 imports and retain isolated job-directory overrides in tests.
 
-`tests/editor_routes_before.json` records the route contract before extraction.
-`tests/test_editor_routes.py` compares every path/method pair and enforces the
+`tests/fixtures/editor_routes_before.json` records the route contract before extraction.
+`tests/application/test_editor_routes.py` compares every path/method pair and enforces the
 300-line module budget. Provider tests mock both adapters; they exercise caption
 changes with either provider's key, override isolation, invalid proposals, missing
 credentials, and disabled OpenAI response storage. Automated tests do not make

@@ -1,15 +1,25 @@
 """Editor HTTP boundary; URLs intentionally unchanged."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from .broll_routes import stock_search, stock_media, stock_thumbnail
 from .drafts import editor_index, get_draft, save_draft, save_clip
 from .reframe import start_reframe, reframe_status, subjects_at, reframe_plan
 from .render import export_selected, export
-from .media_routes import get_thumbnail, get_media
+from .media_routes import get_thumbnail, get_media, style_progress
 from .chat import chat
+from .ai import ai_status
 from .audio_assets import list_assets, upload_asset, asset_media
 from .trends import start as start_trends, latest as get_trends, apply_result
+from .own_clip import upload_clip
 
 router = APIRouter(prefix="/api/projects/{pid}/editor")
+
+
+def ai_edit_status(pid: str, jid: str, index: int, request: Request):
+    from .ai_edit.jobs import status
+    return status(pid, jid, index, request)
+
+
+router.add_api_route('/{jid}/{index}/ai-edit', ai_edit_status, methods=['GET'])
 router.add_api_route('/{jid}/{index}/trends', start_trends, methods=['POST'], status_code=202)
 router.add_api_route('/{jid}/{index}/trends', get_trends, methods=['GET'])
 router.add_api_route('/{jid}/{index}/trends/apply', apply_result, methods=['POST'])
@@ -20,6 +30,8 @@ router.add_api_route('/{jid}/{index}/audio', list_assets, methods=['GET'])
 router.add_api_route('/{jid}/{index}/audio', upload_asset, methods=['POST'])
 router.add_api_route('/{jid}/{index}/audio/{asset_id}/media', asset_media, methods=['GET'])
 router.add_api_route('', editor_index, methods=['GET'])
+router.add_api_route('/upload', upload_clip, methods=['POST'], status_code=201)
+router.add_api_route('/ai-status', ai_status, methods=['GET'])
 router.add_api_route('/{jid}/{index}/reframe', start_reframe, methods=['POST'])
 router.add_api_route('/{jid}/{index}/reframe/{analysis_id}', reframe_status, methods=['GET'])
 router.add_api_route('/{jid}/{index}/reframe/{analysis_id}/subjects', subjects_at, methods=['GET'])
@@ -29,6 +41,7 @@ router.add_api_route('/{jid}/{index}', save_draft, methods=['PUT'])
 router.add_api_route('/{jid}/{index}/save-clip', save_clip, methods=['POST'])
 router.add_api_route('/{jid}/{index}/thumbnail', get_thumbnail, methods=['GET'])
 router.add_api_route('/{jid}/{index}/media', get_media, methods=['GET'])
+router.add_api_route('/{jid}/{index}/style-progress', style_progress, methods=['GET'])
 router.add_api_route('/{jid}/{index}/chat', chat, methods=['POST'])
 router.add_api_route('/export-selected', export_selected, methods=['POST'])
 router.add_api_route('/{jid}/{index}/export', export, methods=['POST'])

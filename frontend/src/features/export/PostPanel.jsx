@@ -3,6 +3,7 @@ import useApi from "../../api/useApi";
 import Button from "../../components/ui/Button";
 import Spinner from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/ToastContext";
+import Icon from "../../components/ui/Icon";
 
 // Post copy for one clip: title, caption and hashtags (backend/post_metadata.py, Manila).
 // "Write with AI" drafts them from the clip's transcript; nothing is saved until you press Save.
@@ -72,12 +73,17 @@ function PostPanel({ projectId, clip, onChange }) {
     setBusy(action);
     try {
       const result = await api.generatePost(projectId, clip.job_id, clip.clip_index, action, current());
-      const next = action === "tags" ? { ...post } : { ...post, caption: result.caption };
-      const tags = action === "rewrite" ? tagText : result.hashtags.join(" ");
-      setPost(next);
-      setTagText(tags);
-      setDirty(true);
-      onChange?.({ ...next, hashtags: tags.split(/[\s,]+/).filter(Boolean) });
+      // Fill the fields straight in: "generate" writes the title, caption and hashtags; "rewrite" the
+      // caption; "tags" the hashtags. Then save, so YouTube/LinkedIn use them right away.
+      const next = { ...post };
+      if (action !== "tags") next.caption = result.caption;
+      if (action === "generate" && result.name) next.name = result.name;
+      const hashtags = action === "rewrite" ? current().hashtags : result.hashtags;
+      const saved = await api.savePost(projectId, clip.job_id, clip.clip_index, { ...next, hashtags });
+      setPost(saved);
+      setTagText(saved.hashtags.join(" "));
+      setDirty(false);
+      onChange?.(saved);
     } catch (err) {
       toast.show(err.message, "error");
     } finally {
@@ -104,10 +110,10 @@ function PostPanel({ projectId, clip, onChange }) {
       </label>
       <div className="export-post-actions">
         <Button size="sm" variant="primary" onClick={save} disabled={busy !== null || !dirty}>
-          {busy === "save" ? "Saving…" : dirty ? "Save" : "✓ Saved"}
+          {busy === "save" ? "Saving…" : dirty ? "Save" : <><Icon name="check" /> Saved</>}
         </Button>
         <Button size="sm" onClick={() => suggest(post.caption ? "rewrite" : "generate")} disabled={busy !== null}>
-          {busy === "generate" || busy === "rewrite" ? "Writing…" : post.caption ? "✨ Improve with AI" : "✨ Write with AI"}
+          {busy === "generate" || busy === "rewrite" ? "Writing…" : post.caption ? <><Icon name="sparkles" /> Improve with AI</> : <><Icon name="sparkles" /> Write with AI</>}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => suggest("tags")} disabled={busy !== null}>
           {busy === "tags" ? "Thinking…" : "# Suggest hashtags"}

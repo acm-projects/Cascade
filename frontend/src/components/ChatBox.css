@@ -74,7 +74,7 @@
 .chatbox-message.assistant {
   align-self: flex-start;
   background: #2f6b3a;
-  color: #fffbea;
+  color: var(--surface-light);
 }
 
 /* Notes from the app (e.g. "the editing AI isn't set up"): centered, plain */

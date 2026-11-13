@@ -4,7 +4,7 @@
   place-items: center;
   height: 100vh;
   padding: var(--space-4);
-  background: var(--color-leaf-mist);
+  background: linear-gradient(160deg, #3fc2dc, var(--sea-deep) 55%, #1a8fc8);
   color: var(--color-text-green);
   font-family: var(--font-heading);
   font-size: 1.4rem;

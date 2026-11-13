@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import "./NotFoundPage.css";
+import Icon from "../components/ui/Icon";
 
 // Shown for any URL that isn't in App.jsx
 function NotFoundPage() {
@@ -9,7 +10,7 @@ function NotFoundPage() {
     <div className="not-found leaf-page">
       <div className="not-found-card">
         <p className="not-found-code">404</p>
-        <h1 className="not-found-title">Lost in the jungle 🌴</h1>
+        <h1 className="not-found-title">Lost in the jungle <Icon name="tree" /></h1>
         <p className="not-found-text">
           There's no trail at <code>{pathname}</code>.
         </p>

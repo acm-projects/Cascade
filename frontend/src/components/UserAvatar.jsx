@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/clerk-react";
 import { useAuthMode } from "../auth/AuthContext";
 import "./UserAvatar.css";
 
@@ -31,3 +31,17 @@ function UserAvatar({ className = "" }) {
 }
 
 export default UserAvatar;
+
+// The signed-in person's name, for the top bar next to the avatar.
+function ClerkName({ className }) {
+  const { user } = useUser();
+  const name = user?.fullName || user?.firstName || user?.username || user?.primaryEmailAddress?.emailAddress;
+  return name ? <span className={className} title={name}>{name}</span> : null;
+}
+
+//   className - extra class for size/position (e.g. "topnav-user")
+export function UserName({ className = "" }) {
+  const mode = useAuthMode();
+  if (mode === "clerk") return <SignedIn><ClerkName className={className} /></SignedIn>;
+  return <span className={className}>Dev user</span>;
+}

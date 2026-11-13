@@ -1,15 +1,15 @@
 import { Link, NavLink, useParams } from "react-router-dom";
-import UserAvatar from "./UserAvatar";
+import UserAvatar, { UserName } from "./UserAvatar";
 import "./TopNav.css";
-import leafIcon from "../assets/icons/leaf.svg";
+import "./WorkflowNav.css";
+import leafIcon from "../assets/icons/leaf-cream.svg";
 
 const steps = [
-  { id: "studio", number: 1, label: "AI Studio" },
-  { id: "editor", number: 2, label: "Editor" },
-  { id: "export", number: 3, label: "Export" },
+  { id: "studio", label: "Canvas" },
+  { id: "editor", label: "Editor" },
+  { id: "export", label: "Export" },
 ];
 
-const short = (id) => (id && id.length > 10 ? `${id.slice(0, 8)}…` : id);
 
 // /projects/<id>/studio|editor|export. While you're in an AI Studio session, the AI Studio link keeps it.
 function stepPath(projectId, stepId, sessionId) {
@@ -17,7 +17,7 @@ function stepPath(projectId, stepId, sessionId) {
   return stepId === "studio" && sessionId ? `${path}/${sessionId}` : path;
 }
 
-// The wooden bar across the top of AI Studio, Editor and Export (Figma Page 7, 1728 x 119).
+// The green bar across the top of AI Studio, Editor and Export (Figma Page 7, 1728 x 119).
 //   projectTitle   - shown next to the logo
 //   projectId      - used to build the step links (defaults to the one in the URL)
 //   active         - "studio" | "editor" | "export": the step that's filled in
@@ -29,7 +29,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
   const unlocked = { studio: true, editor: canOpenEditor, export: canOpenExport };
 
   return (
-    <header className="topnav">
+    <header className={`topnav${["studio", "editor", "export"].includes(active) ? " topnav--compact" : ""}`}>
       <Link to="/projects" className="topnav-brand" title="Back to your projects">
         <img src={leafIcon} alt="" className="topnav-leaf" />
         <span className="topnav-name">Cascade</span>
@@ -43,7 +43,6 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
           const className = `topnav-step${step.id === active ? " active" : ""}`;
           const content = (
             <>
-              <span className="topnav-step-number">{step.number}</span>
               {step.label}
             </>
           );
@@ -67,16 +66,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
         })}
       </nav>
 
-      {/* Only while running `npm run dev`: shows the ids read from the URL, so you can see routing work */}
-      {import.meta.env.DEV && (
-        <span className="topnav-route"
-          title={`From the URL (useParams): project ${id}${params.sessionId ? `, session ${params.sessionId}` : ""}`}>
-          {/* Real ids are 32 characters, so show the start; hover for the full id */}
-          project: {short(id)}
-          {params.sessionId && <> · session: {short(params.sessionId)}</>}
-        </span>
-      )}
-
+      <UserName className="topnav-user" />
       <UserAvatar className="topnav-avatar" />
     </header>
   );

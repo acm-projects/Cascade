@@ -219,7 +219,7 @@ def register(app, integration, selected, export, export_model):
             raise HTTPException(502, 'The backend could not reach LinkedIn during connection. Retry when network access is restored.')
         except (KeyError, ValueError, TypeError):
             raise HTTPException(502, 'LinkedIn returned incomplete token or profile information. No connection was saved.')
-        return HTMLResponse('LinkedIn connected to your personal profile. Return to Cascade and click Refresh connection. Connecting does not publish a post.')
+        return HTMLResponse('LinkedIn connected to your personal profile. Cascade will publish your post now. You can close this tab.')
 
     def finish(job_key):
         with storage.schedule_lock('linkedin:'+job_key):

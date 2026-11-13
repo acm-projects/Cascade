@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import "./ui.css";
+import Icon from "./Icon";
 
 // A pop-up window over the page. Show it with {isOpen && <Modal ...>}.
 //   <Modal title="Delete project?" onClose={() => setIsOpen(false)}> ...buttons... </Modal>
@@ -54,7 +55,7 @@ function Modal({ title, children, onClose, className = '', wide = false }) {
         aria-labelledby={titleId} tabIndex={-1}>
         <div className="ui-modal-header">
           <h2 id={titleId} className="ui-modal-title">{title}</h2>
-          <button type="button" className="btn btn-ghost btn-small" aria-label="Close" onClick={onClose}>✕</button>
+          <button type="button" className="btn btn-ghost btn-small" aria-label="Close" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="ui-modal-body">{children}</div>
       </div>

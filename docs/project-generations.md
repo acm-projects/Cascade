@@ -30,12 +30,12 @@ Remote S3 objects are not purged by project deletion. Their project/job access i
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_*.py' -q
-node tests/test_editor_state.cjs
-node tests/test_editor_flow.cjs
+node tests/javascript/test_editor_state.cjs
+node tests/javascript/test_editor_flow.cjs
 # With isolated headless Chrome on DevTools port 9333:
-python3 tests/project_browser_server.py
+python3 tests/browser/project_browser_server.py
 # Separate terminal:
-python3 tests/test_project_browser.py
+python3 tests/browser/test_project_browser.py
 ```
 
 The project browser fixture uses temporary storage, mocked identity/selection and real FFmpeg cuts. It checks five-clip and second ordinary requests, fewer results, parent cancel, expansion, child follow-up, reload, opening earlier/later clips in the real editor, failed group isolation, native delete cancel/confirm, persistent deletion and stale-link redirect. It does not establish live provider selection quality. Unit checks cover ownership, invalid counts, idempotency, source references, rollback and editor draft access across groups. Local pipeline tests mock model scoring but encode/probe four and five distinct real clips with audio and timed captions.
@@ -46,7 +46,7 @@ Existing Chrome editor tests also check actual playback/captions, history, per-c
 
 The canvas now has a bounded horizontal branch viewport beside the composer on laptop screens. Every generation owns a unique column in a single horizontal strip. New full-video requests and siblings append to the right, and each follow-up is positioned to the right of its parent. No generation wraps onto a lower row. Clip cards stack vertically inside independently scrolling columns. The branch viewport supports horizontal wheels/trackpads, touch swipes, keyboard arrows, visible scrollbars and left/right buttons. On narrower screens the composer moves above the branches without widening the page.
 
-`web/canvas_branches.js` derives placement from persisted job and parent IDs. It does not infer relationships from titles or clip numbers. SVG connectors link each parent clip to its child column, using an overhead connection rail when intermediate columns are present; when the parent card is outside its column's visible area, the endpoint clamps to that column's edge. **Reveal parent clip** brings the actual parent back into view. New pending requests scroll within the branch viewport and update the same column when done. Reload reconstructs the graph without enqueueing generation.
+`frontend/legacy/web/canvas_branches.js` derives placement from persisted job and parent IDs. It does not infer relationships from titles or clip numbers. SVG connectors link each parent clip to its child column, using an overhead connection rail when intermediate columns are present; when the parent card is outside its column's visible area, the endpoint clamps to that column's edge. **Reveal parent clip** brings the actual parent back into view. New pending requests scroll within the branch viewport and update the same column when done. Reload reconstructs the graph without enqueueing generation.
 
 The **Prompt history** drawer lists submitted requests chronologically with prompt, timestamp, count, state and source context. Clicking an entry reveals/highlights its generation column. **Reuse prompt** copies text/count and restores the source context without submitting; submitting after review creates a new request. Missing parents require choosing a valid clip or explicitly switching to a full-video search.
 
@@ -57,9 +57,9 @@ History is the existing owner/results/failure/progress record set, with additive
 Additional checks:
 
 ```sh
-node tests/test_canvas_branches.cjs
+node tests/javascript/test_canvas_branches.cjs
 # With project_browser_server.py and isolated Chrome running:
-python3 tests/test_horizontal_browser.py
+python3 tests/browser/test_horizontal_browser.py
 ```
 
 The horizontal browser check verifies unique rightward columns for roots, children and siblings, no wrapping, connectors, pending-column identity, scrolling without moving the page, horizontal wheel and synthesized touch gestures, history jump/highlight, reuse, missing-parent metadata and blocked-media handling, retry without duplicate groups/history, reload, 480px page width, per-column scrolling, editor playback, and deletion while preserving another project's saved history. It uses mocked selection/identity with real local HTTP persistence and real video cutting. Synthesized Chrome touch is not physical-device or Safari/Firefox verification. A real fixture screenshot is written to `/tmp/cascade-horizontal-branches.png`.

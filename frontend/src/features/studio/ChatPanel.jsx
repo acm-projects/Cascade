@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./ChatPanel.css";
 import leafCream from "../../assets/icons/leaf-cream.svg";
+import Capybara from "../../components/Capybara";
 import { MAX_CLIPS, requestedClipCount } from './clipCount';
 
 const MIN_CLIPS = 1;
@@ -14,7 +15,7 @@ const MIN_CLIPS = 1;
 //   note             - optional line under the box (e.g. "2 picked clips will guide this prompt")
 //   chips            - picked-clip controls above the composer
 function ChatPanel({ messages, onSend, disabled = false, text: controlledText, onTextChange, note, chips,
-  focusRequest, onStop, onRetry, onReuse }) {
+  focusRequest, onStop, onRetry, onRetryBackup, onReuse }) {
   const [ownText, setOwnText] = useState("");
   const text = controlledText ?? ownText;
   const setText = onTextChange ?? setOwnText;
@@ -63,8 +64,11 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
   return (
     <section className="chat-panel wood-panel" aria-label="AI assistant chat">
       <header className="chat-panel-header">
-        <h2>AI Assistant</h2>
-        <p>Tell me what to find and how many clips you want.</p>
+        <span className="chat-panel-avatar"><Capybara variant="head" size={44} /></span>
+        <div>
+          <h2>AI Assistant</h2>
+          <p>Tell me what to find and how many clips you want.</p>
+        </div>
       </header>
 
       <div className="chat-panel-messages" ref={listRef} aria-live="polite">
@@ -92,10 +96,14 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
                 <button type="button" className="btn btn-small" onClick={() => onStop?.(message.group.job_id)}>Stop</button>}
               {message.group.state === 'error' &&
                 <button type="button" className="btn btn-small" onClick={() => onRetry?.(message.group.job_id)}>Retry</button>}
+              {message.group.backup_state === 'failed' &&
+                <button type="button" className="btn btn-small" onClick={() => onRetryBackup?.(message.group.job_id)}>Retry cloud backup</button>}
               <button type="button" className="btn btn-small" onClick={() => onReuse?.(message.group.prompt)}>Reuse prompt</button>
             </div>}
           </div>
         ))}
+        {/* The mascot sits in the empty space under the messages (it scrolls away once the chat fills up) */}
+        <Capybara className="chat-panel-mascot" size={messages.length ? 150 : 180} />
       </div>
 
       <form className="chat-panel-form" onSubmit={(e) => { e.preventDefault(); send(); }}>

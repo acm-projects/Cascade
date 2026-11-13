@@ -63,3 +63,35 @@
   justify-content: flex-end;
   gap: var(--space-1);
 }
+
+/* "Find clips with AI" / "Edit my own clip" */
+.new-project-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+}
+
+.new-project-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 2px solid var(--color-wood-dark);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 85%, white);
+  color: var(--color-wood-text);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.new-project-mode span { font-size: 12px; opacity: 0.75; }
+.new-project-mode:hover:not(:disabled) { background: color-mix(in srgb, var(--color-leaf) 12%, var(--color-cream-card)); }
+.new-project-mode.active {
+  border-color: var(--color-jungle-deep);
+  background: color-mix(in srgb, var(--color-leaf) 28%, var(--color-cream-card));
+  box-shadow: inset 0 0 0 1px var(--color-jungle-deep);
+}
+.new-project-mode:disabled { cursor: default; opacity: 0.7; }
+@media (max-width: 520px) { .new-project-modes { grid-template-columns: 1fr; } }

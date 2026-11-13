@@ -41,7 +41,7 @@ Audio preparation was approximately 0.026–0.036s before. It is now skipped for
 4. Manual selections seek to the selection time rounded down to the 25 fps grid, skipping prefix processing; prefix observations retain source timestamps and stable framing. The remaining clip is analyzed so later trim changes can reuse it. Auto/conversation analysis retains full context for identity and speaker hysteresis.
 5. `backend/editor_backend.py`: deterministic owner/clip-scoped cache identity includes source/per-clip revision, context, capability profile, selection time/box, engine/OpenCV version and relevant model/device revisions. Output aspect ratio, caption style, B-roll and other downstream edits do not invalidate raw analysis. Manual selections ignore irrelevant context/model/device changes. Cached JSON is reused by file revision.
 6. Identical queued/running requests share an analysis ID. A thread lock and OS file lock prevent duplicate inference across threads and local worker processes on macOS/Linux. Interrupted workers can be retried. Old engine results and changed media/models are rejected at plan/export time.
-7. `web/editor_reframe.js` revalidates the analysis cache before preview/export preparation. Progress updates at least once per second of analyzed video. Cancel is enabled and preview playback remains available during preparation; conflicting edits remain locked. Cancelling stops the view from waiting, while a backend job may finish and be reused.
+7. `frontend/legacy/web/editor_reframe.js` revalidates the analysis cache before preview/export preparation. Progress updates at least once per second of analyzed video. Cancel is enabled and preview playback remains available during preparation; conflicting edits remain locked. Cancelling stops the view from waiting, while a backend job may finish and be reused.
 
 ## Quality checks and retained limits
 
@@ -66,11 +66,11 @@ CASCADE_REFRAME_MODELS=/tmp/cascade-reframe-models CASCADE_REFRAME_DEVICE=cpu \
   --output /tmp/cascade-perf-new --runs 3
 python3 scripts/compare_reframe_benchmarks.py /tmp/cascade-perf-report-before \
   /tmp/cascade-perf-new --output /tmp/cascade-perf-comparison.json
-python3 -m unittest tests.test_reframe_cache tests.test_subject_tracking tests.test_reframe -q
+python3 -m unittest tests.application.test_reframe_cache tests.application.test_subject_tracking tests.application.test_reframe -q
 ```
 
 The pre-change source snapshots are retained at `/tmp/cascade-perf-before`; the benchmark script accepts `--baseline` pointing there. Temporary files are not permanent repository assets. Public footage sources and setup are documented in [subject-tracking.md](subject-tracking.md). The baseline is engine version 2; optimized analysis is version 3.
 
-Analysis records include phase timings/call counts and the actual speaker device. The authenticated job-status endpoint exposes those summaries without returning frame arrays. `tests/test_reframe_responsiveness_browser.py` passed playback/cancellation during real inference, cancellation/rejoin sharing one job, undo/redo and profile skipping. Ten ready-cache requests measured 1.31 ms median over local HTTP, with no model rerun (raw samples: `/tmp/cascade-perf-cache.json`). A selection at 2.5s was separately checked to skip prefix processing while retaining source timestamps.
+Analysis records include phase timings/call counts and the actual speaker device. The authenticated job-status endpoint exposes those summaries without returning frame arrays. `tests/browser/test_reframe_responsiveness_browser.py` passed playback/cancellation during real inference, cancellation/rejoin sharing one job, undo/redo and profile skipping. Ten ready-cache requests measured 1.31 ms median over local HTTP, with no model rerun (raw samples: `/tmp/cascade-perf-cache.json`). A selection at 2.5s was separately checked to skip prefix processing while retaining source timestamps.
 
 Remote S3 clips are treated as immutable generation assets: their bucket/key and any supplied ETag/version participate in identity. Replacing an object externally under the same key without updating metadata is outside this cache contract. Unrelated result metadata, caption edits and changes to other clips do not force reanalysis.

@@ -1,0 +1,48 @@
+/* Sits inside a .leaf-page, over the blue gradient and under all the page's content. */
+.water-flow {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  transform-origin: 50% 35%;   /* the Trends zoom heads toward the light, a little above the middle */
+  animation: water-flow-in 0.9s ease-out both;
+}
+
+@keyframes water-flow-in {
+  from { opacity: 0; }
+}
+
+/* The canvases WaterFlow puts inside the holder above: the water, then the sea life on top */
+.water-flow > canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Blocky Minecraft-style animals: scale their small canvas up as crisp blocks */
+.water-flow > .water-flow-creatures,
+.water-flow > .water-flow-life {
+  image-rendering: pixelated;
+}
+
+/* Inside a section (the Trends header) instead of the whole screen. The parent must be position: relative. */
+.water-flow-within {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* The water replaces the little white squares of the old pixel sea. */
+.leaf-page:has(> .water-flow)::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .water-flow { animation: none; }
+}

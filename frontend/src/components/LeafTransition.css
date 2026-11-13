@@ -1,0 +1,42 @@
+/* Camera-move page changes (see LeafTransition.jsx).
+   While the camera moves, the page's words and buttons fade away, then a wash of water covers the swap and clears. */
+.is-camera-moving :is(.landing-copy, .projects-bar, .projects-body) {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.camera-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;   /* above the pages; also stops clicks while the camera moves */
+}
+
+/* Into the deep sea: the same colors as the top of the underwater scene */
+.camera-transition-dive {
+  background: linear-gradient(180deg, #2fb4dc 0%, #1663a8 45%, #0b3a6e 100%);
+}
+
+/* Out of the water into a work page: the pixel-sea colors of AI Studio, the Editor and Export */
+.camera-transition-push {
+  background: linear-gradient(160deg, #7ff0ec, #3fc2dc 35%, #1f9fd6 75%);
+}
+
+.camera-transition-cover {
+  animation: camera-wash-in var(--wash-for) ease-in var(--wash-from) both;
+}
+
+.camera-transition-reveal {
+  animation: camera-wash-out var(--reveal-for) ease-out both;
+}
+
+@keyframes camera-wash-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes camera-wash-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.leaf-transition-backward { transform: scaleX(-1); }

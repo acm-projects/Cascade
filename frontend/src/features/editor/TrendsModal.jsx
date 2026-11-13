@@ -1,20 +1,8 @@
-import Modal from '../../components/ui/Modal';
-import { useEffect } from 'react';
-import ClipPlayer from './ClipPlayer';
-import TrendsPanel from './TrendsPanel';
-import './TrendsPanel.css';
+import TrendAnalysis from './trends/TrendAnalysis';
 
-export default function TrendsModal({ projectId, clip, state, info, flush, onApply, disabled, onClose, children }) {
-  useEffect(() => {
-    document.querySelectorAll('video, audio').forEach(media => { if (!media.closest('.trends-modal')) media.pause(); });
-  }, []);
-  return <Modal title="Trends · YouTube research" onClose={onClose} className="trends-modal">
-    <TrendsPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} state={state} info={info} flush={flush} onApply={onApply} disabled={disabled} preview={
-      <section className="trends-modal-preview" aria-label="Selected clip">
-        <h3>{clip.title || 'Selected clip'}</h3>
-        {info && state && <ClipPlayer projectId={projectId} clip={clip} state={state} info={info} />}
-        {children}
-      </section>
-    } />
-  </Modal>;
+// The Trends button opens the full Trend Analysis page over the Editor/Export page.
+// change: accept a previewed change into the draft (undoable). onOpenEditor(t): go edit at source second t.
+export default function TrendsModal({ projectId, clip, state, info, flush, change, onClose, onOpenEditor, clips, onSelectClip }) {
+  return <TrendAnalysis key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} state={state} info={info}
+    flush={flush} change={change} onClose={onClose} onOpenEditor={onOpenEditor} clips={clips} onSelectClip={onSelectClip} />;
 }
