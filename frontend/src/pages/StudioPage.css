@@ -27,7 +27,8 @@
   overflow: hidden;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  box-shadow: var(--panel-edge);
+  /* just a soft shadow: the panels' chunky edge looked like a stray stripe under the island's water */
+  box-shadow: 0 12px 26px rgba(10, 50, 60, 0.3);
 }
 
 .chat-panel.wood-panel {

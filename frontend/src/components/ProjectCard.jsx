@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./ProjectCard.css";
-import leafIcon from "../assets/icons/leaf.svg";
+import logo from "../assets/icons/cascade-logo.svg";
 import { isTrashed } from "../utils/projectViews";
 import { timeAgo } from "../utils/time";
 import useProjectThumbnail from "../hooks/useProjectThumbnail";
@@ -44,7 +44,7 @@ function ProjectCard({ project, onOpen, onUpdate, busy = false }) {
           {thumbnail ? (
             <img src={thumbnail} alt="" />
           ) : (
-            <img src={leafIcon} alt="" className="project-card-leaf" />
+            <img src={logo} alt="" className="project-card-leaf" />
           )}
         </div>
         <span className="project-card-name">{project.favorite && <span className="project-card-star" aria-label="Favorite"><Icon name="star" /> </span>}{project.name}</span>

@@ -66,11 +66,13 @@
 }
 
 /* No thumbnail yet: a leaf instead */
+/* No thumbnail yet: the Cascade logo, gently tilted */
 .project-card-thumb img.project-card-leaf {
-  width: calc(60 * var(--u));
-  height: calc(60 * var(--u));
+  width: calc(84 * var(--u));
+  height: calc(84 * var(--u));
   object-fit: contain;
-  opacity: 0.6;
+  filter: drop-shadow(0 calc(4 * var(--u)) 0 rgba(18, 50, 79, 0.25));
+  transform: rotate(-8deg);
 }
 
 .project-card-name {
