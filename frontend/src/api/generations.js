@@ -1,5 +1,10 @@
 import { apiFetch } from "./client";
 
+export function retryClipBackup(token, projectId, jobId) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/generations/${encodeURIComponent(jobId)}/backup/retry`,
+    { token, method: "POST" });
+}
+
 // AI Studio clip generation: backend/project_actions.py and app1.py (/upload, /jobs)
 // Generating is an async job: the backend answers 202 { job_id } right away,
 // then you poll getJob(job_id) (see hooks/useJobPolling.js) until state is "done" or "error".

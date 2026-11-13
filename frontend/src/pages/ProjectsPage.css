@@ -34,6 +34,8 @@
   text-shadow: 0 calc(3 * var(--u)) 0 var(--bar-edge);
 }
 
+.projects-brand:hover { opacity: 0.85; }
+
 .projects-leaf {
   width: calc(50 * var(--u));   /* the Cascade logo */
   height: calc(50 * var(--u));

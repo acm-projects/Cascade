@@ -6,7 +6,7 @@ import { apiFetch } from "./client";
 // An "edit" (the draft state) looks like:
 //   { start, end,                                   seconds, trimmed inside the clip
 //     captions:    { enabled, font, size, color, stroke, thickness, background, opacity, position, bold },
-//     composition: { ratio: "original" | "9:16" | "1:1" | "4:5" | "16:9" | "4:3", mode: "fit" | "fill", x, y, background },
+//     composition: { ratio: "original" | "9:16" | "1:1" | "4:5" | "16:9" | "4:3" | "16:10" | "21:9", mode: "fit" | "fill", x, y, background },
 //     effects:     { brightness, contrast, saturation, grayscale },
 //     reframe:     { enabled, focus, selection, analysis_id },
 //     texts: { [cueId]: "caption text" },  broll: [ ...b-roll segments ] }
@@ -21,6 +21,8 @@ export function getTrends(token, projectId, jobId, index, researchId) {
 export function analyzeTrends(token, projectId, jobId, index, body) {
   return apiFetch(clipPath(projectId, jobId, index) + '/trends', { token, method: 'POST', body });
 }
+/** POST …/trends/apply  body: { state, research_id, suggestion } → { state, outcomes, message }.
+ *  Returns the edit one suggestion would produce; nothing is saved until the page calls change(). */
 export function applyTrends(token, projectId, jobId, index, body) {
   return apiFetch(clipPath(projectId, jobId, index) + '/trends/apply', { token, method: 'POST', body });
 }
@@ -43,6 +45,16 @@ export function getEditorIndex(token, projectId, { selectedOnly = false } = {}) 
  * @returns {Promise<{ duration, width, height, cues, burned_in, warning,
  *                     draft: { state: Edit, chat: { role, text }[], updated_at } }>}
  */
+/**
+ * POST /api/projects/{projectId}/editor/upload
+ * Your own video, straight into the Editor (no AI Studio picking). Captions are added when speech-to-text is set up.
+ * @returns {Promise<{ job_id, clip_index, title, duration, captions: boolean, warning: string }>}
+ */
+export function uploadEditorClip(token, projectId, file) {
+  const form = new FormData(); form.append('video', file);
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/upload`, { token, method: 'POST', form });
+}
+
 export function getDraft(token, projectId, jobId, index) {
   return apiFetch(clipPath(projectId, jobId, index), { token });
 }
@@ -62,6 +74,16 @@ export function saveDraft(token, projectId, jobId, index, draft) {
  * @returns {Promise<{ state: Edit, message: string, actions: object[], broll_search: object | null }>}
  *          state = the edit with the AI's changes applied, message = the AI's reply
  */
+/** GET /api/projects/{projectId}/editor/ai-status → provider, engine, model and free-tier usage (never credentials). */
+export function getEditorAIStatus(token, projectId) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/ai-status`, { token });
+}
+
+/** GET …/{jobId}/{index}/ai-edit → the background edit for this clip: { job, versions, saved } */
+export function getAIEdit(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/ai-edit`, { token });
+}
+
 export function sendEditorChat(token, projectId, jobId, index, body) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/chat`, { token, method: "POST", body });
 }
@@ -71,6 +93,11 @@ export function sendEditorChat(token, projectId, jobId, index, body) {
  * Renders one clip. 409 while automatic framing is still being prepared.
  * @returns {Promise<Blob>} the finished MP4
  */
+/** GET …/{jobId}/{index}/style-progress → { done, total } while fan-edit subject cutouts are computed, else {}. */
+export function getStyleProgress(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/style-progress`, { token });
+}
+
 export function exportClip(token, projectId, jobId, index, edit) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/export`, { token, method: "POST", body: edit });
 }
@@ -104,6 +131,15 @@ export function startReframe(token, projectId, jobId, index, body) {
  */
 export function getReframe(token, projectId, jobId, index, analysisId) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/reframe/${encodeURIComponent(analysisId)}`, { token });
+}
+
+/**
+ * POST .../editor/{jobId}/{index}/reframe/{analysisId}/plan   body: { composition, focus, selection }
+ * Where the crop should sit over time, following whoever is talking.
+ * @returns {Promise<{ points: { t, x, y }[] }>} x / y are 0-1 positions of the crop inside the picture, by source second
+ */
+export function getReframePlan(token, projectId, jobId, index, analysisId, body) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/reframe/${encodeURIComponent(analysisId)}/plan`, { token, method: "POST", body });
 }
 
 export function listAudioAssets(token, projectId, jobId, index) {

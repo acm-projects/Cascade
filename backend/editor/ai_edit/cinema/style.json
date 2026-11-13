@@ -1,0 +1,27 @@
+{
+  "_about": "Cascade Cinema's tunable editing rules. Code reads this file at start-up; change a number here, restart the backend, and every edit follows it. No AI model is involved in applying any of these.",
+  "dialogue": {
+    "max_pause": 0.16,
+    "lead_in": 0.09,
+    "tail": 0.18,
+    "fade": 0.012,
+    "part_breath": 0.06,
+    "filler_words": ["um", "umm", "uh", "uhh", "uhm", "erm", "er", "ah", "ahh", "hmm", "hm", "mm", "mhm", "mmm", "eh", "uh-huh"]
+  },
+  "captions": {"size_wide": 82, "size_tall": 78, "max_words": 7, "keyword_scale": 1.12},
+  "mix": {"music_under_voice_db": -17, "loudness_lufs": -14, "true_peak_db": -1.2},
+  "broll": {"min_seconds": 1.5, "max_seconds": 3.4, "lead_seconds": 0.12},
+  "pacing": {"longest_hold_seconds": 3.2, "message_seconds": 3.4, "tail_seconds": 0.5},
+  "tones": {
+    "water": [72, 198, 255], "life": [88, 227, 140], "hope": [126, 240, 196], "danger": [255, 64, 52],
+    "money": [245, 197, 66], "earth": [255, 168, 76], "calm": [244, 241, 234]
+  },
+  "tone_words": {
+    "water": ["water", "river", "rain", "ocean", "sea", "flood", "stream", "wave", "ice", "glacier", "blue", "lake", "swim"],
+    "life": ["forest", "tree", "jungle", "rainforest", "amazon", "green", "life", "alive", "grow", "leaf", "leaves", "plant", "animal", "jaguar", "species", "wild", "nature", "breathe", "oxygen", "baby", "mother", "peace", "peaceful", "healthy", "biodiversity", "thriving"],
+    "danger": ["fire", "burn", "kill", "die", "dead", "death", "destroy", "cut", "chainsaw", "gone", "lost", "loss", "extinct", "crush", "bite", "skull", "danger", "dangerous", "blood", "heat", "smoke", "collapse", "never", "teeth", "hungry", "prey", "stealing", "poison"],
+    "money": ["money", "dollar", "profit", "cattle", "beef", "gold", "pay", "cost", "rich", "greed", "billion", "million", "price"],
+    "earth": ["earth", "planet", "world", "sun", "home", "everyone", "everything"],
+    "hope": ["children", "kids", "future", "hope", "protect", "save", "god", "church"]
+  }
+}

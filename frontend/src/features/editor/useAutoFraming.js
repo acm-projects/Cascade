@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import useApi from "../../api/useApi";
+import { ratioOf } from "./aspectRatios";
 
-const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 4 / 3 };
 const POLL_MS = 1500;
 
 // Does this edit crop the video? (Fill into a different shape than the clip's own)
 export function needsFraming(state, info) {
   if (!state || !info || info.has_video === false || state.composition.mode !== "fill" || state.composition.ratio === "original") return false;
-  return Math.abs(RATIOS[state.composition.ratio] - info.width / info.height) > 0.01;
+  return Math.abs(ratioOf(state.composition.ratio) - info.width / info.height) > 0.01;
 }
 
 // Fill (crop) exports need a "who is in the frame" analysis first, so the crop can follow people.
@@ -23,6 +23,13 @@ export default function useAutoFraming(projectId, clip, state, info, patch) {
   useEffect(() => {
     composition.current = state?.composition;
   });
+
+  // Start the "who is talking" analysis as soon as the clip opens, so picking a shape later is instant.
+  // A finished analysis is found again by its content, so nothing needs to be saved for it.
+  useEffect(() => {
+    if (!info || info.has_video === false || !composition.current) return;
+    api.startReframe(projectId, clip.job_id, clip.clip_index, { composition: composition.current, focus: "auto", selection: null }).catch(() => {});
+  }, [api, projectId, clip.job_id, clip.clip_index, info?.has_video]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!wanted) return;

@@ -4,12 +4,13 @@ import Button from "../../components/ui/Button";
 import Spinner from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/ToastContext";
 import Icon from "../../components/ui/Icon";
+import { connectAndWait } from "./connectAndWait";
 
 const WORKING = ["Rendering", "Uploading", "Processing", "Verifying"];
 const POLL_MS = 3000;
 
-// Upload one clip to YouTube (backend/social_youtube.py, Manila).
-// The server renders the clip with its edits, then uploads it. Needs Google keys in the server's .env.
+// Upload one clip to YouTube (backend/social_youtube.py, Manila) with one button: if YouTube isn't connected yet,
+// it opens Google's sign-in, waits for it, then starts the upload. The server renders the clip with its edits.
 //   post  - { name, caption, hashtags } from PostPanel: used as the YouTube title/description
 //   state - the clip's edit (draft state)
 // Use with key={clip key}.
@@ -19,7 +20,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
   const [connection, setConnection] = useState(null); // { connected, channel } or { error }
   const [privacy, setPrivacy] = useState("private");
   const [upload, setUpload] = useState(null);         // { status, url?, error? }
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(null);             // null | "connect" | "publish"
   const submission = useRef(null);
 
   useEffect(() => {
@@ -45,79 +46,67 @@ function YouTubePanel({ projectId, clip, post, state }) {
     return () => clearTimeout(timer);
   }, [working, upload, api, projectId, clip.job_id, clip.clip_index]);
 
-  async function connect() {
-    try {
-      const { url } = await api.connectYoutube(projectId);
-      window.open(url, "_blank", "noopener"); // Google's sign-in; come back and press "Check again"
-    } catch (err) {
-      toast.show(err.message, "error");
-    }
-  }
-
-  function checkAgain() {
-    api.getYoutubeConnection(projectId).then(setConnection).catch((err) => setConnection({ error: err }));
-  }
-
   async function publish() {
     // Same submission id if you press again after a hiccup: the backend never uploads twice
+    if (upload?.status === "Failed" && !upload.upload_attempted) submission.current = null;
     submission.current = submission.current ?? crypto.randomUUID();
-    setBusy(true);
+    const result = await api.publishYoutube(projectId, clip.job_id, clip.clip_index, {
+      title: (post?.name || clip.title || "Cascade clip").slice(0, 100),
+      description: post?.caption ?? "",
+      hashtags: post?.hashtags ?? [],
+      privacy,
+      submission_id: submission.current,
+      edit: state,
+    });
+    setUpload(result);
+    if (result.status === "Failed" && !result.upload_attempted) submission.current = null;
+  }
+
+  async function connectAndPublish() {
     try {
-      const result = await api.publishYoutube(projectId, clip.job_id, clip.clip_index, {
-        title: (post?.name || clip.title || "Cascade clip").slice(0, 100),
-        description: post?.caption ?? "",
-        hashtags: post?.hashtags ?? [],
-        privacy,
-        submission_id: submission.current,
-        edit: state,
-      });
-      setUpload(result);
+      if (!connection?.connected) {
+        setBusy("connect");
+        const connected = await connectAndWait({
+          name: "YouTube",
+          connect: () => api.connectYoutube(projectId),
+          check: () => api.getYoutubeConnection(projectId),
+        });
+        setConnection(connected);
+      }
+      setBusy("publish");
+      await publish();
     } catch (err) {
+      setUpload((current) => (current && WORKING.includes(current.status) ? current : { status: "Failed", error: err.message }));
+      submission.current = null;
       toast.show(err.message, "error");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
-  let content;
-  if (!connection) {
-    content = <Spinner label="Checking YouTube" />;
-  } else if (connection.error) {
-    content = (
-      <p className="export-social-note">
-        YouTube publishing is unavailable.
-      </p>
-    );
-  } else if (!connection.connected) {
-    content = (
-      <div className="export-post-actions">
-        <Button size="sm" variant="primary" onClick={connect}>Connect YouTube</Button>
-        <Button size="sm" variant="ghost" onClick={checkAgain}>Check again</Button>
-      </div>
-    );
-  } else {
-    content = (
-      <>
-        <p className="export-social-note">Connected: <b>{connection.channel}</b></p>
-        <label className="export-post-field">
-          Visibility
-          <select value={privacy} onChange={(e) => setPrivacy(e.target.value)} disabled={busy || working}>
-            <option value="private">Private</option>
-            <option value="unlisted">Unlisted</option>
-            <option value="public">Public</option>
-          </select>
-        </label>
-        <Button size="sm" variant="primary" onClick={publish} disabled={busy || working || !state}>
-          {busy ? "Starting…" : "Upload to YouTube"}
-        </Button>
-      </>
-    );
-  }
+  const done = !!upload?.upload_attempted || !!upload?.video_id;
+  let label = connection?.connected ? "Publish to YouTube" : "Connect & publish to YouTube";
+  if (busy === "connect") label = "Waiting for Google sign-in…";
+  if (busy === "publish") label = "Starting upload…";
 
   return (
-    <div className="export-post">
+    <div className="export-publish-row">
       <h3 className="export-social-title"><Icon name="youtube" /> YouTube</h3>
-      {content}
+      {!connection ? <Spinner label="Checking YouTube" />
+        : connection.error ? <p className="export-social-note">{connection.error.message}</p>
+          : <>
+            <div className="export-publish-controls">
+              <Button size="sm" variant="primary" onClick={connectAndPublish} disabled={!!busy || working || !state || done}>
+                {busy && <Spinner size={14} label="Working" />} {label}
+              </Button>
+              <select aria-label="YouTube visibility" value={privacy} onChange={(e) => setPrivacy(e.target.value)} disabled={!!busy || working || done}>
+                <option value="private">Private</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="public">Public</option>
+              </select>
+            </div>
+            {connection.connected && <p className="export-social-note">as <b>{connection.channel}</b></p>}
+          </>}
       {upload && upload.status !== "Ready" && (
         <p className={`export-upload-status${upload.status === "Failed" ? " failed" : ""}`} role="status">
           {working && <Spinner size={14} label="Uploading" />} {upload.status}

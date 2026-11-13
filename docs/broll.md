@@ -31,8 +31,8 @@ All numeric controls and timeline timestamps use the full generated clip’s sec
 
 - `backend/broll.py`: validated Pexels API mapping, clip-scoped registry, 24-hour search cache, bounded media download and FFprobe validation.
 - `backend/editor_backend.py`: owner-checked search/thumbnail/media routes, draft validation, structured chat actions, FFmpeg composition.
-- `web/editor_broll.js`: results, attribution, preview, numeric edits, selected-segment context, synchronized muted overlay.
-- `web/editor_state.js`, `web/editor_timeline.js`: persisted segments, undo/redo, dedicated selectable stock track.
+- `frontend/legacy/web/editor_broll.js`: results, attribution, preview, numeric edits, selected-segment context, synchronized muted overlay.
+- `frontend/legacy/web/editor_state.js`, `frontend/legacy/web/editor_timeline.js`: persisted segments, undo/redo, dedicated selectable stock track.
 
 At most 30 nonoverlapping segments per clip. Fit or centered Fill are supported. Numeric placement/resizing is provided; timeline dragging/resizing of stock blocks is not implemented. Existing main-clip trim dragging is unchanged. Main audio is preserved; mixing stock audio, transitions, speed changes, and stock color correction are not supported. Burned-in original captions are part of the main video pixels and may be covered by stock; the editor’s additional caption layer stays on top.
 
@@ -43,19 +43,19 @@ Only exact HTTPS Pexels media hosts are fetched, using provider-returned URLs sa
 ## Verification
 
 ```sh
-python3 -m unittest tests.test_frontend_routes tests.test_frontend_views tests.test_editor tests.test_broll -q
-node tests/test_editor_state.cjs
-node tests/test_editor_flow.cjs
+python3 -m unittest tests.application.test_frontend_routes tests.application.test_frontend_views tests.application.test_editor tests.application.test_broll -q
+node tests/javascript/test_editor_state.cjs
+node tests/javascript/test_editor_flow.cjs
 ```
 
 The backend tests mock provider/AI calls; FFmpeg tests use real colored fixtures and distinct audio tones to verify insertion intervals, source offsets, multiple segments, trim intersections, captions above stock, and original audio preservation. The isolated browser server also uses temporary storage and mocked providers:
 
 ```sh
-python3 tests/editor_browser_server.py
+python3 tests/browser/editor_browser_server.py
 # In separate terminals: isolated Chrome with --remote-debugging-port=9333
 # and --remote-allow-origins=http://localhost:9333, then run suites sequentially:
-python3 -m tests.test_broll_browser
-python3 tests/test_editor_browser.py
+python3 -m tests.browser.test_broll_browser
+python3 tests/browser/test_editor_browser.py
 ```
 
 No paid OpenAI calls are needed for these tests.

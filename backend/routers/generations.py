@@ -31,6 +31,23 @@ class RetryInput(BaseModel):
     request_id: str = Field(pattern=r'^[a-zA-Z0-9_-]{1,80}$')
 
 
+@router.post('/projects/{project_id}/generations/{job_id}/backup/retry', status_code=202)
+def retry_backup(project_id: str, job_id: str, request: Request):
+    from backend.services import clip_backup
+    with projects_store.lock:
+        owner = projects_store.owner_for_job(project_id, job_id, request.state.user_id)
+        if owner.get('kind', 'generation') != 'generation':
+            raise HTTPException(400, 'Only generated clips can be backed up here.')
+        folder = job_service.JOBS_DIR / job_id
+        if not job_service.metadata_exists(folder/'results.json'):
+            raise HTTPException(409, 'Wait for the clips to finish generating.')
+        try:
+            clip_backup.schedule(folder, job_id)
+        except Exception:
+            raise HTTPException(503, 'Cloud backup could not start. Your local clips are still available; retry shortly.') from None
+        return {'backup_state': job_service.load_json(folder/'results.json').get('backup_state', 'local')}
+
+
 @router.get('/projects/{project_id}/generations')
 def groups(project_id: str, request: Request):
     with projects_store.lock:

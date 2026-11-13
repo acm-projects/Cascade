@@ -113,7 +113,19 @@ function ProjectsPage() {
 
   // From the New Project pop-up: create the project, then open its AI Studio. A picked video goes along
   // and uploads there with the first prompt.
-  async function createProject(name, file) {
+  // "Edit my own clip": upload the video into the Editor first, then open the Editor.
+  // If the upload fails, the project made on the first try is reused when you press the button again.
+  const pendingOwnClip = useRef(null);
+  async function createProject(name, file, mode = "studio") {
+    if (mode === "editor") {
+      const created = pendingOwnClip.current ?? await api.createProject(name);
+      pendingOwnClip.current = created;
+      await api.uploadEditorClip(created.id, file);
+      pendingOwnClip.current = null;
+      openProject(created);
+      leafNavigate(`/projects/${created.id}/editor`);
+      return;
+    }
     const created = await api.createProject(name);
     openProject(created);
     leafNavigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined, ready: import("./StudioPage") });
@@ -207,10 +219,10 @@ function ProjectsPage() {
       <IsoWorld framing="underwater" />
       {/* Green top bar */}
       <header className="projects-bar">
-        <div className="projects-brand">
+        <Link to="/" className="projects-brand" title="Back to the home page">
           <img src={logo} alt="" className="projects-leaf" />
           <span>Cascade</span>
-        </div>
+        </Link>
         <div className="projects-bar-right">
           {/* "Discover" is a placeholder: it looks like a link but doesn't go anywhere yet */}
           <nav className="projects-nav" aria-label="Site">
@@ -277,7 +289,7 @@ function ProjectsPage() {
         </main>
       </div>
 
-      {creatingNew && <NewProjectModal onClose={() => setCreatingNew(false)} onCreate={createProject} />}
+      {creatingNew && <NewProjectModal onClose={() => { pendingOwnClip.current = null; setCreatingNew(false); }} onCreate={createProject} />}
       {emptyTrashOpen && (
         <Modal title="Empty trash?" onClose={() => !deleting && setEmptyTrashOpen(false)}>
           <p className="projects-delete-text">

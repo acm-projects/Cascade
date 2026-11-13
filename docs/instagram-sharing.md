@@ -10,7 +10,7 @@ The user chooses Instagram in the sheet if offered, then completes posting there
 
 ## Verification and environment limits
 
-`node tests/test_instagram_share.cjs` exercises capability profiles without browser automation:
+`node tests/javascript/test_instagram_share.cjs` exercises capability profiles without browser automation:
 
 | Test profile | Outcome | Instagram composer already loaded? |
 | --- | --- | --- |

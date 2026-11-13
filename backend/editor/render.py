@@ -4,6 +4,7 @@ import re
 import subprocess
 import shutil
 import zipfile
+from contextlib import contextmanager
 from functools import lru_cache
 import tempfile
 from pathlib import Path
@@ -33,6 +34,19 @@ def export_binary(needs_captions):
         except (OSError, subprocess.SubprocessError):
             continue
     raise HTTPException(503, 'Caption export requires FFmpeg with libass. Set CASCADE_EDITOR_FFMPEG to a compatible binary on the server.')
+
+
+@contextmanager
+def styled_media(jid, clip, body):
+    """Clip media, with any stylized fan-edit effects baked in (cached, rendered locally)."""
+    with media(jid, clip) as source:
+        if not body.stylize or not body.stylize.events:
+            yield source
+            return
+        from .stylize import stylized
+        from .runtime import jobs_dir
+        with stylized(source, body, jobs_dir()/jid/'stylize'/Path(source).stem) as path:
+            yield path
 
 
 def export_selected(pid: str, body: BatchExport, request: Request):
@@ -66,6 +80,24 @@ def export_selected(pid: str, body: BatchExport, request: Request):
         raise
 
 
+def recompose_file(path, body):
+    """Put a finished video (an AI edit) into the frame shape chosen in the Aspect tab: one quick FFmpeg pass, audio untouched."""
+    probe=subprocess.run(['ffprobe','-v','error','-select_streams','v:0','-show_entries','stream=width,height','-of','csv=p=0:s=x',str(path)],capture_output=True,text=True,timeout=30)
+    try:width,height=map(int,probe.stdout.strip().split('x'))
+    except ValueError:raise HTTPException(503,'Could not read the finished edit. Try again.')
+    g=composition_geometry(width,height,body.composition)
+    filters=composition_filter(g,body.composition)
+    if body.resolution!='original':filters+=','+resolution_filter(g['width'],g['height'],body.resolution)
+    directory=tempfile.TemporaryDirectory(prefix='cascade-reshape-')
+    target=Path(directory.name)/'edited.mp4'
+    try:
+        subprocess.run(['ffmpeg','-nostdin','-v','error','-y','-i',str(path),'-vf',filters,'-c:v','libx264','-preset','ultrafast' if body.preview else 'veryfast','-crf','26' if body.preview else '18',
+                        '-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart',str(target)],capture_output=True,check=True,timeout=300)
+    except (OSError,subprocess.SubprocessError):
+        directory.cleanup();raise HTTPException(503,'Could not reshape the edit. Check FFmpeg and retry.')
+    return FileResponse(target,filename='cascade-edited.mp4',media_type='video/mp4',background=BackgroundTask(directory.cleanup))
+
+
 def export(pid: str, jid: str, index: int, body: ExportInput, request: Request):
     return _export(pid,jid,index,body,request)
 
@@ -80,11 +112,52 @@ def _export(pid, jid, index, body, request, prepared=None):
     from .audio_assets import store
     audio_store=store(pid,jid,index,request.state.user_id)
     audio_store.verify(body)
+    if body.ai_edit and not prepared:  # a finished AI edit: this exact file is what the preview showed
+        from .ai_edit.jobs import rendered_path
+        finished=rendered_path(pid, jid, index, request.state.user_id, body.ai_edit.version)
+        if body.composition.ratio=='original':
+            return FileResponse(finished, filename='cascade-edited.mp4', media_type='video/mp4', background=BackgroundTask(lambda: None))
+        return recompose_file(finished, body)
+    if body.fablecut and not prepared:
+        if body.overlays is not None:
+            raise HTTPException(422,'FableCut sequences render captions on the server; source raster overlays are unsupported.')
+        from .sequence_models import OPENCHATCUT_ENGINE
+        if body.fablecut.engine == OPENCHATCUT_ENGINE:
+            from .openchatcut_render import render as render_sequence
+        else:
+            from .fablecut_render import render as render_sequence
+        from .storage import draft_path
+        import hashlib
+        import json
+        from .runtime import jobs_dir
+        cache=draft_path(pid,jid,index,request.state.user_id).parent/'sequence-renders'/f'{jid}-{index}'
+        cache.mkdir(parents=True,exist_ok=True)
+        local_source=jobs_dir()/jid/Path(clip.get('clip_url','')).name
+        version=(local_source.stat().st_size,local_source.stat().st_mtime_ns) if local_source.is_file() else clip.get('clip_s3_key')
+        digest=hashlib.sha256(json.dumps({'state':body.model_dump(),'info':info,'clip':clip,'source_version':version,'renderer':hashlib.sha256(b''.join(p.read_bytes() for p in sorted([*Path(__file__).parent.glob('*.py'),*Path(__file__).parent.glob('*.mts')]))).hexdigest()},sort_keys=True).encode()).hexdigest()
+        cached=cache/(digest+'.mp4')
+        if cached.is_file():
+            return FileResponse(cached,filename='cascade-edited.mp4',media_type='video/mp4',background=BackgroundTask(lambda:None))
+        result_dir=tempfile.TemporaryDirectory(prefix='cascade-sequence-export-')
+        base_response=None
+        try:
+            base=body.model_copy(deep=True);base.fablecut=None;base.captions.enabled=False;base.audio=[]
+            base_response=_export(pid,jid,index,base,request)
+            output=Path(result_dir.name)/'edited.mp4'
+            render_sequence(base_response.path,output,body,info,audio_store)
+            staged=cache/(digest+'.'+os.urandom(6).hex()+'.tmp')
+            shutil.copy2(output,staged);os.replace(staged,cached)
+            return FileResponse(output,filename='cascade-edited.mp4',media_type='video/mp4',background=BackgroundTask(result_dir.cleanup))
+        except Exception:
+            result_dir.cleanup();raise
+        finally:
+            if base_response and base_response.background:
+                base_response.background.func(*base_response.background.args,**base_response.background.kwargs)
     if not prepared and (body.timeline or body.speed):
         if body.overlays is not None: raise HTTPException(422,'Retimed Reel captions must use server rendering, without source-timed raster overlays.')
         if info.get('has_video') is False: raise HTTPException(422,'Reel timeline retiming currently requires video.')
         from .retiming import prepare
-        with media(jid,clip) as source, prepare(source,body,info,export_binary(False)) as prepared_source:
+        with styled_media(jid,clip,body) as source, prepare(source,body,info,export_binary(False)) as prepared_source:
             return _export(pid,jid,index,prepared_source[1],request,prepared_source)
     directory = tempfile.TemporaryDirectory(prefix='cascade-export-')
     try:
@@ -98,15 +171,24 @@ def _export(pid, jid, index, body, request, prepared=None):
         base_filter=composition_filter(g,body.composition)
         needs_tracking=body.composition.mode=='fill' and (g['scaledWidth']>g['width'] or g['scaledHeight']>g['height'])
         if needs_tracking:
-            if not body.reframe.analysis_id:
-                begin_analysis(pid,jid,index,request.state.user_id,body.reframe.selection,body.reframe.focus)
-                raise HTTPException(409,'Automatic framing is being prepared. Open Exports and retry when analysis is ready.')
-            analysis=read_analysis(pid,jid,index,body.reframe.analysis_id,request.state.user_id)
-            if analysis.get('selection')!=(body.reframe.selection.model_dump() if body.reframe.selection else None):raise HTTPException(409,'Selected subject tracking is outdated. Reopen the editor.')
-            motion=reframelib.plan(analysis,g,body.reframe.focus,(.5,.5))
-            x=reframelib.expression(motion['points'],'x',g['scaledWidth']-g['width'],body.start)
-            y=reframelib.expression(motion['points'],'y',g['scaledHeight']-g['height'],body.start)
-            base_filter=f"setpts=PTS-STARTPTS,scale={g['scaledWidth']}:{g['scaledHeight']}:flags=lanczos,setsar=1,crop={g['width']}:{g['height']}:x='{x}':y='{y}'"
+            analysis_id=body.reframe.analysis_id
+            if not analysis_id:
+                # A finished analysis is found by its content key, so the draft doesn't have to carry its id.
+                started=begin_analysis(pid,jid,index,request.state.user_id,body.reframe.selection,body.reframe.focus)
+                if started.get('status')=='ready':analysis_id=started['analysis_id']
+                elif not body.preview:
+                    raise HTTPException(409,'Automatic framing is being prepared. Open Exports and retry when analysis is ready.')
+            analysis=None
+            if analysis_id:
+                try:analysis=read_analysis(pid,jid,index,analysis_id,request.state.user_id)
+                except HTTPException:
+                    if not body.preview:raise
+            if analysis is not None:
+                if analysis.get('selection')!=(body.reframe.selection.model_dump() if body.reframe.selection else None):raise HTTPException(409,'Selected subject tracking is outdated. Reopen the editor.')
+                motion=reframelib.plan(analysis,g,body.reframe.focus,(.5,.5))
+                x=reframelib.expression(motion['points'],'x',g['scaledWidth']-g['width'],body.start)
+                y=reframelib.expression(motion['points'],'y',g['scaledHeight']-g['height'],body.start)
+                base_filter=f"setpts=PTS-STARTPTS,scale={g['scaledWidth']}:{g['scaledHeight']}:flags=lanczos,setsar=1,crop={g['width']}:{g['height']}:x='{x}':y='{y}'"
 
         extra_inputs=[]
         graph=f'[0:v]{base_filter},setpts=PTS-STARTPTS[main0]'
@@ -165,10 +247,10 @@ def _export(pid, jid, index, body, request, prepared=None):
             option='-filter_complex_script' if '-filter_complex_script' in help_text else '-/filter_complex'
             graph_args=[option,str(folder/'filters.txt')]
         from contextlib import nullcontext
-        with (nullcontext(prepared[0]) if prepared else media(jid, clip)) as source:
+        with (nullcontext(prepared[0]) if prepared else styled_media(jid, clip, body)) as source:
             subprocess.run([export_binary(needs_ass), '-nostdin', '-v', 'error', '-y', '-ss', str(body.start), '-i', str(source.resolve()),
                             *extra_inputs, '-t', str(body.end-body.start), *graph_args,'-map','[out]',*audio_map,
-                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', str(folder/'edited.mp4')],
+                            '-c:v', 'libx264', '-preset', 'ultrafast' if body.preview else 'veryfast', '-crf', '26' if body.preview else '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', str(folder/'edited.mp4')],
                            cwd=folder, capture_output=True, check=True, timeout=300)
         return FileResponse(folder/'edited.mp4', filename='cascade-edited.mp4', media_type='video/mp4', background=BackgroundTask(directory.cleanup))
     except (OSError, subprocess.SubprocessError):

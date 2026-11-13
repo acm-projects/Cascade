@@ -18,9 +18,8 @@ from typing import Any, Callable
 from backend.cascade_llm import LLMConfigError, make_client, selected_model, selected_provider
 
 from .agent import run_agent
-from .intent import classify_request
-from .fast_selection import MAX_TRANSCRIPT_CHARS, MAX_BATCH_CLIPS, run_transcript_selection
-from .chunks import format_transcript
+from .intent import classify_request, heuristic_intent
+from .fast_selection import MAX_BATCH_CLIPS, run_transcript_selection
 from .index import build_index
 from .summaries import ensure_summaries
 from .tools import MAX_CLIP_SECONDS, TARGET_CLIPS, ToolBox
@@ -38,7 +37,9 @@ def transcript_first_request(prompt: str) -> bool:
     """Spoken/topic searches can avoid the full CLIP index; inspection still uses real frames."""
     if re.search(r'\b(visual|visually|fight|fighting|fall|falls|chase|explosion|dance|action|scene|footage)\b|on screen', prompt, re.I):
         return False
-    return bool(re.search(r'\b(said|says|speech|transcript|talk|talks|discuss|discusses|explain|explains|explanation|interview|documentary|history|historical|healthcare|news|topic)\b', prompt, re.I))
+    # Ordinary highlights/mood prompts should not pay for visual indexing unless
+    # they explicitly ask for on-screen evidence.
+    return not bool(re.search(r'\b(silent|gesture|gestures|camera|slap|punch|kick|running|jumping)\b', prompt, re.I))
 
 
 class SelectionError(Exception):
@@ -103,16 +104,23 @@ def select_with_agent(
     # itself (embeddings, transcript) is cached by file hash for follow-up prompts.
     with tempfile.TemporaryDirectory(prefix="agent_index_") as scratch:
         speech_first = transcript_first_request(request_prompt if request_prompt is not None else search)
-        index = build_index(video_path, Path(scratch), progress=progress, **({'visual': False} if speech_first else {}))
+        batch_request = speech_first and requested_count <= MAX_BATCH_CLIPS
+        index = build_index(video_path, Path(scratch), progress=progress,
+                            **({'visual': False, 'embed_transcript': not batch_request} if speech_first else {}))
+        if speech_first and not index.transcript and getattr(index, 'has_video', True):
+            # A silent/completely non-speech video still needs visual evidence.
+            # Reuse the empty transcript cache rather than transcribing again.
+            speech_first = False
+            index = build_index(video_path, Path(scratch), progress=progress)
 
-    fast_batch = (speech_first and bool(index.transcript) and requested_count <= MAX_BATCH_CLIPS
-                  and len(format_transcript(index.transcript)) <= MAX_TRANSCRIPT_CHARS)
+    fast_batch = speech_first and bool(index.transcript) and requested_count <= MAX_BATCH_CLIPS
     if not fast_batch:
         stage("Transcript summaries")
         ensure_summaries(index, progress=progress)
 
     stage("AI agent selection")
-    intent = classify_request(request_prompt if request_prompt is not None else search)
+    intent = (heuristic_intent if fast_batch else classify_request)(
+        request_prompt if request_prompt is not None else search)
     toolbox = ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len,
                       target_clips=requested_count, intent=intent, exclude_windows=exclude_windows,
                       references=references, require_count=True)

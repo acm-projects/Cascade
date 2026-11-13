@@ -33,17 +33,17 @@ The browser interpolates the server's actual crop trajectory against the main vi
 Offline regression tests include planning with overlap/uncertainty, hysteresis, bounded movement, left/both focus, ownership and clip isolation, saved state, Chat actions, and a real FFmpeg moving-crop export with audio:
 
 ```sh
-python3 -m unittest tests.test_reframe tests.test_editor_navigation -q
+python3 -m unittest tests.application.test_reframe tests.application.test_editor_navigation -q
 ```
 
 Opt-in real-model verification uses the public TalkNet `demo/001.avi` kept outside the repository:
 
 ```sh
 python3 tests/manual/verify_reframe_media.py --source /tmp/cascade-conversation.avi
-CASCADE_REFRAME_FIXTURES=/tmp/cascade-tracking-fixtures python3 tests/editor_browser_server.py
+CASCADE_REFRAME_FIXTURES=/tmp/cascade-tracking-fixtures python3 tests/browser/editor_browser_server.py
 # With isolated Chrome on DevTools port 9333:
-python3 -m tests.test_reframe_browser
-python3 -m tests.test_exports_browser
+python3 -m tests.browser.test_reframe_browser
+python3 -m tests.browser.test_exports_browser
 ```
 
 The controlled turn-taking fixture uses real speaking-face video opposite a frozen listener, then swaps their roles. The moving-person fixture translates the actual speaking video across a canvas. No camera path or speaker labels are supplied to inference. These are constructed test stimuli, not a natural-conversation accuracy benchmark. Real inference selected opposite sides for the two turns and tracked the moving subject with bounded smooth motion. The uploaded sources inspected for this task contain animation or a human/animated-character interaction and were not treated as a valid two-human-speaker benchmark.

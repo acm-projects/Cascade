@@ -6,9 +6,10 @@ import { clipMediaPath } from "./clips";
 import { dragFraming, frameSize } from "./playerMath";
 import "./ClipPlayer.css";
 import { timelineClock } from "./reelTiming";
+import { ratioOf } from "./aspectRatios";
+import useFramingPlan, { framingAt } from "./useFramingPlan";
 import Icon from "../../components/ui/Icon";
 
-const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 4 / 3 };
 // Live preview of one clip with its edits: plays only the trimmed part (looping), in the chosen
 // aspect-ratio frame, with the captions drawn on top. The real render happens on Export.
 //   clip  - { job_id, clip_index } ; info - { duration, width, height, cues } ; state - the draft
@@ -16,8 +17,9 @@ const RATIOS = { "9:16": 9 / 16, "1:1": 1, "4:5": 4 / 5, "16:9": 16 / 9, "4:3": 
 //                can move the playhead and jump the video
 //   framing    - optional { patch, recordUndo } from useClipDraft: in Fill mode you can then drag the video
 //                to choose what stays in the frame (one undo step per drag)
+//   onSourceMedia - optional: called with the source video URL once it loads (the timeline uses it for frames)
 //   onOpenTrends, trendsOpen - optional: show a Trends button that opens the Trends popup
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenTrends, trendsOpen, saveStatus }) {
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -25,7 +27,11 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
   const [render, setRender] = useState(null); // { key, url } or { key, error } for the last finished server render
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
-  const clock = useMemo(() => timelineClock(state), [state]);
+  const [cutout, setCutout] = useState(null);
+  // A finished AI edit is its own film: its file sets the clock, not the source timeline.
+  const aiDuration = state.ai_edit?.duration;
+  const clock = useMemo(() => aiDuration ? { duration: aiDuration, output: t => t, source: t => t } : timelineClock(state), [state, aiDuration]);
+  const styled = Boolean(state.stylize?.events?.length);
   const advanced = true; // Edited always uses the same server renderer as MP4 export.
   const snapshot = JSON.stringify(state);
   // The render for the current edit (+ retry count). An older render's result is ignored, so
@@ -36,11 +42,23 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
   const renderError = current?.error ?? '';
   const rendering = advanced && !current;
   const showEdited = view === "edited" && !!rendered;
+  // Until the server's render of this exact edit arrives, the shape is shown instantly by cropping the video itself
+  const cropNow = view === "edited" && !showEdited && state.composition.mode === "fill";
+  // Fan-edit previews first compute subject cutouts locally; show that progress while rendering.
+  useEffect(() => {
+    if (!rendering || !styled) return;
+    let active = true;
+    const poll = () => api.getStyleProgress(projectId, clip.job_id, clip.clip_index)
+      .then(p => { if (active) setCutout(p?.total ? p : null); }).catch(() => {});
+    const timer = setInterval(poll, 2000);
+    const first = setTimeout(poll, 0);
+    return () => { active = false; clearInterval(timer); clearTimeout(first); setCutout(null); };
+  }, [api, projectId, clip.job_id, clip.clip_index, rendering, styled]);
   useEffect(() => {
     if (!advanced) return;
     let active = true, objectUrl;
     const timer = setTimeout(() => {
-      api.exportClip(projectId, clip.job_id, clip.clip_index, JSON.parse(snapshot)).then(blob => {
+      api.exportClip(projectId, clip.job_id, clip.clip_index, { ...JSON.parse(snapshot), preview: true, resolution: '540p' }).then(blob => {
         if (!active) return;
         objectUrl = URL.createObjectURL(blob); setRender({ key: renderKey, url: objectUrl });
       }).catch(e => { if (active) setRender({ key: renderKey, error: e.message }); });
@@ -55,6 +73,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
   const drag = useRef(null);        // the Fill-mode drag in progress
   const justDragged = useRef(false); // so letting go after a drag doesn't also play/pause
   const [stage, setStage] = useState({ width: 0, height: 0 });
+  const [fileShape, setFileShape] = useState(null); // an AI edit's own width / height, once its file has loaded
+  const framingPlan = useFramingPlan(projectId, clip, state, info);
 
   // Download the clip with the sign-in token (videos can't send it themselves)
   useEffect(() => {
@@ -82,6 +102,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
     return () => observer.disconnect();
   }, [url]);
 
+  useEffect(() => { onSourceMedia?.(url); }, [url, onSourceMedia]);
+
   // The "remote control" the timeline uses
   useEffect(() => {
     if (!controlRef) return;
@@ -92,6 +114,12 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
       },
       getTime: () => showEdited ? clock.source(videoRef.current?.currentTime ?? 0) : (videoRef.current?.currentTime ?? 0),
       isReady: () => Boolean(videoRef.current),
+      isPlaying: () => Boolean(videoRef.current && !videoRef.current.paused),
+      togglePlay: () => {
+        const video = videoRef.current;
+        if (!video) return;
+        if (video.paused) video.play().catch(() => {}); else video.pause();
+      },
     };
     return () => {
       controlRef.current = null;
@@ -138,16 +166,31 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
     else video.pause();
   }
 
+  // Instant Fill preview that follows the speaker: move the crop with the video's clock
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!cropNow || !framingPlan || !video) return undefined;
+    let frame = 0;
+    const move = () => {
+      const at = framingAt(framingPlan, video.currentTime);
+      if (at) video.style.objectPosition = `${at.x * 100}% ${at.y * 100}%`;
+      frame = requestAnimationFrame(move);
+    };
+    frame = requestAnimationFrame(move);
+    return () => { cancelAnimationFrame(frame); video.style.objectPosition = ""; };
+  }, [cropNow, framingPlan, url]);
+
   if (error) return <div className="clip-player-message" role="alert">{error.message || error}</div>;
   if (!url) return <ClipLoading />;
 
   const { composition } = state;
   const audioOnly = info.has_video === false;
-  const ratio = view === "original" ? info.width / info.height : audioOnly ? 16/9 : composition.ratio === "original" ? info.width / info.height : RATIOS[composition.ratio];
+  const aiShape = composition.ratio !== "original" ? ratioOf(composition.ratio) : fileShape || 9 / 16;
+  const ratio = view === "original" ? info.width / info.height : state.ai_edit ? aiShape : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : ratioOf(composition.ratio);
   // The biggest frame of this shape that fits the space
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
 
-  const canDrag = Boolean(framing) && !audioOnly && view === "edited" && composition.mode === "fill";
+  const canDrag = Boolean(framing) && !audioOnly && !state.fablecut && view === "edited" && composition.mode === "fill";
 
   // ---------- Drag to reposition (Fill) ----------
   function startDrag(event) {
@@ -210,10 +253,10 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
             muted={muted}
             className="clip-player-video"
             style={{
-              objectFit: "contain",
+              objectFit: cropNow ? "cover" : "contain",
               objectPosition: `${composition.x * 100}% ${composition.y * 100}%`,
             }}
-            onLoadedMetadata={(e) => (e.target.currentTime = showEdited || view === "original" ? 0 : state.start)}
+            onLoadedMetadata={(e) => { if (state.ai_edit && e.target.videoWidth) setFileShape(e.target.videoWidth / e.target.videoHeight); e.target.currentTime = showEdited || view === "original" ? 0 : state.start; }}
             onError={() => setError(new Error("Unable to load the preview. Please try again."))}
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
@@ -223,7 +266,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onOpenT
           />}
         </div>
       </div>
-      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? 'Rendering edited preview… Original source shown until ready.' : rendered ? 'Rendered preview · same audio/effects as MP4 export' : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
+      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? (state.ai_edit ? `AI edit ${state.ai_edit.version} · this exact file is what Export saves` : 'Rendered preview · same audio/effects as MP4 export') : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
           <Icon name={playing ? "pause" : "play"} />

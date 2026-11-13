@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
+import WaterFlow from "../components/WaterFlow";
 import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
@@ -17,6 +18,7 @@ import useDownloads from "../features/export/useDownloads";
 import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
+import LinkedInPanel from "../features/export/LinkedInPanel";
 import { isAudioClip } from "../utils/media";
 import TrendsModal from "../features/editor/TrendsModal";
 import { exportTree } from "../features/export/exportTree";
@@ -110,8 +112,8 @@ function ExportPage() {
   else if (!clips) message = <Spinner size={48} label="Loading your clips" />;
   else if (!clips.length) {
     message = (
-      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips in AI Studio and edit them, then export them here."
-        action={{ label: "Go to AI Studio", onClick: () => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" }) }} />
+      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips in Canvas and edit them, then export them here."
+        action={{ label: "Go to Canvas", onClick: () => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" }) }} />
     );
   }
 
@@ -119,6 +121,7 @@ function ExportPage() {
 
   return (
     <div className="export leaf-page">
+      <WaterFlow />
       <TopNav projectTitle={projectName} active="export" canOpenEditor canOpenExport />
       {message ? (
         <div className="export-empty">{message}</div>
@@ -178,7 +181,7 @@ function ExportPage() {
                 <Destination value="download" chosen={destination} onChoose={(value) => { setDestination(value); setConfigured(true); }}
                   icon="download" title="Download file" text="Export a video to your device" />
                 <Destination value="youtube" chosen={destination} onChoose={(value) => { setDestination(value); setConfigured(true); }}
-                  icon="youtube" title="Publish to YouTube" text="Export and share to YouTube" disabled={audioOnly} />
+                  icon="youtube" title="Publish online" text="Post to YouTube or LinkedIn" disabled={audioOnly} />
                 <p className="export-tip">
                   <Icon name="sparkles" />
                   You can add a title, caption and hashtags when you publish to YouTube.
@@ -191,6 +194,7 @@ function ExportPage() {
               clipNumber={clips.indexOf(current) + 1} destination={destination} settings={settings}
               onSettings={(next) => { setSettings(next); setConfigured(true); }}
               onAddClip={() => leave(`/projects/${projectId}/studio`)} onDone={() => navigate("/projects")}
+              onOpenEditor={() => leave(`/projects/${projectId}/editor`)}
             />
           </div>
         </>
@@ -253,7 +257,7 @@ function TreeGroup({ label, title, checked, onCheck, children }) {
 
 // The middle and right columns, for the clip on screen. key={clip key}, so it follows the chosen clip.
 function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, downloads, clipNumber, registerFlush,
-  destination, settings, onSettings, onAddClip, onDone }) {
+  destination, settings, onSettings, onAddClip, onDone, onOpenEditor }) {
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [trendsOpen, setTrendsOpen] = useState(false);
@@ -261,13 +265,6 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   const loaded = Boolean((info && state) || error);
   useEffect(() => { if (loaded) markPageReady(); }, [loaded]);   // the clip on screen is ready
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
-  const api = useApi();
-  async function applyResearch(research_id, suggestion) {
-    const result = await api.applyTrends(projectId, clip.job_id, clip.clip_index, { state, research_id, ...(Array.isArray(suggestion) ? { suggestions: suggestion } : { suggestion }) });
-    draft.change(result.state);
-    draft.setChat([...draft.chat, { role: "user", text: "Apply suggested edits from YouTube research." }, { role: "assistant", text: result.message }]);
-    return result;
-  }
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
   const framing = useAutoFraming(projectId, clip, state, info, patch);
   const rendering = downloads.working;
@@ -351,14 +348,19 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
         {status && <p className={`export-status${framing.status === "error" ? " is-error" : ""}`} role="status">{status}</p>}
       </main>
 
-      <aside className="export-panel export-right" aria-label={destination === "youtube" ? "Publish to YouTube" : "Configure export"}>
+      <aside className="export-panel export-right" aria-label={destination === "youtube" ? "Publish online" : "Configure export"}>
         {destination === "youtube" && !audioOnly ? (
           <>
-            <h2 className="export-panel-title">3. Publish to YouTube</h2>
+            <h2 className="export-panel-title">3. Publish online</h2>
             <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
-            {state && <Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}><Icon name="target" /> Research trends</Button>}
-            <section className="export-youtube" aria-label="YouTube upload">
+            {state && (
+              <Button size="sm" className="export-trends-button" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>
+                <Icon name="compass" /> Trends analysis
+              </Button>
+            )}
+            <section className="export-publish" aria-label="Publish">
               <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />
+              <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />
             </section>
           </>
         ) : (
@@ -398,13 +400,8 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
           </>
         )}
         {trendsOpen && state && (
-          <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onApply={applyResearch} onClose={() => setTrendsOpen(false)}>
-            <div className="export-post-actions">
-              <Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}><Icon name="undo" /> Undo trend edits</Button>
-              <Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}><Icon name="redo" /> Redo</Button>
-              <small>{draft.saveStatus}</small>
-            </div>
-          </TrendsModal>
+          <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} change={draft.change}
+            onClose={() => setTrendsOpen(false)} onOpenEditor={async () => { await draft.flush(); onOpenEditor(); }} />
         )}
       </aside>
     </>

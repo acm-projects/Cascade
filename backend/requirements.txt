@@ -23,6 +23,11 @@ pillow
 httpx
 openai
 
+# AI Editor Cinema engine: person cut-outs for the words behind the speaker (model downloads once),
+# and word timings when whisper-cli is not installed
+onnxruntime
+faster-whisper
+
 # Local face tracks and audio-visual active speaker inference (Auto Reframe)
 opencv-python-headless>=4.10,<6
 python_speech_features==0.6

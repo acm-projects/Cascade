@@ -35,7 +35,7 @@ function StockResult({ api, projectId, clip, asset, selected, onSelect }) {
       <span>{asset.duration}s · {asset.creator}</span>
     </button>
     {(thumb.error || media.error || playbackError) && <small role="alert">{thumb.error || media.error || playbackError}</small>}
-    <a href={asset.source_url} target="_blank" rel="noopener noreferrer">Video by {asset.creator} on Pexels <Icon name="external" /></a>
+    <a href={asset.source_url} target="_blank" rel="noopener noreferrer">Video by {asset.creator} <Icon name="external" /></a>
   </article>;
 }
 
@@ -87,7 +87,7 @@ export default function BrollPanel({ projectId, clip, state, duration, player, c
 
   return <aside className={inline ? "broll-drawer broll-inline" : "broll-drawer wood-panel"} aria-label="B-roll panel">
     <header><h2>B-roll</h2>{!inline && <button type="button" className="btn btn-ghost btn-small" aria-label="Close B-roll" onClick={onClose}><Icon name="close" /></button>}</header>
-    <p>Search Pexels stock footage. Your original dialogue stays.</p>
+    <p>Search stock footage. Your original dialogue stays.</p>
     <form className="broll-search" onSubmit={find}>
       <label>Search stock footage<input value={query} onChange={e => setQuery(e.target.value)} maxLength={160} required placeholder="e.g. city skyline" /></label>
       <button className="btn btn-small" disabled={busy || disabled}>{busy ? "Searching…" : "Search"}</button>
@@ -99,7 +99,7 @@ export default function BrollPanel({ projectId, clip, state, duration, player, c
     {search?.results.length === 0 && <p>No footage found. Try another search.</p>}
     {search?.has_more && search.results.length < 120 && <button className="btn btn-small" disabled={busy || disabled} onClick={() => find(null, true)}>More results</button>}
     <button className="btn btn-primary btn-small" disabled={!chosen || busy || disabled || state.broll.length >= 30} onClick={insert}>Insert at playhead</button>
-    <small>Up to 3 seconds, shortened to fit the available timeline space.</small>
+    <small>Adds up to 3 seconds of footage.</small>
     {selected && <form key={JSON.stringify(selected)} className="broll-timing" onSubmit={update}>
       <h3>Selected B-roll segment</h3>
       {[['start', 'Start', duration], ['duration', 'Duration', Math.min(duration, selected.asset.duration)], ['offset', 'Stock offset', selected.asset.duration]].map(([name,label,max]) =>

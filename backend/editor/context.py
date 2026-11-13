@@ -16,3 +16,35 @@ def scene_hints(jid, clip):
         st=source.stat()
         return {'scene_boundaries':_cuts(str(source),st.st_size,st.st_mtime_ns),
                 'limitation':'Local scene-cut detection only; no visual-semantic recognition or exact musical beat analysis.'}
+
+
+@lru_cache(maxsize=64)
+def _frame(path, size, modified, at):
+    import base64
+    try:
+        response = subprocess.run(['ffmpeg','-nostdin','-v','error','-ss',str(at),'-i',path,
+            '-frames:v','1','-vf','scale=384:-2','-f','image2pipe','-vcodec','mjpeg','pipe:1'],
+            capture_output=True, check=True, timeout=15)
+        return base64.b64encode(response.stdout).decode() if response.stdout else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def footage_frames(jid, clip, state, info, hints):
+    """Bounded local samples; no source paths or credentials enter the model context."""
+    if not info.get('has_video'): return []
+    start, end = state.start, state.end
+    # Cover the whole selection, then sample transcript/scene events instead of random frames.
+    times = [start + (end-start) * fraction for fraction in (0, .2, .4, .6, .8, .98)]
+    events = [c['start'] for c in info['cues'] if start <= c['start'] < end]
+    events += [t for t in hints.get('scene_boundaries', []) if start <= t < end]
+    for event in sorted(events, key=lambda t: min(abs(t-v) for v in times), reverse=True):
+        if len(times) >= 8: break
+        if all(abs(event-t) > .3 for t in times): times.append(event)
+    frames = []
+    with media(jid, clip) as source:
+        stat = source.stat()
+        for at in sorted(set(round(t, 3) for t in times)):
+            data = _frame(str(source), stat.st_size, stat.st_mtime_ns, at)
+            if data: frames.append({'at':at, 'data':data})
+    return frames

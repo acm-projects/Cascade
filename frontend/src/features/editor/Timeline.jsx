@@ -5,6 +5,7 @@ import useFilmstrip from "./useFilmstrip";
 import "./Timeline.css";
 import BrollTrack from "./BrollTrack";
 import Icon from "../../components/ui/Icon";
+import { timelineClock } from "./reelTiming";
 import { cueText, setCueText } from "./captionStyles";
 
 const pct = (t, duration) => `${timeToX(t, duration, 100)}%`; // a time as a % across the track
@@ -32,7 +33,7 @@ function TrackRow({ kind, label, icon, onOpen, children }) {
 
 // A lane of simple blocks (extra edits the AI or the tools added). Click a block to jump to it.
 // With onSelect (music and sound effects), clicking also selects it, so the Delete key can remove it.
-function BlockLane({ label, items, duration, player, selectedId, onSelect }) {
+function BlockLane({ label, items, duration, player, onOpen, selectedId, onSelect }) {
   return (
     <div className="timeline-lane" aria-label={`${label} track`}>
       {items.map((item, i) => (
@@ -43,6 +44,7 @@ function BlockLane({ label, items, duration, player, selectedId, onSelect }) {
           aria-pressed={onSelect ? item.id === selectedId : undefined}
           onClick={() => {
             player.current?.seek(item.start);
+            onOpen?.();
             onSelect?.(item.id);
           }}>
           {item.text || label}
@@ -142,7 +144,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
   // "[" and "]" set the trim at the playhead (not while typing in a box)
   useEffect(() => {
     function handleKey(event) {
-      if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+      if (disabled || event.target.closest?.("input, textarea, select, [contenteditable]")) return;
       if (event.key !== "[" && event.key !== "]") return;
       const t = player.current?.getTime() ?? 0;
       event.preventDefault();
@@ -151,7 +153,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [player, change, duration]);
+  }, [player, change, duration, disabled]);
 
   // Where on the track (in seconds) the mouse is
   function timeAt(event) {
@@ -161,6 +163,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
 
   // Press: remember what we're dragging, and keep getting mouse events even off the element
   function startDrag(kind, event) {
+    if (event.button !== 0 || (disabled && kind !== "playhead")) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -188,10 +191,13 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
   // Let go: the whole drag becomes ONE undo step
   function endDrag(event) {
     if (!drag.current) return;
-    if (drag.current.kind !== "playhead") recordUndo(drag.current.before);
+    if (drag.current.kind !== "playhead") {
+      if (event.type === "pointercancel") patch(drag.current.before);
+      else recordUndo(drag.current.before);
+    }
     if (drag.current.kind === "end") player.current?.seek(latest.current.start); // replay from the start
     drag.current = null;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   const dragProps = (kind) => ({
@@ -199,6 +205,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
     onPointerMove: moveDrag,
     onPointerUp: endDrag,
     onPointerCancel: endDrag,
+    onLostPointerCapture: endDrag,
   });
 
   const step = rulerStep(duration);
@@ -215,6 +222,8 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
     ["extra", "Kept footage", "scissors", (state.timeline || []).map((s) => ({ start: s.start, duration: s.end - s.start }))],
     ["extra", "Speed ramps", "repeat", (state.speed || []).map((s) => ({ start: s.start, duration: s.end - s.start }))],
     ["extra", "Zoom / shake", "target", state.motion || []],
+    ["extra", "AI effects", "sparkles", (state.stylize?.events || []).map((e) => ({ ...e,
+      text: e.kind === "text" ? `Text · ${e.text}` : e.kind === "title_card" ? "Edited by Cascade" : e.kind.replace("_", " ") }))],
   ].filter(([, , , items]) => items.length);
 
   return (
@@ -263,7 +272,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
         {hasVideo && (
           <TrackRow kind="broll" label="B-roll" icon="film" onOpen={() => onOpenTool?.("B-roll")}>
             <BrollTrack state={state} duration={duration} player={player} change={change} patch={patch}
-              recordUndo={recordUndo} selectedId={selectedBroll} onSelect={onSelectBroll} disabled={disabled}
+              projectId={projectId} clip={clip} recordUndo={recordUndo} selectedId={selectedBroll} onSelect={onSelectBroll} disabled={disabled}
               onAdd={() => onOpenTool?.("B-roll")} />
           </TrackRow>
         )}
@@ -306,6 +315,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
         {extraLanes.map(([kind, name, icon, items]) => (
           <TrackRow key={name} kind={kind} label={name} icon={icon}>
             <BlockLane label={name} items={items} duration={duration} player={player}
+              onOpen={name === "AI effects" ? () => onOpenTool?.("AI Editor") : undefined}
               {...(kind === "sfx" && { selectedId: selected?.kind === "audio" ? selected.id : null, onSelect: (id) => select({ kind: "audio", id }) })} />
           </TrackRow>
         ))}
@@ -317,7 +327,7 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
       </div>
 
       <div className="timeline-footer">
-        <span>Trim {time(state.start)} – {time(state.end)} · {time(state.end - state.start)} long</span>
+        <span>Trim {time(state.start)} – {time(state.end)} · {time(timelineClock(state).duration)} long</span>
         <span className="timeline-keys">
           {selectedBroll ? "Drag to move · drag the edges to resize · Delete removes it"
             : selected ? "Press Delete to remove it"

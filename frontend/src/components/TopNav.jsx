@@ -1,11 +1,12 @@
 import { Link, NavLink, useParams } from "react-router-dom";
 import { useLeafNavigate } from "../context/leafTransitionValue";
-import UserAvatar from "./UserAvatar";
+import UserAvatar, { UserName } from "./UserAvatar";
 import "./TopNav.css";
+import "./WorkflowNav.css";
 import logo from "../assets/icons/cascade-logo.svg";
 
 const steps = [
-  { id: "studio", label: "AI Studio" },
+  { id: "studio", label: "Canvas" },
   { id: "editor", label: "Editor" },
   { id: "export", label: "Export" },
 ];
@@ -30,7 +31,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
   const unlocked = { studio: true, editor: canOpenEditor, export: canOpenExport };
 
   return (
-    <header className="topnav">
+    <header className={`topnav${["studio", "editor", "export"].includes(active) ? " topnav--compact" : ""}`}>
       <Link to="/projects" className="topnav-brand" title="Back to your projects">
         <img src={logo} alt="" className="topnav-leaf" />
         <span className="topnav-name">Cascade</span>
@@ -72,6 +73,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
         })}
       </nav>
 
+      <UserName className="topnav-user" />
       <UserAvatar className="topnav-avatar" />
     </header>
   );

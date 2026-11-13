@@ -323,3 +323,18 @@
   height: auto;
   padding: 10px 6px;
 }
+
+/* The timeline owns its horizontal scrolling; grid children must be allowed to shrink. */
+.editor-center, .editor-timeline { min-width: 0; }
+.editor-timeline { padding: 12px 10px; overflow: hidden; }
+
+/* Empty Editor: "Upload your own clip" or "Find clips with AI Studio" */
+.editor-empty-choices { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.editor-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.editor-empty-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* "+ Upload clip" at the end of the clip tabs / clip list */
+.er-clip-tab.er-clip-tab-upload { border-style: dashed; opacity: 0.85; }
+.er-clip-tab.er-clip-tab-upload:hover:not(:disabled) { opacity: 1; }
+.er-clip-tab.er-clip-tab-upload:disabled { cursor: progress; }
+.editor-upload-clip { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; width: 100%; justify-content: center; }

@@ -393,3 +393,8 @@ button.timeline-label:hover {
 
 .timeline-broll-edge.start { left: 0; border-radius: 6px 0 0 6px; }
 .timeline-broll-edge.end { right: 0; border-radius: 0 6px 6px 0; }
+
+/* B-roll stock thumbnail behind the label */
+.timeline-broll-body { position: relative; }
+.timeline-broll-body img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.8; pointer-events: none; }
+.timeline-broll-body span { position: relative; z-index: 1; padding: 1px 4px; border-radius: 3px; background: color-mix(in srgb, var(--timeline-broll) 85%, white); }
