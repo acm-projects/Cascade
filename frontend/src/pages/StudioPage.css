@@ -178,8 +178,6 @@
 }
 .studio .session-bar-picker {
   gap: 8px;
-  padding-left: 16px;
-  border-left: 1px solid color-mix(in srgb, var(--color-wood-dark) 25%, transparent);
   border-radius: 0;
 }
 .studio .session-bar-label { font-size: 10px; }
@@ -235,4 +233,33 @@
   .studio-workspace-title { width: 100%; font-size: 30px; }
   .studio .session-bar-picker { padding-left: 0; border-left: 0; }
   .studio .session-bar-actions { padding-top: 8px; }
+}
+
+/* The island is the page's background: the 3D world fills the whole window behind everything, and the top bar,
+   the session bar and the chat float over it. Clicks go through the empty space to the island, so you can turn
+   and move it from anywhere. The camera frames the island in the open space beside the chat (StudioPage.jsx).
+   On phones it stays in its own box under the chat (the media query above). */
+@media (min-width: 761px) {
+  .studio-island-page {
+    background: #1f9fd6;   /* the island's sea, shown for a moment before the 3D draws */
+  }
+  .studio-island-page > .topnav,
+  .studio-island-page > .session-bar,
+  .studio-island-page .chat-panel {
+    position: relative;
+    z-index: 1;
+  }
+  .studio-island-page .studio-body { pointer-events: none; }
+  .studio-island-page .chat-panel { pointer-events: auto; }
+  .studio-island-page .studio-canvas-frame {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    pointer-events: auto;
+  }
+  /* the "Drag to turn" hint sits just right of the chat instead of under it */
+  .studio-island-page .studio-world-hint { left: calc(20px + 320px + 24px); }
 }

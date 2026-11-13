@@ -66,7 +66,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
       <header className="chat-panel-header">
         <span className="chat-panel-avatar"><Mascot variant="head" size={44} /></span>
         <div>
-          <h2>AI Assistant</h2>
+          <h2>BufoBot</h2>
           <p>Tell me what to find and how many clips you want.</p>
         </div>
       </header>

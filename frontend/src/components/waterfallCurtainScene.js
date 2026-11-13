@@ -50,17 +50,25 @@ export function createCurtainScene(canvas) {
     sheets.length = 0;
     foam.length = 0;
     const aspect = width / height;
-    viewHeight = 2 * camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const camZ = camera.position.z;
+    viewHeight = 2 * camZ * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     viewWidth = viewHeight * aspect;
-    sheetHeight = viewHeight * 1.25;
+    // The canvas is taller than the screen (WaterfallCurtain.css); the water fills only the
+    // screen-sized middle, and the foam sits on its top and bottom edges, bulging past them.
+    const inner = Math.min(1, window.innerHeight / height);
+    sheetHeight = viewHeight * inner;
     for (const layer of layers) {
       const sheetWidth = viewWidth * 1.5;
-      const geometry = new THREE.PlaneGeometry(sheetWidth, sheetHeight, 60, 24);
+      const geometry = new THREE.PlaneGeometry(sheetWidth, 1, 60, 24);
       const position = geometry.attributes.position;
       for (let i = 0; i < position.count; i += 1) {
         const x = position.getX(i);
         // bulge out in the middle, with a few ripples across so it isn't one smooth curve
-        position.setZ(i, -(x * x) / (sheetWidth * 1.4) + Math.sin(x * 1.7) * 0.12 + Math.sin(x * 4.3) * 0.05);
+        const z = -(x * x) / (sheetWidth * 1.4) + Math.sin(x * 1.7) * 0.12 + Math.sin(x * 4.3) * 0.05;
+        position.setZ(i, z);
+        // stretch each point up or down so the top and bottom edges line up with the screen's
+        // edges in the picture, however far back that part of the sheet is
+        position.setY(i, position.getY(i) * sheetHeight * ((camZ - layer.z - z) / camZ));
       }
       geometry.computeVertexNormals();
       const texture = waterTexture(random, sheetWidth / 3, sheetHeight / 3, false);
@@ -73,24 +81,28 @@ export function createCurtainScene(canvas) {
       curtain.add(sheet);
       sheets.push(sheet);
     }
-    // Anchor foam to the visible canvas edges, not the oversized water planes.
-    // Account for perspective at each puff's depth so both rows stay in view.
+    // Foam churning along the water's top and bottom edges: two staggered rows of lumps,
+    // centred on the edge so they bulge out past it and hide the straight cut of the sheets.
+    // Each lump's spot accounts for perspective at its depth.
     const foamMaterial = new THREE.MeshStandardMaterial({
       color: COLORS.foam, emissive: COLORS.foam, emissiveIntensity: 0.65,
       roughness: 0.6, flatShading: true,
     });
     for (const edge of [-1, 1]) {
-      const count = Math.ceil(viewWidth * 2.2);
-      for (let i = 0; i < count; i += 1) {
-        const size = 0.25 + random() * 0.35;
-        const mesh = new THREE.Mesh(lumpyBall(size, random, 0.2, 1), foamMaterial);
-        const z = 1.1 + random() * 0.4;
-        const depthScale = (camera.position.z - z) / camera.position.z;
-        const x = (-0.55 + (i / Math.max(1, count - 1)) * 1.1) * viewWidth * depthScale;
-        const y = edge * (viewHeight * depthScale / 2 - size * 0.4);
-        mesh.position.set(x, y + (random() - 0.5) * 0.12, z);
-        curtain.add(mesh);
-        foam.push({ mesh, baseY: mesh.position.y, phase: random() * 6, speed: 3 + random() * 3 });
+      for (const row of [0, 1]) {
+        const count = Math.ceil(viewWidth * 2.4);
+        for (let i = 0; i < count; i += 1) {
+          const size = 0.28 + random() * 0.36;
+          const mesh = new THREE.Mesh(lumpyBall(size, random, 0.2, 1), foamMaterial);
+          const z = 1.1 + row * 0.25 + random() * 0.3;
+          const depthScale = (camZ - z) / camZ;
+          const x = (-0.55 + ((i + row * 0.5) / Math.max(1, count - 1)) * 1.1) * viewWidth * depthScale;
+          // the back row sits right on the edge, the front row a little inside it
+          const y = edge * (sheetHeight / 2 - row * 0.22) * depthScale;
+          mesh.position.set(x, y + (random() - 0.5) * 0.18, z);
+          curtain.add(mesh);
+          foam.push({ mesh, baseY: mesh.position.y, phase: random() * 6, speed: 3 + random() * 3 });
+        }
       }
     }
   }
@@ -148,7 +160,7 @@ export function createCurtainScene(canvas) {
     droplets.instanceMatrix.needsUpdate = true;
     for (const m of mist) {
       const p = (time * 0.25 + m.phase) % 1;
-      m.mesh.position.set(m.x, -viewHeight / 2 + p * 2.2, 1.5);
+      m.mesh.position.set(m.x, -sheetHeight / 2 + p * 2.2, 1.5);
       m.mesh.scale.setScalar(0.8 + p * 1.2);
       m.mesh.material.opacity = 0.22 * (1 - p);
     }

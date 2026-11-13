@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
-import WaterFlow from "../components/WaterFlow";
 import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import AIEditorChat from "../features/editor/AIEditorChat";
 import SequenceControls from "../features/editor/SequenceControls";
@@ -148,11 +147,11 @@ function EditorPage() {
     body = (
       <div className="editor-empty-choices">
         <EmptyState icon="scissors" title="No clips yet"
-          text="Upload your own video to edit it right away, or let Canvas find the best clips for you." />
+          text="Upload your own video to edit it right away, or let Studio Island find the best clips for you." />
         <div className="editor-empty-actions">
           <UploadClipButton projectId={projectId} onUploaded={addOwnClip} className="btn btn-primary" label="Upload your own clip" />
           <button type="button" className="btn" onClick={() => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" })}>
-            <Icon name="sparkles" /> Find clips with Canvas
+            <Icon name="sparkles" /> Find clips on Studio Island
           </button>
         </div>
       </div>
@@ -161,7 +160,6 @@ function EditorPage() {
 
   return (
     <div className={`editor leaf-page editor-${layout}`}>
-      <WaterFlow />
       <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} />
       {body ? (
         <div className="editor-empty">{body}</div>

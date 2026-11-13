@@ -16,11 +16,13 @@ import {
 // Controls: drag to turn the island around (it glides a little after you let go, like a 3D splat viewer),
 // right-drag / Shift + drag / two-finger scroll to move, pinch or Ctrl + scroll to zoom.
 //
-// createStudioWorld(canvas, { still, onFrame }) returns
+// createStudioWorld(canvas, { still, onFrame, insets }) returns
 //   setGraph({ nodes, edges }) - nodes: [{ id, type: "source" | "generation" | "clip", x, z, picked, busy }]
 //                                edges: [{ id, source, target, busy }]   (x / z in world units on the ground)
 //   zoomBy(factor), fit() (also resets the angle), stop()
 //   onFrame(spots, scale) - every frame: spots = { [id]: { x, y } } in canvas pixels, scale = pixels per world unit
+//   insets() - optional: { top, right, bottom, left } in pixels of the canvas covered by the page's panels
+//              (when the world is the whole page's background); fitting frames the island in the space left
 // In the world: +y is up, the flow runs along +x (it steps down that way), clips of a prompt line up along +z.
 
 const SEA = -0.6;          // the sea's surface
@@ -132,7 +134,7 @@ function instances(group, geometry, items, shadows = false) {
   group.add(mesh);
 }
 
-export function createStudioWorld(canvas, { still = false, onFrame = () => {} } = {}) {
+export function createStudioWorld(canvas, { still = false, onFrame = () => {}, insets = () => null } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1030,8 +1032,16 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {} } 
     const spanY = Math.max(...ys) - Math.min(...ys);
     offset.x = (Math.max(...xs) + Math.min(...xs)) / 2;
     offset.y = (Math.max(...ys) + Math.min(...ys)) / 2;
-    const aspect = width / height;
-    camera.zoom = THREE.MathUtils.clamp(0.92 * Math.min((VIEW_HEIGHT * aspect) / spanX, VIEW_HEIGHT / spanY), 0.12, 3);
+    // Fit into the part of the canvas the page's panels don't cover, and slide the view so the island sits in
+    // the middle of that open part instead of the middle of the canvas
+    const cover = insets() || {};
+    const { left: coverLeft = 0, right: coverRight = 0, top: coverTop = 0, bottom: coverBottom = 0 } = cover;
+    const openWidth = Math.max(width * 0.3, width - coverLeft - coverRight);
+    const openHeight = Math.max(height * 0.3, height - coverTop - coverBottom);
+    camera.zoom = THREE.MathUtils.clamp(0.92 * Math.min((VIEW_HEIGHT * openWidth / height) / spanX, (VIEW_HEIGHT * openHeight / height) / spanY), 0.12, 3);
+    const unitsPerPixel = VIEW_HEIGHT / height / camera.zoom;
+    offset.x -= ((coverLeft - coverRight) / 2) * unitsPerPixel;
+    offset.y += ((coverTop - coverBottom) / 2) * unitsPerPixel;
     if (smooth && !still) {
       glide = { pivot: pivot.clone(), x: offset.x, y: offset.y, zoom: camera.zoom };
       pivot.copy(before.pivot);

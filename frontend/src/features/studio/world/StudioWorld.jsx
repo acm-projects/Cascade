@@ -13,6 +13,7 @@ import "./StudioWorld.css";
 // above their spot in the world and following it as you pan and zoom.
 // If the device can't draw 3D, the flat React Flow canvas (StudioCanvas) is shown instead.
 //   nodes, edges - from buildGraph   onDropFile(file) - a video was dropped on the world
+//   insets() - optional: how much of each edge the page's panels cover, so the island is framed beside them
 //   (nodeTypes, edgeTypes, onNodeDragStop are passed through to the flat canvas fallback)
 
 // The graph's boxes are laid out in screen pixels. In the world, left-to-right (the flow) is squeezed a bit
@@ -41,10 +42,12 @@ function toWorld(nodes, edges) {
   };
 }
 
-function StudioWorld({ nodes, edges, onDropFile, ...flatProps }) {
+function StudioWorld({ nodes, edges, onDropFile, insets, ...flatProps }) {
   const holderRef = useRef(null);
   const sceneRef = useRef(null);
   const cardRefs = useRef(new Map());
+  const insetsRef = useRef(insets);   // the latest insets(), read whenever the camera frames the island
+  useEffect(() => { insetsRef.current = insets; });
   const [failed, setFailed] = useState(false);
 
   // Start the 3D world once
@@ -57,6 +60,7 @@ function StudioWorld({ nodes, edges, onDropFile, ...flatProps }) {
     try {
       sceneRef.current = createStudioWorld(canvas, {
         still,
+        insets: () => insetsRef.current?.() ?? null,
         // Every frame: move each card to its spot, sized to the zoom, nearer cards on top
         onFrame(places, pixelsPerUnit) {
           const scale = Math.min(1.1, Math.max(0.35, pixelsPerUnit / 80));

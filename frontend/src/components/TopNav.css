@@ -57,23 +57,6 @@
   font-size: 17px;
 }
 
-/* The signed-in person's name, left of the avatar */
-.topnav-user {
-  margin-left: auto;
-  max-width: calc(260 * var(--u));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--color-cream-card);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.topnav-user + .topnav-avatar {
-  margin-left: calc(14 * var(--u));
-}
-
 /* Compact workflow navigation follows the project title in the flex layout. */
 .topnav-steps {
   margin-left: auto;

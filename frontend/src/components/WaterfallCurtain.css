@@ -18,13 +18,25 @@
   will-change: transform;
 }
 
-/* One opaque moving surface behind every 3D layer. Moving this wrapper keeps the
-   back and front together, including before WebGL has drawn its first frame. */
+/* The 3D sheet reaches 10vh past the screen at the top and bottom, so the foam along the water's
+   edges can bulge out past it instead of being cut off in a straight line. Only the middle part (the
+   screen's height) is solid water; the extra strips are see-through apart from the foam. */
 .waterfall-sheet-3d {
-  top: 0;
-  height: 100%;
-  background: linear-gradient(90deg, #218fbd, #27afd0 45%, #218fbd);
+  top: -10vh;
+  height: 120vh;
   isolation: isolate;
+}
+
+/* One opaque surface behind the water, the size of the screen. It moves with the 3D layers,
+   so nothing shows through before WebGL has drawn its first frame. */
+.waterfall-sheet-3d::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 10vh;
+  bottom: 10vh;
+  background: linear-gradient(90deg, #218fbd, #27afd0 45%, #218fbd);
 }
 
 /* Pouring in: speeds up as it falls, like water */

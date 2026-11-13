@@ -2,6 +2,8 @@
    Sky behind, 3D island over it (features/landing3d), words on top. */
 .landing {
   position: relative;
+  display: flex;
+  align-items: center;  /* keeps the title and button in the middle of the screen, top to bottom */
   height: 100vh;
   overflow: hidden;
   isolation: isolate;   /* keeps the 3D world behind the words */

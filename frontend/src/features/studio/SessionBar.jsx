@@ -35,7 +35,6 @@ function SessionBar({ sessions, activeId, onSwitch, onCreate, onRename, children
 
   return (
     <div className="session-bar">
-      <h1 className="studio-workspace-title">Canvas</h1>
       <label className="session-bar-picker">
         <span className="session-bar-label">Session</span>
         <select className="session-bar-select" value={activeId} onChange={(e) => onSwitch(e.target.value)}>

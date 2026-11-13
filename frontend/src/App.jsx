@@ -38,7 +38,7 @@ function App() {
           <Route
             path="/projects/:projectId/studio/:sessionId?"
             element={
-              <Suspense fallback={<div className="page-loading"><Spinner size={48} label="Loading Canvas" /></div>}>
+              <Suspense fallback={<div className="page-loading"><Spinner size={48} label="Loading Studio Island" /></div>}>
                 <StudioPage />
               </Suspense>
             }

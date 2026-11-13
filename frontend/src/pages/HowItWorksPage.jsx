@@ -17,7 +17,7 @@ const STAGES = [
   {
     name: "Find",
     title: "AI finds the best moments",
-    text: "In AI Studio, ask for what you want, like \"10 funny clips\". Cascade picks them out, and you keep the ones you like.",
+    text: "On Studio Island, ask for what you want, like \"10 funny clips\". Cascade picks them out, and you keep the ones you like.",
     icon: "sparkles",
   },
   {

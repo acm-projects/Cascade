@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import WaterFlow from "../components/WaterFlow";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -42,6 +41,17 @@ function generationStatus(group) {
 function StudioPage() {
   const navigate = useNavigate();
   const leafNavigate = useLeafNavigate();
+  // The island is the whole page's background, with the bars and the chat floating over it. This tells the
+  // island's camera how much of the screen they cover, so it frames the island in the open space beside them.
+  // (On phones the island sits in its own box under the chat instead, so nothing covers it.)
+  const pageRef = useRef(null);
+  const panelInsets = useCallback(() => {
+    const page = pageRef.current;
+    if (!page || window.innerWidth <= 760) return null;
+    const chat = page.querySelector(".chat-panel")?.getBoundingClientRect();
+    const bar = page.querySelector(".session-bar")?.getBoundingClientRect();
+    return { left: chat ? chat.right + 24 : 0, top: bar ? bar.bottom + 16 : 0, right: 84, bottom: 56 };
+  }, []);
   const location = useLocation();
   const { projectId, sessionId } = useParams();
   const api = useApi();
@@ -276,16 +286,15 @@ function StudioPage() {
   if (!studio) {
     return (
       <div className="studio studio-no-session leaf-page">
-        <WaterFlow />
         {topNav}
         <div className="studio-empty">
           {error ? (
             <div className="studio-empty-card wood-panel">
-              <EmptyState icon="cloud" title="Couldn't open Canvas" text={error.message}
+              <EmptyState icon="cloud" title="Couldn't open Studio Island" text={error.message}
                 action={{ label: "Retry", onClick: refresh }} />
             </div>
           ) : (
-            <Spinner size={48} label="Opening Canvas" />
+            <Spinner size={48} label="Opening Studio Island" />
           )}
         </div>
       </div>
@@ -338,8 +347,7 @@ function StudioPage() {
   }
 
   return (
-    <div className="studio leaf-page">
-      <WaterFlow />
+    <div className="studio studio-island-page leaf-page" ref={pageRef}>
       {topNav}
       <SessionBar sessions={studio.sessions} activeId={session.id}
         onSwitch={switchSession} onCreate={createSession} onRename={renameSession}>
@@ -363,7 +371,7 @@ function StudioPage() {
 
         <div className="studio-canvas-frame">
           <StudioWorld nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-            onDropFile={chooseFile} onNodeDragStop={savePosition} />
+            onDropFile={chooseFile} onNodeDragStop={savePosition} insets={panelInsets} />
         </div>
       </div>
 

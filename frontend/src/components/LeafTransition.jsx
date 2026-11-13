@@ -75,7 +75,7 @@ function LeafTransition({ children }) {
     // The waterfall: pour in, switch pages behind it, wait for the new page to be ready, then fall away
     if (chosen === "falls") {
       setStyle("falls");
-      setLabel(to.endsWith("/editor") ? "Opening the Editor" : to.endsWith("/export") ? "Getting your export ready" : "Back to AI Studio");
+      setLabel(to.endsWith("/editor") ? "Opening the Editor" : to.endsWith("/export") ? "Getting your export ready" : "Back to Studio Island");
       setPhase("cover");
       let settle;
       const pageReady = new Promise((resolve) => { settle = resolve; });

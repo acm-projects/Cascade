@@ -2,7 +2,6 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
-import WaterFlow from "../components/WaterFlow";
 import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
@@ -112,8 +111,8 @@ function ExportPage() {
   else if (!clips) message = <Spinner size={48} label="Loading your clips" />;
   else if (!clips.length) {
     message = (
-      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips in Canvas and edit them, then export them here."
-        action={{ label: "Go to Canvas", onClick: () => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" }) }} />
+      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips on Studio Island and edit them, then export them here."
+        action={{ label: "Go to Studio Island", onClick: () => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" }) }} />
     );
   }
 
@@ -121,7 +120,6 @@ function ExportPage() {
 
   return (
     <div className="export leaf-page">
-      <WaterFlow />
       <TopNav projectTitle={projectName} active="export" canOpenEditor canOpenExport />
       {message ? (
         <div className="export-empty">{message}</div>
