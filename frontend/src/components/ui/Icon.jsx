@@ -39,6 +39,8 @@ const PATHS = {
   chevronRight: <path d="m9 6 6 6-6 6" />,
   external: <><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></>,
   compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5Z" /></>,
+  download: <><path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>,
+  sliders: <><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><path d="M15 5v4M9 15v4" /></>,
   youtube: <><rect x="2" y="5" width="20" height="14" rx="4" /><path d="M10 9v6l5-3Z" fill="currentColor" /></>,
   tree: <><path d="M12 22v-6M12 3 6 11h3l-4 5h14l-4-5h3Z" /></>,
 };

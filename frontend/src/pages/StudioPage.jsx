@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -6,10 +6,11 @@ import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 import { useProject } from "../context/projectContextValue";
+import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import useApi from "../api/useApi";
 import SessionBar from "../features/studio/SessionBar";
 import ChatPanel from "../features/studio/ChatPanel";
-import StudioCanvas from "../features/studio/StudioCanvas";
+import StudioWorld from "../features/studio/world/StudioWorld";
 import MediaPreview from "../features/studio/MediaPreview";
 import ReferenceChips from "../features/studio/ReferenceChips";
 import { isSupportedMedia } from '../utils/media';
@@ -37,12 +38,16 @@ function generationStatus(group) {
 // Picked clips also guide the next prompt ("more like these").
 function StudioPage() {
   const navigate = useNavigate();
+  const leafNavigate = useLeafNavigate();
   const location = useLocation();
   const { projectId, sessionId } = useParams();
   const api = useApi();
   const toast = useToast();
   const { project } = useProject();
   const { studio, setStudio, groups, error, refresh } = useStudioData(projectId);
+  // Loaded (or failed): let a waterfall page change fall away and show the page
+  const loaded = Boolean(studio || error);
+  useEffect(() => { if (loaded) markPageReady(); }, [loaded]);
 
   // Video picked (here, or in the New Project pop-up), uploads with the first prompt
   const [pendingFile, setPendingFile] = useState(() => location.state?.file ?? null);
@@ -242,7 +247,7 @@ function StudioPage() {
   // ---------- Go to Editor ----------
   // The Editor loads the picked clips from the backend itself (they're saved as editor_clips)
   function goToEditor() {
-    navigate(`/projects/${projectId}/editor`);
+    leafNavigate(`/projects/${projectId}/editor`, { style: "falls" });   // a waterfall covers the change
   }
 
   // ---------- What to show ----------
@@ -343,7 +348,7 @@ function StudioPage() {
           chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
 
         <div className="studio-canvas-frame">
-          <StudioCanvas nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+          <StudioWorld nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onDropFile={chooseFile} onNodeDragStop={savePosition} />
         </div>
       </div>

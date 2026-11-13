@@ -219,7 +219,7 @@ function isRiver(x) {
 
 // ---------- The sea ----------
 
-const SEA_VERTEX = `
+export const SEA_VERTEX = `
   varying vec2 vPlace;
   void main() {
     vPlace = position.xz;
@@ -227,7 +227,7 @@ const SEA_VERTEX = `
   }
 `;
 
-const SEA_FRAGMENT = `
+export const SEA_FRAGMENT = `
   uniform float uTime;
   uniform sampler2D uShore;
   uniform float uRange;

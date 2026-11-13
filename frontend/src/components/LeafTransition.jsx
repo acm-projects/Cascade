@@ -1,13 +1,16 @@
 import { useCallback, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./LeafTransition.css";
-import { LeafTransitionContext } from "../context/leafTransitionValue";
+import { LeafTransitionContext, PAGE_READY } from "../context/leafTransitionValue";
+import WaterfallCurtain from "./WaterfallCurtain";
 
 // Page changes that feel like a camera moving through the world (like an isometric camera gliding across a model):
 //   "dive" (Landing -> Projects): the words fade, the camera glides and zooms down into the splash where the last
 //          waterfall meets the sea, the view sinks into deep blue, then on Projects the camera keeps sinking to the sea floor.
 //   "push" (Projects -> AI Studio): the cards fade, the underwater camera pushes forward into the beam of light,
 //          and AI Studio appears out of the water.
+//   "falls" (between AI Studio, the Editor and Export): a waterfall pours down over the screen, the next page
+//          loads behind it, and the water falls away once that page says it's ready (see WaterfallCurtain.jsx).
 //   "rise" (Projects -> How it works): the underwater camera swims up to the bright surface, then on How it works
 //          the camera comes down onto the pond from above.
 // The 3D scenes do the camera part when they hear a "cascade:camera" event. This file fades the page out,
@@ -18,6 +21,7 @@ const MOVES = {
   rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
+const FALLS = { cover: 650, reveal: 750, least: 250, most: 8000 };   // the waterfall: pour in, at least / at most hold, fall away
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,7 +54,8 @@ export function Leaf({ color, preserveAspectRatio }) {
 // Wraps the pages. The wash of water lives here, above the pages, so it stays on screen while the page underneath changes.
 function LeafTransition({ children }) {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState("idle");   // idle -> cover -> reveal -> idle
+  const [phase, setPhase] = useState("idle");   // idle -> cover (-> hold) -> reveal -> idle
+  const [label, setLabel] = useState("");
   const [style, setStyle] = useState("push");
   const running = useRef(false);
   const shownLocation = useLocation();   // the page to draw (App.jsx passes it to <Routes>)
@@ -66,6 +71,28 @@ function LeafTransition({ children }) {
     }
 
     running.current = true;
+
+    // The waterfall: pour in, switch pages behind it, wait for the new page to be ready, then fall away
+    if (chosen === "falls") {
+      setStyle("falls");
+      setLabel(to.endsWith("/editor") ? "Opening the Editor" : to.endsWith("/export") ? "Getting your export ready" : "Back to AI Studio");
+      setPhase("cover");
+      let settle;
+      const pageReady = new Promise((resolve) => { settle = resolve; });
+      const onReady = () => settle();
+      window.addEventListener(PAGE_READY, onReady);
+      await Promise.all([wait(FALLS.cover), Promise.resolve(ready).catch(() => {})]);
+      setPhase("hold");
+      navigate(to, { state });
+      await Promise.all([Promise.race([pageReady, wait(FALLS.most)]), wait(FALLS.least)]);
+      window.removeEventListener(PAGE_READY, onReady);
+      setPhase("reveal");
+      await wait(FALLS.reveal);
+      setPhase("idle");
+      running.current = false;
+      return;
+    }
+
     const move = MOVES[chosen] ?? MOVES.push;
     setStyle(chosen);
     setPhase("cover");
@@ -89,7 +116,8 @@ function LeafTransition({ children }) {
   return (
     <LeafTransitionContext.Provider value={leafNavigate}>
       {children(shownLocation)}
-      {phase !== "idle" && (
+      {phase !== "idle" && style === "falls" && <WaterfallCurtain phase={phase} label={label} />}
+      {phase !== "idle" && style !== "falls" && (
         <div
           className={`camera-transition camera-transition-${move.color} camera-transition-${phase}`}
           style={{ "--wash-from": `${move.washFrom}ms`, "--wash-for": `${move.camera - move.washFrom}ms`, "--reveal-for": `${move.reveal}ms` }}

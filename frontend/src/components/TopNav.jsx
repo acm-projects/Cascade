@@ -1,4 +1,5 @@
 import { Link, NavLink, useParams } from "react-router-dom";
+import { useLeafNavigate } from "../context/leafTransitionValue";
 import UserAvatar from "./UserAvatar";
 import "./TopNav.css";
 import logo from "../assets/icons/cascade-logo.svg";
@@ -24,6 +25,7 @@ function stepPath(projectId, stepId, sessionId) {
 //   canOpenExport  - same for Export
 function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpenExport = false }) {
   const params = useParams();
+  const leafNavigate = useLeafNavigate();
   const id = projectId ?? params.projectId;
   const unlocked = { studio: true, editor: canOpenEditor, export: canOpenExport };
 
@@ -58,7 +60,12 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
           }
 
           return (
-            <NavLink key={step.id} to={stepPath(id, step.id, params.sessionId)} className={className}>
+            <NavLink key={step.id} to={stepPath(id, step.id, params.sessionId)} className={className}
+              onClick={(event) => {
+                if (step.id === active || !leafNavigate) return;
+                event.preventDefault();   // a waterfall covers the change while the next step loads
+                leafNavigate(stepPath(id, step.id, params.sessionId), { style: "falls" });
+              }}>
               {content}
             </NavLink>
           );

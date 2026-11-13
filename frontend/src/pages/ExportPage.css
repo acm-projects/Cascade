@@ -1,136 +1,16 @@
-/* Sizes are Figma pixels: calc(N * var(--u)) */
+/* Export (ExportPage.jsx): a step bar across the top, then three columns:
+   1-2. clips and destination | the preview and clip strip | 3. settings and the Export button.
+   Panels are the site's pale seafoam cards; the chosen thing is always light green with a leaf-green border. */
 .export {
+  --export-ink: var(--color-wood-text);
+  --export-line: color-mix(in srgb, var(--color-wood-dark) 18%, transparent);
+  --export-chosen-bg: #e3f6dc;
+  --export-chosen-edge: var(--color-leaf);
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
 
-/* Layout (like the old site's Exports page): clip list on the left | everything else on the right, scrolling */
-.export-body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  column-gap: calc(36 * var(--u));
-  padding: calc(23 * var(--u)) calc(42 * var(--u)) 0 calc(25 * var(--u));
-}
-
-.export-tree,
-.export-stage,
-.export-settings,
-.export-youtube,
-.export-social {
-  min-height: 0;
-  box-shadow: var(--panel-edge);
-  border: var(--panel-border);
-  border-radius: var(--panel-radius);
-  background: var(--panel-bg);
-}
-
-.export-main {
-  grid-column: 2;
-  grid-row: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(20 * var(--u));
-  overflow-y: auto;
-  padding-bottom: calc(48 * var(--u));
-}
-
-.export-main > * {
-  flex-shrink: 0; /* the column scrolls instead of squashing the panels */
-}
-
-/* Export settings */
-.export-settings {
-  display: flex;
-  flex-direction: column;
-  gap: calc(18 * var(--u));
-  padding: calc(16 * var(--u)) calc(32 * var(--u)) calc(28 * var(--u));
-  overflow-y: auto;
-}
-
-.export-title {
-  color: var(--color-wood-dark);
-  font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: calc(48 * var(--u));
-}
-
-.export-field {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6 * var(--u));
-  font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: calc(22 * var(--u));
-}
-
-.export-field select {
-  padding: calc(10 * var(--u)) calc(12 * var(--u));
-  border: 2px solid var(--color-wood-dark);
-  border-radius: calc(10 * var(--u));
-  background: rgba(255, 252, 240, 0.9);
-  font-family: var(--font-body);
-  font-size: calc(20 * var(--u));
-}
-
-.export-check {
-  display: flex;
-  align-items: center;
-  gap: calc(10 * var(--u));
-  font-size: calc(22 * var(--u));
-}
-
-.export-button {
-  margin-top: auto;                 /* sits at the bottom of the panel */
-  padding: calc(10 * var(--u));
-  font-size: calc(28 * var(--u));
-}
-
-.export-done {
-  color: var(--color-accent);
-  font-weight: 700;
-  font-size: calc(22 * var(--u));
-  text-align: center;
-}
-
-/* Social posting panel */
-.export-social {
-  display: flex;
-  flex-direction: column;
-  gap: calc(14 * var(--u));
-  padding: calc(24 * var(--u)) calc(32 * var(--u));
-}
-
-.export-social-title {
-  color: var(--color-wood-dark);
-  font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: calc(32 * var(--u));
-}
-
-.export-social-list {
-  display: flex;
-  gap: calc(40 * var(--u));
-}
-
-.export-social-item {
-  display: flex;
-  align-items: center;
-  gap: calc(10 * var(--u));
-  font-size: calc(24 * var(--u));
-  opacity: 0.6;
-}
-
-.export-social-note {
-  color: var(--color-text-muted);
-  font-size: calc(20 * var(--u));
-}
-
-/* ---------- Connected export ---------- */
 .export-empty {
   flex: 1;
   display: grid;
@@ -138,227 +18,564 @@
   padding: var(--space-3);
 }
 
-/* Left: session > wave > clips, each with a checkbox for "Download selected" */
-.export-tree {
-  align-self: start;
-  max-height: 100%;
+/* ---------- Top: Back to editor on the left, the step bar centered on the page ---------- */
+.export-top {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 1000px) 1fr;   /* equal sides, so the bar sits in the middle of the page */
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px 0;
+}
+
+.export-back {
+  justify-self: start;
+  font-size: 14px;
+}
+
+.export-steps {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
+  box-shadow: var(--panel-edge);
+  list-style: none;
+}
+
+.export-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--export-ink) 70%, transparent);
+  font-family: var(--font-heading);
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+/* The arrows between steps share the leftover space equally, so the steps are evenly spaced */
+.export-step-arrow {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 16px;
+  color: color-mix(in srgb, var(--export-ink) 55%, transparent);
+  font-size: 18px;
+}
+
+.export-step-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 15px;
+}
+
+.export-step.is-done { color: var(--export-ink); }
+.export-step.is-done .export-step-icon { background: #3a9bd6; color: #fff; }
+
+.export-step.is-current {
+  background: var(--export-chosen-bg);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--export-chosen-edge) 45%, transparent);
+  color: var(--export-ink);
+}
+.export-step.is-current .export-step-icon { background: var(--color-leaf); color: #fff; }
+
+/* ---------- The three columns ---------- */
+.export-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 330px) minmax(0, 1fr) minmax(290px, 380px);
+  gap: 18px;
+  padding: 16px 20px 20px;
+}
+
+.export-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
   overflow-y: auto;
-  padding: calc(20 * var(--u));
-  color: var(--color-wood-text);
+  border-radius: var(--panel-radius);
+  background: var(--panel-bg);
+  box-shadow: var(--panel-edge);
+  color: var(--export-ink);
+}
+
+.export-panel > * { flex-shrink: 0; }
+
+.export-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.export-panel-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  color: var(--export-ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.export-count {
   font-family: var(--font-ui);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* A small text button: Select all, Retry, Download only this clip */
+.export-link {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: #1f6fae;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.export-link:disabled { opacity: 0.5; cursor: default; }
+
+/* ---------- Left: 1. Select clips ---------- */
+.export-left section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.export-tree {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--export-line);
+  font-family: var(--font-heading);
+  font-size: 17px;
 }
 
 .export-tree-row,
 .export-tree-clip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.export-tree input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #2f86c9;
+  flex-shrink: 0;
 }
 
 .export-tree-fold {
-  width: 18px;
-  border: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  padding: 0;
+  border: 0;
   background: none;
   color: inherit;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
 }
 
 .export-tree-children {
   margin-left: 9px;
-  padding-left: 12px;
-  border-left: 2px solid color-mix(in srgb, var(--color-wood-dark) 30%, transparent);
+  padding-left: 14px;
+  border-left: 2px solid var(--export-line);
 }
 
 .export-tree-clip-name {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
   border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-sm);
-  background: var(--color-cream-card);
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
+  color: var(--export-ink);
+  font-family: var(--font-heading);
+  font-size: 16px;
   text-align: left;
   cursor: pointer;
 }
 
 .export-tree-clip-name.active {
+  border-color: #23752c;
   background: var(--color-leaf);
-  color: var(--color-jungle-deep);
+  color: #fff;
 }
 
-/* Top buttons: Download this clip | Download selected clips (N) */
-.export-actions,
-.export-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.export-footer {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.export-actions .btn,
-.export-footer .btn,
-.export-pager .btn {
-  font-size: 15px;
-}
-
-/* The preview card: "▦ N clips", the player stacked like a deck, or every clip as a card */
-.export-stage {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: calc(20 * var(--u)) calc(28 * var(--u)) calc(32 * var(--u));
-}
-
-.export-stage-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.export-stage .export-title {
-  font-size: calc(40 * var(--u));
-}
-
-.export-stack {
-  position: relative;
-  align-self: center;
-  width: min(100%, 760px);
-  margin: -10px 0 20px; /* a little higher, so the cards behind don't touch the panel's bottom edge */
-}
-
-/* Two cards peeking out behind the player when there's more than one clip */
-.export-stack.is-stacked::before,
-.export-stack.is-stacked::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: calc(24 * var(--u));
-  background: var(--color-cream-card);
-  box-shadow: var(--shadow-soft);
-}
-
-.export-stack.is-stacked::before {
-  transform: translate(-14px, 12px) rotate(-2.5deg);
-}
-
-.export-stack.is-stacked::after {
-  transform: translate(10px, 8px) rotate(1.5deg);
-}
-
-.export-player {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  height: min(52vh, 430px);
-  overflow: hidden;
-  border-radius: calc(24 * var(--u));
-  background: var(--panel-bg);
-  box-shadow: var(--shadow-soft);
-}
-
-.export-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
-}
-
-.export-grid-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-sm);
-  background: var(--color-cream-card);
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.export-grid-card.active {
-  background: var(--color-leaf);
-  color: var(--color-jungle-deep);
-}
-
-/* ← 1 of 4 → */
-.export-pager {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  color: var(--color-wood-text);
+.export-tree-time {
   font-family: var(--font-ui);
   font-weight: 700;
-  font-size: 15px;
-}
-
-/* One line about the clip on screen (or framing progress / problems) */
-.export-status {
-  padding: 10px 16px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-sm);
-  background: var(--color-cream-card);
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
   font-size: 14px;
 }
 
+/* ---------- Left: 2. Choose destination ---------- */
+.export-destinations { padding-top: 6px; }
+
+.export-destination {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 55%, white);
+  box-shadow: 0 2px 6px rgba(10, 50, 60, 0.1);
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
+}
+
+.export-destination:hover { border-color: color-mix(in srgb, var(--export-chosen-edge) 40%, transparent); }
+
+.export-destination.active {
+  border-color: var(--export-chosen-edge);
+  background: var(--export-chosen-bg);
+}
+
+.export-destination.is-disabled { opacity: 0.55; cursor: default; }
+.export-destination.is-disabled:hover { border-color: transparent; }
+
+.export-destination input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: #23752c;
+  flex-shrink: 0;
+}
+
+.export-destination-icon { flex-shrink: 0; font-size: 28px; color: var(--export-ink); }
+.export-destination-icon.is-youtube { color: #e62117; }
+
+.export-destination b {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.export-destination small {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: color-mix(in srgb, var(--export-ink) 70%, transparent);
+}
+
+.export-tip {
+  display: flex;
+  gap: 10px;
+  margin: 2px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, #a98ff0 14%, white);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.export-tip .ui-icon { flex-shrink: 0; margin-top: 2px; color: #8b5cf6; font-size: 16px; }
+
+/* ---------- Middle: the preview ---------- */
+.export-clip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  color: color-mix(in srgb, var(--export-ink) 70%, transparent);
+}
+
+.export-pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.export-pager button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--export-ink);
+  font-size: 18px;
+  cursor: pointer;
+}
+.export-pager button:hover:not(:disabled) { background: var(--export-line); }
+.export-pager button:disabled { opacity: 0.35; cursor: default; }
+.export-flip { transform: scaleX(-1); }
+
+.export-player {
+  flex: 1 1 auto;
+  display: grid;
+  min-height: 320px;
+}
+
+/* The strip of clips under the player */
+.export-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 2px 6px;
+}
+
+.export-strip-card {
+  position: relative;
+  flex: 0 0 150px;
+  height: 92px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 3px solid transparent;
+  border-radius: var(--radius-md);
+  background: linear-gradient(160deg, #1d4a3a, #0f2a22);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease-out, transform 150ms ease-out;
+}
+
+.export-strip-card:hover { transform: translateY(-2px); }
+.export-strip-card.active { border-color: var(--color-leaf); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-leaf) 35%, transparent); }
+
+.export-strip-play {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 13px;
+  transform: translateX(-50%);
+}
+
+.export-strip-time {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.export-strip-add {
+  flex-basis: 110px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 2px dashed color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
+  background: color-mix(in srgb, var(--color-cream-card) 55%, white);
+  color: var(--export-ink);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+}
+.export-strip-add .ui-icon { font-size: 24px; }
+
+.export-status {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: color-mix(in srgb, var(--export-ink) 70%, transparent);
+}
+.export-status.is-error { color: var(--color-plank); }
+
+/* ---------- Right: 3. Configure export ---------- */
 .export-section {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  gap: 16px;
+}
+
+.export-label,
+.export-field {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.export-field-group { display: flex; flex-direction: column; gap: 8px; }
+
+.export-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.export-section-title {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--color-wood-text);
+.export-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 55%, white);
+  box-shadow: 0 2px 6px rgba(10, 50, 60, 0.1);
+  color: var(--export-ink);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
 }
 
-.export-summary {
+.export-preset b { font-family: var(--font-heading); font-size: 15px; font-weight: 400; line-height: 1.15; }
+.export-preset span { font-family: var(--font-ui); font-size: 12px; color: color-mix(in srgb, var(--export-ink) 70%, transparent); }
+.export-preset:hover:not(:disabled) { border-color: color-mix(in srgb, var(--export-chosen-edge) 40%, transparent); }
+.export-preset.active { border-color: var(--export-chosen-edge); background: var(--export-chosen-bg); }
+.export-preset:disabled { opacity: 0.6; cursor: default; }
+
+.export-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.export-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid color-mix(in srgb, var(--color-wood-dark) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 50%, white);
+  color: var(--export-ink);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+}
+.export-field select:disabled { opacity: 0.75; }
+
+.export-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+}
+.export-check input { width: 18px; height: 18px; accent-color: #23752c; }
+
+.export-help {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--export-line);
   font-family: var(--font-ui);
   font-size: 13px;
-  color: var(--color-wood-text);
+}
+.export-help summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.export-help p { margin: 8px 0 0; line-height: 1.5; color: color-mix(in srgb, var(--export-ink) 75%, transparent); }
+
+.export-note { margin: 0; font-family: var(--font-ui); font-size: 13px; }
+.export-note.is-error { color: var(--color-plank); }
+
+/* The big Export button */
+.export-go {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
 }
 
-/* Posting row: post copy | YouTube | share */
-.export-social {
-  display: grid;
-  grid-template-columns: 1.4fr 0.8fr;
-  gap: var(--space-3);
-  padding: 14px 18px;
-  overflow-y: auto;
+.export-go-button {
+  --depth: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #84dc4f, #4cb83e 60%, #3fa836);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), 0 var(--depth) 0 #1d6b34;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 22px;
+  text-shadow: 0 2px 0 #1d6b34;
+  cursor: pointer;
+  transition: translate 0.1s, box-shadow 0.1s, filter 0.15s;
 }
+.export-go-button .ui-icon { font-size: 24px; }
+.export-go-button:hover:not(:disabled) { filter: brightness(1.06); translate: 0 -1px; }
+.export-go-button:active:not(:disabled) { translate: 0 3px; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), 0 2px 0 #1d6b34; }
+.export-go-button:disabled { filter: grayscale(0.6); opacity: 0.6; cursor: default; }
+.export-go-button:focus-visible { outline: 3px solid #0d4a3a; outline-offset: 3px; }
 
+.export-go-note {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: color-mix(in srgb, var(--export-ink) 70%, transparent);
+  text-align: center;
+}
+.export-go .export-link { align-self: center; }
+
+/* ---------- Right: Publish to YouTube (PostPanel, YouTubePanel) and sharing ---------- */
 .export-post {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  color: var(--color-wood-text);
 }
+
+.export-social-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--export-ink);
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.export-social-note { margin: 0; font-family: var(--font-ui); font-size: 13px; color: color-mix(in srgb, var(--export-ink) 70%, transparent); }
 
 .export-post-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
   font-family: var(--font-ui);
   font-weight: 700;
@@ -369,185 +586,56 @@
 .export-post-field textarea,
 .export-post-field select {
   width: 100%;
-  padding: 6px 8px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
-  color: var(--color-wood-text);
+  padding: 8px 10px;
+  border: 2px solid color-mix(in srgb, var(--color-wood-dark) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-cream-card) 50%, white);
+  color: var(--export-ink);
   font-family: var(--font-body);
   font-size: 14px;
   resize: vertical;
 }
 
-.export-post-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.export-post-actions .btn,
+.export-post-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.export .export-post-actions .btn,
 .export-post .btn,
-.export-section .btn {
-  font-size: 14px;
-}
+.export-right > .btn { font-size: 13px; }
+.export-right > .btn { align-self: flex-start; }
 
-.export-upload-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.export-upload-status.failed {
-  color: var(--color-plank);
-}
-
-.export-panel-loading {
-  display: grid;
-  place-items: center;
-}
-
-/* Keep export tools accessible alongside the preview using the current theme. */
-.export-sidebar {
-  grid-column: 1;
-  grid-row: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(20 * var(--u));
-  overflow-y: auto;
-  padding-bottom: calc(48 * var(--u));
-}
-.export-sidebar > * { flex-shrink: 0; }
-.export-sidebar .export-tree { align-self: stretch; }
 .export-youtube {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
-  padding: calc(20 * var(--u));
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--export-line);
 }
-.export-youtube .btn { font-size: 14px; white-space: normal; }
-.export-stage-head .export-actions { margin-left: auto; }
-.export-pager { justify-content: center; }
+.export-youtube .btn { font-size: 13px; white-space: normal; }
 
-/* Keep the team's wood panels and type, but stack rather than clip on phones. */
+.export-upload-status { display: flex; align-items: center; gap: 6px; font-family: var(--font-ui); font-weight: 700; font-size: 13px; }
+.export-upload-status.failed { color: var(--color-plank); }
+.export-panel-loading { display: grid; place-items: center; }
+
+/* ---------- Smaller screens ---------- */
+@media (max-width: 1180px) {
+  .export-body { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); grid-auto-rows: max-content; overflow-y: auto; }
+  .export-panel { overflow: visible; }
+  .export-right { grid-column: 1 / -1; }
+  .export-top { grid-template-columns: auto minmax(0, 1fr); }
+  .export-step { padding: 8px 12px; font-size: 15px; }
+}
+
 @media (max-width: 760px) {
   .export { height: auto; min-height: 100dvh; }
-  .export-body { display: flex; flex-direction: column; gap: 16px; padding: 14px; }
-  .export-sidebar { order: 1; overflow: visible; padding-bottom: 0; gap: 16px; }
-  .export-tree { max-height: 180px; flex-shrink: 0; }
-  .export-main { overflow: visible; gap: 16px; }
-  .export-social { grid-template-columns: minmax(0, 1fr); }
-  .export-settings { overflow: visible; }
-  .export-stage { padding: 16px; }
-  .export-stack { margin-top: 0; }
-  .export-player { height: 380px; }
-  .export-stage-head { flex-wrap: wrap; gap: 8px; }
-  .export-actions .btn { flex: 1 1 160px; white-space: normal; }
-
+  .export-top { grid-template-columns: minmax(0, 1fr); padding: 12px 12px 0; }
+  .export-steps { grid-column: 1; padding: 6px; }
+  .export-step { flex-direction: column; gap: 4px; padding: 6px; font-size: 12px; }
+  .export-step-arrow { min-width: 4px; font-size: 14px; }
+  .export-body { display: flex; flex-direction: column; padding: 12px; overflow: visible; }
+  .export-panel { overflow: visible; }
+  .export-player { min-height: 260px; }
 }
 
-/* Review layout: compact options, tall preview, and publishing side by side. */
-@media (min-width: 1101px) {
-  .export-body {
-    grid-template-columns: minmax(210px, 240px) minmax(0, 1fr) minmax(270px, 320px);
-    gap: 16px;
-    padding: 16px 20px 20px;
-  }
-  .export-main { padding-bottom: 0; gap: 12px; }
-  .export-stage { flex: 1; min-height: 480px; padding: 16px; }
-  .export-stack { flex: 1; min-height: 340px; width: 100%; margin: 0; }
-  .export-player { height: 100%; min-height: 340px; box-shadow: none; }
-  .export-stack.is-stacked::before,
-  .export-stack.is-stacked::after { display: none; }
-  .export-stage-head { align-items: flex-start; }
-  .export-stage-head .export-actions { width: 100%; margin-left: 0; }
-  .export-actions .btn { flex: 1; white-space: normal; }
+@media (prefers-reduced-motion: reduce) {
+  .export-destination, .export-preset, .export-strip-card, .export-go-button { transition: none; }
 }
-.export-publishing {
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-}
-.export-publishing .export-social {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 16px;
-  overflow: visible;
-}
-.export-publishing .export-youtube {
-  width: 100%;
-  border: 0;
-  border-radius: 0;
-  border-top: 1px solid var(--color-wood-dark);
-  border-bottom: 1px solid var(--color-wood-dark);
-  background: transparent;
-  padding: 16px 0;
-}
-.export-publishing .export-social-title { font-size: 20px; }
-.export-publishing .export-social-note { font-size: 13px; }
-.export-sidebar { gap: 12px; padding-bottom: 0; }
-.export-sidebar .export-settings { padding: 14px; gap: 10px; }
-.export-sidebar .export-field,
-.export-sidebar .export-check { font-size: 15px; }
-.export-sidebar .export-field select { font-size: 14px; padding: 6px 8px; }
-.export-sidebar .export-section > p { font-size: 12px; }
-.export-sidebar .export-tree { padding: 12px; }
-@media (min-width: 761px) and (max-width: 1100px) {
-  .export-body { grid-template-columns: 230px minmax(0, 1fr); gap: 16px; }
-  .export-publishing { grid-column: 2; overflow: visible; }
-  .export-body { overflow-y: auto; }
-  .export-sidebar { grid-row: 1 / span 2; }
-  .export-main { overflow: visible; }
-}
-@media (max-width: 760px) {
-  .export-sidebar { order: 0; }
-  .export-publishing { overflow: visible; }
-}
-
-.export-download-controls { display: flex; flex-direction: column; gap: 12px; }
-.export-download-controls .export-title { font-size: 22px; }
-.export-download-controls .export-actions { flex-direction: column; gap: 8px; }
-.export-download-controls .export-actions .btn { width: 100%; white-space: normal; }
-
-/* Compact export navigation and secondary controls. */
-
-.export-footer { align-items: flex-start; }
-.export-download-controls .export-actions { align-items: flex-start; }
-.export-download-controls .export-actions .btn { width: auto; flex: none; }
-.export-help { font-size: 12px; color: var(--color-text-muted); }
-.export-help summary { cursor: pointer; padding: 4px 0; }
-.export-help p { margin-top: 6px; line-height: 1.5; }
-.export-status { border: 0; background: transparent; padding: 0 4px; color: var(--color-text-muted); }
-
-/* Preview information and navigation belong to the same card. */
-.export-preview-heading { min-width: 0; display: flex; align-items: baseline; gap: 10px; }
-.export-preview-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; font: 13px var(--font-ui); color: var(--color-text-muted); }
-.export-stage-head { flex-wrap: nowrap; }
-.export-stage-head > button { flex-shrink: 0; font-size: 13px; }
-.export-preview-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid color-mix(in srgb, var(--color-wood-dark) 18%, transparent); padding-top: 12px; }
-.export-preview-footer .export-status { margin: 0; font-size: 12px; line-height: 1.5; }
-.export-preview-footer .export-status.is-error { color: var(--color-plank); }
-.export-preview-footer .export-pager { flex-shrink: 0; gap: 8px; font-size: 12px; }
-.export-preview-footer .export-pager .btn { min-width: 32px; min-height: 32px; padding: 4px 8px; font-size: 14px; }
-.export-selection-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--color-wood-dark) 18%, transparent); }
-.export-selection-head h2 { display: flex; align-items: baseline; gap: 8px; }
-.export-selection-head h2 span { font: 12px var(--font-ui); color: var(--color-text-muted); }
-.export-selection-head .btn { font-size: 12px; padding: 4px 8px; }
-.export-download-controls { border-top: 1px solid color-mix(in srgb, var(--color-wood-dark) 18%, transparent); padding-top: 12px; }
-.export-download-controls .export-actions { gap: 6px; align-items: stretch; }
-.export-download-controls .export-actions .btn { align-self: flex-start; font-size: 13px; padding: 9px 12px; }
-.export-download-controls .export-actions .btn-primary { align-self: stretch; }
-.export .export-post-actions .btn { font-size: 12px; padding: 6px 10px; }
-@media (max-width: 760px) {
-  .export-preview-footer { flex-wrap: wrap; }
-  .export-preview-footer .export-pager { margin-left: auto; }
-  .export-preview-heading > span { max-width: 16ch; }
-}
-
-/* Give the workflow tabs a clear surface without restoring oversized buttons. */

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
+import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import ChatBox from "../components/ChatBox";
 import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
@@ -56,7 +57,7 @@ const panelInfo = {
 // Built from the Figma "Editor" wireframe (node 560:2716), connected to backend/editor_backend.py.
 // Shows the clips picked in AI Studio; every edit is saved to the backend automatically.
 function EditorPage() {
-  const navigate = useNavigate();
+  const leafNavigate = useLeafNavigate();
   const { projectId } = useParams();
   const layout = EDITOR_LAYOUT;
   const api = useApi();
@@ -87,6 +88,10 @@ function EditorPage() {
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   const hasClips = Boolean(clips?.length);
+  // Nothing more to load (an error, or no clips): let a waterfall page change fall away. With clips,
+  // ClipWorkspace says so once the clip's edits have loaded.
+  const settled = Boolean(error || (clips && !hasClips));
+  useEffect(() => { if (settled) markPageReady(); }, [settled]);
 
   // Save the clip you're on, then open another one
   async function selectClip(clip) {
@@ -130,7 +135,7 @@ function EditorPage() {
   } else if (!hasClips) {
     body = (
       <EmptyState icon="scissors" title="No clips picked yet" text="Pick the clips you like in AI Studio, then come back here to edit them."
-        action={{ label: "Go to AI Studio", onClick: () => navigate(`/projects/${projectId}/studio`) }} />
+        action={{ label: "Go to AI Studio", onClick: () => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" }) }} />
     );
   }
 
@@ -141,7 +146,7 @@ function EditorPage() {
         <div className="editor-empty">{body}</div>
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
-          registerFlush={registerFlush} onExport={() => navigate(`/projects/${projectId}/export`)} />
+          registerFlush={registerFlush} onExport={() => leafNavigate(`/projects/${projectId}/export`, { style: "falls" })} />
       )}
     </div>
   );
@@ -169,6 +174,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const selectedBroll = state?.broll?.some(s => s.id === selectedSegment) ? selectedSegment : null;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
+  const loaded = Boolean((info && state) || draft.error);
+  useEffect(() => { if (loaded) markPageReady(); }, [loaded]);   // the Editor is ready to use
 
   // "Make the captions yellow": the backend's editor AI returns a new edit + a reply
   async function sendChat(message, research = {}) {
