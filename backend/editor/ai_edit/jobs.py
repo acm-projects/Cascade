@@ -5,6 +5,7 @@ the last working edit in place and says why in the chat. Versions are kept so a 
 """
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -67,7 +68,13 @@ def rendered_path(pid, jid, index, user, version):
 def wants(body, info):
     """Whether this chat turn belongs to the finished-edit workflow."""
     if body.research_id or not info.get('has_video', True) or re.search(r'storyboard', body.message, re.I): return False
-    return bool(body.state.ai_edit) or bool(EDIT_REQUEST.search(body.message))
+    return bool(body.state.ai_edit) or bool(getattr(body.state, 'ai_plan', None)) or bool(EDIT_REQUEST.search(body.message))
+
+
+def uses_beats(state):
+    """Beats follow-ups stay on beats; a new edit uses beats only when CASCADE_EDIT_ENGINE=beats (Cinema is the default)."""
+    if getattr(state, 'ai_plan', None): return True
+    return not state.ai_edit and os.getenv('CASCADE_EDIT_ENGINE', 'cinema').strip().lower() == 'beats'
 
 
 def _reply(state, message, job=None):
@@ -82,22 +89,27 @@ def turn(pid, jid, index, user, clip, body, info, stock, audio_store):
     if job and job['status'] in ('queued', 'running'):
         return _reply(body.state, 'Still working on your last request for this clip. I will take the next change as soon as it finishes.', job)
     current = body.state.ai_edit
+    plan_ref = getattr(body.state, 'ai_plan', None)
+    if plan_ref and GO_BACK.search(body.message):
+        from .beats import workflow
+        earlier, text = workflow.go_back(folder, plan_ref)
+        return _reply(body.state.model_copy(update={'ai_plan': earlier}) if earlier else body.state, text)
     if current and GO_BACK.search(body.message):
-        history = versions(folder)
+        history = [v for v in versions(folder) if v.get('engine') != 'beats']   # beat plans have no film to go back to
         names = [v['version'] for v in history]
         if current.version not in names or names.index(current.version) == 0:
             return _reply(body.state, 'This is the first version of the edit, so there is nothing earlier to go back to.')
         earlier = history[names.index(current.version)-1]
         state = body.state.model_copy(update={'ai_edit': type(current)(version=earlier['version'], duration=earlier['duration'])})
         return _reply(state, f"Back to {earlier['version']} ({earlier['request'][:80]}). Your later version is still saved.")
-    job = {'id': uuid.uuid4().hex, 'status': 'queued', 'progress': 0, 'stage': 'Waiting for another edit to finish…', 'kind': 'revision' if current else 'edit',
+    job = {'id': uuid.uuid4().hex, 'status': 'queued', 'progress': 0, 'stage': 'Waiting for another edit to finish…', 'kind': 'revision' if current or plan_ref else 'edit',
            'request': body.message[:500], 'version': None, 'message': '', 'started': time.time(), 'finished': None}
     _write(folder/'job.json', job)
     args = (folder, pid, jid, index, user, clip, info, body.state.model_copy(deep=True), [m.model_dump() for m in body.chat], body.message, stock, audio_store, job)
     thread = threading.Thread(target=_run, args=args, daemon=True, name='cascade-ai-edit')
     with GUARD: RUNNING[str(folder)] = thread
     thread.start()
-    verb = 'Changing the edit' if current else 'Editing this clip'
+    verb = 'Changing the edit' if current or plan_ref else 'Editing this clip'
     return _reply(body.state, f'{verb} now. You can keep working or switch clips. It will show up in the Edited preview when it is ready.', job)
 
 
@@ -108,6 +120,8 @@ def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock,
         job.update(status='running', progress=round(amount, 3), stage=stage)
         _write(folder/'job.json', job)
 
+    if uses_beats(state):
+        return _run_beats(folder, pid, jid, index, user, clip, state, message, job, progress)
     if tools.cinema():
         return _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message, stock, job, progress)
     try:
@@ -237,6 +251,40 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
         with GUARD: RUNNING.pop(str(folder), None)
 
 
+def _run_beats(folder, pid, jid, index, user, clip, state, message, job, progress):
+    """The beats pipeline (beats/workflow.py): a first message plans the clip, a follow-up revises the current plan.
+    Plans only: nothing is rendered yet, and the user's own timeline keeps playing and exporting."""
+    from ..storage import media
+    from .beats import workflow
+    from .beats.llm import PlanError
+    def finish(status, text, **more):
+        job.update(status=status, message=text, finished=time.time(), **more)
+        _write(folder/'job.json', job)
+    try:
+        if state.ai_plan:
+            data, text = workflow.revise(folder, state.ai_plan, message, progress)
+        else:
+            with RENDER_SLOT, media(jid, clip) as source:
+                progress(.02, 'Getting the clip ready…')
+                data, text = workflow.first(folder, source, state, message, progress)
+        _publish(pid, jid, index, user, state, None, None, text, plan=workflow.ref(data) if data else None)
+        finish('done', text, progress=1, stage='Done', version=data and data['version'], changed_beat_ids=data['changed_beat_ids'] if data else [])
+    except PlanError as exc:
+        LOG.warning('Beat plan failed: %s', exc.detail)
+        text = f'NOT CHANGED: {exc.user_message}'+(' The current plan is still in place.' if state.ai_plan else '')
+        _publish(pid, jid, index, user, state, None, None, text)
+        finish('failed', text)
+    except Exception as exc:
+        why = getattr(exc, 'detail', None) or str(exc) or exc.__class__.__name__
+        LOG.warning('Beat plan failed', exc_info=True)
+        if not isinstance(exc, (HTTPException, ValueError)): why = 'Something went wrong while planning this edit. Try the request again.'
+        text = f'NOT CHANGED: {str(why)[:600]}'+(' The current plan is still in place.' if state.ai_plan else '')
+        _publish(pid, jid, index, user, state, None, None, text)
+        finish('failed', text)
+    finally:
+        with GUARD: RUNNING.pop(str(folder), None)
+
+
 def _windows(state):
     if state.timeline:
         spans = [[max(state.start, s.start), min(state.end, s.end)] for s in state.timeline]
@@ -270,7 +318,7 @@ def _track(state, audio_store, plan):
 
 
 def _next_version(folder):
-    used = [int(p.name[1:]) for p in Path(folder).glob('v[0-9][0-9][0-9]') if (p/'edited.mp4').is_file()]
+    used = [int(p.name[1:]) for p in Path(folder).glob('v[0-9][0-9][0-9]') if (p/'edited.mp4').is_file() or (p/'beats.json').is_file()]
     return f'v{max(used, default=0)+1:03d}'
 
 
@@ -401,17 +449,17 @@ def _message(plan, name, report):
     return '\n'.join(lines)[:4000]
 
 
-def _publish(pid, jid, index, user, state, version, duration, text):
+def _publish(pid, jid, index, user, state, version, duration, text, plan=None):
     """Save the result, retrying through a brief database outage so a finished edit is not lost."""
     for attempt in range(6):
         try:
-            return _save_result(pid, jid, index, user, state, version, duration, text)
-        except HTTPException:
-            if attempt == 5: raise
+            return _save_result(pid, jid, index, user, state, version, duration, text, plan)
+        except HTTPException as exc:
+            if attempt == 5 or exc.status_code == 409: raise
             time.sleep(5*(attempt+1))
 
 
-def _save_result(pid, jid, index, user, state, version, duration, text):
+def _save_result(pid, jid, index, user, state, version, duration, text, plan=None):
     """Attach the result to the saved draft, keeping anything the user changed while it ran."""
     from backend.services.projects_store import lock
     from ..models import AIEditRef, Draft
@@ -425,8 +473,10 @@ def _save_result(pid, jid, index, user, state, version, duration, text):
                 draft = Draft.model_validate(load_json(path))
             except ValueError:
                 draft = None
+        if draft is None and state is None: raise HTTPException(409, 'Open this clip in the Editor first.')
         draft = draft or Draft(state=state)
         if version: draft.state.ai_edit = AIEditRef(version=version, duration=duration)
+        if plan: draft.state.ai_plan = plan
         draft.chat = [*draft.chat, {'role': 'assistant', 'text': text[:4000]}][-200:]
         path.parent.mkdir(parents=True, exist_ok=True)
         save_json(path, draft.model_dump())
@@ -445,7 +495,8 @@ def status(pid: str, jid: str, index: int, request):
     if job and job['status'] in ('done', 'failed') and metadata_exists(path):
         try:
             saved = Draft.model_validate(load_json(path))
-            draft = {'chat': [m.model_dump() for m in saved.chat], 'ai_edit': saved.state.ai_edit.model_dump() if saved.state.ai_edit else None}
+            draft = {'chat': [m.model_dump() for m in saved.chat], 'ai_edit': saved.state.ai_edit.model_dump() if saved.state.ai_edit else None,
+                     'ai_plan': saved.state.ai_plan.model_dump() if saved.state.ai_plan else None}
         except ValueError:
             draft = {}
     return {'job': job, 'versions': versions(folder), 'saved': draft}

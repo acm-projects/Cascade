@@ -88,7 +88,7 @@ def _ask(system, messages, accept):
         text = llm.complete(system, messages)
 
 
-def make_plan(transcript, window=None, instructions=None, source_video='source.mp4', use_example=True):
+def make_plan(transcript, window=None, instructions=None, source_video=None, use_example=True):
     """Director, then up to two critic rounds. Raises PlanError if the plan still has high-severity issues."""
     if window: window = {'start': float(window['start']), 'end': float(window['end'])}
     messages = []
@@ -96,7 +96,7 @@ def make_plan(transcript, window=None, instructions=None, source_video='source.m
         example_transcript, example_plan = _example()
         messages += [{'role': 'user', 'content': _director_input(example_transcript, EXAMPLE_WINDOW, None, example_plan['source_video'])},
                      {'role': 'assistant', 'content': json.dumps(example_plan)}]
-    messages.append({'role': 'user', 'content': _director_input(transcript, window, instructions, source_video)})
+    messages.append({'role': 'user', 'content': _director_input(transcript, window, instructions, source_video or 'source.mp4')})
 
     def accept(data):
         plan, notes, issues, blocking = _check(data, transcript, window)
@@ -106,7 +106,6 @@ def make_plan(transcript, window=None, instructions=None, source_video='source.m
     if value is None or value[0] is None:
         raise PlanError('The AI editor could not make a plan for this clip. Try again.', '; '.join(blocking))
     plan, notes, issues = value
-    plan.setdefault('source_video', source_video)
     result = PlanResult(plan=plan, notes=list(notes), model=llm.model())
     critic_system = prompt('critic')
     window = plan['source_window']
@@ -126,6 +125,8 @@ def make_plan(transcript, window=None, instructions=None, source_video='source.m
             plan, issues = fixed, fixed_issues
             result.notes += [n for n in fixed_notes if n not in result.notes]
         if not critic_issues and not validator.high(issues): break
+    if source_video: plan = {**plan, 'source_video': source_video}   # which video this is comes from the app, not the model
+    plan.setdefault('source_video', 'source.mp4')
     result.plan, result.issues = plan, [i.as_dict() for i in issues]
     result.validator_score = validator.score(issues)
     if validator.high(issues):

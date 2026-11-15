@@ -1,5 +1,6 @@
 """Editor HTTP boundary; URLs intentionally unchanged."""
 from fastapi import APIRouter, Request
+from .ai_edit.beats.workflow import BeatEdit
 from .broll_routes import stock_search, stock_media, stock_thumbnail
 from .drafts import editor_index, get_draft, save_draft, save_clip
 from .reframe import start_reframe, reframe_status, subjects_at, reframe_plan
@@ -20,6 +21,20 @@ def ai_edit_status(pid: str, jid: str, index: int, request: Request):
 
 
 router.add_api_route('/{jid}/{index}/ai-edit', ai_edit_status, methods=['GET'])
+
+
+def beat_plan(pid: str, jid: str, index: int, version: str, request: Request):
+    from .ai_edit.beats.workflow import plan_route
+    return plan_route(pid, jid, index, version, request)
+
+
+def edit_beat(pid: str, jid: str, index: int, version: str, beat_id: int, body: BeatEdit, request: Request):
+    from .ai_edit.beats.workflow import patch_route
+    return patch_route(pid, jid, index, version, beat_id, body, request)
+
+
+router.add_api_route('/{jid}/{index}/beats/{version}', beat_plan, methods=['GET'])
+router.add_api_route('/{jid}/{index}/beats/{version}/{beat_id}', edit_beat, methods=['PATCH'])
 router.add_api_route('/{jid}/{index}/trends', start_trends, methods=['POST'], status_code=202)
 router.add_api_route('/{jid}/{index}/trends', get_trends, methods=['GET'])
 router.add_api_route('/{jid}/{index}/trends/apply', apply_result, methods=['POST'])

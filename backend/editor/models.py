@@ -77,6 +77,13 @@ class AIEditRef(BaseModel):
     duration: float = Field(gt=0)
 
 
+class AIPlanRef(BaseModel):
+    """The current beat plan the AI Editor made for this clip (ai_edit/beats). A plan only: nothing renders from it yet."""
+    model_config = ConfigDict(extra='forbid')
+    version: str = Field(pattern=r'^v[0-9]{3}$')
+    plan_id: str = Field(pattern=r'^[0-9a-f]{32}$')
+
+
 class Edit(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
     start: float = Field(ge=0)
@@ -100,6 +107,7 @@ class Edit(BaseModel):
     stylize: StyleInfo | None = None
     board: StoryboardInfo | None = None
     ai_edit: AIEditRef | None = None
+    ai_plan: AIPlanRef | None = None
 
 
 class Message(BaseModel):
