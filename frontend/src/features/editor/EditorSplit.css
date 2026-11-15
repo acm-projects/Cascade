@@ -299,7 +299,7 @@
 .editor-split .es-panel .es-trends { width: 100%; flex-shrink: 0; padding: 9px 8px; font: 700 13px var(--font-ui); }
 .es-history { display: flex; justify-content: center; gap: 6px; }
 .es-history .editor-history-btn { min-width: 0; padding: 6px; }
-.editor-split .es-preview .clip-player-bar { padding: 0 0 12px; gap: 8px; }
+.editor-split .es-preview .clip-player-bar { padding: 0 0 2px; gap: 8px; }
 .editor-split .es-preview .clip-player-loop { margin-left: 0; }
 .editor-split .clip-player-version-controls { margin-left: auto; flex-wrap: nowrap; gap: 10px; }
 .editor-split .clip-player-version-controls > .editor-choice-row { padding: 0; gap: 6px; flex-wrap: nowrap; }
@@ -317,4 +317,27 @@
   .es-panel-workspace { grid-template-columns: minmax(0, 1fr) 104px; }
   .es-panel-workspace > .editor-panel-content { max-height: 65dvh; }
   .editor-split .es-panel .editor-panel-tabs { padding: 8px; }
+}
+
+/* Bigger video: the clip tabs (1, 2, + Upload clip) move out of their own row above the video and into the
+   empty middle of the play controls row, between the play/time/sound buttons and "Saved · Original · Edited".
+   That gives the row's height back to the video, so a wide video fills much more of the panel's width.
+   (Many clips scroll sideways inside that space.) On phones the tabs keep their own row. */
+@media (min-width: 761px) {
+  .editor-split .es-preview {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "player";
+  }
+  .editor-split .es-preview .es-clip-rail {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 12px;
+    width: auto;
+    max-width: calc(100% - 420px);   /* the play buttons on the left and Saved · Original · Edited on the right */
+    transform: translateX(-50%);
+  }
+  .editor-split .es-preview .es-clip-rail .er-clip-tabs { min-width: 0; padding: 2px 0 4px; }
+  .editor-split .es-preview .es-clip-rail .er-clip-tab { width: 32px; height: 32px; }
+  .editor-split .es-preview .es-clip-rail .er-clip-tab.er-clip-tab-upload { width: auto; height: 32px; }
 }

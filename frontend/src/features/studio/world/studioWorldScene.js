@@ -37,6 +37,13 @@ const LIFT = { source: 6.6, generation: 0.7, clip: 1.4 };   // how high above th
 const UP = new THREE.Vector3(0, 1, 0);
 const CLIFF = [[-2.2, 4.6], [-0.9, 3.2], [0.4, 1.8]];         // the video cliff's steps: [front edge x, height]
 const RIVER_WIDTH = 1.15;
+// The little stones along the river banks: one chunky low-poly pebble shape, in a few earthy browns
+const BANK_STONES = ["#a8784a", "#b88a5a", "#9a6a40", "#c29a6a", "#8c6038"];
+const bankStone = lumpyBall(1, makeRandom(5), 0.12, 1);   // round pebbles, not spiky shards
+// The raised banks either side of a river, so the water looks sunk into a channel in the grass
+const BANK_HEIGHT = 0.16;   // how far the bank's top sits above the water
+const BANK_TOP = 0.22;      // how wide its flat grassy top is
+const BANK_SLOPE = 0.14;    // how far out its outer side slopes back down to the ground
 const RISE_DEPTH = 4.5;      // new land starts this far under the sea...
 const RISE_SECONDS = 1.9;    // ...and rises up over this long
 
@@ -775,6 +782,49 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
     return { geometry, length: along };
   }
 
+  // One side of a river's bank along a flat run of the river (side = -1 or 1): a brown dirt wall facing the
+  // water, a flat grassy top, then a grassy slope back down to the ground. Each is a strip between two lines
+  // that run alongside the river, given as [how far out from the middle, how high above the water].
+  function buildBank(group, run, side) {
+    const sides = run.map((point, i) => {
+      const before = run[Math.max(0, i - 1)];
+      const after = run[Math.min(run.length - 1, i + 1)];
+      const flat = new THREE.Vector3(after.x - before.x, 0, after.z - before.z);
+      if (flat.lengthSq() < 1e-6) flat.set(1, 0, 0);
+      flat.normalize();
+      return new THREE.Vector3(-flat.z, 0, flat.x).multiplyScalar(side);
+    });
+    const edge = RIVER_WIDTH / 2;
+    const strip = (inner, outer, color) => {
+      const positions = [];
+      const indices = [];
+      run.forEach((point, i) => {
+        for (const [out, up] of [inner, outer]) {
+          positions.push(point.x + sides[i].x * out, point.y + up, point.z + sides[i].z * out);
+        }
+        if (i < run.length - 1) {
+          const a = i * 2;
+          indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      });
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }));
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      group.add(mesh);
+    };
+    const wallFoot = [edge - 0.03, -0.03];
+    const wallTop = [edge + 0.02, BANK_HEIGHT];
+    const topEnd = [edge + 0.02 + BANK_TOP, BANK_HEIGHT];
+    const slopeFoot = [edge + 0.02 + BANK_TOP + BANK_SLOPE, -0.07];
+    strip(wallFoot, wallTop, COLORS.dirt[1]);
+    strip(wallTop, topEnd, COLORS.grass[0]);
+    strip(topEnd, slopeFoot, COLORS.grass[3]);
+  }
+
   function buildRiver(group, random, from, to, heightAt, busy) {
     const { path, drops } = riverPath(from, to, heightAt);
     const { geometry, length } = ribbonAlong(path, RIVER_WIDTH);
@@ -782,6 +832,56 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
     const water = new THREE.Mesh(geometry, waterMaterial(texture, 0.045));
     water.receiveShadow = true;
     group.add(water);
+    // Raised banks along each flat stretch (not down the waterfalls), so the water sits in a channel
+    let run = [path[0]];
+    const finishRun = () => {
+      if (run.length > 1) for (const side of [-1, 1]) buildBank(group, run, side);
+    };
+    for (let i = 1; i < path.length; i += 1) {
+      const a = path[i - 1];
+      const b = path[i];
+      if (Math.abs(b.y - a.y) > Math.hypot(b.x - a.x, b.z - a.z)) {   // a waterfall: end this stretch
+        finishRun();
+        run = [b];
+      } else {
+        run.push(b);
+      }
+    }
+    finishRun();
+    // Small brown stones along the tops of both banks.
+    // Not on the waterfalls themselves, nor right at a cliff edge (they'd hang in the air), nor at the very ends.
+    const stones = [];
+    const edgesX = drops.map((spot) => spot.x - 0.35);
+    let travelled = 0;
+    let next = 0.35;
+    for (let i = 1; i < path.length; i += 1) {
+      const a = path[i - 1];
+      const b = path[i];
+      const segment = a.distanceTo(b);
+      const across = Math.hypot(b.x - a.x, b.z - a.z);
+      const start = travelled;
+      travelled += segment;
+      if (Math.abs(b.y - a.y) > across) { next = Math.max(next, travelled); continue; }   // a waterfall
+      while (next <= travelled && next < length - 0.35) {
+        const point = a.clone().lerp(b, (next - start) / (segment || 1));
+        next += 0.2 + random() * 0.09;
+        if (edgesX.some((edge) => Math.abs(point.x - edge) < 0.28)) continue;
+        const side = new THREE.Vector3(-(b.z - a.z), 0, b.x - a.x).normalize();
+        for (const s of [-1, 1]) {
+          const out = RIVER_WIDTH / 2 + 0.02 + BANK_TOP * (0.3 + random() * 0.4);   // on the bank's flat top
+          stones.push({
+            x: point.x + side.x * out * s + (random() - 0.5) * 0.05,
+            y: point.y + BANK_HEIGHT - 0.02,   // half sunk into the bank
+            z: point.z + side.z * out * s + (random() - 0.5) * 0.05,
+            s: 0.09 + random() * 0.06,
+            sy: (0.09 + random() * 0.06) * 0.5,   // flattened, like river pebbles
+            ry: random() * Math.PI * 2,
+            color: pick(BANK_STONES, random),
+          });
+        }
+      }
+    }
+    instances(group, bankStone, stones, true);
     // At each drop, a curved sheet of water arcing out over the edge (in front of the river's own drop)
     for (const spot of drops) {
       const edge = spot.x - 0.35;   // where the land steps down

@@ -23,6 +23,10 @@ const CENTER = { source: [110, 95], generation: [65, 50], clip: [95, 130] };
 const ACROSS = 0.85 / 100;   // world units per graph pixel, along the flow
 const DOWN = 1.95 / 100;     // world units per graph pixel, down a stack of clips (enough that cards never overlap)
 const CLIFF_ROOM = 5.2;      // the waterfall cliff is big: it sits this much further back
+// Card size vs. zoom: below FAR_IN the full cards turn into small labels; zooming back past FAR_OUT
+// brings the full cards back
+const FAR_IN = 0.55;
+const FAR_OUT = 0.62;
 
 function toWorld(nodes, edges) {
   return {
@@ -46,6 +50,7 @@ function StudioWorld({ nodes, edges, onDropFile, insets, ...flatProps }) {
   const holderRef = useRef(null);
   const sceneRef = useRef(null);
   const cardRefs = useRef(new Map());
+  const farRef = useRef(false);       // zoomed far out: the cards are showing as small labels
   const insetsRef = useRef(insets);   // the latest insets(), read whenever the camera frames the island
   useEffect(() => { insetsRef.current = insets; });
   const [failed, setFailed] = useState(false);
@@ -61,9 +66,16 @@ function StudioWorld({ nodes, edges, onDropFile, insets, ...flatProps }) {
       sceneRef.current = createStudioWorld(canvas, {
         still,
         insets: () => insetsRef.current?.() ?? null,
-        // Every frame: move each card to its spot, sized to the zoom, nearer cards on top
+        // Every frame: move each card to its spot, sized to the zoom, nearer cards on top.
+        // Zoomed far out, the full cards would shrink until their words can't be read, so instead they
+        // stop shrinking and turn into smaller cards (clip number, length, video, title) at normal reading size.
+        // (Two switch points, so it doesn't flicker back and forth right at the edge.)
         onFrame(places, pixelsPerUnit) {
-          const scale = Math.min(1.1, Math.max(0.35, pixelsPerUnit / 80));
+          const zoomScale = pixelsPerUnit / 80;
+          farRef.current = zoomScale < (farRef.current ? FAR_OUT : FAR_IN);
+          const far = farRef.current;
+          holder.classList.toggle("is-far", far);
+          const scale = far ? 1 : Math.min(1.1, Math.max(FAR_IN, zoomScale));
           for (const [id, element] of cardRefs.current) {
             const place = places[id];
             if (!element || !place) continue;

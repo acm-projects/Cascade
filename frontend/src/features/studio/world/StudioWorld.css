@@ -39,7 +39,28 @@
 }
 
 .studio-world-card .studio-node {
-  box-shadow: 0 10px 22px rgba(10, 50, 40, 0.28);
+  /* The cards are chunky 3D slabs: a solid side edge stepping down and a little to the right (like the
+     island's own blocks), darkening toward the bottom, then a soft shadow on the ground below. */
+  --slab-1: var(--surface-edge);
+  --slab-2: #86c3ce;
+  --slab-3: #5f9fb3;
+  --slab-shadow: 0 0 0 transparent;
+  box-shadow:
+    var(--slab-shadow),
+    1px 2px 0 var(--slab-1), 1.5px 3px 0 var(--slab-1), 2px 4px 0 var(--slab-1),
+    2.5px 5px 0 var(--slab-2), 3px 6px 0 var(--slab-2), 3.5px 7px 0 var(--slab-2),
+    4px 8px 0 var(--slab-3), 4.5px 9px 0 var(--slab-3),
+    8px 18px 20px rgba(10, 50, 40, 0.3);
+}
+/* picked: the slab is green; hovered in the chat: a yellow glow around it */
+.studio-world-card .studio-clip-node.is-selected {
+  --slab-1: #8fdc6a;
+  --slab-2: #5fbf45;
+  --slab-3: #3f9a33;
+  --slab-shadow: 0 0 0 4px color-mix(in srgb, var(--color-leaf) 45%, transparent);
+}
+.studio-world-card .studio-clip-node.is-highlighted {
+  --slab-shadow: 0 0 0 6px color-mix(in srgb, #ffd400 70%, transparent);
 }
 
 /* A prompt's sign on its lily pad */
@@ -115,3 +136,36 @@
 @media (prefers-reduced-motion: reduce) {
   .studio-world-pad { animation: none !important; transition: none; }
 }
+
+/* Zoomed far out (StudioWorld.jsx adds .is-far): the cards stop shrinking and become small cards that
+   stay readable: the clip's number and length, a smaller video you can still click to play, its title
+   (up to two lines) and whether it's picked. The explanation and extra details come back when you zoom in. */
+.studio-world.is-far .studio-node {
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 var(--surface-edge), 0 8px 12px rgba(8, 60, 90, 0.3);
+}
+.studio-world.is-far .studio-clip-node { width: 176px; }
+.studio-world.is-far .studio-source-node { width: 176px; height: auto; }
+.studio-world.is-far .studio-clip-node .studio-poster,
+.studio-world.is-far .studio-source-node .studio-poster { flex: none; height: 74px; font-size: 11px; }
+.studio-world.is-far .studio-clip-why,
+.studio-world.is-far .studio-combination-badge,
+.studio-world.is-far .studio-blend-details,
+.studio-world.is-far .studio-clip-revision,
+.studio-world.is-far .studio-drop-hint {
+  display: none;
+}
+.studio-world.is-far .studio-clip-head { font-size: 10px; opacity: 0.8; }
+.studio-world.is-far .studio-clip-title,
+.studio-world.is-far .studio-source-name {
+  display: -webkit-box;
+  font-size: 14px;
+  line-height: 1.25;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+/* the "Pick clip" switch stays, smaller, so you can still pick from far away */
+.studio-world.is-far .studio-clip-select { font-size: 11px; padding: 4px 8px; }

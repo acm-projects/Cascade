@@ -102,8 +102,6 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
             </div>}
           </div>
         ))}
-        {/* The mascot sits in the empty space under the messages (it scrolls away once the chat fills up) */}
-        <Mascot className="chat-panel-mascot" size={messages.length ? 150 : 180} />
       </div>
 
       <form className="chat-panel-form" onSubmit={(e) => { e.preventDefault(); send(); }}>

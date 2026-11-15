@@ -11,6 +11,7 @@ import IsoWorld from "../features/landing3d/IsoWorld";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
+import Mascot from "../components/Mascot";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import Modal from "../components/ui/Modal";
@@ -252,6 +253,7 @@ function ProjectsPage() {
               {v.label}
             </button>
           ))}
+          <TrendsTip />
         </nav>
 
         {/* Main area */}
@@ -310,3 +312,21 @@ function ProjectsPage() {
 }
 
 export default ProjectsPage;
+
+// In the empty corner under the sidebar: the frog, pointing out the Trends analysis.
+// The × hides it for now; it comes back whenever the page is refreshed or opened again.
+function TrendsTip() {
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
+  const hide = () => setHidden(true);
+  return (
+    <div className="projects-tip" role="note">
+      <p className="projects-tip-bubble">
+        <button type="button" className="projects-tip-close" onClick={hide} aria-label="Hide this tip">×</button>
+        <b>Psst!</b> Try the new <b>Trends analysis</b>. Open a project and press <b>Trends</b> in the Editor
+        to see how your clip compares with what's trending right now.
+      </p>
+      <Mascot className="projects-tip-frog" size={150} />
+    </div>
+  );
+}

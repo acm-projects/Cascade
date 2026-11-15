@@ -27,14 +27,6 @@
 }
 
 
-/* The big frog: pushed to the bottom of the message area */
-.chat-panel-mascot {
-  flex: none;
-  align-self: center;
-  margin-top: auto;
-  padding-top: 12px;
-}
-
 .chat-panel-header h2 {
   font-family: var(--font-display);
   font-weight: normal;

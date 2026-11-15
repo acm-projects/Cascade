@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { COLORS, clipTexture, lumpyBall, makeRandom, material, pick } from "./islandScene";
 
 // The world behind Projects: under the sea, in 3D like the Landing island, seen from the side as if you're swimming.
@@ -7,6 +9,12 @@ import { COLORS, clipTexture, lumpyBall, makeRandom, material, pick } from "./is
 // and the sea floor has sand, coral, seaweed, a treasure chest and sunken clip cards. Fish swim past.
 //
 // createUnderwaterScene(canvas, { still }) starts it and returns a function that stops it and frees its memory.
+//
+// The still scenery (sand, rock pillars, coral, rocks, starfish, the treasure chest) is made in Blender:
+// frontend/blender/underwater.py builds it into public/models/underwater.glb. If that file can't load, the
+// simpler versions in code below (buildFloor, buildRocks, buildCodeDecor) are drawn instead.
+// What moves or glows stays in code: the water, the beam of light, light ripples on the sand, seaweed,
+// the sunken clip cards, the chest's glow, fish, jellyfish and bubbles.
 // In the world: +x is right, +y is up, +z comes toward you. The camera is at z = 14, looking into the scene.
 
 const ROCK = ["#4f6584", "#5c7394", "#46597a", "#566c8e"];
@@ -106,7 +114,47 @@ function buildBeam(scene) {
   return beamMaterial.uniforms.uTime;
 }
 
-// ---------- The sea floor ----------
+// ---------- The Blender scenery ----------
+
+const SCENERY_URL = "/models/underwater.glb";
+let sceneryPromise = null;
+function loadSceneryModel() {
+  if (!sceneryPromise) {
+    const draco = new DRACOLoader().setDecoderPath("/draco/");   // the model is Draco-compressed
+    sceneryPromise = new GLTFLoader().setDRACOLoader(draco).loadAsync(SCENERY_URL).finally(() => draco.dispose());
+    sceneryPromise.catch(() => { sceneryPromise = null; });   // let a later visit try again
+  }
+  return sceneryPromise;
+}
+// Start downloading as soon as this file loads (the dive from Landing loads it early), so it's ready on arrival
+loadSceneryModel().catch(() => {});
+
+// Adds the Blender scenery to the scene: the sand gets the moving light ripples, the gold in the chest glows.
+// If it can't load, onFail() draws the code versions instead.
+function addScenery(scene, time, onFail) {
+  let stopped = false;
+  loadSceneryModel().then((gltf) => {
+    if (stopped) return;
+    const scenery = gltf.scene.clone(true);
+    scenery.traverse((object) => {
+      if (!object.isMesh) return;
+      const material = object.material.clone();   // each piece gets its own copy, so the changes below stay apart
+      material.flatShading = true;
+      if (object.name.startsWith("Floor")) addCaustics(material, time);
+      if (object.name.startsWith("Gold")) {
+        material.emissive = new THREE.Color("#ffb800");
+        material.emissiveIntensity = 0.55;
+        material.roughness = 0.3;
+        material.metalness = 0.4;
+      }
+      object.material = material;
+    });
+    scene.add(scenery);
+  }).catch(() => { if (!stopped) onFail(); });
+  return () => { stopped = true; };
+}
+
+// ---------- The sea floor (code version: only used if the Blender scenery can't load) ----------
 
 function floorY(x, z) {
   return -0.6 + Math.sin(x * 0.35) * 0.6 + Math.cos(z * 0.4 + x * 0.2) * 0.5 + Math.sin(x * 0.9 + z * 0.7) * 0.25;
@@ -143,7 +191,7 @@ function buildFloor(scene, time) {
   scene.add(new THREE.Mesh(geometry, addCaustics(new THREE.MeshStandardMaterial({ color: SAND, roughness: 0.95, flatShading: true }), time)));
 }
 
-// ---------- Rock: pillars made of stacked lumpy chunks ----------
+// ---------- Rock: pillars made of stacked lumpy chunks (code version, fallback only) ----------
 
 function buildRocks(scene, random) {
   const materials = ROCK.map((color) => material(color));
@@ -180,6 +228,7 @@ function buildRocks(scene, random) {
 
 // ---------- Things on the sea floor ----------
 
+// Seaweed, the sunken clip cards and the chest's glow: always drawn here (they move, or need a picture)
 function buildDecorations(scene, random, time) {
   const swaying = [];
   const placeOnFloor = (object, x, z, lift = 0) => {
@@ -204,6 +253,45 @@ function buildDecorations(scene, random, time) {
     }
     placeOnFloor(base, x, z);
   }
+
+  // Clip cards that sank to the bottom
+  function sunkenClip(x, z, palette, tilt) {
+    const card = new THREE.Group();
+    card.add(new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.12, 0.72, 2, 0.04), material(COLORS.cream, { flatShading: false })));
+    const texture = clipTexture(...palette);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.58), new THREE.MeshStandardMaterial({ map: texture, emissiveMap: texture, emissive: "#ffffff", emissiveIntensity: 0.2, roughness: 0.6 }));
+    face.rotation.x = -Math.PI / 2;
+    face.position.y = 0.07;
+    card.add(face);
+    card.rotation.set(tilt, random() * 6, tilt * 0.6);
+    placeOnFloor(card, x, z, 0.1);
+  }
+
+  // The glow of the gold in the treasure chest (the chest itself is in the Blender scenery)
+  const glow = new THREE.PointLight("#ffcf5a", 6, 6, 1.6);
+  glow.position.set(-3.4, floorY(-3.4, 3) + 1.2, 3);
+  scene.add(glow);
+
+  for (const [x, z, h, c] of [[-8, 4, 3.2, "#2f9a5a"], [-7.2, 5.2, 2.4, "#3fae66"], [-2, 6.5, 2.2, "#58c172"], [5.5, 3.5, 3, "#3fae66"], [6.4, 4.8, 2.2, "#2f9a5a"], [8.6, 1, 3.6, "#58c172"], [-5, -2, 2.8, "#2f9a5a"], [3, -4, 3.2, "#3fae66"], [-1, -8, 3.6, "#58c172"], [9.5, -5, 3, "#2f9a5a"], [-9, -6, 3.4, "#3fae66"]]) {
+    seaweed(x, z, h, c);
+  }
+  sunkenClip(0.4, 4.6, ["#2d6cdf", "#4fd1e0"], 0.3);
+  sunkenClip(-1.6, 1.4, ["#f06a4a", "#f7b267"], -0.25);
+  sunkenClip(5.2, -0.6, ["#7b4ddb", "#e36bb0"], 0.22);
+
+  return (now) => {
+    for (const item of swaying) item.group.rotation.z = Math.sin(now * item.speed + item.phase) * item.amount;
+    glow.intensity = 5.4 + Math.sin(now * 2.2) * 0.8;
+    time.value = now;
+  };
+}
+
+// Coral, rocks, starfish and the treasure chest, in code: only used if the Blender scenery can't load
+function buildCodeDecor(scene, random) {
+  const placeOnFloor = (object, x, z, lift = 0) => {
+    object.position.set(x, floorY(x, z) + lift, z);
+    scene.add(object);
+  };
 
   function coral(x, z, color, size = 1) {
     const group = new THREE.Group();
@@ -248,19 +336,6 @@ function buildDecorations(scene, random, time) {
     placeOnFloor(mesh, x, z, 0.05);
   }
 
-  // Clip cards that sank to the bottom
-  function sunkenClip(x, z, palette, tilt) {
-    const card = new THREE.Group();
-    card.add(new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.12, 0.72, 2, 0.04), material(COLORS.cream, { flatShading: false })));
-    const texture = clipTexture(...palette);
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.58), new THREE.MeshStandardMaterial({ map: texture, emissiveMap: texture, emissive: "#ffffff", emissiveIntensity: 0.2, roughness: 0.6 }));
-    face.rotation.x = -Math.PI / 2;
-    face.position.y = 0.07;
-    card.add(face);
-    card.rotation.set(tilt, random() * 6, tilt * 0.6);
-    placeOnFloor(card, x, z, 0.1);
-  }
-
   // A treasure chest full of glowing gold
   const chest = new THREE.Group();
   const wood = material("#8a5328");
@@ -284,15 +359,9 @@ function buildDecorations(scene, random, time) {
   gold.scale.set(1.3, 0.45, 0.85);
   gold.position.y = 0.72;
   chest.add(gold);
-  const glow = new THREE.PointLight("#ffcf5a", 6, 6, 1.6);
-  glow.position.y = 1.2;
-  chest.add(glow);
   chest.rotation.y = 0.45;
   placeOnFloor(chest, -3.4, 3);
 
-  for (const [x, z, h, c] of [[-8, 4, 3.2, "#2f9a5a"], [-7.2, 5.2, 2.4, "#3fae66"], [-2, 6.5, 2.2, "#58c172"], [5.5, 3.5, 3, "#3fae66"], [6.4, 4.8, 2.2, "#2f9a5a"], [8.6, 1, 3.6, "#58c172"], [-5, -2, 2.8, "#2f9a5a"], [3, -4, 3.2, "#3fae66"], [-1, -8, 3.6, "#58c172"], [9.5, -5, 3, "#2f9a5a"], [-9, -6, 3.4, "#3fae66"]]) {
-    seaweed(x, z, h, c);
-  }
   coral(-5.6, 5, "#ff7f8a", 1.3);
   coral(4, 5.5, "#ff9a3c", 1.4);
   coral(1.4, 2, "#c77dff", 1.1);
@@ -309,15 +378,6 @@ function buildDecorations(scene, random, time) {
   starfish(-1.6, 5.4, "#ff8a3d");
   starfish(3.2, 4.2, "#ff5d73");
   starfish(-6.4, 7.4, "#ffcf3d");
-  sunkenClip(0.4, 4.6, ["#2d6cdf", "#4fd1e0"], 0.3);
-  sunkenClip(-1.6, 1.4, ["#f06a4a", "#f7b267"], -0.25);
-  sunkenClip(5.2, -0.6, ["#7b4ddb", "#e36bb0"], 0.22);
-
-  return (now) => {
-    for (const item of swaying) item.group.rotation.z = Math.sin(now * item.speed + item.phase) * item.amount;
-    glow.intensity = 5.4 + Math.sin(now * 2.2) * 0.8;
-    time.value = now;
-  };
 }
 
 // ---------- Fish, jellyfish and bubbles ----------
@@ -477,8 +537,13 @@ export function createUnderwaterScene(canvas, { still = false } = {}) {
   const water = buildWater(scene, renderer.getPixelRatio());
   const beamTime = buildBeam(scene);
   const causticsTime = { value: 0 };
-  buildFloor(scene, causticsTime);
-  buildRocks(scene, random);
+  // the Blender scenery (or, if it can't load, the code versions)
+  const stopScenery = addScenery(scene, causticsTime, () => {
+    const fallback = makeRandom(20261109);
+    buildFloor(scene, causticsTime);
+    buildRocks(scene, fallback);
+    buildCodeDecor(scene, fallback);
+  });
   const updates = [
     buildDecorations(scene, random, causticsTime),
     buildFish(scene, random),
@@ -571,6 +636,7 @@ export function createUnderwaterScene(canvas, { still = false } = {}) {
   }
 
   return () => {
+    stopScenery();
     cancelAnimationFrame(frame);
     window.removeEventListener("pointermove", handleMouse);
     window.removeEventListener("cascade:camera", handleCamera);
