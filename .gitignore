@@ -37,3 +37,6 @@ cascade-*.log
 
 # Blender backup files
 *.blend1
+
+# AI Editor beats: the style reference clip is local only, never committed
+backend/editor/ai_edit/beats/reference/*.mov
