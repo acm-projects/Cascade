@@ -92,8 +92,8 @@ def turn(pid, jid, index, user, clip, body, info, stock, audio_store):
     plan_ref = getattr(body.state, 'ai_plan', None)
     if plan_ref and GO_BACK.search(body.message):
         from .beats import workflow
-        earlier, text = workflow.go_back(folder, plan_ref)
-        return _reply(body.state.model_copy(update={'ai_plan': earlier}) if earlier else body.state, text)
+        earlier, film, text = workflow.go_back(folder, plan_ref)
+        return _reply(body.state.model_copy(update={'ai_plan': earlier, 'ai_edit': film}) if earlier else body.state, text)
     if current and GO_BACK.search(body.message):
         history = [v for v in versions(folder) if v.get('engine') != 'beats']   # beat plans have no film to go back to
         names = [v['version'] for v in history]
@@ -121,7 +121,7 @@ def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock,
         _write(folder/'job.json', job)
 
     if uses_beats(state):
-        return _run_beats(folder, pid, jid, index, user, clip, state, message, job, progress)
+        return _run_beats(folder, pid, jid, index, user, clip, state, message, job, progress, stock)
     if tools.cinema():
         return _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message, stock, job, progress)
     try:
@@ -251,9 +251,9 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
         with GUARD: RUNNING.pop(str(folder), None)
 
 
-def _run_beats(folder, pid, jid, index, user, clip, state, message, job, progress):
-    """The beats pipeline (beats/workflow.py): a first message plans the clip, a follow-up revises the current plan.
-    Plans only: nothing is rendered yet, and the user's own timeline keeps playing and exporting."""
+def _run_beats(folder, pid, jid, index, user, clip, state, message, job, progress, stock=None):
+    """The beats pipeline (beats/workflow.py): a first message plans the clip, a follow-up revises the current plan;
+    then the new version is rendered (only changed beats) and becomes the Edited preview and the export."""
     from ..storage import media
     from .beats import workflow
     from .beats.llm import PlanError
@@ -261,13 +261,17 @@ def _run_beats(folder, pid, jid, index, user, clip, state, message, job, progres
         job.update(status=status, message=text, finished=time.time(), **more)
         _write(folder/'job.json', job)
     try:
-        if state.ai_plan:
-            data, text = workflow.revise(folder, state.ai_plan, message, progress)
-        else:
-            with RENDER_SLOT, media(jid, clip) as source:
+        seconds = None
+        with RENDER_SLOT, media(jid, clip) as source:
+            if state.ai_plan:
+                data, text = workflow.revise(folder, state.ai_plan, message, lambda a, s: progress(a*.5, s))
+            else:
                 progress(.02, 'Getting the clip ready…')
-                data, text = workflow.first(folder, source, state, message, progress)
-        _publish(pid, jid, index, user, state, None, None, text, plan=workflow.ref(data) if data else None)
+                data, text = workflow.first(folder, source, state, message, lambda a, s: progress(a*.5, s))
+            if data:
+                seconds, note = workflow.render_version(folder, data, source, stock, lambda a, s: progress(.5+a*.48, s))
+                text += note
+        _publish(pid, jid, index, user, state, data['version'] if seconds else None, seconds, text, plan=workflow.ref(data) if data else None)
         finish('done', text, progress=1, stage='Done', version=data and data['version'], changed_beat_ids=data['changed_beat_ids'] if data else [])
     except PlanError as exc:
         LOG.warning('Beat plan failed: %s', exc.detail)
@@ -283,6 +287,38 @@ def _run_beats(folder, pid, jid, index, user, clip, state, message, job, progres
         finish('failed', text)
     finally:
         with GUARD: RUNNING.pop(str(folder), None)
+
+
+def start_beats_render(folder, pid, jid, index, request, data):
+    """Render a plan version in the background (after a direct beat edit). Returns the job the Editor polls."""
+    from ..storage import media, selected, stock_store
+    from .beats import workflow
+    user = request.state.user_id
+    clip = selected(pid, jid, index, user)
+    try:
+        stock = stock_store(pid, jid, index, user)
+    except Exception:
+        stock = None
+    job = {'id': uuid.uuid4().hex, 'status': 'queued', 'progress': 0, 'stage': 'Waiting for another edit to finish…', 'kind': 'render',
+           'request': f"render {data['version']}", 'version': None, 'message': '', 'started': time.time(), 'finished': None}
+    _write(folder/'job.json', job)
+
+    def run():
+        try:
+            with RENDER_SLOT, media(jid, clip) as source:
+                seconds, note = workflow.render_version(folder, data, source, stock, lambda a, s: (job.update(status='running', progress=round(a, 3), stage=s), _write(folder/'job.json', job)))
+            if seconds: _publish(pid, jid, index, user, None, data['version'], seconds, f"{data['version']} re-rendered.{note}", plan=workflow.ref(data))
+            job.update(status='done', progress=1, stage='Done', version=data['version'] if seconds else None, message=note.strip(), finished=time.time())
+        except Exception as exc:
+            LOG.warning('beat render failed', exc_info=True)
+            job.update(status='failed', message=f'The preview could not be re-rendered: {getattr(exc, "detail", None) or exc}', finished=time.time())
+        finally:
+            _write(folder/'job.json', job)
+            with GUARD: RUNNING.pop(str(folder), None)
+    thread = threading.Thread(target=run, daemon=True, name='cascade-beats-render')
+    with GUARD: RUNNING[str(folder)] = thread
+    thread.start()
+    return job
 
 
 def _windows(state):

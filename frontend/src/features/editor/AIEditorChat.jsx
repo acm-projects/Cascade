@@ -46,7 +46,9 @@ function BeatPlan({ saved }) {
       <b>Edit plan · {saved.version}</b>
       <small>{rows.length} beats · {clockTime(plan.total_duration ?? 0)}{count ? ` · ${count} changed in the last turn` : ""}</small>
     </header>
-    <p className="ai-beat-plan-note" role="status">Preview rendering arrives in the next stage. Review the beats and ask for changes in the chat.</p>
+    <p className="ai-beat-plan-note" role="status">{saved.render
+      ? `Rendered at 60 fps: the Edited view plays ${saved.version} and Export saves it.${saved.render.reused_beats?.length ? ` ${saved.render.reused_beats.length} unchanged beats were reused.` : ""}`
+      : "Plan only: this version has no preview video yet. Ask for any change in the chat."}</p>
     <ol>{rows.map(row => <li key={row.id} className={row.changed ? "changed" : ""} title={row.spoken}>
       <span className="ai-beat-time">{row.time}</span>
       <span className={`ai-beat-text tone-${row.color}`}>{row.text || <i>{row.spoken}</i>}{row.accent && <em> {row.accent}</em>}</span>

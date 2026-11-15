@@ -13,6 +13,7 @@ so the Edited preview and Export keep using the user's own timeline until plans 
 """
 import copy
 import json
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -100,8 +101,40 @@ def first(folder, source, state, message, progress):
     text = (f"Here's the plan: {len(plan['beats'])} beats covering {chosen['start']:.1f}s to {chosen['end']:.1f}s of the clip "
             f"({plan['total_duration']:.1f}s). It opens on “{plan['hook']['text']}”.\n"
             f"{data['version']}{' · quality score '+str(round(result.critic_score)) if result.critic_score is not None else ''}. "
-            'The preview video comes in a later update; for now, review the beats below and ask for any change here.')
+            'Ask for any change here.')
     return data, text
+
+
+def render_version(folder, data, source, stock=None, progress=None):
+    """Render a saved plan version to vNNN/edited.mp4 (Remotion; see render.py). Returns (duration or None, a note for the
+    chat). Beats already rendered for an earlier version are reused. Never raises: a plan stays usable without its video."""
+    import os
+    from . import render
+    report = progress or (lambda amount, stage: None)
+    if os.getenv('CASCADE_BEATS_RENDER', 'on').strip().lower() == 'off': return None, ''
+    why = render.available()
+    if why: return None, f'\nThe preview video was not made: {why}'
+    folder = Path(folder)
+    out = folder/data['version']/'edited.mp4'
+    try:
+        result = render.render(data['plan'], source, out, folder/'beats-render', progress=report)
+    except Exception as exc:
+        logging.getLogger(__name__).warning('beat plan render failed', exc_info=True)
+        return None, f"\nThe preview video could not be made ({getattr(exc, 'detail', None) or exc}). The plan is saved."
+    record = load(folder, data['version'])
+    record['render'] = {k: result[k] for k in ('frames', 'seconds', 'size', 'rendered_beats', 'reused_beats', 'timings', 'checks', 'credits')}
+    _jobs()._write(folder/data['version']/PLAN_FILE, record)
+    reused = len(result['reused_beats'])
+    return result['seconds'], (f"\nPreview ready: {result['seconds']:.1f}s at 60 fps"
+                               f"{f', {reused} unchanged beats reused' if reused else ''}. The Edited view plays it.")
+
+
+def film(folder, version):
+    """The rendered film of a plan version as an AIEditRef, or None if it has none."""
+    from ...models import AIEditRef
+    record = load(folder, version)
+    seconds = (record.get('render') or {}).get('seconds')
+    return AIEditRef(version=version, duration=seconds) if seconds and (Path(folder)/version/'edited.mp4').is_file() else None
 
 
 def revise(folder, current, message, progress):
@@ -119,11 +152,12 @@ def revise(folder, current, message, progress):
 
 
 def go_back(folder, current):
+    """(plan ref, film ref or None, text) of the parent version; plan ref None when there is no parent."""
     base = load(folder, current.version)
     if not base.get('parent_version'):
-        return None, 'This is the first version of the plan, so there is nothing earlier to go back to.'
+        return None, None, 'This is the first version of the plan, so there is nothing earlier to go back to.'
     parent = load(folder, base['parent_version'])
-    return ref(parent), f"Back to {parent['version']} ({parent['message'][:80]}). Your later version is still saved."
+    return ref(parent), film(folder, parent['version']), f"Back to {parent['version']} ({parent['message'][:80]}). Your later version is still saved."
 
 
 class BeatEdit(BaseModel):
@@ -191,4 +225,6 @@ def patch_route(pid: str, jid: str, index: int, version: str, beat_id: int, body
                         critic_score=base.get('critic_score'), issues=[i.as_dict() for i in issues], model=base.get('model', ''))
     text = f"{message[:-1]}. Saved as {data['version']}."
     jobs._publish(pid, jid, index, request.state.user_id, None, None, None, text, plan=ref(data))
-    return {'plan': data, 'ai_plan': ref(data).model_dump(), 'message': text, 'warnings': [explain(i) for i in new if i.severity != 'high']}
+    job = jobs.start_beats_render(folder, pid, jid, index, request, data)
+    return {'plan': data, 'ai_plan': ref(data).model_dump(), 'message': text, 'ai_job': job,
+            'warnings': [explain(i) for i in new if i.severity != 'high']}

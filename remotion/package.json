@@ -1,0 +1,22 @@
+{
+  "name": "cascade-beats-renderer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Renders an AI Editor beat plan (backend/editor/ai_edit/beats) with Remotion. Reads plan.json + assets only; no AI here.",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "bundle": "remotion bundle src/index.ts --out-dir build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.543",
+    "@remotion/cli": "^4.0.543",
+    "@remotion/renderer": "^4.0.543",
+    "@types/react": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "^4.0.543",
+    "typescript": "^7.0.2"
+  }
+}

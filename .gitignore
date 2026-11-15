@@ -40,3 +40,9 @@ cascade-*.log
 
 # AI Editor beats: the style reference clip is local only, never committed
 backend/editor/ai_edit/beats/reference/*.mov
+
+# AI Editor beats: local inputs and outputs (large media, never committed)
+backend/editor/ai_edit/beats/examples/source/
+backend/editor/ai_edit/beats/output/
+remotion/node_modules/
+remotion/build/

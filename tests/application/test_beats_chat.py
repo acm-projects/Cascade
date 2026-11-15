@@ -36,7 +36,7 @@ class Script:
 
 
 class InlineThread:
-    def __init__(self, target, args, **kwargs): self.target, self.args = target, args
+    def __init__(self, target, args=(), **kwargs): self.target, self.args = target, args
     def start(self): self.target(*self.args)
 
 
@@ -60,8 +60,9 @@ class Chat(unittest.TestCase):
         self.draft = {'state': None, 'chat': []}
 
         def publish(pid, jid, index, user, state, version, duration, text, plan=None):
-            self.published.append({'version': version, 'text': text, 'plan': plan})
+            self.published.append({'version': version, 'duration': duration, 'text': text, 'plan': plan})
             if plan: self.draft['state'] = (state or self.draft['state']).model_copy(update={'ai_plan': plan})
+            if version: self.draft['state'] = self.draft['state'].model_copy(update={'ai_edit': AIEditRef(version=version, duration=duration)})
             self.draft['chat'].append(text)
 
         @contextmanager
@@ -76,7 +77,7 @@ class Chat(unittest.TestCase):
         for patch in (mock.patch.object(jobs, 'root', lambda *a: self.folder), mock.patch.object(jobs, '_publish', publish),
                       mock.patch.object(jobs.threading, 'Thread', InlineThread), mock.patch('backend.editor.storage.media', media),
                       mock.patch('backend.editor.storage.selected', lambda *a: {}), mock.patch.object(workflow, 'transcribe', transcribe),
-                      mock.patch.dict(os.environ, {'CASCADE_EDIT_ENGINE': 'beats', 'AI_EDITOR_MODEL': 'test-model'})):
+                      mock.patch.dict(os.environ, {'CASCADE_EDIT_ENGINE': 'beats', 'AI_EDITOR_MODEL': 'test-model', 'CASCADE_BEATS_RENDER': 'off'})):
             patch.start(); self.addCleanup(patch.stop)
 
     def say(self, state, message, *replies):
@@ -187,6 +188,46 @@ class Chat(unittest.TestCase):
         with mock.patch.dict(jobs.RUNNING, {str(self.folder): object()}), self.assertRaises(HTTPException) as caught:
             self.patch_beat('v001', 2, semantic_color='red')
         self.assertEqual(caught.exception.status_code, 409)
+
+
+class Rendering(Chat):
+    """With rendering on (the renderer itself is faked here; real renders are checked by hand and in REPORT.md)."""
+    def setUp(self):
+        super().setUp()
+        self.renders = []
+        def fake_render(plan, source, out, work, **kwargs):
+            self.renders.append([b['id'] for b in plan['beats']])
+            Path(out).parent.mkdir(parents=True, exist_ok=True); Path(out).write_bytes(b'mp4')
+            return {'frames': 2680, 'seconds': 44.667, 'size': [1284, 704], 'rendered_beats': [1], 'reused_beats': [], 'timings': {}, 'checks': {'ok': True}, 'credits': []}
+        from backend.editor.ai_edit.beats import render as beats_render
+        for patch in (mock.patch.dict(os.environ, {'CASCADE_BEATS_RENDER': 'on'}), mock.patch.object(beats_render, 'render', fake_render),
+                      mock.patch.object(beats_render, 'available', lambda: None)):
+            patch.start(); self.addCleanup(patch.stop)
+
+    def test_full_chat_flow(self):   # the inherited flow is plan-only; here: rendering makes each version the Edited film
+        _, job = self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
+        self.assertEqual((job['status'], self.published[-1]['version'], self.published[-1]['duration']), ('done', 'v001', 44.667))
+        self.assertIn('Preview ready', self.published[-1]['text'])
+        self.assertEqual(self.draft['state'].ai_edit.version, 'v001')
+        self.assertTrue((self.folder/'v001'/'edited.mp4').is_file())
+        self.assertEqual(self.saved('v001')['render']['frames'], 2680)
+        state = self.draft['state']
+        _, job = self.say(state, 'make it faster', {'reply': 'Faster.', 'changed_beat_ids': [9, 10], 'plan': faster(self.saved('v001')['plan'])})
+        self.assertEqual((self.published[-1]['version'], self.draft['state'].ai_edit.version), ('v002', 'v002'))
+        reply, _ = self.say(self.draft['state'], 'undo your last edit')
+        self.assertEqual((reply['state']['ai_plan']['version'], reply['state']['ai_edit']['version']), ('v001', 'v001'))   # the earlier film comes back too
+
+    def test_a_render_failure_keeps_the_plan(self):
+        from backend.editor.ai_edit.beats import render as beats_render
+        with mock.patch.object(beats_render, 'render', side_effect=beats_render.RenderError('Chrome went away.')):
+            _, job = self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
+        self.assertEqual(job['status'], 'done')
+        self.assertIsNone(self.published[-1]['version'])
+        self.assertIn('could not be made (Chrome went away.)', self.published[-1]['text'])
+        self.assertEqual(self.draft['state'].ai_plan.version, 'v001')
+
+    test_a_question_back_saves_no_version = test_a_long_clip_lets_the_director_pick_the_window = None
+    test_failures_are_friendly_and_change_nothing = test_patch_waits_for_a_running_job = None
 
 
 class Engines(unittest.TestCase):

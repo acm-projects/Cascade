@@ -78,9 +78,21 @@ class Transcribe(unittest.TestCase):
         self.assertEqual(fw.call_count, 1)
 
     def test_no_transcriber_is_a_clear_error(self):
-        with mock.patch.object(prep, '_transcribe', return_value=None), mock.patch.object(prep, '_faster_whisper', return_value=None):
+        with mock.patch.object(prep, '_transcribe', return_value=None), mock.patch.object(prep, '_faster_whisper', side_effect=OSError('no download')), \
+                mock.patch.object(asr, 'parakeet', return_value=None):
             with self.assertRaises(asr.TranscriptionUnavailable):
                 asr.transcribe(self.video, self.folder/'work')
+
+
+class Engines(unittest.TestCase):
+    def test_order_and_override(self):
+        self.assertEqual([name for name, _ in asr._engines()], ['whisper-cli', 'faster-whisper', 'parakeet'])
+        with mock.patch.dict('os.environ', {'CASCADE_TRANSCRIBER': 'parakeet'}):
+            self.assertEqual([name for name, _ in asr._engines()], ['parakeet'])
+
+    def test_parakeet_without_its_model_is_skipped(self):
+        with mock.patch.object(asr, 'parakeet_model', return_value=None):
+            self.assertIsNone(asr.parakeet('missing.wav'))
 
 
 if __name__ == '__main__':
