@@ -168,13 +168,14 @@ def upload_clip_files(
     job_id,
     filename,
     captions_filename,
+    *, owner=None,
 ):
     from backend.media import content_type as media_content_type
     # Local media already uses the same ownership-checked /clips route.
     if uses_local_storage():
         return {"storage": "local"}
     from backend.core.jobs import load_json
-    owner = load_json(folder / 'owner.json')
+    owner = owner if owner is not None else load_json(folder / 'owner.json')
 
     user_folder = (
         safe_folder_name(owner.get("user_folder"))

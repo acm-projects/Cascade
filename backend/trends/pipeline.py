@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import yt_dlp
+from . import claude_route
 from .diagnostics import stage,ydl_options
 
 from backend.cascade_llm import OPENAI, make_client, selected_model, selected_provider, structured_json
@@ -79,7 +80,7 @@ def download_video(video_id: str, dest_dir: Path) -> Path:
         "fragment_retries": 1,
         "noplaylist": True,
         "match_filter": duration_filter,
-        "format": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]/best",
+        "format": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]/best",
         "merge_output_format": "mp4",
         "outtmpl": out_template,
         "quiet": True,
@@ -200,6 +201,8 @@ def extract_audio(video_path: Path, dest_dir: Path) -> Path | None:
 def transcribe(audio_path: Path | None) -> str:
     if audio_path is None:
         return ""
+    if claude_route.active():  # references are saved in a folder named after their YouTube id
+        return claude_route.captions(audio_path.parent.name)
     segments = transcribe_media(audio_path)  # Deepgram
     return " ".join(segment["text"] for segment in segments).strip()
 
@@ -224,16 +227,21 @@ def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
     if cache_path.exists():
         return json.loads(cache_path.read_text())
 
-    provider = selected_provider()
-    model = selected_model()
-    # The key is read now (not at import), so a change in .env applies to the next job.
-    client = make_client(provider)  # raises if the key is missing
-
     prompt_text = (
         "Analyze this short video's frames and transcript. "
         "Extract structured tags describing its style and content.\n\n"
         f"Transcript:\n{transcript or '(no speech detected)'}"
     )
+
+    if claude_route.active():
+        tags = claude_route.tags(frame_paths, prompt_text, TAG_SCHEMA)
+        cache_path.write_text(json.dumps(tags))
+        return tags
+
+    provider = selected_provider()
+    model = selected_model()
+    # The key is read now (not at import), so a change in .env applies to the next job.
+    client = make_client(provider)  # raises if the key is missing
 
     if provider == OPENAI:
         result = structured_json(

@@ -3,12 +3,12 @@
 `.github/workflows/ci.yml` runs on every pull request and pushes to `main`.
 It needs no provider secrets. The `backend` job installs CPU-only PyTorch and
 FFmpeg, runs application unittest tests, both unittest and pytest agent tests,
-and the three existing Node editor/canvas suites. The `frontend` job uses
+and all six standalone legacy JavaScript suites. The `frontend` job uses
 Node 20 and runs a clean npm install, lint, tests, and the production build.
 
 Install test dependencies locally with `python -m pip install -r requirements-dev.txt`.
 Run application tests with `CASCADE_WARM_MODELS=0`, `CASCADE_STORAGE=local`,
-and `CASCADE_METADATA_STORE=local`; run agent tests with `python -m pytest backend/tests -q`.
+and `CASCADE_METADATA_STORE=local`; run agent tests with `python -m pytest tests/agent -q`.
 Run Node suites from the repository root and npm commands from `frontend/`.
 
 Chrome suites are preserved and skipped unless `CASCADE_BROWSER_TESTS=1`.

@@ -176,3 +176,13 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+.captions-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.captions-header .captions-toggle { flex-shrink: 0; }
+.captions-header .captions-views { flex: 0 0 auto; }
+.captions-header .captions-view { padding: 5px 12px; }

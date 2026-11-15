@@ -3,7 +3,9 @@ import math
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend import broll as stocklib
-from .advanced_models import AudioSegment, Motion, TextOverlay, Transition, TimelineSpan, SpeedRamp, CutAccent, ReelInfo
+from .advanced_models import AudioSegment, Motion, TextOverlay, Transition, TimelineSpan, SpeedRamp, CutAccent, ReelInfo, StyleEvent, StoryboardInfo, StyleInfo, StyleOptions
+from .sequence_models import FablecutSequence
+from .director_models import DirectorPlan
 
 
 class Captions(BaseModel):
@@ -26,7 +28,7 @@ class Captions(BaseModel):
 
 class Composition(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
-    ratio: Literal['original','9:16','1:1','4:5','16:9','4:3'] = 'original'
+    ratio: Literal['original','9:16','1:1','4:5','16:9','4:3','16:10','21:9'] = 'original'
     mode: Literal['fit','fill'] = 'fit'
     x: float = Field(default=.5, ge=0, le=1)
     y: float = Field(default=.5, ge=0, le=1)
@@ -68,6 +70,13 @@ class ReframePlanInput(BaseModel):
     selection: SubjectSelection | None = None
 
 
+class AIEditRef(BaseModel):
+    """A finished edit the AI Editor rendered for this clip (see ai_edit/). The file is the preview and the export."""
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    version: str = Field(pattern=r'^v[0-9]{3}$')
+    duration: float = Field(gt=0)
+
+
 class Edit(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
     start: float = Field(ge=0)
@@ -87,6 +96,10 @@ class Edit(BaseModel):
     accents: list[CutAccent] = Field(default_factory=list, max_length=8)
     reel: ReelInfo | None = None
     dialogue_volume: float = Field(default=1, ge=0, le=2)
+    fablecut: FablecutSequence | None = None
+    stylize: StyleInfo | None = None
+    board: StoryboardInfo | None = None
+    ai_edit: AIEditRef | None = None
 
 
 class Message(BaseModel):
@@ -113,7 +126,7 @@ class ChatInput(BaseModel):
 
 class Action(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
-    type: Literal['trim_first', 'keep_first', 'reset_trim', 'captions_enabled', 'caption_color', 'caption_bold', 'caption_position', 'caption_text', 'caption_settings', 'reframe_focus', 'broll_search', 'broll_insert', 'broll_update', 'broll_remove', 'broll_auto', 'audio_add', 'audio_update', 'audio_remove', 'motion', 'text_overlay', 'color_adjust', 'transition', 'caption_animation', 'dialogue_volume', 'high_energy_reel', 'speed_ramp', 'cut_accent']
+    type: Literal['trim_first', 'keep_first', 'reset_trim', 'captions_enabled', 'caption_color', 'caption_bold', 'caption_position', 'caption_text', 'caption_settings', 'reframe_focus', 'broll_search', 'broll_insert', 'broll_update', 'broll_remove', 'broll_auto', 'audio_add', 'audio_update', 'audio_remove', 'motion', 'motion_update', 'motion_remove', 'composition', 'text_overlay', 'color_adjust', 'transition', 'caption_animation', 'dialogue_volume', 'high_energy_reel', 'speed_ramp', 'cut_accent', 'style_preset', 'style_event', 'style_clear', 'auto_edit']
     focus: Literal['speaker','both','left','right','off'] | None = None
     settings: Captions | None = None
     seconds: float | None = Field(default=None, gt=0)
@@ -134,6 +147,8 @@ class Action(BaseModel):
     anchor: str | None = Field(default=None, max_length=200)
     audio: AudioSegment | None = None
     motion: Motion | None = None
+    target_index: int | None = Field(default=None, ge=0, le=29)
+    composition: Composition | None = None
     overlay: TextOverlay | None = None
     effects: Effects | None = None
     transition: Transition | None = None
@@ -142,6 +157,21 @@ class Action(BaseModel):
     animation: Literal['none','pop','karaoke'] | None = None
     speed: SpeedRamp | None = None
     accent: CutAccent | None = None
+    zoom_strength: float | None = Field(default=None, ge=1.05, le=1.45)
+    shake_strength: float | None = Field(default=None, ge=0, le=.015)
+    max_punch_ins: int | None = Field(default=None, ge=1, le=6)
+    style: StyleEvent | None = None
+    style_options: StyleOptions | None = None
+    plan: DirectorPlan | None = None
+
+
+class VisualObservation(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    frame_index: int = Field(ge=0, le=11)
+    at: float = Field(ge=0)
+    description: str = Field(max_length=300)
+    importance: float = Field(ge=0, le=1)
+    activity: Literal['low', 'medium', 'high'] = 'medium'
 
 
 class Proposal(BaseModel):
@@ -149,6 +179,8 @@ class Proposal(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     actions: list[Action] = Field(max_length=30)
     unsupported: list[str] = Field(default_factory=list, max_length=20)
+    observations: list[VisualObservation] = Field(default_factory=list, max_length=8)
+    planning_method: Literal['model','direct_revision'] = 'model'
 
 
 class CaptionImage(BaseModel):
@@ -159,7 +191,8 @@ class CaptionImage(BaseModel):
 
 
 class ExportInput(Edit):
-    resolution: Literal['original', '1080p', '720p'] = 'original'
+    resolution: Literal['original', '1080p', '720p', '540p', '480p'] = 'original'
+    preview: bool = False  # the Editor's quick preview: small, fast, and never waits for speaker tracking
     overlays: list[CaptionImage] | None = Field(default=None, max_length=1000)
 
 

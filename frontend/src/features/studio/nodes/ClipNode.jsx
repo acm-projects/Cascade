@@ -1,9 +1,10 @@
 import { Handle, Position } from "@xyflow/react";
 import { formatTime } from "../../../utils/time";
 import { sameRef } from "../graph";
+import Icon from "../../../components/ui/Icon";
 
 // One clip the AI found. Check it to (1) guide the next prompt ("more like this") and
-// (2) take it to the Editor. ▶ opens it big.
+// (2) take it to the Editor. The play button opens it big.
 //   data.clip       - { title, explanation, start, end, clip_url }
 //   data.ref        - { job_id, clip_index } (which clip this is, for the backend)
 //   data.label      - "2", or "2.1" after a "more like this" update replaced it
@@ -25,7 +26,7 @@ function ClipNode({ data }) {
       </div>
       <button type="button" className="studio-poster nodrag nopan" onClick={() => onPreview(clip, ref)}
         aria-label={`Preview ${clip.title || "clip"}`}>
-        <span className="studio-poster-play">▶</span>
+        <span className="studio-poster-play"><Icon name="play" /></span>
         <span>{formatTime(clip.start)} – {formatTime(clip.end)}</span>
       </button>
       <strong className="studio-clip-title" title={clip.title}>{clip.title || "A moment from your video"}</strong>
@@ -50,7 +51,7 @@ function ClipNode({ data }) {
       <label className="studio-clip-select nodrag nopan">
         <input type="checkbox" checked={selected} onChange={() => onToggle(ref)}
           aria-label={`Pick prompt ${number} clip ${label}: ${clip.title || "clip"}`} />
-        {selected ? "Picked ✓" : "Pick clip"}
+        {selected ? <>Picked <Icon name="check" /></> : "Pick clip"}
       </label>
       <Handle type="source" position={Position.Right} />
     </div>

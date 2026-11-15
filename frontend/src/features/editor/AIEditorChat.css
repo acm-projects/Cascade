@@ -1,0 +1,50 @@
+/* Scoped to the editor; shared ChatBox and other pages retain their appearance. */
+.ai-editor-chat { display:flex; flex-direction:column; min-height:0; gap:10px; height:100%; overflow-y:auto; }
+.ai-editor-chat > * { flex-shrink:0; }
+.ai-editor-chat .chatbox { flex:0 0 auto; height:clamp(380px, 62vh, 620px); min-height:0; }
+.ai-editor-chat .chatbox-header { padding:10px; }
+.ai-editor-chat .chatbox-title { font-size:18px; }
+.ai-editor-chat .chatbox-subtitle { font-size:11px; line-height:1.5; }
+.ai-editor-chat .chatbox-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+.ai-editor-chat .chatbox-quick { flex-wrap:wrap; }
+.ai-editor-receipt { flex-shrink:0; padding:9px; border:1px solid var(--color-wood-dark); border-radius:8px; background:var(--color-cream-card); color:var(--color-wood-text); font:11px/1.5 var(--font-ui); max-height:220px; overflow:auto; }
+.ai-editor-receipt summary { font-weight:700; cursor:pointer; }
+.ai-editor-engine { flex-shrink:0; margin:0; padding:4px 2px; color:var(--color-wood-text); font:11px/1.4 var(--font-ui); opacity:.85; }
+.ai-editor-receipt ol { padding-left:18px; }
+.ai-editor-step { margin:6px 0; }
+.ai-editor-step.applied b { color:var(--color-jungle-deep); }
+.ai-editor-step.failed b { text-decoration:underline; }
+.ai-sequence { margin-top: 12px; padding: 12px; border: 2px solid #49361e; border-radius: 14px; background: #f4ecd2; color: #49361e; font-size: 13px; min-width: 0; }
+.ai-sequence-shots { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; }
+.ai-sequence-shot { flex: 0 0 180px; display: grid; gap: 7px; padding: 8px; border: 1px solid #735b35; border-radius: 10px; background: #e4e8ca; }
+.ai-sequence button, .ai-sequence select { border: 1px solid #49361e; border-radius: 7px; padding: 5px; color: #49361e; background: #faf3df; cursor: pointer; }
+.ai-sequence label { display: flex; gap: 5px; align-items: center; }
+.ai-sequence input { min-width: 0; width: 85px; accent-color: #317648; }
+.ai-sequence-clock { margin-top: 8px; font-variant-numeric: tabular-nums; }
+.ai-sequence-strip { display: flex; height: 43px; overflow: hidden; border: 1px solid #49361e; border-radius: 8px; margin: 6px 0; }
+.ai-sequence-strip button { min-width: 0; border-radius: 0; overflow: hidden; background: #cad8a8; border-width: 0 1px 0 0; }
+.ai-sequence-strip small { display: block; font-size: 10px; white-space: nowrap; }
+.ai-sequence-details summary { padding: 7px 0; cursor: pointer; font-weight: 600; }
+.editor-center.has-ai-sequence { overflow-y: auto; }
+.editor-center.has-ai-sequence > .editor-preview { flex: 0 0 clamp(280px, 40vh, 480px); min-height: 280px; }
+.ai-editor-chat .ai-editor-clear { align-self:flex-start; font-size:12px; }
+
+.ai-storyboard { flex-shrink:0; padding:9px; border:1px solid var(--color-wood-dark); border-radius:8px; background:var(--color-cream-card); color:var(--color-wood-text); font:11px/1.45 var(--font-ui); }
+.ai-storyboard header { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+.ai-storyboard-beats { list-style:none; margin:0; padding:0; display:grid; gap:5px; }
+.ai-storyboard-plan { margin:0 0 7px; }
+.ai-storyboard-beats q { flex-basis:100%; quotes:none; }
+.ai-storyboard-beats q.rewritten { font-weight:700; }
+.ai-storyboard-beats li { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; padding:4px; border-radius:6px; background:#faf3df; }
+.ai-storyboard-beats li.cut { opacity:.55; text-decoration:line-through; }
+.ai-storyboard-beats img { width:64px; height:36px; object-fit:cover; border-radius:4px; }
+.ai-storyboard-n { font-weight:700; }
+.ai-storyboard-beats strong { color:#a3261b; }
+.ai-storyboard-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; }
+
+.ai-edit-progress { display: grid; gap: 6px; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,.06); }
+.ai-edit-progress p { margin: 0; }
+.ai-edit-progress small { opacity: .7; }
+.ai-edit-progress-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+.ai-edit-progress-bar i { display: block; height: 100%; background: #3d4eff; transition: width .4s ease; }
+.ai-edit-current { margin: 0; font-size: 13px; opacity: .85; display: grid; gap: 6px; justify-items: start; }

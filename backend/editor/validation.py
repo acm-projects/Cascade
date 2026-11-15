@@ -15,8 +15,18 @@ from .models import Composition, Effects
 
 def validate_media_edit(state, info):
     validate_edit(state, info['duration'])
-    from .retiming import validate_timing
+    from .retiming import validate_timing, phrases
     validate_timing(state,info['cues'],info['duration'])
+    if state.fablecut:
+        if not info.get('has_video'):raise HTTPException(422,'FableCut sequences require video footage.')
+        for shot in state.fablecut.shots:
+            if shot.end>info['duration']+.001:raise HTTPException(422,'AI sequence shot exceeds the source duration.')
+            changed_speed=shot.rate_from!=1 or shot.rate_to!=1
+            if changed_speed and any(shot.start<c['end']+.08 and shot.end>c['start']-.08 for c in info['cues']):
+                raise HTTPException(422,'AI speed ramps cannot overlap spoken transcript cues.')
+            for boundary in (shot.start,shot.end):
+                if any(c['start']+.025<boundary<c['end']-.025 for c in phrases(info['cues'])):
+                    raise HTTPException(422,'AI sequence cuts must preserve complete transcript cues.')
     if (state.timeline or state.speed) and (state.reframe.enabled or state.composition.mode=='fill'):
         raise HTTPException(422,'Use Fit framing for a retimed Reel; source-time tracking cannot be reused after cuts or speed changes.')
     if info.get('has_video') is False and (

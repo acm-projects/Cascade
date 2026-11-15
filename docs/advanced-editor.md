@@ -151,7 +151,7 @@ replacement was introduced by this work.
 npm --prefix frontend run build
 npm --prefix frontend run lint
 npm --prefix frontend test
-CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest tests.test_advanced_editing tests.test_editor tests.test_broll tests.test_audio_media tests.test_social_youtube -q
+CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest tests.application.test_advanced_editing tests.application.test_editor tests.application.test_broll tests.application.test_audio_media tests.application.test_social_youtube -q
 ```
 
 Tests cover multi-action execution, automatic insertion (including legacy
@@ -165,9 +165,9 @@ For isolated official-React browser checks, build first, then run in separate
 test-only processes:
 
 ```sh
-.venv/bin/python tests/advanced_editor_browser_server.py
+.venv/bin/python tests/browser/advanced_editor_browser_server.py
 '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --remote-debugging-port=9351 --user-data-dir=/tmp/cascade-advanced-edit-browser --no-first-run about:blank
-.venv/bin/python tests/test_advanced_editor_browser.py
+.venv/bin/python tests/browser/test_advanced_editor_browser.py
 ```
 
 This verifies Music list/preview/Add/Remove, undo/redo, chat-to-Music/timeline

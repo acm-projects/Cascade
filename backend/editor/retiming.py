@@ -79,7 +79,9 @@ def mapped_state(state,info):
             end=item.start+item.duration
             if not clock.kept(item.start,end):continue
             update={'start':clock.output(item.start),'duration':clock.output(end)-clock.output(item.start)}
-            if field=='broll' and item.offset+update['duration']>item.asset.duration:
+            if field in ('audio','broll'):
+                update['offset']=item.offset+max(0,state.start-item.start)
+            if field=='broll' and update['offset']+update['duration']>item.asset.duration:
                 raise HTTPException(422,'Retimed B-roll exceeds the available stock media.')
             rows.append(item.model_copy(update=update))
         setattr(mapped,field,rows)

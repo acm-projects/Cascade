@@ -39,6 +39,14 @@ def get_thumbnail(pid: str, jid: str, index: int, request: Request):
                     media_type='image/jpeg', headers={'Cache-Control': 'private, no-cache'})
 
 
+def style_progress(pid: str, jid: str, index: int, request: Request):
+    """Subject-cutout progress for a stylized preview: {'done', 'total'} or {} when idle."""
+    from .segmentation import PROGRESS
+    clip = selected(pid, jid, index, request.state.user_id)
+    done, total = PROGRESS.get(str(jobs_dir()/jid/Path(clip.get('clip_url', '')).name), (None, None))
+    return {} if total is None else {'done': done, 'total': total}
+
+
 def get_media(pid: str, jid: str, index: int, request: Request):
     clip = selected(pid, jid, index, request.state.user_id)
     # Copy cloud-backed temporary media before returning a streaming response.

@@ -82,6 +82,8 @@
 
 .ui-empty-icon {
   font-size: 2.5rem;
+  line-height: 1;
+  color: var(--color-jungle-deep);
 }
 
 .ui-empty-title {
@@ -127,4 +129,11 @@
     opacity: 0;
     translate: 0 8px;
   }
+}
+
+/* Line icons (Icon.jsx): sit on the text line like a letter */
+.ui-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: -0.15em;
 }

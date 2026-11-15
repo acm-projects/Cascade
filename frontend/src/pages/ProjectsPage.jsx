@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import "./ProjectsPage.css";
-import bg from "../assets/figma/projects-bg.jpg";
-import woodPill from "../assets/figma/wood-pill.png";
-import woodGreen from "../assets/figma/wood-green-btn.png";
 import leafCream from "../assets/icons/leaf-cream.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/projectContextValue";
+import { useLeafNavigate } from "../context/leafTransitionValue";
 import useApi from "../api/useApi";
 import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
+import IsoWorld from "../features/landing3d/IsoWorld";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
@@ -18,25 +17,26 @@ import Modal from "../components/ui/Modal";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 
+// icon: simple line drawings (24 x 24, drawn in the text color), the same style as the landing page icons
 const views = [
-  { id: "all", label: "All Projects" },
-  { id: "recent", label: "Recents" },
-  { id: "favorites", label: "Favorites" },
-  { id: "archives", label: "Archives" },
-  { id: "trash", label: "Trash" },
+  { id: "all", label: "All Projects", icon: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /> },
+  { id: "recent", label: "Recents", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
+  { id: "favorites", label: "Favorites", icon: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" /> },
+  { id: "archives", label: "Archives", icon: <><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4" /></> },
+  { id: "trash", label: "Trash", icon: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" /> },
 ];
 
 const emptyViews = {
-  all: ["🌿", "No active projects", "Create a project or restore one from Archives or Trash."],
-  recent: ["🕰️", "Nothing from the last 7 days", "Projects you work on this week show up here."],
-  favorites: ["⭐", "No favorites yet", "Choose Favorite from a project's menu to find it here."],
-  archives: ["📦", "No archived projects", "Archive a project from its menu to keep it here."],
-  trash: ["🗑️", "Trash is empty", "Projects moved to trash can be restored here."],
+  all: ["leaf", "No active projects", "Create a project or restore one from Archives or Trash."],
+  recent: ["clock", "Nothing from the last 7 days", "Projects you work on this week show up here."],
+  favorites: ["star", "No favorites yet", "Choose Favorite from a project's menu to find it here."],
+  archives: ["box", "No archived projects", "Archive a project from its menu to keep it here."],
+  trash: ["trash", "Trash is empty", "Projects moved to trash can be restored here."],
 };
 
 // Built from the Figma "Projects/Archive Page" (section 2, node 640:529)
 function ProjectsPage() {
-  const navigate = useNavigate();
+  const leafNavigate = useLeafNavigate();
   const api = useApi();
   const toast = useToast();
   const { openProject } = useProject();
@@ -57,6 +57,27 @@ function ProjectsPage() {
   // Each load gets a number, so if Retry is clicked twice only the newest answer is used.
   // (The page starts with loading = true, so this only sets state once the answer arrives.)
   const loadCount = useRef(0);
+
+  // Line the sidebar's buttons up with the first row of project cards, wherever the title and search end up
+  // (they move as the window changes size). The sidebar reads --cards-top in ProjectsPage.css.
+  const bodyRef = useRef(null);
+  const contentRef = useRef(null);
+  useEffect(() => {
+    const body = bodyRef.current;
+    const content = contentRef.current;
+    if (!body || !content) return undefined;
+    function lineUp() {
+      const grid = content.querySelector(".projects-grid");
+      const gridPadding = grid ? parseFloat(getComputedStyle(grid).paddingTop) : 0;
+      const top = content.getBoundingClientRect().top - body.getBoundingClientRect().top + gridPadding;
+      body.style.setProperty("--cards-top", `${top}px`);
+    }
+    lineUp();
+    const observer = new ResizeObserver(lineUp);
+    observer.observe(body);
+    if (content.previousElementSibling) observer.observe(content.previousElementSibling);   // the title and search row
+    return () => observer.disconnect();
+  }, [loading]);
 
   const loadProjects = useCallback(() => {
     const thisLoad = ++loadCount.current;
@@ -92,15 +113,27 @@ function ProjectsPage() {
 
   // From the New Project pop-up: create the project, then open its AI Studio. A picked video goes along
   // and uploads there with the first prompt.
-  async function createProject(name, file) {
+  // "Edit my own clip": upload the video into the Editor first, then open the Editor.
+  // If the upload fails, the project made on the first try is reused when you press the button again.
+  const pendingOwnClip = useRef(null);
+  async function createProject(name, file, mode = "studio") {
+    if (mode === "editor") {
+      const created = pendingOwnClip.current ?? await api.createProject(name);
+      pendingOwnClip.current = created;
+      await api.uploadEditorClip(created.id, file);
+      pendingOwnClip.current = null;
+      openProject(created);
+      leafNavigate(`/projects/${created.id}/editor`);
+      return;
+    }
     const created = await api.createProject(name);
     openProject(created);
-    navigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined });
+    leafNavigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined, ready: import("./StudioPage") });
   }
 
   function handleOpen(project) {
     openProject(project);
-    navigate(`/projects/${project.id}/studio`);
+    leafNavigate(`/projects/${project.id}/studio`, { ready: import("./StudioPage") });
   }
 
   async function handleUpdate(project, changes) {
@@ -153,7 +186,7 @@ function ProjectsPage() {
     if (projects.length === 0 && view.id === "all") {
       return (
         <EmptyState
-          icon="🌿"
+          icon="leaf"
           title="No projects yet"
           text="Upload a video and Cascade will find the best clips for you."
           action={{ label: "Create your first project", onClick: handleNewProject }}
@@ -162,7 +195,7 @@ function ProjectsPage() {
     }
     if (shown.length === 0) {
       return query ? (
-        <EmptyState icon="🔍" title={`No projects match "${search.trim()}"`} text="Try a different name." />
+        <EmptyState icon="search" title={`No projects match "${search.trim()}"`} text="Try a different name." />
       ) : (
         <EmptyState icon={emptyViews[view.id][0]} title={emptyViews[view.id][1]} text={emptyViews[view.id][2]} />
       );
@@ -182,17 +215,18 @@ function ProjectsPage() {
   }
 
   return (
-    <div className="projects" style={{ backgroundImage: `url(${bg})` }}>
+    <div className="projects">
+      <IsoWorld framing="underwater" />
       {/* Green top bar */}
       <header className="projects-bar">
-        <div className="projects-brand">
+        <Link to="/" className="projects-brand" title="Back to the home page">
           <img src={leafCream} alt="" className="projects-leaf" />
           <span>Cascade</span>
-        </div>
+        </Link>
         <UserAvatar />
       </header>
 
-      <div className="projects-body">
+      <div className="projects-body" ref={bodyRef}>
         {/* Left sidebar: wooden view buttons */}
         <nav className="projects-sidebar" aria-label="Project views">
           {views.map((v) => (
@@ -200,10 +234,11 @@ function ProjectsPage() {
               key={v.id}
               type="button"
               className={`projects-filter${v.id === view.id ? " active" : ""}`}
-              style={{ backgroundImage: `url(${woodPill})` }}
               aria-current={v.id === view.id ? "page" : undefined}
               onClick={() => chooseView(v.id)}
             >
+              <svg className="projects-filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{v.icon}</svg>
               {v.label}
             </button>
           ))}
@@ -220,7 +255,7 @@ function ProjectsPage() {
             <div className="projects-actions">
               {view.id === "trash" && <Button size="sm" disabled={loading || deleting || updating.size > 0 || trashedProjects.length === 0}
                 onClick={() => setEmptyTrashOpen(true)}>Empty trash</Button>}
-              <label className="projects-search" style={{ backgroundImage: `url(${woodPill})` }}>
+              <label className="projects-search">
                 <img src={searchIcon} alt="" />
                 <input
                   type="search"
@@ -233,7 +268,6 @@ function ProjectsPage() {
               <button
                 type="button"
                 className="projects-new"
-                style={{ backgroundImage: `url(${woodGreen})` }}
                 onClick={handleNewProject}
               >
                 + New Project
@@ -241,11 +275,11 @@ function ProjectsPage() {
             </div>
           </div>
 
-          <div className="projects-content">{renderContent()}</div>
+          <div className="projects-content" ref={contentRef}>{renderContent()}</div>
         </main>
       </div>
 
-      {creatingNew && <NewProjectModal onClose={() => setCreatingNew(false)} onCreate={createProject} />}
+      {creatingNew && <NewProjectModal onClose={() => { pendingOwnClip.current = null; setCreatingNew(false); }} onCreate={createProject} />}
       {emptyTrashOpen && (
         <Modal title="Empty trash?" onClose={() => !deleting && setEmptyTrashOpen(false)}>
           <p className="projects-delete-text">

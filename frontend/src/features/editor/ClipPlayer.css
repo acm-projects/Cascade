@@ -7,6 +7,20 @@
   min-height: 0;
 }
 
+/* Original / Edited buttons: moved in from the panel's edge, in the jungle button font */
+.clip-player-version-controls > .editor-choice-row {
+  gap: 10px;
+  padding: 14px 0 0 16px;
+}
+
+.clip-player-version-controls > .editor-choice-row .editor-choice {
+  padding: 7px 14px;
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
 /* The stage centers a frame of the chosen aspect ratio inside whatever space there is */
 .clip-player-stage {
   flex: 1;
@@ -90,3 +104,49 @@
   color: var(--color-wood-text);
   font-family: var(--font-ui);
 }
+
+/* While a clip loads: a dark screen with a gently rocking leaf (see ClipLoading.jsx) */
+.clip-loading {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  padding: 12px;
+}
+
+.clip-loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  border-radius: var(--radius-md);
+  background: radial-gradient(ellipse at 50% 40%, #1d5a32, #0a2e15 75%);
+  box-shadow: var(--shadow-soft);
+  color: var(--color-cream-card);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.clip-loading-leaf {
+  color: var(--color-leaf);
+  transform-origin: 20% 80%;   /* the leaf's stem */
+  animation: clip-loading-rock 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes clip-loading-rock {
+  from { rotate: -14deg; }
+  to { rotate: 14deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clip-loading-leaf {
+    animation: none;
+  }
+}
+
+.clip-loading-screen { position: relative; overflow: hidden; }
+.clip-player-version-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.clip-player-save-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

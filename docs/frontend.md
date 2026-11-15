@@ -1,6 +1,6 @@
 # One HTML source, existing page URLs
 
-`web/index.html` is the only HTML source file. It contains conditional views for Home, Login, Projects, Canvas, Editor, Exports and Settings. `backend/frontend.py` renders exactly one view through the existing FastAPI frontend routes. CSS, JavaScript, backend services and assets remain separate. The startup command remains `uvicorn app1:app`.
+`frontend/legacy/web/index.html` is the only HTML source file. It contains conditional views for Home, Login, Projects, Canvas, Editor, Exports and Settings. `backend/frontend.py` renders exactly one view through the existing FastAPI frontend routes. CSS, JavaScript, backend services and assets remain separate. The startup command remains `uvicorn app1:app`.
 
 The public URLs `/`, `/index_C.html`, `/login`, `/login_C.html`, `/projects_C.html`, `/canvas_C.html`, `/editor_C.html`, `/exports_C.html`, `/settings_C.html` and `/settings` retain their behavior. `/index.html` is an additional home alias. Query parameters identifying projects, jobs and clips are preserved. Navigation still uses ordinary document links, so direct links, refresh and native Back/Forward use the existing browser routing rather than a new client router.
 
@@ -18,22 +18,22 @@ Generations remain distinct columns in one horizontal strip: children, siblings 
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_*.py' -q
-node tests/test_editor_state.cjs
-node tests/test_editor_flow.cjs
-node tests/test_canvas_branches.cjs
+node tests/javascript/test_editor_state.cjs
+node tests/javascript/test_editor_flow.cjs
+node tests/javascript/test_canvas_branches.cjs
 # With isolated Chrome on port 9333, start this fixture server:
-python3 tests/project_browser_server.py
+python3 tests/browser/project_browser_server.py
 # In a separate terminal (each destructive fixture scenario needs fresh server data):
-python3 tests/test_frontend_browser.py
-python3 tests/test_horizontal_browser.py
-python3 tests/test_project_browser.py
+python3 tests/browser/test_frontend_browser.py
+python3 tests/browser/test_horizontal_browser.py
+python3 tests/browser/test_project_browser.py
 ```
 
 `test_frontend_views.py` checks one HTML file, one head/body per view, unique DOM IDs, correct scripts, legacy aliases, source privacy and the preserved authentication fallback. During migration all seven rendered documents were verified byte-for-byte against pre-change originals saved outside the repository.
 
 `test_frontend_browser.py` compares original and migrated fixture screenshots when the optional migration snapshots in `/tmp` are available. With fresh checkouts that do not have those snapshots, visual comparison is explicitly skipped; route/navigation/media/persistence/download checks still run. Screenshots are written under `/tmp/cascade-frontend-artifacts`. The identity and external Clerk widget are mocked consistently for before/after comparisons, not claimed to be live sign-in verification.
 
-It also uses the real legacy URLs and native links, tests Back/Forward, paused media on leaving a view, caption/settings persistence, a real MP4 download, refresh and absence of generation requests caused by navigation. Existing editor browser checks use `tests/editor_browser_server.py` separately for actual caption/composition/export pixel comparisons.
+It also uses the real legacy URLs and native links, tests Back/Forward, paused media on leaving a view, caption/settings persistence, a real MP4 download, refresh and absence of generation requests caused by navigation. Existing editor browser checks use `tests/browser/editor_browser_server.py` separately for actual caption/composition/export pixel comparisons.
 
 Tests use temporary user/project storage and mocked identity/selection. Live Clerk sign-in/sign-up, cloud storage, paid providers, physical touch devices and cross-browser behavior require separate verification. No paid requests are made by these checks.
 

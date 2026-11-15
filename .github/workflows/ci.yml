@@ -43,17 +43,14 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Application regression tests
-        run: python -m unittest discover -s tests -p 'test_*.py' -q
+        run: python -m unittest discover -s tests -t . -p 'test_*.py' -q
       - name: Agent unittest tests
-        run: python -m unittest discover -s backend/tests -q
+        run: python -m unittest discover -s tests/agent -q
       # Most agent suites use pytest functions, which unittest discovery doesn't execute.
       - name: Agent pytest tests
-        run: python -m pytest backend/tests -q
-      - name: Editor state, editor flow and canvas logic
-        run: |
-          node tests/test_editor_state.cjs
-          node tests/test_editor_flow.cjs
-          node tests/test_canvas_branches.cjs
+        run: python -m pytest tests/agent -q
+      - name: Legacy JavaScript regressions
+        run: node --test tests/javascript/*.cjs
 
   frontend:
     name: frontend

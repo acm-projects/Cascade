@@ -28,6 +28,8 @@ class Subjects:
         if not Path(model_path).is_file():raise ValueError('Subject model is missing. Run python3 scripts/setup_reframe.py and retry.')
         self.cv,self.np=cv,np
         path=Path(model_path);self.net,self.net_lock=_object_model(str(path.resolve()),path.stat().st_mtime_ns,path.stat().st_size);self.metrics=metrics;self.tracks={};self.next_id=0;self.previous=None;self.scene=0
+        # How often the (slow) whole-scene detector runs, and whether it should sit out because faces are already being followed.
+        self.cadence=5;self.hold=False
         grids=[];strides=[]
         for stride in (8,16,32):
             x,y=np.meshgrid(np.arange(640//stride),np.arange(640//stride));grids.append(np.stack((x,y),-1).reshape(-1,2));strides.append(np.full((x.size,1),stride))
@@ -83,7 +85,7 @@ class Subjects:
                             if ok.sum()<4:continue
                             dx,dy=np.median((moved-points)[start:start+count][ok],axis=0).ravel()
                             x,y,bw,bh=track['box'];track['box']=[max(0,min(1-bw,x+float(dx)/w)),max(0,min(1-bh,y+float(dy)/h)),bw,bh]
-        if index%5==0 or cut:
+        if not self.hold and (index%self.cadence==0 or cut):
             detections=self.metrics.call('object_detection',self.detect,image) if self.metrics else self.detect(image);used=set()
             for d in detections:
                 choices=[]

@@ -99,35 +99,50 @@ def research(job_id, source, topic):
     work = None
     internal_id = None
     job_registry = None
+    log = logging.getLogger(__name__)
+    stage = 'loading the trends module'
+    def progress(message):
+        # Remember the last step so a failure can say where it happened.
+        nonlocal stage
+        stage = message.rstrip('.')
+        job_service.update_job(job_id, message=message)
     try:
         from backend.trends.router import _run_analysis, _new_job, JOBS, RESULTS_CACHE_DIR, _result_cache_key
+        from backend.trends.diagnostics import safe_text
         # Existing remote pipeline owns its progress/cache; adapt to persistent authenticated jobs.
+        stage = 'preparing the research workspace'
         folder = job_service.JOBS_DIR / job_id
         work = folder / 'research'
         work.mkdir()
         internal_id = _new_job()
         job_registry = JOBS
         job_service.update_job(job_id, state='processing', message='Analyzing your video and current YouTube trends...')
+        stage = 'reading your source video'
         hasher = hashlib.sha256()
         with source.open('rb') as video:
             while chunk := video.read(1024 * 1024):
                 hasher.update(chunk)
         digest = hasher.hexdigest()
+        stage = 'checking for a cached result'
         cache = RESULTS_CACHE_DIR / (_result_cache_key(topic, digest) + '.json')
         if cache.is_file() and __import__('time').time()-cache.stat().st_mtime < 21600:
+            stage = 'loading the cached result'
             result = job_service.load_json(cache)
         else:
-            _run_analysis(internal_id, topic, source, work, cache,
-                          progress=lambda message: job_service.update_job(job_id, message=message))
+            _run_analysis(internal_id, topic, source, work, cache, progress=progress)
             outcome = JOBS[internal_id]
             if outcome['status'] != 'done':
-                raise RuntimeError('Research failed')
+                # The pipeline's own message can include provider details, so it stays in the server log.
+                log.error('Research job %s pipeline error while %s: %s', job_id, stage, safe_text(outcome.get('error')))
+                raise RuntimeError('Research pipeline reported an error')
             result = outcome['result']
         projects_store.finish_feature(job_id, {'clips': [], 'research': result})
     except ImportError:
-        projects_store.fail_feature(job_id, 'A processing dependency is missing. Install requirements.txt and restart the service.')
-    except Exception:
-        projects_store.fail_feature(job_id)
+        log.exception('Research job %s is missing a dependency while %s', job_id, stage)
+        projects_store.fail_feature(job_id, f'A processing dependency is missing (while {stage}). Install requirements.txt and restart the service.')
+    except Exception as error:
+        log.exception('Research job %s failed while %s', job_id, stage)
+        projects_store.fail_feature(job_id, job_service.processing_error(error, stage).replace('Processing failed', 'Research failed', 1))
 
     finally:
         if work is not None:

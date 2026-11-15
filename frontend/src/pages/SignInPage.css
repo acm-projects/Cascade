@@ -1,8 +1,14 @@
 .sign-in {
+  position: relative;
+  isolation: isolate;   /* keeps the 3D world behind the sign-in box */
   display: grid;
   place-items: center;
   min-height: 100vh;
   padding: var(--space-3);
-  background-size: cover;
-  background-position: center;
+  overflow: hidden;
+}
+
+/* Clerk's sign-in box gets the same thick block edge as everything else */
+.sign-in .cl-cardBox {
+  box-shadow: var(--block-edge);
 }

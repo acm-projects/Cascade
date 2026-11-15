@@ -27,6 +27,7 @@ def execute(body, proposal, info, stock, audio_store):
     state=body.state.model_copy(deep=True); reports=[]; search_result=None
     ids=list(body.result_ids)
     def commit(candidate):
+        candidate=Edit.model_validate(candidate.model_dump())
         validate_media_edit(candidate,info);stock.verify(candidate);audio_store.verify(candidate)
         return candidate
     actions=list(proposal.actions)
@@ -45,6 +46,47 @@ def execute(body, proposal, info, stock, audio_store):
                 candidate,steps=build_reel(state,info,stock,audio_store,action,body.message)
                 state=commit(candidate)
                 reports.extend(steps)
+                continue
+            if action.type=='auto_edit':
+                from .director_recipes import apply_plan
+                if not action.plan: raise HTTPException(422,'The Director plan is missing.')
+                edited,notes=apply_plan(candidate,action.plan,info,stock,audio_store)
+                try:
+                    state=commit(edited)
+                except (HTTPException,ValueError):
+                    # Keep the rest of the edit if B-roll or pause tightening does not fit this clip.
+                    edited.broll=list(state.broll);edited.timeline=list(state.timeline)
+                    state=commit(edited);notes.append('some B-roll/pause cuts did not fit and were skipped')
+                reports.append({'step':number+1,'action':action.type,'status':'applied','message':'; '.join(notes)})
+                continue
+            if action.type in ('style_preset','style_event','style_clear'):
+                from .stylize import plan_preset, PALETTES
+                from .advanced_models import StyleInfo, StyleOptions
+                if action.type=='style_clear':
+                    candidate.stylize=None;message='removed stylized effects'
+                elif action.type=='style_preset':
+                    options=action.style_options or StyleOptions()
+                    candidate.stylize=plan_preset(candidate,info,options,audio_store)
+                    message='fan-edit style: '+candidate.stylize.note
+                    if options.broll_query:
+                        from .stylize import add_broll, beats_for
+                        query=options.broll_query if options.broll_query!='*' else (info.get('clip_title') or 'cinematic action')
+                        try:
+                            placed=add_broll(candidate,stock,query,beats_for(candidate,info,audio_store))
+                            message+=f'; added {placed} free stock shots for "{query}"'
+                        except (HTTPException,OSError,KeyError):
+                            message+='; stock footage search was unavailable, so no extra clips were added'
+                else:
+                    if not action.style: raise HTTPException(422,'Style effect timing is required.')
+                    event=action.style.model_copy(deep=True)
+                    if event.start>=candidate.end or event.start+event.duration<=candidate.start:
+                        raise HTTPException(422,'That effect is outside the current trim.')
+                    current=candidate.stylize or StyleInfo(palette=action.text if action.text in PALETTES else 'spider')
+                    current.events=sorted([*current.events,event],key=lambda e:e.start)[:80]
+                    candidate.stylize=current
+                    message=f'{event.kind.replace("_"," ")} at {event.start:.2f}–{event.start+event.duration:.2f}s'
+                state=commit(candidate)
+                reports.append({'step':number+1,'action':action.type,'status':'applied','message':message})
                 continue
             if action.type=='speed_ramp':
                 if not action.speed: raise HTTPException(422,'Speed-ramp timing and rates are required.')
@@ -78,11 +120,13 @@ def execute(body, proposal, info, stock, audio_store):
                 candidate.broll.append(Segment(id=uuid.uuid4().hex,asset=Asset(**asset),start=begin,duration=length,offset=action.offset or 0,mode=action.mode or 'fill'))
             elif action.type in ('audio_add','audio_update','audio_remove'):
                 if action.type=='audio_remove':
+                    if candidate.reel and any(s.id==action.segment_id and s.track=='music' for s in candidate.audio):candidate.reel.beat_sync_current=False
                     before=len(candidate.audio)
                     candidate.audio=[s for s in candidate.audio if s.id!=action.segment_id]
                     if before==len(candidate.audio): raise HTTPException(422,'Identify an existing audio segment to remove.')
                 elif action.type=='audio_update':
                     if action.audio is None or not any(s.id==action.audio.id for s in candidate.audio): raise HTTPException(422,'Identify an existing audio segment to update.')
+                    if candidate.reel and action.audio.track=='music':candidate.reel.beat_sync_current=False
                     candidate.audio=[action.audio.model_copy(deep=True) if s.id==action.audio.id else s for s in candidate.audio]
                     begin=action.audio.start;length=action.audio.duration
                 else:
@@ -102,12 +146,40 @@ def execute(body, proposal, info, stock, audio_store):
                         chosen=assets[0];begin=at(action,state,info['cues'])
                         length=action.duration or (state.end-begin if track=='music' else min(chosen['duration'],state.end-begin))
                         segment=AudioSegment(id=uuid.uuid4().hex,asset_id=chosen['id'],track=track,start=begin,duration=length,offset=action.offset or 0,volume=action.volume if action.volume is not None else (.18 if track=='music' else .55),fade_in=.3 if track=='music' else .01,fade_out=.5 if track=='music' else .05,duck=track=='music',loop=track=='music')
+                    if candidate.reel and segment.track=='music':candidate.reel.beat_sync_current=False
                     candidate.audio.append(segment);begin=segment.start;length=segment.duration
             elif action.type=='motion':
                 if not action.motion: raise HTTPException(422,'Zoom/shake settings are required.')
                 motion=action.motion.model_copy(deep=True)
                 if action.anchor: motion.start=at(action,state,info['cues'])
                 candidate.motion.append(motion);begin=motion.start;length=motion.duration
+            elif action.type in ('motion_update','motion_remove'):
+                target = action.target_index
+                if target is None or not 0 <= target < len(candidate.motion):
+                    raise HTTPException(422,'Identify an existing zoom/shake by its timeline index.')
+                old = candidate.motion[target]
+                begin = old.start; length = old.duration
+                if action.type == 'motion_remove':
+                    candidate.motion.pop(target)
+                else:
+                    if not action.motion: raise HTTPException(422,'Updated zoom/shake settings are required.')
+                    candidate.motion[target] = action.motion.model_copy(deep=True)
+                    begin = action.motion.start; length = action.motion.duration
+                if candidate.reel:
+                    owned=candidate.reel.generated_motion
+                    match=next((i for i,m in enumerate(owned) if m==old),None)
+                    if match is not None:
+                        if action.type=='motion_update':owned[match]=action.motion.model_copy(deep=True)
+                        else:owned.pop(match)
+                    candidate.reel.last_motion_index = target if action.type == 'motion_update' else None
+                    if action.type=='motion_update' and action.motion.start!=old.start:
+                        from .retiming import Clock
+                        at_output=Clock(candidate).output(action.motion.start)
+                        if not candidate.reel.beats or min(abs(at_output-b) for b in candidate.reel.beats)>.02:
+                            candidate.reel.beat_sync_current=False
+            elif action.type=='composition':
+                if not action.composition: raise HTTPException(422,'Frame composition settings are required.')
+                candidate.composition = action.composition.model_copy(deep=True)
             elif action.type=='text_overlay':
                 if not action.overlay: raise HTTPException(422,'Text overlay settings are required.')
                 overlay=action.overlay.model_copy(deep=True)
@@ -131,8 +203,9 @@ def execute(body, proposal, info, stock, audio_store):
             state=commit(candidate)
             message=action.type.replace('_',' ')
             if begin is not None: message+=f' at {begin:.2f}–{begin+(length or 0):.2f}s'
-            if action.type in ('speed_ramp','cut_accent'):
-                pass
+            if action.type in ('motion','motion_update'):
+                m=action.motion
+                message+=f'; zoom {m.scale_from:.2f}×→{m.scale_to:.2f}×, shake {m.shake:.4f}'
             elif action.type=='broll_auto': message+='; selected and inserted '+asset['id']+'; original dialogue preserved'
             if action.type=='audio_add': message+='; '+audio_store.entry(segment.asset_id)['name']
             reports.append({'step':number+1,'action':action.type,'status':'applied','start':begin,'duration':length,'message':message})

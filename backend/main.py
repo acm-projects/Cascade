@@ -10,6 +10,7 @@ from backend.core import auth, jobs
 from backend.core.config import FRONTEND_DIR
 from backend.routers import clips, pages, projects, settings, features, generations
 from backend.routers.editor_setup import include_editor
+from backend.services.clip_backup import resume_pending
 
 app = FastAPI()
 app.middleware("http")(auth.authenticate_request)
@@ -37,6 +38,7 @@ def start_model_warmup():
 
 app.on_event("startup")(start_model_warmup)
 app.on_event("startup")(jobs.initialize_metadata)
+app.on_event("startup")(resume_pending)
 app.include_router(projects.router)
 app.include_router(settings.router)
 app.include_router(features.router)

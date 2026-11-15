@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import WaterFlow from "../components/WaterFlow";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -29,7 +30,9 @@ function generationStatus(group) {
   const found = group.parent_clips?.length > 1
     ? `Combined context from ${group.parent_clips.length} clips: ${group.clips.length} of ${group.requested_clip_count || group.clips.length} results.`
     : `${group.parent_clips?.length ? "Added similar clips:" : "Found"} ${plural(group.clips.length, "clip")}.`;
-  return `${found} Pick the ones you like, then go to the Editor.${group.selection_note ? ` (${group.selection_note})` : ""}`;
+  const backup = group.backup_state === "pending" ? " Your clips are ready; cloud backup is running in the background."
+    : group.backup_state === "failed" ? " Your clips are available locally, but cloud backup needs a retry." : "";
+  return `${found} Pick the ones you like, then go to the Editor.${backup}${group.selection_note ? ` (${group.selection_note})` : ""}`;
 }
 
 // AI Studio, connected to Kashmine's Studio backend (backend/studio.py):
@@ -121,6 +124,15 @@ function StudioPage() {
   const retry = useCallback((jobId) => {
     api.retryGeneration(projectId, jobId, crypto.randomUUID()).then(refresh).catch((err) => toast.show(err.message, "error"));
   }, [api, projectId, refresh, toast]);
+
+  async function retryBackup(jobId) {
+    try {
+      await api.retryClipBackup(projectId, jobId);
+      await refresh();
+    } catch (err) {
+      toast.show(err.message, "error");
+    }
+  }
 
   const actions = useMemo(() => ({
     editorClips, pendingFile, sourceName,
@@ -259,15 +271,16 @@ function StudioPage() {
   if (!studio) {
     return (
       <div className="studio studio-no-session leaf-page">
+        <WaterFlow />
         {topNav}
         <div className="studio-empty">
           {error ? (
             <div className="studio-empty-card wood-panel">
-              <EmptyState icon="🌧️" title="Couldn't open AI Studio" text={error.message}
+              <EmptyState icon="cloud" title="Couldn't open Canvas" text={error.message}
                 action={{ label: "Retry", onClick: refresh }} />
             </div>
           ) : (
-            <Spinner size={48} label="Opening AI Studio" />
+            <Spinner size={48} label="Opening Canvas" />
           )}
         </div>
       </div>
@@ -321,6 +334,7 @@ function StudioPage() {
 
   return (
     <div className="studio leaf-page">
+      <WaterFlow />
       {topNav}
       <SessionBar sessions={studio.sessions} activeId={session.id}
         onSwitch={switchSession} onCreate={createSession} onRename={renameSession}>
@@ -339,7 +353,7 @@ function StudioPage() {
 
       <div className="studio-body">
         <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note}
-          focusRequest={chatFocus} onStop={stop} onRetry={retry} onReuse={setDraft}
+          focusRequest={chatFocus} onStop={stop} onRetry={retry} onRetryBackup={retryBackup} onReuse={setDraft}
           chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
 
         <div className="studio-canvas-frame">

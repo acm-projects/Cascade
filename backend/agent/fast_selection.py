@@ -1,19 +1,19 @@
 """Bounded batch selection for spoken documentary/topic requests.
 
-The complete timestamped transcript goes to the configured model in one call.
+Bounded timestamped transcript context goes to the configured model in one call.
 Existing ToolBox validation owns duration, overlap, prior-session and reference rules.
 """
 import json
 
 from backend.cascade_llm import structured_json, selected_model, call_cost
-from .chunks import format_transcript
+from .transcript_context import selection_context
 
-MAX_TRANSCRIPT_CHARS = 350_000
 MAX_BATCH_CLIPS = 12
 
 
 def run_transcript_selection(toolbox, search, progress):
     references = toolbox.references
+    context, intervals = selection_context(toolbox.index.transcript, search, references)
     match_schema = {'type': 'object', 'additionalProperties': False,
         'properties': {'reference': {'type': 'integer'}, 'explanation': {'type': 'string'}},
         'required': ['reference', 'explanation']}
@@ -29,7 +29,8 @@ def run_transcript_selection(toolbox, search, progress):
         f'Request: {search}\nRequested outputs: {toolbox.target_clips}. '
         f'Propose up to {toolbox.target_clips * 2} distinct strong candidates so validation has alternatives. '
         f'Every clip must be {toolbox.min_clip_seconds:g}–{toolbox.max_clip_seconds:g} seconds long, '
-        'within the source duration, and use actual source timestamps. Start/end at natural sentence '
+        'within the source duration, and use actual source timestamps. Keep titles under 9 words '
+        'and reasons under 30 words. Start/end at natural sentence '
         'boundaries and include context. Describe only what the transcript supports; do not invent visuals. '
         + ('Only clear matches to the specific event/topic; fewer genuine matches are fine. Minimum confidence 0.5. '
            if toolbox.intent == 'specific' else 'Choose strong moments spread across the beginning, middle and end. ')
@@ -39,7 +40,8 @@ def run_transcript_selection(toolbox, search, progress):
           'in reference order, with a 1-based reference number and concrete evidence for each. '
           'For zero/one reference use an empty reference_matches list. Never repeat a selected reference. '
           'Never pad with duplicate or weak clips.\nTRANSCRIPT:\n'
-        + format_transcript(toolbox.index.transcript)
+        + context
+        + ('\nOnly select moments fully contained in one supplied excerpt; gaps are omitted, not silence.' if intervals else '')
     )
     usage = {'input_tokens': 0, 'output_tokens': 0, 'cached_input_tokens': 0,
              'model': selected_model(), 'estimated_cost_usd': toolbox.index.transcription_cost_usd,
@@ -66,6 +68,12 @@ def run_transcript_selection(toolbox, search, progress):
             raise ValueError('Invalid transcript selection response')
         for candidate in candidates[:toolbox.target_clips * 2]:
             if not isinstance(candidate, dict):
+                continue
+            if intervals and not any(
+                isinstance(candidate.get('start_time'), (int, float)) and isinstance(candidate.get('end_time'), (int, float))
+                and start <= candidate['start_time'] < candidate['end_time'] <= end for start, end in intervals
+            ):
+                errors.append('Candidate crosses omitted transcript material. Choose a range inside a supplied excerpt.')
                 continue
             blocks, error = toolbox.call('add_candidate', candidate)
             if error:

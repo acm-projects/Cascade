@@ -74,3 +74,17 @@ export function publishYoutube(token, projectId, jobId, index, body) {
 export function getYoutubeStatus(token, projectId, jobId, index) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/publish/youtube`, { token });
 }
+
+// LinkedIn personal-profile connection and publication use the existing backend integration.
+export function getLinkedinConnection(token, projectId) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/social/linkedin`, { token });
+}
+export function connectLinkedin(token, projectId) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/social/linkedin/connect`, { token, method: "POST" });
+}
+export function publishLinkedin(token, projectId, jobId, index, body) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/publish/linkedin`, { token, method: "POST", body });
+}
+export function getLinkedinStatus(token, projectId, jobId, index) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/publish/linkedin`, { token });
+}

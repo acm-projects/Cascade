@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 
 const POLL_MS = 2400;
-const isRunning = (group) => ["queued", "processing"].includes(group.state);
+const isRunning = (group) => ["queued", "processing"].includes(group.state) || group.backup_state === "pending";
 
 // Everything the AI Studio page needs from the backend, in one place.
 //   studio  - the studio document (sessions, messages, positions, checked clips); null until loaded

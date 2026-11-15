@@ -2,9 +2,9 @@ import { Navigate } from "react-router-dom";
 import { SignIn } from "@clerk/clerk-react";
 import { useAuthMode } from "../auth/AuthContext";
 import "./SignInPage.css";
-import background from "../assets/figma/landing-bg.jpg";
+import IsoWorld from "../features/landing3d/IsoWorld";
 
-// /sign-in: Clerk's ready-made sign-in box on the lake background.
+// /sign-in: Clerk's ready-made sign-in box, in front of the 3D island.
 // In dev mode there's nothing to sign in to, so it skips straight to your projects.
 function SignInPage() {
   const mode = useAuthMode();
@@ -14,7 +14,8 @@ function SignInPage() {
   }
 
   return (
-    <div className="sign-in" style={{ backgroundImage: `url(${background})` }}>
+    <div className="sign-in">
+      <IsoWorld framing="backdrop" />
       <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/projects" />
     </div>
   );

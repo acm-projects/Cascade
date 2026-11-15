@@ -41,12 +41,12 @@ renderer, ZIP endpoint, progress/error messages and account checks are retained.
 
 ## Browser verification
 
-With `tests/editor_browser_server.py` and isolated Chrome on DevTools port 9333:
+With `tests/browser/editor_browser_server.py` and isolated Chrome on DevTools port 9333:
 
 ```sh
-python3 -m tests.test_exports_horizontal_browser
-python3 -m tests.test_exports_stacks_browser
-python3 -m tests.test_exports_browser
+python3 -m tests.browser.test_exports_horizontal_browser
+python3 -m tests.browser.test_exports_stacks_browser
+python3 -m tests.browser.test_exports_browser
 ```
 
 The stack test checks actual rendered-poster loading and overlap geometry,
@@ -79,14 +79,14 @@ Timeline trackpad zoom uses Ctrl+wheel pinch events in Chromium and gesture even
 in Safari, coalesced to animation frames. Zoom anchors the media time under the
 cursor, updates the slider and percentage, and leaves ordinary horizontal wheel
 input to native scrolling. Fit resets zoom and scroll to show the full timeline.
-`tests/test_timeline_pinch_browser.py` checks Chromium input, cursor anchoring,
+`tests/browser/test_timeline_pinch_browser.py` checks Chromium input, cursor anchoring,
 percentage/slider synchronization, horizontal scrolling, and Fit. Physical macOS
 trackpad and Safari gesture hardware still require manual verification.
 
-`node tests/test_exports_selection.cjs` checks cross-session selection grouping,
+`node tests/javascript/test_exports_selection.cjs` checks cross-session selection grouping,
 selected-only inclusion and order, empty/unavailable selections, and direct clip links.
 
-`python3 -m tests.test_exports_thumbnails_browser` verifies real JPEGs from two
+`python3 -m tests.browser.test_exports_thumbnails_browser` verifies real JPEGs from two
 saves inside one tile while edited exports are held pending, thumbnail request
 failure/retry, image visibility, and refresh. Its screenshot is saved to
 `/tmp/cascade-exports-thumbnails.png`.
@@ -101,7 +101,7 @@ Collapse or Escape within the section dismisses it; opening another clip updates
 the same section. Clip navigation also updates the open form and preview to the displayed clip while preserving each clip’s saved details. Outside clicks leave it open. The gallery, selection, and
 renderer remain independent.
 
-`web/export_post.js` owns the section and debounced saves. `backend/post_metadata.py`
+`frontend/legacy/web/export_post.js` owns the section and debounced saves. `backend/post_metadata.py`
 provides owner-checked GET/PUT `.../editor/{job_id}/{clip_index}/post` and POST
 `.../post/generate`. Metadata is stored under
 `video_jobs/projects/<account-hash>/posts/<project_id>/<job_id>-<clip_index>.json`,
@@ -150,7 +150,7 @@ bounds and fixture-backed YouTube publishing states. No paid requests or real
 YouTube uploads are made:
 
 ```sh
-python3 -m tests.test_exports_post_browser
+python3 -m tests.browser.test_exports_post_browser
 ```
 
 Run against the isolated editor browser fixture and Chrome DevTools on port 9333.

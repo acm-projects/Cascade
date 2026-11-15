@@ -1,0 +1,45 @@
+/* The landing page monkey, bottom right (see LandingMascot.jsx) */
+.landing-mascot {
+  position: absolute;
+  right: 0;                 /* the branch grows in from the right edge of the screen */
+  bottom: 6vh;
+  width: min(34vw, 62vh);
+  aspect-ratio: 400 / 420;
+  pointer-events: none;
+}
+
+/* A slow, gentle breathing bob, and a small head tilt now and then */
+.landing-mascot-body {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: mascot-breathe 3.2s ease-in-out infinite;
+}
+
+.landing-mascot-head {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: mascot-tilt 6s ease-in-out infinite;
+}
+
+@keyframes mascot-breathe {
+  50% { transform: translateY(-4px) scale(1.01); }
+}
+
+@keyframes mascot-tilt {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  70%, 85% { transform: rotate(-6deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-mascot-body,
+  .landing-mascot-head {
+    animation: none;
+  }
+}
+
+/* Narrow screens: only the words and button */
+@media (max-width: 800px) {
+  .landing-mascot {
+    display: none;
+  }
+}

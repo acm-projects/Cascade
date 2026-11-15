@@ -50,3 +50,21 @@ export function rulerTicks(duration) {
   for (let t = 0; t <= duration + 1e-9; t += step) ticks.push(Math.round(t * 1000) / 1000);
   return ticks;
 }
+
+// ---------- Film strip (the little video frames on the timeline track) ----------
+
+// The times to grab frames at: the middle of `count` equal slices of the clip
+export function filmstripTimes(duration, count) {
+  return Array.from({ length: count }, (_, i) => ((i + 0.5) / count) * duration);
+}
+
+// How many frames fit across the track, each one the video's shape (aspect = width / height)
+export function filmstripTileCount(trackWidth, trackHeight, aspect) {
+  if (!(trackWidth > 0 && trackHeight > 0 && aspect > 0)) return 0;
+  return Math.max(1, Math.round(trackWidth / (trackHeight * aspect)));
+}
+
+// Which grabbed frame to show in tile `index` (the frame closest to that tile's time)
+export function filmstripFrameIndex(index, tileCount, frameCount) {
+  return Math.min(frameCount - 1, Math.floor(((index + 0.5) / tileCount) * frameCount));
+}

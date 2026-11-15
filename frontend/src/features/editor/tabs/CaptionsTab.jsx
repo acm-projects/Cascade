@@ -55,15 +55,12 @@ function CaptionsTab({ state, info, change, patch, recordUndo, player, view, onV
 
   return (
     <div className="editor-controls captions-tab">
+      <div className="captions-header">
       <label className="captions-toggle">
         <input type="checkbox" checked={captions.enabled} onChange={(e) => setStyle({ enabled: e.target.checked })} />
         <span>Show captions</span>
       </label>
-      {info.burned_in && (
-        <p className="editor-control-note">This clip already has captions burned in, so ours start off. Turn them on to add more.</p>
-      )}
-
-      <div className="captions-views" role="tablist">
+      <div className="captions-views" role="tablist" aria-label="Caption controls">
         {["Style", "Text"].map((name) => (
           <button key={name} type="button" role="tab" aria-selected={view === name}
             className={`captions-view${view === name ? " active" : ""}`} onClick={() => onView(name)}>
@@ -71,6 +68,12 @@ function CaptionsTab({ state, info, change, patch, recordUndo, player, view, onV
           </button>
         ))}
       </div>
+      </div>
+      {info.burned_in && (
+        <p className="editor-control-note">This clip already has captions burned in, so ours start off. Turn them on to add more.</p>
+      )}
+
+
 
       <fieldset className="editor-controls" disabled={!captions.enabled}>
         <label className="editor-control">Animation<select value={captions.animation || "none"} onChange={e => setStyle({ animation: e.target.value })}><option value="none">None</option><option value="pop">Pop in</option><option value="karaoke">Highlighted words (estimated timing)</option></select></label>

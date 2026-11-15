@@ -4,8 +4,9 @@
   width: 100%;
   height: 100%;
 
-  --xy-background-color: color-mix(in srgb, var(--color-cream-card) 45%, var(--color-leaf-mist));
-  --xy-background-pattern-color: color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
+  /* The canvas is water: lily pads and vines float on it */
+  --xy-background-color: #35b9dc;
+  --xy-background-pattern-color: rgba(243, 255, 253, 0.42);
 
   /* Boxes: cream with a wood outline (ticket 3.2 replaces these with custom designs) */
   --xy-node-background-color: var(--color-cream-card);
@@ -31,9 +32,9 @@
   --xy-controls-button-color: var(--color-wood-dark);
   --xy-controls-button-border-color: color-mix(in srgb, var(--color-wood-dark) 30%, transparent);
   --xy-controls-box-shadow: var(--shadow-soft);
-  --xy-minimap-background-color: var(--color-cream-card);
-  --xy-minimap-node-background-color: color-mix(in srgb, var(--color-vine) 55%, transparent);
-  --xy-minimap-mask-background-color: color-mix(in srgb, var(--color-jungle-deep) 12%, transparent);
+  --xy-minimap-background-color: #8fe3ea;
+  --xy-minimap-node-background-color: #2f8f4a;
+  --xy-minimap-mask-background-color: rgba(10, 80, 120, 0.3);
 }
 
 /* Default boxes: a little bigger and rounder than React Flow's */
@@ -48,14 +49,9 @@
   font-size: 15px;
 }
 
-.studio-canvas .react-flow__minimap {
-  overflow: hidden;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: 10px;
-}
-
+.studio-canvas .react-flow__minimap,
 .studio-canvas .react-flow__controls {
   overflow: hidden;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: 10px;
+  border-radius: 12px;
+  box-shadow: 0 4px 0 rgba(8, 70, 100, 0.55);
 }

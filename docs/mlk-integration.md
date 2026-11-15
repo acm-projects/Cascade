@@ -76,14 +76,14 @@ to use their existing setup. No new API credentials or redirects are introduced.
 
 ```sh
 PYTHON_DOTENV_DISABLED=1 CASCADE_METADATA_STORE=local CASCADE_STORAGE=local CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -q
-PYTHON_DOTENV_DISABLED=1 CASCADE_METADATA_STORE=local CASCADE_STORAGE=local CASCADE_WARM_MODELS=0 .venv/bin/python -m pytest backend/tests -q
-PYTHON_DOTENV_DISABLED=1 CASCADE_METADATA_STORE=local CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest discover -s backend/tests -q
+PYTHON_DOTENV_DISABLED=1 CASCADE_METADATA_STORE=local CASCADE_STORAGE=local CASCADE_WARM_MODELS=0 .venv/bin/python -m pytest tests/agent -q
+PYTHON_DOTENV_DISABLED=1 CASCADE_METADATA_STORE=local CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest discover -s tests/agent -q
 npm --prefix frontend run lint
 npm --prefix frontend test
 npm --prefix frontend run build
-node tests/test_editor_state.cjs
-node tests/test_editor_flow.cjs
-node tests/test_canvas_branches.cjs
+node tests/javascript/test_editor_state.cjs
+node tests/javascript/test_editor_flow.cjs
+node tests/javascript/test_canvas_branches.cjs
 ```
 
 Results: 368 application checks completed successfully (24 explicit skips),
@@ -99,16 +99,16 @@ real local media/FFmpeg, isolated identity/storage and mocked paid selection.
 Ownership and lifecycle tests are included. No live provider operation occurred.
 
 Isolated Chrome also passed the advanced-editor test and
-`tests/test_merged_react_browser.py`: Music previews/add/remove, shared audio
+`tests/browser/test_merged_react_browser.py`: Music previews/add/remove, shared audio
 state, multi-edit chat, undo/redo, caption presets/animation, aspect controls,
 Trends opening without edits, navigation/persistence, latest Exports layout,
 real single/ZIP downloads with equal decoded frames, and mobile layout. Browser
 artifacts are at `/private/tmp/cascade-merged-browser-zqj4cjs_`.
 
 To reproduce the React browser test, build the frontend, run
-`PYTHON_DOTENV_DISABLED=1 CASCADE_METADATA_STORE=local CASCADE_STORAGE=local CASCADE_FIXTURE_PORT=18771 .venv/bin/python tests/advanced_editor_browser_server.py`,
+`PYTHON_DOTENV_DISABLED=1 CASCADE_METADATA_STORE=local CASCADE_STORAGE=local CASCADE_FIXTURE_PORT=18771 .venv/bin/python tests/browser/advanced_editor_browser_server.py`,
 start isolated headless Chrome with DevTools on port 9333, then run
-`CASCADE_BROWSER_TESTS=1 PYTHON_DOTENV_DISABLED=1 PYTHONPATH=.:tests .venv/bin/python tests/test_merged_react_browser.py`.
+`CASCADE_BROWSER_TESTS=1 PYTHON_DOTENV_DISABLED=1 PYTHONPATH=.:tests .venv/bin/python tests/browser/test_merged_react_browser.py`.
 The fixture server uses temporary storage and mocked identity/providers; never
 run it as the production application.
 

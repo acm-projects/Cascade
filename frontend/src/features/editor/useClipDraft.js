@@ -21,6 +21,8 @@ export default function useClipDraft(projectId, clip) {
   const [history, setHistory] = useState({ past: [], present: null, future: [] });
   const [chat, setChat] = useState([]);
   const [saveStatus, setSaveStatus] = useState("saved");
+  const revision = useRef(0);
+  const getRevision = useCallback(() => revision.current, []);
   const loaded = useRef(false);    // don't save the draft we just loaded straight back
   const saveCount = useRef(0);
   const pending = useRef(null);
@@ -83,6 +85,7 @@ export default function useClipDraft(projectId, clip) {
   }, [state, chat, persist]);
 
   const change = useCallback((next) => {
+    revision.current += 1;
     setHistory(({ past, present }) => {
       const value = typeof next === "function" ? next(present) : next;
       if (JSON.stringify(value) === JSON.stringify(present)) return { past, present, future: [] };
@@ -92,6 +95,7 @@ export default function useClipDraft(projectId, clip) {
 
   // A change that isn't an undo step (e.g. the app storing a finished framing analysis)
   const patch = useCallback((next) => {
+    revision.current += 1;
     setHistory(({ past, present, future }) => ({
       past, future, present: typeof next === "function" ? next(present) : next,
     }));
@@ -107,17 +111,30 @@ export default function useClipDraft(projectId, clip) {
   }, []);
 
   const undo = useCallback(() => {
+    revision.current += 1;
     setHistory(({ past, present, future }) =>
       past.length ? { past: past.slice(0, -1), present: past[past.length - 1], future: [present, ...future] } : { past, present, future });
   }, []);
 
   const redo = useCallback(() => {
+    revision.current += 1;
     setHistory(({ past, present, future }) =>
       future.length ? { past: [...past, present], present: future[0], future: future.slice(1) } : { past, present, future });
   }, []);
 
+  // A finished AI edit saved its result on the server: take it without losing newer manual edits. One undo step.
+  const adoptAIEdit = useCallback((aiEdit, savedChat) => {
+    revision.current += 1;
+    setHistory(({ past, present, future }) => {
+      if (!present || JSON.stringify(present.ai_edit ?? null) === JSON.stringify(aiEdit ?? null)) return { past, present, future };
+      return { past: [...past, present].slice(-HISTORY_LIMIT), present: { ...present, ai_edit: aiEdit }, future: [] };
+    });
+    if (savedChat) setChat(savedChat);
+  }, []);
+
   return {
-    info, error, state, change, patch, recordUndo, undo, redo,
+    adoptAIEdit,
+    info, error, state, change, patch, recordUndo, undo, redo, getRevision,
     canUndo: history.past.length > 0, canRedo: history.future.length > 0,
     chat, setChat, saveStatus, flush,
   };

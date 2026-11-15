@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import threading
 import time
+import traceback
 import uuid
 if os.name == "nt":
     import msvcrt
@@ -20,7 +21,7 @@ from urllib.parse import urlencode
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from typing import Literal
 from backend import youtube_schedule as scheduling
@@ -54,6 +55,22 @@ def provider_reason(response):
         return ','.join(reasons) or 'unrecognized_provider_error'
     except (ValueError, AttributeError, TypeError):
         return 'unrecognized_provider_error'
+
+
+def exception_diagnostic(exc):
+    """Capture exception identity and application frames, never values or locals."""
+    kind = type(exc).__name__
+    # Type names and checked-in source locations carry no request/credential values.
+    kind = ''.join(c for c in kind if c.isascii() and (c.isalnum() or c == '_'))[:80]
+    root = Path(__file__).resolve().parent
+    frames = []
+    for frame in traceback.extract_tb(exc.__traceback__):
+        try:
+            relative = Path(frame.filename).resolve().relative_to(root)
+        except ValueError:
+            continue
+        frames.append(f'{relative.as_posix()}:{frame.lineno}')
+    return kind or 'Exception', ','.join(frames) or 'none'
 
 
 def oauth_failure(stage, reason, status=None, hint='Try connecting again.'):
@@ -186,7 +203,9 @@ def credentials(user, transaction=None):
         except httpx.RequestError:
             raise HTTPException(503, 'Unable to reach Google authorization. Retry when your backend connection is restored.')
         if response.status_code != 200:
-            raise HTTPException(409, 'YouTube authorization expired or was revoked. Reconnect YouTube.')
+            reason = provider_reason(response)
+            logger.warning('YouTube request failed step=token_refresh http_status=%s reason=%s', response.status_code, reason)
+            raise HTTPException(409, f'YouTube token refresh failed (HTTP {response.status_code}: {reason}). Reconnect YouTube; if this persists, check the backend OAuth client configuration.')
         token.update(response.json());token['expires_at'] = time.time()+token.get('expires_in', 3600)
         renewed = {**record, 'token': protect(token)}
         if transaction is not None:
@@ -226,13 +245,31 @@ def schedule_lock(key):
                 fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def youtube_data(response, step):
+def youtube_data(response, step, *, expect_json=True):
     if not response.is_success:
         reason = provider_reason(response)
         logger.warning('YouTube request failed step=%s http_status=%s reason=%s', step, response.status_code, reason)
-        hint = 'Reconnect YouTube to refresh permissions.' if response.status_code == 401 or 'insufficientPermissions' in reason else 'Check your channel and OAuth project API permissions, restrictions and quota in Google Cloud and YouTube Studio.'
+        if response.status_code == 401 or any(r in reason for r in ('insufficientPermissions', 'ACCESS_TOKEN_SCOPE_INSUFFICIENT')):
+            hint = 'Reconnect YouTube and grant the requested permissions.'
+        elif any(r in reason for r in ('SERVICE_DISABLED', 'API_DISABLED', 'accessNotConfigured')):
+            hint = 'Enable YouTube Data API v3 in the Google Cloud project that owns the OAuth client.'
+        elif any(r in reason for r in ('quotaExceeded', 'dailyLimitExceeded', 'rateLimitExceeded')):
+            hint = 'The Google Cloud project quota is exhausted. Check YouTube Data API quota and retry after it resets.'
+        elif 'uploadLimitExceeded' in reason:
+            hint = 'The channel upload limit was reached. Wait before trying again in YouTube Studio.'
+        else:
+            hint = 'Check the connected channel in YouTube Studio and the OAuth project API restrictions.'
         raise HTTPException(502, f'YouTube {step} failed (HTTP {response.status_code}: {reason}). {hint}')
-    return response.json()
+    if not expect_json:
+        return None
+    try:
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError()
+        return data
+    except ValueError:
+        logger.warning('YouTube request failed step=%s http_status=%s reason=invalid_json', step, response.status_code)
+        raise HTTPException(502, f'YouTube {step} returned an invalid response. Check YouTube Studio before retrying.')
 
 
 def connection_for(record, manage=False, transaction=None):
@@ -373,7 +410,7 @@ def register(app, integration, selected, export, export_model):
         except (sqlite3.Error, OSError):
             oauth_failure(stage, 'storage_error', hint='Check the backend social database path and filesystem permissions.')
         logger.warning('YouTube OAuth connected successfully')
-        return HTMLResponse('YouTube connected. Return to Cascade and click Refresh connection. You may close this tab.')
+        return HTMLResponse('YouTube connected. Cascade will start your upload now. You can close this tab.')
 
     def job_key(pid, jid, index, user):
         return user+':'+pid+':'+jid+':'+str(index)
@@ -465,31 +502,52 @@ def register(app, integration, selected, export, export_model):
     def run(key, record, body, request):
         response = None
         upload_attempted = False
+        stage = 'authorization'
+        diagnostic = uuid.uuid4().hex[:12]
         def update(**values):
             record.update(values);write('publish', key, record)
         try:
             connection_for(record, manage=bool(record.get('schedule')))
+            stage = 'rendering'
             response = export(record['pid'], record['jid'], record['index'], export_model.model_validate(body.edit), request)
+            if response is None or not Path(response.path).is_file():
+                raise HTTPException(500, 'The edited video render was not produced. Try downloading the clip to verify rendering before retrying YouTube.')
             if record.get('schedule'):
                 scheduling.validate_lead(record['schedule'])
+            stage = 'authorization'
             access = connection_for(record, manage=bool(record.get('schedule')))
             update(status='Uploading')
             headers = {'Authorization': 'Bearer '+access}
             with httpx.Client(timeout=120) as client:
                 # Keep scheduled uploads unarmed while processing: past publishAt publishes immediately.
                 privacy = 'private' if record.get('schedule') else body.privacy
+                stage = 'upload initialization'
                 start = client.post('https://www.googleapis.com/upload/youtube/v3/videos', params={'uploadType': 'resumable', 'part': 'snippet,status'}, headers={**headers, 'X-Upload-Content-Type': 'video/mp4', 'X-Upload-Content-Length': str(Path(response.path).stat().st_size)}, json={'snippet': {'title': body.title, 'description': body.description}, 'status': {'privacyStatus': privacy}})
-                youtube_data(start, 'upload initialization'); location = start.headers['location']
+                # Google returns HTTP 200 + Location with an EMPTY body here.
+                youtube_data(start, stage, expect_json=False)
+                location = start.headers.get('location', '')
                 if not location.startswith('https://www.googleapis.com/'):
-                    raise ValueError('Unexpected upload endpoint')
+                    raise HTTPException(502, 'YouTube did not return a valid upload session. No video was sent. Retry the upload.')
                 # Persist ambiguity BEFORE sending media. Never automatically duplicate this upload.
+                stage = 'media transfer'
                 upload_attempted = True;update(upload_attempted=True)
                 with open(response.path, 'rb') as media:
                     uploaded = client.put(location, headers={**headers, 'Content-Type': 'video/mp4', 'Content-Length': str(Path(response.path).stat().st_size)}, content=media)
-                data = youtube_data(uploaded, 'upload');video_id = data['id']
+                data = youtube_data(uploaded, 'upload')
+                video_id = data.get('id')
+                if not isinstance(video_id, str) or not video_id:
+                    raise HTTPException(502, 'YouTube accepted the media request but returned no video ID. Check YouTube Studio; upload success is unconfirmed.')
             update(status='Processing', video_id=video_id, url='https://www.youtube.com/watch?v='+video_id)
         except Exception as exc:
-            detail = exc.detail if isinstance(exc, HTTPException) else 'YouTube upload failed. Check your channel permissions, authorization and API quota.'
+            # Exception messages, tracebacks, URLs and raw provider bodies can contain secrets.
+            category = 'http_error' if isinstance(exc, HTTPException) else 'network_error' if isinstance(exc, httpx.RequestError) else 'internal_error'
+            exception_type, source_frames = exception_diagnostic(exc)
+            logger.warning('YouTube publishing failed diagnostic=%s step=%s category=%s exception_type=%s source_frames=%s',
+                           diagnostic, stage, category, exception_type, source_frames)
+            detail = str(exc.detail) if isinstance(exc, HTTPException) else (
+                f'Unable to reach YouTube during {stage}. Check backend connectivity and retry.' if isinstance(exc, httpx.RequestError)
+                else f'YouTube publishing failed during {stage} ({exception_type}). Check backend diagnostics using the reference below before retrying.')
+            detail += f' Diagnostic: {diagnostic}'
             if upload_attempted:
                 detail += ' The upload may have reached YouTube. Check YouTube Studio; duplicate retries are blocked.'
             update(status='Failed', error=detail, upload_attempted=upload_attempted)
@@ -498,6 +556,12 @@ def register(app, integration, selected, export, export_model):
                 response.background.func(*response.background.args, **response.background.kwargs)
         if record.get('video_id') and record.get('schedule'):
             start_worker(finish_processing, (key,))
+
+    def submission_response(record):
+        data = public(record)
+        if record['status'] == 'Failed':
+            return JSONResponse({**data, 'detail': record.get('error', 'YouTube upload failed. Check YouTube Studio before retrying.')}, status_code=502)
+        return JSONResponse(data, status_code=202 if record['status'] in ('Rendering', 'Uploading', 'Processing', 'Verifying') else 200)
 
     @app.post('/api/projects/{pid}/editor/{jid}/{index}/publish/youtube')
     def publish(pid: str, jid: str, index: int, body: Publish, request: Request):
@@ -510,7 +574,7 @@ def register(app, integration, selected, export, export_model):
             row = c.execute("SELECT value FROM records WHERE kind='publish' AND key=?", (key,)).fetchone()
             previous = json.loads(row[0]) if row else None
             if previous and (previous['submission_id'] == str(body.submission_id) or previous.get('video_id') or previous.get('upload_attempted') or previous['status'] != 'Failed'):
-                return public(previous)
+                return submission_response(previous)
             schedule = scheduling.resolve(body.schedule) if body.schedule else None
             if schedule and body.privacy != 'private':
                 raise HTTPException(422, 'Scheduled videos upload as Private and become Public at the selected time. Unlisted scheduling is not supported.')
@@ -521,7 +585,7 @@ def register(app, integration, selected, export, export_model):
             connection_for(record, manage=bool(schedule), transaction=c)
             c.execute('INSERT OR REPLACE INTO records VALUES (?,?,?)', ('publish', key, json.dumps(record)))
         start_worker(run, (key, record, body, request))
-        return public(record)
+        return submission_response(record)
 
     @app.get('/api/projects/{pid}/editor/{jid}/{index}/publish/youtube')
     def status(pid: str, jid: str, index: int, request: Request):

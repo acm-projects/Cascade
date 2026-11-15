@@ -3,6 +3,7 @@ import Modal from "../../components/ui/Modal";
 import Spinner from "../../components/ui/Spinner";
 import useApi from "../../api/useApi";
 import { formatTime } from "../../utils/time";
+import Icon from "../../components/ui/Icon";
 
 // Watch a clip (or the original video) big, in a pop-up.
 //   item - { title, path } for a video on the server, or { title, file } for one picked but not uploaded yet
@@ -82,7 +83,7 @@ function MediaPreview({ item, clip, onClose }) {
             <span className="studio-preview-count">Clip {clip.position}</span>
             <button type="button" className={`btn btn-small ${clip.picked ? "" : "btn-primary"}`} onClick={clip.onTogglePick}
               title="Picked clips go to the Editor and guide your next prompt">
-              {clip.picked ? "Picked ✓ (unpick)" : "Pick clip"}
+              {clip.picked ? <>Picked <Icon name="check" /> (unpick)</> : "Pick clip"}
             </button>
             <button type="button" className="btn btn-small" onClick={onNext} disabled={!onNext}
               aria-label="Next clip" title="Next clip (→)">→</button>

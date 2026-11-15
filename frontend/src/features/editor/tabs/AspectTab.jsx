@@ -1,16 +1,8 @@
 import { useEffect, useRef } from "react";
 import "../EditorControls.css";
 import "./AspectTab.css";
-
-// The frame shapes the backend accepts (Composition in backend/editor/models.py), with where each is used
-const PRESETS = [
-  { id: "9:16", label: "9:16", hint: "TikTok · Shorts · Reels", w: 9, h: 16 },
-  { id: "1:1", label: "1:1", hint: "Instagram feed", w: 1, h: 1 },
-  { id: "4:5", label: "4:5", hint: "Instagram portrait", w: 4, h: 5 },
-  { id: "16:9", label: "16:9", hint: "YouTube", w: 16, h: 9 },
-  { id: "4:3", label: "4:3", hint: "Classic", w: 4, h: 3 },
-  { id: "original", label: "Original", hint: "Keep the clip's shape", w: null, h: null },
-];
+import Icon from "../../../components/ui/Icon";
+import { PRESETS } from "../aspectRatios";
 
 // The Editor's Aspect Ratio tab: frame shape, Fit (show everything) or Fill (crop), and where the crop sits.
 // In Fill you can also drag the video in the preview (ClipPlayer). Cropped exports follow the people in
@@ -55,7 +47,7 @@ function AspectTab({ state, info, change, patch, recordUndo }) {
           return (
             <button key={preset.id} type="button" aria-pressed={composition.ratio === preset.id}
               className={`aspect-preset${composition.ratio === preset.id ? " active" : ""}`}
-              onClick={() => set({ ratio: preset.id })}>
+              onClick={() => set(preset.id === "original" ? { ratio: "original", mode: "fit", x: 0.5, y: 0.5 } : { ratio: preset.id, mode: "fill" })}>
               <span className="aspect-shape-box" aria-hidden="true">
                 <span className="aspect-shape" style={{
                   aspectRatio: `${shape.w} / ${shape.h}`,
@@ -80,7 +72,7 @@ function AspectTab({ state, info, change, patch, recordUndo }) {
 
       {composition.mode === "fill" ? (
         <>
-          <p className="editor-control-note">Drag the video in the preview to choose what stays in the frame.</p>
+          <p className="editor-control-note">Fill follows whoever is talking: person one while they speak, then person two. You can also drag the video in the preview to choose what stays in the frame.</p>
           <label className="editor-control">
             <span>Horizontal</span>
             <input {...slider("x")} aria-label="Move the crop left or right" />
@@ -90,7 +82,7 @@ function AspectTab({ state, info, change, patch, recordUndo }) {
             <input {...slider("y")} aria-label="Move the crop up or down" />
           </label>
           <button type="button" className="btn btn-small btn-ghost" disabled={centered}
-            onClick={() => set({ x: 0.5, y: 0.5 })}>⌖ Center</button>
+            onClick={() => set({ x: 0.5, y: 0.5 })}><Icon name="target" /> Center</button>
         </>
       ) : (
         <label className="editor-control">

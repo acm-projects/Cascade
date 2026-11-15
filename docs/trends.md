@@ -120,7 +120,7 @@ aggregation, result TTL and provenance have also been corrected.
 ## Verification and sample
 
 ```sh
-CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest tests.test_clip_trends tests.test_high_energy_reel tests.test_advanced_editing tests.test_editor tests.test_broll -q
+CASCADE_WARM_MODELS=0 .venv/bin/python -m unittest tests.application.test_clip_trends tests.application.test_high_energy_reel tests.application.test_advanced_editing tests.application.test_editor tests.application.test_broll -q
 npm --prefix frontend test
 npm --prefix frontend run build
 npm --prefix frontend run lint
@@ -139,8 +139,8 @@ correlation at four output windows. Matched source/output frames were inspected
 for actual punch-in, caption, grade and local cutaway changes. This is signal/frame
 verification; subjective listening remains a user check.
 
-`tests/test_trends_browser.py` uses the isolated server in
-`tests/advanced_editor_browser_server.py` with `CASCADE_FIXTURE_PORT=8782` and a
+`tests/browser/test_trends_browser.py` uses the isolated server in
+`tests/browser/advanced_editor_browser_server.py` with `CASCADE_FIXTURE_PORT=8782` and a
 separate Chrome debug profile on port 9352. It verifies analyze/apply, citations,
 guide/read/stop wiring, undo/redo, reload, shared Exports results and mobile overflow.
 Browser speech playback is mocked, so actual OS voice output remains manual.

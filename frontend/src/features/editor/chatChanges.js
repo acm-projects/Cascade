@@ -30,5 +30,11 @@ export function describeChanges(before, after) {
   if (before.composition?.mode !== frame.mode) changes.push(frame.mode === "fill" ? "Crop to fill" : "Fit whole video");
   if (before.reframe?.enabled !== after.reframe?.enabled) changes.push(`Follow speaker: ${onOff(after.reframe?.enabled)}`);
   if ((before.broll?.length ?? 0) !== (after.broll?.length ?? 0)) changes.push(`B-roll: ${after.broll?.length ?? 0} segment(s)`);
+  for (const [key, label] of [['motion','Zoom / shake'], ['audio','Music / sound'], ['speed','Speed ramps'], ['timeline','Kept footage'], ['text_overlays','Text overlays']]) {
+    if (JSON.stringify(before[key] || []) !== JSON.stringify(after[key] || [])) changes.push(`${label}: ${(after[key] || []).length} segment(s)`);
+  }
+  if (was.animation !== now.animation) changes.push(`Caption animation: ${now.animation}`);
+  if (JSON.stringify(before.fablecut || null) !== JSON.stringify(after.fablecut || null)) changes.push(after.fablecut ? `${after.fablecut.engine?.startsWith('openchatcut') ? 'OpenChatCut' : 'FableCut'} sequence: ${after.fablecut.shots.length} shots` : 'AI sequence removed');
+  if (JSON.stringify(before.stylize || null) !== JSON.stringify(after.stylize || null)) changes.push(after.stylize ? `Fan-edit effects: ${after.stylize.events.length}` : 'Fan-edit effects removed');
   return changes;
 }

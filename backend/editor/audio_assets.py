@@ -25,6 +25,7 @@ CATALOG = [
     ('Playful plucks', 'music', ['comic', 'funny', 'playful', 'teddy'], 30, 'pluck'),
     ('Impact hit', 'sfx', ['impact', 'punch', 'hit', 'dramatic'], .55, 'hit'),
     ('Air whoosh', 'sfx', ['whoosh', 'transition', 'zoom'], .65, 'whoosh'),
+    ('Build riser', 'sfx', ['riser', 'build', 'tension', 'transition'], 1.8, 'riser'),
     ('Bell accent', 'sfx', ['bell', 'ding', 'reaction', 'punchline', 'funny'], .6, 'bell'),
 ]
 
@@ -49,9 +50,12 @@ class AudioStore:
         if not path.is_file(): raise HTTPException(409, 'Audio file is missing. Restore the uploaded asset or choose another track.')
         return path
     def verify(self, state):
+        if state.fablecut and state.fablecut.music_asset_id:
+            item=self.entry(state.fablecut.music_asset_id);self.media(state.fablecut.music_asset_id)
+            if item['kind']!='music':raise HTTPException(422,'The AI sequence bed must use a music asset owned by this clip.')
         for segment in state.audio:
             item = self.entry(segment.asset_id); self.media(segment.asset_id)
-            if segment.offset >= item['duration'] or (not segment.loop and segment.offset+segment.duration > item['duration']+.02):
+            if not segment.loop and (segment.offset >= item['duration'] or segment.offset+segment.duration > item['duration']+.02):
                 raise HTTPException(422, 'Audio trim exceeds the selected asset. Shorten it or enable looping.')
     def library(self):
         with LOCK:
@@ -108,6 +112,9 @@ def synth(path, duration, sound):
         elif sound=='pluck': value=.35*math.exp(-(t%.25)*18)*math.sin(2*math.pi*notes[int(t/.25)%8]*t)
         elif sound=='hit': value=.65*math.exp(-t*12)*math.sin(2*math.pi*(110*t-50*t*t))
         elif sound=='whoosh': value=.35*math.sin(2*math.pi*(330*t+1800*t*t))*math.sin(math.pi*t/duration)**2
+        elif sound=='riser':
+            progress=t/duration
+            value=.22*progress**1.5*(math.sin(2*math.pi*(90*t+800*t*t))+ .2*math.sin(2*math.pi*3100*t))
         else: value=.4*math.exp(-t*8)*(math.sin(2*math.pi*1100*t)+.25*math.sin(2*math.pi*2200*t))
         value*=min(1,t/.01,(duration-t)/.02)
         data.append(round(max(-1,min(1,value))*32700))

@@ -1,0 +1,22 @@
+{
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/node_modules": true,
+    ".venv": true,
+    "venv": true,
+    ".test-tmp": true,
+    "cascade-*.log": true,
+    "frontend/dist": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/__pycache__": true,
+    ".venv": true,
+    "venv": true,
+    ".test-tmp": true,
+    "video_jobs": true,
+    "frontend/dist": true,
+    "frontend/legacy/web/studio/studio.js": true
+  }
+}

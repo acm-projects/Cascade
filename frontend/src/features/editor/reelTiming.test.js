@@ -13,3 +13,13 @@ test('Removed footage never increases output time; next kept phrase starts clean
   assert.equal(clock.output(4), 2);
   assert.equal(clock.source(2), 5);
 });
+test('FableCut reordered shots and linear speed integration preserve source/output seeking', () => {
+  const clock = timelineClock({start:0,end:20,timeline:[],speed:[],fablecut:{shots:[
+    {start:10,end:12,rate_from:1,rate_to:1},
+    {start:2,end:6,rate_from:1.5,rate_to:.5},
+  ]}});
+  assert.equal(clock.duration,6);
+  assert.ok(Math.abs(clock.source(0)-10)<1e-8);
+  assert.ok(Math.abs(clock.source(2)-2)<1e-8);
+  for (const source of [10.5,11.5,2.2,3,5.9]) assert.ok(Math.abs(clock.source(clock.output(source))-source)<1e-7);
+});

@@ -16,18 +16,22 @@
 .studio-body {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  gap: 16px;
+  gap: 18px;
   min-height: 0;
-  padding: 12px calc(24 * var(--u)) calc(20 * var(--u));
+  padding: 18px calc(24 * var(--u)) 26px;
 }
 
-/* Wooden frame around the canvas */
+/* The canvas is a block of water, with a thick edge like everything else */
 .studio-canvas-frame {
   min-height: 0;
   overflow: hidden;
   border: var(--panel-border);
   border-radius: var(--panel-radius);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--panel-edge);
+}
+
+.chat-panel.wood-panel {
+  box-shadow: var(--panel-edge);
 }
 
 .studio-empty {
@@ -108,4 +112,126 @@
   width: 100%;
   height: 10px;
   accent-color: var(--color-leaf);
+}
+
+/* Match the Editor and Export workspace surfaces and control sizes. */
+.studio-body { padding: 16px 20px 20px; gap: 16px; }
+.studio .studio-canvas-frame,
+.studio .chat-panel { border-radius: calc(30 * var(--u)); }
+.studio .chat-panel { min-width: 0; padding: 16px; }
+.studio .chat-panel-header h2 {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+}
+.studio .chat-panel-header p,
+.studio .chat-panel-hint { font-size: 12px; line-height: 1.5; }
+.studio .session-bar {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 20px 0;
+  padding: 10px 14px;
+  border: var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel-bg);
+  box-shadow: none;
+}
+.studio .session-bar-picker { min-width: 0; padding: 0; }
+.studio .session-bar-select {
+  min-width: 0;
+  max-width: 220px;
+  padding: 6px 8px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+.studio .session-bar-actions { flex-wrap: wrap; gap: 8px; font-size: 12px; font-weight: 500; }
+.studio .session-bar .btn,
+.studio .chat-panel .btn { font-family: var(--font-ui); font-size: 13px; padding: 8px 12px; }
+.studio .session-bar-actions .btn-primary { font-weight: 600; }
+@media (max-width: 760px) {
+  .studio { height: auto; min-height: 100dvh; overflow: visible; }
+  .studio .session-bar { margin: 14px 14px 0; }
+  .studio .session-bar-actions { width: 100%; margin-left: 0; }
+  .studio .session-bar-select { max-width: 180px; }
+  .studio-body { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .studio .chat-panel { height: 420px; }
+  .studio-canvas-frame { height: 60dvh; min-height: 360px; }
+}
+
+/* Projects' jungle headings and raised cream controls in the Studio workspace. */
+.studio .session-bar {
+  padding: 12px 16px;
+  gap: 12px;
+  border: 0;
+  background: color-mix(in srgb, var(--color-cream-card) 92%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+.studio-workspace-title {
+  flex-shrink: 0;
+  margin: 0 8px 0 0;
+  font-family: var(--font-title);
+  font-size: clamp(26px, 2.5vw, 38px);
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--color-wood-text);
+}
+.studio .session-bar-picker {
+  gap: 8px;
+  padding-left: 16px;
+  border-left: 1px solid color-mix(in srgb, var(--color-wood-dark) 25%, transparent);
+  border-radius: 0;
+}
+.studio .session-bar-label { font-size: 10px; }
+.studio .session-bar-select {
+  border: 1px solid color-mix(in srgb, var(--color-wood-dark) 40%, transparent);
+  border-radius: 8px;
+  background: var(--color-cream-card);
+}
+.studio .session-bar .btn:not(.btn-ghost),
+.studio .chat-panel-send {
+  border: 2px solid var(--color-wood-dark);
+  border-radius: 10px;
+  background: var(--color-cream-card);
+  box-shadow: 0 3px 0 var(--color-wood-dark);
+  transition: translate .12s, box-shadow .12s;
+}
+.studio .session-bar .btn-primary,
+.studio .chat-panel-send {
+  background: var(--color-leaf);
+  color: var(--color-jungle-deep);
+  font-weight: 700;
+}
+.studio .session-bar .btn:not(.btn-ghost):hover:not(:disabled),
+.studio .chat-panel-send:hover:not(:disabled) {
+  translate: 0 -1px;
+  box-shadow: 0 4px 0 var(--color-wood-dark);
+}
+.studio .session-bar .btn:not(.btn-ghost):active:not(:disabled),
+.studio .chat-panel-send:active:not(:disabled) {
+  translate: 0 2px;
+  box-shadow: 0 1px 0 var(--color-wood-dark);
+}
+.studio .chat-panel,
+.studio .studio-canvas-frame {
+  border: 2px solid var(--color-wood-dark);
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
+}
+.studio .chat-panel { background: var(--color-cream-card); }
+.studio .chat-panel-header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-wood-dark) 20%, transparent);
+}
+.studio .chat-panel-header h2 {
+  font-family: var(--font-title);
+  font-size: 26px;
+  font-weight: 400;
+}
+.studio .chat-panel-input { border-width: 2px; background: color-mix(in srgb, var(--color-cream-card) 40%, white); }
+.studio .chat-bubble-user { background: color-mix(in srgb, var(--color-leaf) 24%, var(--color-cream-card)); }
+@media (max-width: 760px) {
+  .studio .session-bar { gap: 10px; padding: 14px; }
+  .studio-workspace-title { width: 100%; font-size: 30px; }
+  .studio .session-bar-picker { padding-left: 0; border-left: 0; }
+  .studio .session-bar-actions { padding-top: 8px; }
 }

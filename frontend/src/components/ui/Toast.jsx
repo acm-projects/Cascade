@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ToastContext } from "./ToastContext";
 import "./ui.css";
+import Icon from "./Icon";
 
 const SHOW_FOR_MS = 3000;
 
@@ -36,7 +37,7 @@ export function ToastProvider({ children }) {
         <div className="ui-toasts" role="status" aria-live="polite">
           {toasts.map((toast) => (
             <div key={toast.id} className={`ui-toast ui-toast-${toast.type}`}>
-              {toast.type === "error" ? "⚠️" : "✅"} {toast.message}
+              <Icon name={toast.type === "error" ? "alert" : "checkCircle"} /> {toast.message}
             </div>
           ))}
         </div>,

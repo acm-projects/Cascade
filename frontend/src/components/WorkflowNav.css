@@ -1,0 +1,50 @@
+
+/* Shared compact navigation for AI Studio, Editor and Export. */
+.topnav--compact { height: auto; min-height: 72px; gap: 16px; padding: 12px 20px; }
+.topnav--compact .topnav-leaf { width: 28px; height: 28px; }
+.topnav--compact .topnav-name { font-size: 28px; }
+.topnav--compact .topnav-divider { height: 26px; width: 1px; margin: 0; opacity: .4; }
+.topnav--compact .topnav-title { font-size: 18px; max-width: 220px; min-width: 0; }
+.topnav--compact .topnav-steps { position: static; margin-left: auto; gap: 4px; }
+.topnav--compact .topnav-step { width: auto; height: auto; min-height: 36px; padding: 8px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--color-cream-card); font-family: var(--font-ui); font-size: 14px; white-space: nowrap; transition: background .15s; }
+.topnav--compact .topnav-step-number { display: none; }
+.topnav--compact .topnav-step.active { background: color-mix(in srgb, var(--color-cream-card) 16%, transparent); box-shadow: inset 0 -2px var(--color-leaf); }
+.topnav--compact .topnav-step:not(.locked):hover { scale: 1; background: color-mix(in srgb, var(--color-cream-card) 12%, transparent); }
+.topnav--compact .topnav-avatar { margin-left: 0; flex-shrink: 0; }
+.topnav--compact .topnav-title { flex: 1; }
+.topnav--compact .topnav-steps {
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--color-cream-card) 30%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-jungle-deep) 50%, transparent);
+}
+.topnav--compact .topnav-step {
+  font-weight: 600;
+  color: var(--color-cream-card);
+}
+.topnav--compact .topnav-step.active {
+  background: var(--color-cream-card);
+  color: var(--color-jungle-deep);
+  box-shadow: 0 2px 6px #0003;
+}
+.topnav--compact .topnav-step:not(.locked):not(.active):hover {
+  background: color-mix(in srgb, var(--color-cream-card) 22%, transparent);
+}
+.topnav--compact .topnav-step.active:hover {
+  background: var(--color-cream-card);
+}
+.topnav--compact .topnav-step:focus-visible {
+  outline: 2px solid var(--color-leaf);
+  outline-offset: 2px;
+}
+.topnav--compact .topnav-steps { width: auto; }
+.topnav--compact .topnav-steps { width: auto; order: initial; }
+.topnav--compact .topnav-title { flex: initial; }
+@media (max-width: 760px) {
+  .topnav--compact { flex-wrap: wrap; gap: 10px; margin: 10px 14px 0; padding: 12px; }
+  .topnav--compact .topnav-title { flex: 1; }
+  .topnav--compact .topnav-steps { width: auto; order: 5; margin: 0; justify-content: flex-start; }
+  .topnav--compact .topnav-step { flex: none; font-size: 14px; padding: 8px 14px; }
+}
+
+.topnav--compact .topnav-brand { gap: 10px; }

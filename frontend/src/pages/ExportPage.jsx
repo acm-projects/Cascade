@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import WaterFlow from "../components/WaterFlow";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
@@ -16,9 +18,11 @@ import useDownloads from "../features/export/useDownloads";
 import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
+import LinkedInPanel from "../features/export/LinkedInPanel";
 import { isAudioClip } from '../utils/media';
 import TrendsModal from '../features/editor/TrendsModal';
 import { exportTree } from "../features/export/exportTree";
+import Icon from "../components/ui/Icon";
 
 // Built from the Figma "Export" wireframe (node 557:2263), connected to backend/editor_backend.py
 // (rendering) and Manila's posting backend. Every download is rendered by the server with your edits.
@@ -30,6 +34,8 @@ function ExportPage() {
   const [error, setError] = useState(null);
   const [projectName, setProjectName] = useState(null);
   const [currentKey, setCurrentKey] = useState(null);
+  const [downloadActionsTarget, setDownloadActionsTarget] = useState(null);
+  const [showAllClips, setShowAllClips] = useState(false);
   const [inZip, setInZip] = useState([]);       // clip keys to put in the ZIP
   const [settings, setSettings] = useState({resolution: "original", includeCaptions: true});
   const downloads = useDownloads(api, projectId, projectName, settings);
@@ -76,23 +82,37 @@ function ExportPage() {
   }
 
   let message;
-  if (error) message = <EmptyState icon="🌧️" title="Couldn't open Export" text={error.message} />;
+  if (error) message = <EmptyState icon="cloud" title="Couldn't open Export" text={error.message} />;
   else if (!clips) message = <Spinner size={48} label="Loading your clips" />;
   else if (!clips.length) {
     message = (
-      <EmptyState icon="📦" title="Nothing to export yet" text="Pick clips in AI Studio and edit them, then export them here."
-        action={{ label: "Go to AI Studio", onClick: () => navigate(`/projects/${projectId}/studio`) }} />
+      <EmptyState icon="box" title="Nothing to export yet" text="Pick clips in Canvas and edit them, then export them here."
+        action={{ label: "Go to Canvas", onClick: () => navigate(`/projects/${projectId}/studio`) }} />
     );
   }
 
   return (
     <div className="export leaf-page">
+      <WaterFlow />
       <TopNav projectTitle={projectName} active="export" canOpenEditor canOpenExport />
       {message ? (
         <div className="export-empty">{message}</div>
       ) : (
         <div className="export-body">
-          <aside className="export-tree" aria-label="Clips to export">
+          <aside className="export-sidebar" aria-label="Export options">
+          <div className="export-footer">
+            <Button size="sm" onClick={async () => {
+              try { await activeFlush.current?.(); navigate(`/projects/${projectId}/editor`); }
+              catch (err) { toast.show(err.message, "error"); }
+            }}>← Back to editor</Button>
+          </div>
+          <section className="export-tree" aria-label="Clips to export">
+            <div className="export-selection-head">
+              <h2 className="export-section-title">Clips <span>{inZip.length}/{clips.length}</span></h2>
+              <Button size="sm" variant="ghost" onClick={() => setInZip(inZip.length === clips.length ? [] : clips.map(clipKey))}>
+                {inZip.length === clips.length ? "Clear" : "Select all"}
+              </Button>
+            </div>
             {tree.map((session) => {
               const sessionClips = session.waves.flatMap((wave) => wave.clips);
               return (
@@ -119,14 +139,22 @@ function ExportPage() {
                 </TreeGroup>
               );
             })}
+          </section>
+          <section className="export-settings">
+            <h3 className="export-section-title">Download</h3>
+            <ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)} />
+            <div className="export-download-controls" ref={setDownloadActionsTarget} />
+          </section>
+          <div className="export-footer">
+            <Button variant="primary" size="sm" onClick={() => navigate("/projects")}>Go to projects</Button>
+          </div>
           </aside>
 
           <ClipExport key={currentKey} projectId={projectId} clip={current} downloads={downloads} registerFlush={registerFlush}
             clips={clips} picked={picked} onPick={pickClip} onDownloadSelected={downloadZip}
+            downloadActionsTarget={downloadActionsTarget}
+            expanded={showAllClips} onExpandedChange={setShowAllClips}
             clipNumber={clips.indexOf(current) + 1}
-            settingsPanel={<ExportSettings settings={settings} onChange={setSettings} downloads={downloads} selectedCount={inZip.length} audioOnly={isAudioClip(current)}/>}
-            onEdit={() => navigate(`/projects/${projectId}/editor`)}
-            onProjects={() => navigate("/projects")}
           />
         </div>
       )}
@@ -141,7 +169,7 @@ function TreeGroup({ label, title, checked, onCheck, children }) {
     <div className="export-tree-group">
       <div className="export-tree-row" title={title}>
         <button type="button" className="export-tree-fold" onClick={() => setOpen(!open)}
-          aria-expanded={open} aria-label={`${open ? "Fold" : "Unfold"} ${label}`}>{open ? "▾" : "▸"}</button>
+          aria-expanded={open} aria-label={`${open ? "Fold" : "Unfold"} ${label}`}><Icon name={open ? "chevronDown" : "chevronRight"} /></button>
         <input type="checkbox" checked={checked} onChange={onCheck} aria-label={`Include all of ${label}`} />
         <span>{label}</span>
       </div>
@@ -151,25 +179,18 @@ function TreeGroup({ label, title, checked, onCheck, children }) {
 }
 
 // Everything right of the list, for the clip on screen. key={clip key}, so it follows the chosen clip.
-function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, onEdit, onProjects, downloads, clipNumber, settingsPanel, registerFlush }) {
+function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, downloads, clipNumber, registerFlush, downloadActionsTarget, expanded, onExpandedChange }) {
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [trendsOpen, setTrendsOpen] = useState(false);
+  const navigate = useNavigate();
   const { info, state, error, patch } = draft;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
-  const api = useApi();
-  async function applyResearch(research_id, suggestion) {
-    const result = await api.applyTrends(projectId, clip.job_id, clip.clip_index, { state, research_id, ...(Array.isArray(suggestion) ? { suggestions: suggestion } : { suggestion }) });
-    draft.change(result.state);
-    draft.setChat([...draft.chat, { role: 'user', text: 'Apply suggested edits from YouTube research.' }, { role: 'assistant', text: result.message }]);
-    return result;
-  }
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
   const framing = useAutoFraming(projectId, clip, state, info, patch);
   const rendering = downloads.working;
   const [rendered, setRendered] = useState(null); // the last MP4, so it can be shared
   const [post, setPost] = useState(null);
-  const [expanded, setExpanded] = useState(false); // "Expand clips": every clip as a small card
   async function downloadMp4() {
     try {
       await draft.flush();
@@ -191,30 +212,36 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   const index = clipNumber - 1;
   const goTo = (i) => onPick(clipKey(clips[i]));
   let status = null;
-  if (framing.status === "error") status = `⚠ ${framing.message}`;
+  if (framing.status === "error") status = `Couldn't prepare framing: ${framing.message}`;
   else if (framing.status === "working") status = `Preparing automatic framing… ${Math.round(framing.progress * 100)}%`;
   else if (state) {
-    status = `Clip ${clipNumber}: ${formatTime(state.end - state.start)} long · ${isAudioClip(clip) ? "audio recording"
-      : state.composition.ratio === "original" ? "original shape" : state.composition.ratio} · captions ${state.captions.enabled ? "on" : "off"}`;
+    status = `${formatTime(state.end - state.start)} · ${isAudioClip(clip) ? "Audio"
+      : state.composition.ratio === "original" ? "Original" : state.composition.ratio} · captions ${state.captions.enabled ? "on" : "off"}`;
   }
 
   return (
-    <main className="export-main">
-      <div className="export-actions">
-        <Button size="sm" onClick={downloadMp4} disabled={!state || rendering || framing.status === "working"}>
-          {rendering ? <><Spinner size={14} label="Rendering" /> Rendering…</> : "Download this clip"}
-        </Button>
-        <Button variant="primary" size="sm" onClick={onDownloadSelected} disabled={rendering || !picked.length}>
-          Download selected clips ({picked.length})
-        </Button>
-      </div>
+    <>
+    {downloadActionsTarget && createPortal(<>
 
+          <div className="export-actions">
+            <Button variant="primary" size="sm" onClick={onDownloadSelected} disabled={!state || rendering || framing.status === "working" || !picked.length}>
+              Download selected ({picked.length})
+            </Button>
+            <Button variant="ghost" size="sm" onClick={downloadMp4} disabled={!state || rendering || framing.status === "working"}>
+              {rendering ? <><Spinner size={14} label="Rendering" /> Rendering…</> : "Download clip"}
+            </Button>
+          </div>
+    </>, downloadActionsTarget)}
+    <main className="export-main">
       <section className="export-stage">
         <header className="export-stage-head">
-          <h2 className="export-title">▦ {clips.length} {clips.length === 1 ? "clip" : "clips"}</h2>
+          <div className="export-preview-heading">
+            <h2 className="export-section-title">Clip {clipNumber}</h2>
+            <span title={clip.title}>{clip.title || "Preview"}</span>
+          </div>
           {clips.length > 1 && (
-            <button type="button" className="btn btn-small btn-ghost" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
-              {expanded ? "Stack clips ↑" : "Expand clips ↓"}
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => onExpandedChange(!expanded)} aria-expanded={expanded}>
+              {expanded ? "Back to preview" : "Browse clips"}
             </button>
           )}
         </header>
@@ -222,7 +249,7 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
           <div className="export-grid">
             {clips.map((item, i) => (
               <button key={clipKey(item)} type="button" className={`export-grid-card${i === index ? " active" : ""}`}
-                onClick={() => { goTo(i); setExpanded(false); }}>
+                onClick={() => { goTo(i); onExpandedChange(false); }}>
                 <b>Clip {i + 1}</b>
                 <span>{item.title || "Clip"}</span>
                 <span>{formatTime(item.end - item.start)}</span>
@@ -238,41 +265,44 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
             </div>
           </div>
         )}
+        <footer className="export-preview-footer">
+          {status && <p className={`export-status${framing.status === "error" ? " is-error" : ""}`} role="status">{status}</p>}
+        <div className="export-pager">
+          <button type="button" className="btn btn-small" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous clip">←</button>
+          <span>{clipNumber} of {clips.length}</span>
+          <button type="button" className="btn btn-small" onClick={() => goTo(index + 1)} disabled={index === clips.length - 1} aria-label="Next clip">→</button>
+        </div>
+        </footer>
       </section>
 
-      <div className="export-pager">
-        <button type="button" className="btn btn-small" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous clip">←</button>
-        <span>{clipNumber} of {clips.length}</span>
-        <button type="button" className="btn btn-small" onClick={() => goTo(index + 1)} disabled={index === clips.length - 1} aria-label="Next clip">→</button>
-      </div>
-
-      {status && <p className="export-status" role="status">{status}</p>}
-
-      <section className="export-settings">{settingsPanel}</section>
-
+    </main>
+    <aside className="export-publishing" aria-label="Publishing tools">
       <section className="export-social">
         <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
-        {state && !isAudioClip(clip) && <div className="export-post"><Button size="sm" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>Trends · YouTube research</Button></div>}
-        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} onApply={applyResearch} onClose={() => setTrendsOpen(false)}>
-          <div className="export-post-actions"><Button size="sm" onClick={draft.undo} disabled={!draft.canUndo}>↶ Undo trend edits</Button><Button size="sm" onClick={draft.redo} disabled={!draft.canRedo}>↷ Redo</Button><small>{draft.saveStatus}</small></div>
-        </TrendsModal>}
-        {!isAudioClip(clip) && <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />}
+        {trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush} change={draft.change}
+          onClose={() => setTrendsOpen(false)} onOpenEditor={async () => { await draft.flush(); navigate(`/projects/${projectId}/editor`); }} />}
+        {!isAudioClip(clip) && state && (
+          <Button size="sm" className="export-trends-button" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>
+            <Icon name="compass" /> Trends analysis
+          </Button>
+        )}
+        {!isAudioClip(clip) && <section className="export-publish" aria-label="Publish">
+          <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />
+          <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />
+        </section>}
         <div className="export-post">
-          <h3 className="export-social-title">{isAudioClip(clip) ? '🎧 Share audio' : '📱 Instagram, TikTok & more'}</h3>
+          <h3 className="export-social-title">{isAudioClip(clip) ? <><Icon name="headphones" /> Share audio</> : <><Icon name="phone" /> Share clip</>}</h3>
           <p className="export-social-note">
             {isAudioClip(clip) ? 'Download the MP3, or share it with apps on this device that accept audio files.' : rendered
               ? canShare ? "Share the MP4 you just downloaded to any app on this device." : "This browser can't share files. Upload the downloaded MP4 in the app."
-              : "Download this clip first, then share it to Instagram, TikTok or anywhere else."}
+              : "Download a clip to share it."}
           </p>
           {canShare && <Button size="sm" onClick={share}>Share…</Button>}
         </div>
       </section>
 
-      <div className="export-footer">
-        <Button size="sm" onClick={async () => { try { await draft.flush(); onEdit(); } catch (err) { toast.show(err.message, "error"); } }}>← Back to editor</Button>
-        <Button variant="primary" size="sm" onClick={onProjects}>Back to projects →</Button>
-      </div>
-    </main>
+    </aside>
+    </>
   );
 }
 

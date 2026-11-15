@@ -1,4 +1,5 @@
 import { sameRef } from "./graph";
+import Icon from "../../components/ui/Icon";
 
 // The picked clips of this session, as chips above the chat box. Picked clips guide the next prompt
 // ("more like these"); click a chip to leave that clip out of this prompt (it stays picked for the Editor).
@@ -17,7 +18,7 @@ function ReferenceChips({ chips, leftOut, onToggle, onHover }) {
             className={`reference-chip${on ? " is-on" : ""}`} title={on ? "Guides this prompt. Click to leave it out." : "Left out. Click to use it."}
             onClick={() => onToggle(ref)} onMouseEnter={() => onHover(ref)} onMouseLeave={() => onHover(null)}
             onFocus={() => onHover(ref)} onBlur={() => onHover(null)}>
-            {on ? "🌿" : "○"} {label}{title ? ` · ${title}` : ""}
+            <Icon name={on ? "leaf" : "circle"} /> {label}{title ? ` · ${title}` : ""}
           </button>
         );
       })}
