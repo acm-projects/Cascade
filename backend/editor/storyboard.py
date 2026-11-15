@@ -3,9 +3,7 @@
 "Edit this video, make it moody" returns a storyboard (one beat per transcript line: keep or cut,
 on-screen caption, big word, zoom, B-roll, effect, sound) and changes nothing yet. Any later
 message is a note on that storyboard ("beat 3 should say ...", "tighter cut", "bigger captions")
-until the user says render. Planning uses Claude through the user's Claude subscription
-(claude_code.py, never an API key); when that is unavailable or its usage limit is reached, the
-local Ollama vision model; and without either, a plain transcript-based storyboard.
+until the user says render. Planning uses OpenAI through backend.cascade_llm; provider failures leave the existing edit unchanged.
 """
 import base64
 import json
@@ -85,22 +83,12 @@ def _fallback(lines, request):
 
 
 def _plan(prompt, frames, lines, request):
-    from . import claude_code
+    from . import openai_edit
+    result = openai_edit.ask(SYSTEM, prompt, openai_edit.strict_schema(Storyboard), frames, name='editor_storyboard')
     try:
-        return Storyboard.model_validate(claude_code.ask(SYSTEM, prompt, frames)), 'Claude (your Claude subscription)'
-    except claude_code.UsageLimit as exc:
-        why = 'Claude plan usage limit reached — used the local model until it resets'
-        LOG.info('storyboard: %s', exc.detail)
-    except (HTTPException, ValueError) as exc:
-        why = 'Claude unavailable ('+str(getattr(exc, 'detail', exc))[:120]+')'
-        LOG.info('storyboard claude unavailable: %s', getattr(exc, 'detail', exc))
-    try:
-        from .director import _local
-        sampled = [{'data': base64.b64encode(data).decode(), 'at': 0.0} for _, data in frames[:8]]
-        return Storyboard.model_validate(_local(SYSTEM, {'task': prompt}, sampled)), 'local vision model; '+why
-    except Exception as exc:  # Ollama/network/validation: fall back to the transcript
-        LOG.info('storyboard local model unavailable: %s', exc)
-    return _fallback(lines, request), 'transcript only; '+why
+        return Storyboard.model_validate(result), openai_edit.label()
+    except ValueError:
+        raise HTTPException(502, 'OpenAI returned an invalid storyboard. Your current edit is unchanged; try again.') from None
 
 
 def _complete(board, lines):

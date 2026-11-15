@@ -3,14 +3,15 @@ import './AIEditorChat.css';
 
 export const AI_EDITOR_PROMPT = 'Make this a high-energy Instagram Reel with beat-synced cuts, punch-in zooms, animated captions, shakes, and music. Preserve complete spoken phrases and existing manual edits.';
 const suggestions = [
-  { label: 'Edit this video', prompt: 'Edit this video' },
+  { label: 'Cascade signature edit', prompt: 'Edit this video in a bold Cascade style inspired by the reference guide. Choose the best visual language for the actual story, with meaningful standout moments, strong type, dynamic framing and a clean payoff. Preserve complete speech and my aspect ratio.' },
+  { label: 'Editorial collage', prompt: 'Edit this video with the editorial collage direction: evidence-led photo cards, an ink reveal, a circled hero word and readable typography. Keep it relevant to the speech, with quiet space between bold moments.' },
   { label: 'Create a high-energy Reel', prompt: AI_EDITOR_PROMPT },
   { label: 'Less shake', prompt: 'Less shake' },
   { label: 'Move the last zoom earlier', prompt: 'Move that zoom earlier by 0.5 seconds' },
   { label: 'Undo last AI edit', prompt: 'Undo your last edit' },
 ];
 
-// The storyboard Claude proposed: nothing renders until "Render". Notes go through the chat box.
+// The storyboard OpenAI proposed: nothing renders until "Render". Notes go through the chat box.
 function Storyboard({ board, cues, onSend, disabled }) {
   return <section className="ai-storyboard" aria-label="Storyboard">
     <header><b>Storyboard · {board.title || "edit"}</b><small>{board.planner}</small></header>
@@ -35,13 +36,11 @@ function Storyboard({ board, cues, onSend, disabled }) {
 
 export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, clip, result, cues, job, aiEdit, onUseTimeline }) {
   const analysis = result?.analysis;
-  // A used-up Gemini quota does not lock the chat: storyboards are planned with Claude (or the local
-  // model), and requests that need Gemini come back as a visible NOT APPLIED note.
   const placeholder = job
     ? 'Working on the edit. You can ask for changes when it finishes…'
     : typing ? 'Starting…' : aiEdit ? 'Ask for a change to this edit…' : 'Type “edit this clip”, or describe the edit you want…';
   return <div className="ai-editor-chat">
-    <ChatBox title="AI Editor" subtitle="Plans and applies real timeline edits. Preview shows the rendered result."
+    <ChatBox title="AI Editor" subtitle="OpenAI plans your edit from the footage and speech. The Edited preview shows the rendered result."
       messages={messages} onSend={onSend} disabled={disabled} typing={typing}
       tag={clip.title || 'Selected clip'} quickActions={suggestions} placeholder={placeholder} />
     {job && <section className="ai-edit-progress" role="status" aria-live="polite">

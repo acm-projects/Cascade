@@ -25,11 +25,11 @@ class LocalPlannerTests(unittest.TestCase):
         return {'request':'Make this a high-energy Instagram Reel','state':state.model_dump(),
                 'visual_frames':[{'at':3,'data':base64.b64encode(buffer.getvalue()).decode()}]}
 
-    def test_default_is_local_with_bounded_images_and_no_paid_fallback(self):
+    def test_explicit_local_helper_has_bounded_images_and_no_paid_fallback(self):
         response=httpx.Response(200,json={'done':True,'message':{'content':'{"message":"Plan","observations":[{"frame_index":0,"description":"Visible reaction","importance":0.9,"activity":"high"}],"actions":[{"type":"high_energy_reel"},{"type":"composition","ratio":"9:16"}]}'}})
         with patch.dict(os.environ,{},clear=True), patch.object(local_ai.httpx,'Client') as factory, patch.object(ai,'structured_json') as cloud:
             factory.return_value.__enter__.return_value.post.return_value=response
-            proposal=ai.request_edit(self.payload())
+            proposal=local_ai.request_edit(self.payload())
             cloud.assert_not_called()
             request=factory.return_value.__enter__.return_value.post.call_args
         self.assertEqual(request.args[0],'http://127.0.0.1:11434/api/chat')
@@ -54,7 +54,7 @@ class LocalPlannerTests(unittest.TestCase):
     def test_failure_never_calls_paid_provider_or_logs_exception_values(self):
         with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'ollama'}), patch.object(local_ai.httpx,'Client') as factory, patch.object(ai,'structured_json') as cloud, self.assertLogs(local_ai.logger,level='WARNING') as logs:
             factory.return_value.__enter__.return_value.post.side_effect=httpx.ConnectError('PRIVATE_TOKEN')
-            with self.assertRaises(HTTPException) as caught: ai.request_edit(self.payload())
+            with self.assertRaises(HTTPException) as caught: local_ai.request_edit(self.payload())
             cloud.assert_not_called()
         self.assertEqual(caught.exception.status_code,503)
         self.assertNotIn('PRIVATE_TOKEN',caught.exception.detail+' '.join(logs.output))

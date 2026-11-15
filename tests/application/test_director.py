@@ -46,15 +46,11 @@ class DirectorTests(unittest.TestCase):
         self.assertEqual([(s.start, s.end) for s in state.timeline], [(0, 4.15), (5.85, 12)])
         self.assertEqual(state.captions.animation, 'karaoke')
 
-    def test_without_any_model_the_genre_still_picks_a_fitting_edit(self):
-        from backend.editor import director
+    def test_openai_unavailable_leaves_the_edit_unchanged(self):
+        from backend.editor import director, openai_edit
         cues = [{'start': 1, 'end': 4, 'text': 'The soldiers in our army camp were shot'}]
-        with patch.object(director, '_gemini', side_effect=director.HTTPException(503)), \
-                patch.object(director, '_local', side_effect=OSError()), patch.object(director, '_proxy', side_effect=OSError()):
-            analysis, how = director.analyze('missing.mp4', Edit(start=0, end=10), {'cues': cues}, [], 'War story')
-            chosen, source = director.plan(analysis, {'references': []}, 'edit this', Edit(start=0, end=10))
-        self.assertEqual((analysis.genre, chosen.style, chosen.look, source), ('documentary_history', 'memorial', 'bw', 'genre defaults'))
-        self.assertIsInstance(analysis, Analysis)
+        with patch.object(openai_edit, 'ask', side_effect=director.HTTPException(503)), self.assertRaises(director.HTTPException):
+            director.analyze('missing.mp4', Edit(start=0, end=10), {'cues': cues}, [], 'War story')
 
 
 if __name__ == '__main__':

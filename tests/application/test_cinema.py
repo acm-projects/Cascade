@@ -100,7 +100,7 @@ from unittest.mock import patch
 
 from backend.editor.ai_edit.cinema import engine, planner, project, revise
 
-NO_AI = {'CASCADE_EDITOR_CLAUDE': 'off', 'CASCADE_EDIT_PLANNER': 'auto', 'CASCADE_EDIT_PLANNER_CMD': ''}
+NO_AI = {'CASCADE_EDITOR_CLAUDE': 'off', 'CASCADE_EDIT_PLANNER': 'rules', 'CASCADE_EDIT_PLANNER_CMD': ''}
 STORY = ('What is the most dangerous animal in the Amazon? The jaguars are the pit bulls of the big cats. '
          'They crush the skull of a caiman. But in the forest they are peaceful. He walked right by me.')
 
@@ -119,20 +119,18 @@ class Planner(unittest.TestCase):
         with patch.dict(os.environ, NO_AI), self.assertRaises(planner.Unavailable):
             planner.revise('open on a different line', plans.auto(w), '.', {'words': w, 'duration': 20, 'cuts': [], 'sheets': []}, [[0, 20]], [])
 
-    def test_any_program_can_be_the_planner_and_the_model_name_is_only_configuration(self):
+    def test_openai_plan_receives_images_and_ignores_old_claude_configuration(self):
+        from backend.editor import openai_edit
         w = words(STORY)
-        answer = plans.auto(w).model_dump(); answer['title'] = 'From another model'
+        answer = plans.auto(w).model_dump(); answer['title'] = 'OpenAI directed'
         with tempfile.TemporaryDirectory() as tmp:
-            script = Path(tmp)/'model.py'
-            script.write_text(f'import sys, json\njson.load(sys.stdin)\nprint(json.dumps({answer!r}))\n')
-            env = {**NO_AI, 'CASCADE_EDIT_PLANNER': 'command', 'CASCADE_EDIT_PLANNER_CMD': f'{sys.executable} {script}'}
-            with patch.dict(os.environ, env):
-                plan, who = planner.plan_edit('edit this video', tmp, {'words': w, 'duration': 20, 'cuts': [], 'sheets': []}, [[0, 20]], [])
-        self.assertEqual((plan.title, who), ('From another model', 'command'))
-        with patch.dict(os.environ, {'CASCADE_EDIT_MODEL': 'opus'}):
-            self.assertEqual(planner.label('claude'), 'claude:opus')
-        source = ''.join(p.read_text() for p in Path(planner.__file__).parent.rglob('*.py'))+(Path(planner.__file__).parent/'prompts'/'director.md').read_text()
-        self.assertNotIn('fable', source.lower())   # no model is named anywhere in the engine or its prompt
+            (Path(tmp)/'sheet.jpg').write_bytes(b'fixture-jpeg')
+            with patch.dict(os.environ, {'CASCADE_EDIT_PLANNER':'claude'}), patch.object(openai_edit, 'ask', return_value=answer) as ask:
+                plan, who = planner.plan_edit('edit this video', tmp, {'words':w,'duration':20,'cuts':[],'sheets':['sheet.jpg']}, [[0,20]], [])
+            self.assertEqual(plan.title, 'OpenAI directed')
+            self.assertIn('OpenAI',who)
+            self.assertEqual(ask.call_args.args[3],[('sheet.jpg',b'fixture-jpeg')])
+
 
 
 class Revisions(unittest.TestCase):

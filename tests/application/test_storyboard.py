@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from backend.editor import claude_code, storyboard
+from backend.editor import claude_code, storyboard, openai_edit
 from backend.editor.models import Edit
 from backend.editor.storyboard_models import SavedStoryboard, Storyboard
 
@@ -68,22 +68,18 @@ class StoryboardTests(unittest.TestCase):
         spans = _cuts(Edit(start=0, end=8), [Beat(n=0), Beat(n=1), Beat(n=2)], cues)
         self.assertEqual([(s.start, s.end) for s in spans], [(0, 3.1), (5.9, 8)])
 
-    def test_plan_falls_back_to_local_then_transcript_and_says_why(self):
+    def test_provider_failure_does_not_silently_make_a_basic_storyboard(self):
         lines = storyboard._lines({'cues': CUES}, Edit(start=0, end=9))
-        with patch.object(claude_code, 'ask', side_effect=claude_code.UsageLimit('limit reached')), \
-                patch('backend.editor.director._local', side_effect=OSError()):
-            planned, planner = storyboard._plan('make it moody', [], lines, 'make it moody')
-        self.assertIn('usage limit', planner)
-        self.assertEqual((planned.look, len(planned.beats)), ('bw', 3))
+        with patch.object(openai_edit, 'ask', side_effect=HTTPException(502, 'Try again')), self.assertRaises(HTTPException):
+            storyboard._plan('make it moody', [], lines, 'make it moody')
         complete = storyboard._complete(Storyboard(beats=[{'n': 2}, {'n': 99}]), lines)
         self.assertEqual([b.n for b in complete.beats], [0, 1, 2])
 
-    def test_a_long_fallback_reason_still_saves_the_storyboard(self):
+    def test_openai_storyboard_is_saved_and_can_be_reopened(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(storyboard, 'path', return_value=Path(folder)/'board.json'), \
-                patch.object(storyboard, '_frames', return_value=[]), patch.object(claude_code, 'ask', side_effect=HTTPException(503, 'x'*400)), \
-                patch('backend.editor.director._local', side_effect=OSError()):
+                patch.object(storyboard, '_frames', return_value=[]), patch.object(openai_edit, 'ask', return_value=board().model_dump()):
             saved = storyboard.create('p', 'j', 0, 'u', 'clip.mp4', Edit(start=0, end=9), {'cues': CUES}, 'edit this')
-            self.assertEqual(saved.planner[:14], 'transcript onl')
+            self.assertIn('OpenAI',saved.planner)
             self.assertEqual(storyboard.pending('p', 'j', 0, 'u').id, saved.id)
 
     def test_only_reel_requests_become_storyboards(self):

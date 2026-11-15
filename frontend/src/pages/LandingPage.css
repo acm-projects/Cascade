@@ -5,6 +5,8 @@
   height: 100vh;
   overflow: hidden;
   isolation: isolate;   /* keeps the 3D world behind the words */
+  display: flex;
+  align-items: center;  /* words sit in the vertical middle, level with the island */
 }
 
 /* Left side: title, headline, button and features, stacked */

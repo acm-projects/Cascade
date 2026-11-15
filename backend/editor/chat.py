@@ -90,7 +90,7 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
                     asset={**asset,'measured_bpm':None,'beat_confidence':0}
             measured_assets.append(asset)
         assets=measured_assets
-    frames = footage_frames(jid,clip,body.state,info,hints) if ai.editor_provider() in ai.LOCAL_ANALYSIS and proposal is None else []
+    frames = footage_frames(jid,clip,body.state,info,hints) if info.get('has_video', True) and proposal is None else []
     # Rich sequence editing uses the installed open-source compositor. Shared
     # non-editor providers and ordinary manual-edit chat tools remain unchanged.
     # The sequence planner needs Gemini; with a Claude plan doing the planning, requests stay on the path below.

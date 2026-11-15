@@ -67,15 +67,13 @@ def rendered_path(pid, jid, index, user, version):
 def wants(body, info):
     """Whether this chat turn belongs to the finished-edit workflow."""
     if body.research_id or not info.get('has_video', True) or re.search(r'storyboard', body.message, re.I): return False
-    from ..ai import claude_plan
-    if not claude_plan() and not tools.cinema(): return False
     return bool(body.state.ai_edit) or bool(EDIT_REQUEST.search(body.message))
 
 
 def _reply(state, message, job=None):
     return {'state': state.model_dump(), 'message': message[:4000], 'report': [], 'unsupported': [], 'actions': [], 'ai_job': job,
-            'analysis': {'provider': 'Claude (your Claude plan)', 'model': None, 'planning_method': 'finished edit', 'sampled_frames': [], 'observations': [], 'transcript_cues': 0,
-                         'limitation': 'Claude watches contact sheets and reads the transcript. It cannot hear the audio.'}}
+            'analysis': {'provider': 'openai', 'model': None, 'planning_method': 'finished edit', 'sampled_frames': [], 'observations': [], 'transcript_cues': 0,
+                         'limitation': 'OpenAI reads contact sheets and reads the transcript. It cannot hear the audio.'}}
 
 
 def turn(pid, jid, index, user, clip, body, info, stock, audio_store):
@@ -124,7 +122,7 @@ def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock,
             if state.ai_edit:
                 saved = _read(folder/state.ai_edit.version/'plan.json')
                 current = Plan.model_validate(saved) if saved else None
-            progress(.34, 'Claude is watching the clip and planning the edit…' if not current else 'Claude is revising the edit…')
+            progress(.34, 'OpenAI is analyzing the clip and planning the edit…' if not current else 'OpenAI is revising the edit…')
             if current:
                 plan = director.revise(message, current, prep_dir, prep, summary, windows, assets, chat)
             else:
@@ -136,7 +134,7 @@ def _run(folder, pid, jid, index, user, clip, info, state, chat, message, stock,
             result = _render(plan, source, prep, prep_dir, folder, out, stock, track, progress)
             problems, fixed = [], False
             try:
-                progress(.92, 'Claude is checking the finished picture…')
+                progress(.92, 'OpenAI is checking the finished picture…')
                 problems, fixes = director.review(_review_sheet(result, out), result['table'], plan, prep_dir, prep, windows)
                 revised = _apply_fixes(plan, fixes, prep, windows)
                 if revised:
@@ -188,7 +186,7 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
                 progress(.3, 'Watching the clip and planning the edit…')
                 plan, who = planner.plan_edit(message, prep_dir, prep, windows, chat)
                 if who == 'rules' and planner.choice() != 'rules':
-                    notes.append("No AI planner was available, so Cascade's built-in director made this cut. Sign in to Claude Code for a story-led edit.")
+                    notes.append("No AI planner was available, so Cascade's built-in director made this cut. Configure OpenAI for a story-led edit.")
             else:
                 plan, done, left = revise.apply(message, current)   # switches and simple timeline changes need no AI
                 who = 'no AI needed'

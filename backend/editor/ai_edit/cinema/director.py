@@ -2,6 +2,7 @@
 return a CinemaPlan (plan.py). The instructions are the plain-text file prompts/director.md, so they can be
 read, edited and versioned without touching code. Which model answers is planner.py's business."""
 import json
+import logging
 from pathlib import Path
 
 from .plan import CinemaPlan, check
@@ -41,7 +42,7 @@ def change(note, current, prep, windows, history):
             f"Transcript as word_number:word@second:\n{transcript(prep['words'], windows)}")
 
 
-def direct(ask, prompt, words, tries=2):
+def direct(ask, prompt, words, tries=2, windows=None):
     """Run `ask(prompt) -> dict` until it returns a plan that passes the checks (each failure is fed back)."""
     last = ''
     for _ in range(tries):
@@ -49,7 +50,12 @@ def direct(ask, prompt, words, tries=2):
         try:
             plan = CinemaPlan.model_validate(answer)
             check(plan, words)
+            if windows:
+                for span in plan.story:
+                    if not any(words[span.from_word]['s'] >= a-.001 and words[span.to_word]['e'] <= b+.001 for a, b in windows):
+                        raise ValueError('Story spans must fit entirely inside the usable source ranges; preserve the trim and cuts.')
             return plan
         except ValueError as exc:
+            logging.getLogger(__name__).warning('Edit plan rejected: %s', exc)
             last = f'\n\nYour previous plan was rejected, fix this and return the whole plan: {str(exc)[:600]}'
     raise ValueError('The planner did not return a usable edit plan: '+last[-300:])

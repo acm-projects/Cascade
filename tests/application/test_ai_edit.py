@@ -152,9 +152,9 @@ class Routing(unittest.TestCase):
             edited = self.state.model_copy(update={'ai_edit': AIEditRef(version='v001', duration=9)})
             self.assertTrue(jobs.wants(body(edited, 'make the captions yellow'), {'has_video': True}))
 
-    def test_legacy_engine_never_without_the_claude_plan(self):
+    def test_legacy_engine_uses_openai_without_a_claude_plan(self):
         with patch('backend.editor.ai.claude_plan', return_value=''), patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'legacy'}):
-            self.assertFalse(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
+            self.assertTrue(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
 
     def test_cinema_engine_edits_even_without_claude(self):
         with patch('backend.editor.ai.claude_plan', return_value=''), patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'cinema'}):
@@ -193,7 +193,7 @@ class Failure(unittest.TestCase):
         @contextmanager
         def media(*a):
             yield Path('clip.mp4')
-        env = {'CASCADE_EDIT_ENGINE': 'cinema', 'CASCADE_EDITOR_CLAUDE': 'off', 'CASCADE_EDIT_PLANNER': 'auto', 'CASCADE_EDIT_PLANNER_CMD': ''}
+        env = {'CASCADE_EDIT_ENGINE': 'cinema', 'CASCADE_EDITOR_CLAUDE': 'off', 'CASCADE_EDIT_PLANNER': 'rules', 'CASCADE_EDIT_PLANNER_CMD': ''}
         with TemporaryDirectory() as folder, patch.object(jobs, '_publish') as publish, patch('backend.editor.storage.media', media), \
                 patch.object(jobs.preparation, 'prepare', return_value=prep), patch.object(jobs.preparation, 'probe', return_value={'duration': 6.0}), \
                 patch.object(engine, 'make', fake_make), patch.dict('os.environ', env):
@@ -205,7 +205,7 @@ class Failure(unittest.TestCase):
                 return job
             first = run(Edit(start=0, end=6), 'Edit this video')
             self.assertEqual((first['status'], first['version']), ('done', 'v001'))
-            self.assertIn('built-in director', first['message'])
+            self.assertIn('planned by rules', first['message'])
             self.assertEqual(project.read(folder/'v001')['planner'], 'rules')
 
             edited = Edit(start=0, end=6, ai_edit=AIEditRef(version='v001', duration=6))

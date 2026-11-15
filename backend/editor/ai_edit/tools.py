@@ -30,8 +30,7 @@ def demucs():
 
 def style_sheet():
     """The owner's live rules when the editing folder is on this machine, else the copy kept with Cascade."""
-    live = folder()/'CLAUDE.md'
-    return (live if live.is_file() else HERE/'style_sheet.md').read_text()
+    return (HERE/'style_sheet.md').read_text()
 
 
 def look():

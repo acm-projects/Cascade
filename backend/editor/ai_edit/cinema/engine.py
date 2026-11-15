@@ -136,6 +136,10 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
             overlays.append(Overlay(t0-.06, t0+1.65, m.style, {'text': text, 'tone': tone, 'y': max(H*.18, face_y-H*.14)}))
             held.append((t0-.3, t0+1.7))
             events.append((t0, 'moment', tone))
+        elif m.style in ('scribble', 'perspective'):
+            overlays.append(Overlay(t0-.04, t0+1.5, m.style, {'text': text, 'tone': tone}))
+            held.append((t0-.2, t0+1.5))
+            events.append((t0, 'moment', tone))
         elif m.style == 'glow':
             sent = _sentence(words, order, m.word)
             overlays.append(Overlay(t0-.1, max(t0+1.6, T(sent[-1], 1)+.2), 'glow', {'tone': tone}))
@@ -146,6 +150,11 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         elif m.style == 'serif':
             sent = _sentence(words, order, m.word)
             overlays.append(Overlay(T(sent[0])-.25, T(sent[-1], 1)+.6, 'quote', {'words': [(words[i]['w'], T(i), kw.get(i)) for i in sent]}))
+    for accent in plan.accents:
+        if in_story(accent.word):
+            at = T(accent.word)
+            overlays.append(Overlay(at, min(at+accent.duration, speech_end), 'accent', {'kind': accent.kind}))
+            events.append((at, 'broll', 'water' if accent.kind == 'ripple' else 'calm'))
     # the payoff: the music stops dead just before it, a sub hit lands on it, the words take the screen
     silence = None
     if plan.silence_before is not None and in_story(plan.silence_before):
@@ -183,7 +192,7 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         shot = Shot(t0, t1, 'broll', path, max(0, min(src_len*.2, src_len-(t1-t0)-.1)),
                     rate=1. if src_len > t1-t0+.3 else max(.4, (src_len-.2)/(t1-t0)),
                     zoom0=1., zoom1=1.07, grade='forest' if b.tone in ('life', 'water', 'hope', None) else plan.grade,
-                    look='mono' if b.look == 'mono' else 'full', tone=b.tone or 'calm')
+                    look=b.look, tone=b.tone or 'calm')
         shots = _overlay_shot(shots, shot)
         placed.append((t0, t1)); used_paths.append(path)
         events.append((t0+.12, 'broll', b.tone))
@@ -205,7 +214,7 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         events.append((speech_end+.3, 'boom', 'calm'))
     shots.sort(key=lambda s: s.t0)
     shots = [s for s in shots if s.t1-s.t0 > 1/look.FPS]
-    shots = _keep_moving(shots)
+    shots = _keep_moving(shots, longest=4.8 if plan.visual_family == 'atmospheric' else 3.2)
     if start > 0:
         first = [s for s in shots if s.t1 > start]
         if first and first[0].t0 < start:
@@ -261,13 +270,13 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         'size': [W, H], 'fps': look.FPS, 'voice_starts': offset, 'speech_ends': round(speech_end, 3), 'ends': round(total, 3),
         'dialogue': [{'source_from': p.a, 'source_to': p.b, 'at': round(offset+p.out, 3), 'words': [p.words[0], p.words[-1]], 'part': p.part} for p in edit.pieces],
         'shots': [{'from': round(s.t0, 3), 'to': round(s.t1, 3), 'kind': s.kind, 'file': Path(s.path).name, 'source_from': round(s.src, 3), 'look': s.look} for s in shots],
-        'overlays': [{'from': round(o.t0, 3), 'to': round(o.t1, 3), 'kind': o.kind, **({'text': o.data['text']} if 'text' in o.data else {})} for o in overlays],
+        'overlays': [{'from': round(o.t0, 3), 'to': round(o.t1, 3), 'kind': o.kind, **({'effect': o.data['kind']} if o.kind == 'accent' else {}), **({'text': o.data['text']} if 'text' in o.data else {})} for o in overlays],
         'music_silence': [round(x, 3) for x in silence] if silence else None,
     }
     broll_seconds = sum(z-a for a, z in placed)
     return {'seconds': round(total, 1), 'spoken_seconds': round(edit.total, 1), 'pieces': len(edit.pieces),
             'removed_fillers': len(removed_fillers & set(range(len(words)))), 'removed_interjections': len(removed_others),
-            'broll': len(placed), 'broll_share': round(broll_seconds/max(1, edit.total)*100), 'moments': len(plan.moments),
+            'broll': len(placed), 'broll_share': round(broll_seconds/max(1, edit.total)*100), 'moments': len(plan.moments), 'accents': len(plan.accents), 'visual_family': plan.visual_family,
             'lufs': lufs, 'peak': peak, 'cut_out': matter is not None, 'size': f'{W}x{H}', 'timings': timings, 'timeline': timeline}
 
 

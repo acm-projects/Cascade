@@ -148,16 +148,8 @@ def choose(refs, frames):
     from .inspiration import contact_sheet
     context = {'references': [r.model_dump() for r in refs]}
     sheet = contact_sheet(frames[:16])
-    try:
-        from . import claude_code
-        images = [('references.jpg', base64.b64decode(sheet))] if sheet else []
-        return ProfileChoices.model_validate(claude_code.ask(SYSTEM, 'Measurements (data):\n'+json.dumps(context), images)), 'Claude (your Claude subscription)'
-    except (HTTPException, ValueError) as exc:
-        LOG.info('style profile claude unavailable: %s', getattr(exc, 'detail', exc))
-    try:
-        from .director import _local
-        sampled = [{'data': f, 'at': 0.0} for f in frames[:12]]
-        return ProfileChoices.model_validate(_local(SYSTEM, context, sampled)), 'local vision model'
-    except Exception as exc:  # Ollama/network/validation: fall back to measurements
-        LOG.info('style profile local model unavailable: %s', exc)
-    return defaults(refs), 'measurements only (no vision model available)'
+    from . import openai_edit
+    images = [('references.jpg', base64.b64decode(sheet))] if sheet else []
+    data = openai_edit.ask(SYSTEM, 'Measurements (data):\n'+json.dumps(context),
+                           openai_edit.strict_schema(ProfileChoices), images, name='editor_style_profile')
+    return ProfileChoices.model_validate(data), openai_edit.label()

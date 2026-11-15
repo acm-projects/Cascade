@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import look, settings
+from . import look, settings, accents
 
 LOG = logging.getLogger(__name__)
 FPS = look.FPS
@@ -276,6 +276,7 @@ class Composer:
         self.progress = progress or (lambda a, s: None)
         self.sprites = {}
         self.last = None
+        self.accent_previous = {}
 
     def _sprite(self, key, make):
         if key not in self.sprites: self.sprites[key] = make()
@@ -285,6 +286,14 @@ class Composer:
         frame = reader.next()
         k = (t-shot.t0)/max(.01, shot.t1-shot.t0)
         z = shot.zoom0+(shot.zoom1-shot.zoom0)*k
+        if shot.look == 'card': return accents.card(frame, k, shot.tone)
+        if shot.look == 'band':
+            import cv2
+            h, w = frame.shape[:2]
+            band = cv2.resize(frame, (w, max(2, int(h*.62))))
+            frame = np.full_like(frame, look.INK)
+            y = (h-band.shape[0])//2
+            frame[y:y+band.shape[0]] = band
         if shot.face: return _zoom(frame, z, shot.face[0], shot.face[1])
         return _zoom(frame, z)
 
@@ -388,7 +397,31 @@ class Composer:
                 sp = self._sprite(('title', text, W), lambda: look.text_sprite(text.upper(), look.TIGHT(34*u, 700), fill=(236, 240, 236), tracking=int(10*u), shadow=.7))
                 k = min(1, (t-o.t0)/.4)*min(1, max(0, (o.t1-t)/.4))
                 look.paste(frame, sp, W/2, H*.08, alpha=.92*k)
+        for o in active:
+            if o.kind in ('scribble', 'perspective'):
+                f = look.fit_heavy(o.data['text'], W*.66, int(min(H*.18, W*.22)))
+                sp = self._sprite((o.kind, o.data['text'], W), lambda: look.text_sprite(o.data['text'], f, fill=look.WHITE, shadow=.6))
+                p = _ease((t-o.t0)/.2)
+                if o.kind == 'perspective':
+                    import cv2
+                    layer = np.zeros((H, W, 3), np.uint8)
+                    look.paste(layer, sp, W*.5, H*.3, alpha=p)
+                    corners = np.float32([[0, 0], [W, 0], [W, H], [0, H]])
+                    target = np.float32([[W*.08, H*.13], [W*.96, 0], [W*.9, H*.92], [0, H]])
+                    warped = cv2.warpPerspective(layer, cv2.getPerspectiveTransform(corners, target), (W, H))
+                    frame[:] = np.maximum(frame, warped)
+                else:
+                    look.paste(frame, sp, W*.5, H*.64, alpha=p)
+                    accents.circle(frame, t-o.t0, look.TONES[o.data['tone']])
         if self.captions: self.captions.draw(frame, t, mute)
+        for o in active:
+            if o.kind != 'accent': continue
+            key = (o.t0, o.t1, o.data['kind'])
+            if key not in self.accent_previous:
+                self.accent_previous[key] = self.last.copy() if self.last is not None else None
+            phase = (t-o.t0)/max(.001, o.t1-o.t0)
+            frame = accents.apply(frame, self.accent_previous[key], o.data['kind'], phase)
+        self.accent_previous = {k: v for k, v in self.accent_previous.items() if t < k[1]}
         return frame
 
     def _words(self, frame, t, o):

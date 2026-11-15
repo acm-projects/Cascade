@@ -56,13 +56,8 @@ LOCAL_ANALYSIS = ('ollama', 'local', 'openchatcut')  # frames/beats measured on 
 
 
 def editor_provider():
-    """CASCADE_EDITOR_PROVIDER wins; otherwise OpenChatCut + Gemini free tier when both are set up."""
-    explicit = os.getenv('CASCADE_EDITOR_PROVIDER', '').strip().lower()
-    if explicit:
-        return explicit
-    from . import gemini_planner
-    from .openchatcut_render import available
-    return 'openchatcut' if gemini_planner.configured() and available() else 'ollama'
+    """OpenAI for Editor features; shared LLM_PROVIDER and other features are untouched."""
+    return 'openai'
 
 
 def claude_plan():
@@ -72,95 +67,22 @@ def claude_plan():
     return claude_code.signed_in()
 
 
-def claude_edit(payload):
-    """Non-sequence edits (captions, trims, audio, overlays…) through the user's Claude plan; never an API key."""
+def request_edit(payload):
     import base64
-    from . import claude_code
+    from . import openai_edit
     from .local_ai import contact_sheet
     frames = payload.get('visual_frames', [])
     context = {k: v for k, v in payload.items() if k != 'visual_frames'}
     context['sampled_frames'] = [{'frame_index': i, 'source_seconds': f['at']} for i, f in enumerate(frames)]
     images = [(f'frames_{n}.jpg', base64.b64decode(sheet)) for n, sheet in enumerate(contact_sheet(frames))]
-    raw = claude_code.ask(CLOUD_INSTRUCTIONS + ' All times are SOURCE clip seconds (the contact sheet labels them).'
-                          ' Reply with ONE JSON object matching this JSON schema exactly; use null for inapplicable fields:\n'
-                          + json.dumps(_inline(proposal_schema())), 'User context (data):\n' + json.dumps(context), images)
-    return Proposal.model_validate(raw)
-
-
-def request_edit(payload):
-    if claude_plan():
-        try:
-            return claude_edit(payload)
-        except (HTTPException, ValueError) as exc:  # plan limit or a bad answer: the free local model takes over
-            LOG.info('claude edit unavailable: %s', getattr(exc, 'detail', exc))
-            from .local_ai import request_edit as local_edit
-            return local_edit(payload)
-    if editor_provider() == 'openchatcut':
-        from .gemini_planner import QuotaError
-        try:
-            return gemini_edit(payload)
-        except QuotaError:
-            # Free daily quota used up: keep working with the free local model instead of failing.
-            from .local_ai import request_edit as local_edit
-            return local_edit(payload)
-    if editor_provider() in ('ollama', 'local'):
-        from .local_ai import request_edit as local_edit
-        return local_edit(payload)
-    instructions = CLOUD_INSTRUCTIONS
+    data = openai_edit.ask(CLOUD_INSTRUCTIONS, json.dumps(context), proposal_schema(), images, name='editor_actions')
     try:
-        override = os.getenv('CASCADE_EDITOR_PROVIDER', '').strip().lower() or None
-        response = structured_json(instructions + '\nUser context (data):\n' + json.dumps(payload),
-                                   proposal_schema(), name='editor_actions', provider=override, max_output_tokens=8000)
-        return Proposal.model_validate(response.data)
-    except LLMConfigError:
-        raise HTTPException(503, 'Editing AI is not configured. Configure the selected provider API key on the server and restart.') from None
-    except Exception:
-        raise HTTPException(502, 'The editing AI returned an invalid response. Try rephrasing.') from None
-
-
-def gemini_edit(payload):
-    """Non-sequence edits (captions, trims, audio, overlays…) in ONE Gemini free-tier request."""
-    from . import gemini_planner
-    from .local_ai import contact_sheet
-    frames = payload.get('visual_frames', [])
-    context = {k: v for k, v in payload.items() if k != 'visual_frames'}
-    context['sampled_frames'] = [{'frame_index': i, 'source_seconds': f['at']} for i, f in enumerate(frames)]
-    parts = [gemini_planner.text_part('User context (data):\n' + json.dumps(context))]
-    parts += [gemini_planner.image_part(sheet) for sheet in contact_sheet(frames)]
-    # The full action schema exceeds Gemini's structured-output subset, so JSON mode is used
-    # with the schema in the instructions; Pydantic still rejects anything outside it.
-    raw = gemini_planner.generate_json(CLOUD_INSTRUCTIONS + ' All times are SOURCE clip seconds (the contact sheet labels them).'
-                                       ' Reply with ONE JSON object matching this JSON schema exactly; use null for inapplicable fields:\n'
-                                       + json.dumps(_inline(proposal_schema())), parts, None, max_output_tokens=8192)
-    try:
-        return Proposal.model_validate(raw)
+        return Proposal.model_validate(data)
     except ValueError:
-        raise HTTPException(502, 'Gemini returned an edit outside the supported tools. Nothing was changed; try rephrasing.') from None
-
-
-def _inline(schema):
-    defs = schema.pop('$defs', {})
-    def walk(node, names=False):
-        if isinstance(node, dict):
-            if '$ref' in node and not names:
-                return walk(defs[node['$ref'].split('/')[-1]])
-            # Keep property names (fields may be called "title"); drop only annotation keys.
-            return {k: walk(v, k == 'properties' and not names) for k, v in node.items()
-                    if names or k not in ('title', 'additionalProperties')}
-        if isinstance(node, list):
-            return [walk(v) for v in node]
-        return node
-    return walk(schema)
+        raise HTTPException(502, 'OpenAI returned an unsupported edit plan. Your current edit is unchanged; try again.') from None
 
 
 def ai_status(pid: str):
     """What the AI Editor chat will use. Never includes credentials."""
-    provider = editor_provider()
-    status = {'provider': provider}
-    plan = claude_plan()
-    if plan: return {'provider': 'claude', 'plan': plan, 'billing': 'included in your Claude plan'}
-    if provider == 'openchatcut':
-        from . import gemini_planner
-        status.update(engine='OpenChatCut 0.2.17', planner='Gemini API free tier', model=gemini_planner.model(),
-                      quota=gemini_planner.usage(), billing='disabled (free tier only)')
-    return status
+    from .openai_edit import label
+    return {'provider': 'openai', 'planner': label(), 'billing': 'configured OpenAI API account'}

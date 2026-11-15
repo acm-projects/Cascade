@@ -21,9 +21,16 @@ class Moment(BaseModel):
     """A designed beat on one spoken word."""
     model_config = ConfigDict(extra='ignore')
     word: int = Field(ge=0)
-    style: Literal['behind', 'outline', 'slam', 'serif', 'glow'] = 'behind'
+    style: Literal['behind', 'outline', 'slam', 'serif', 'glow', 'scribble', 'perspective'] = 'behind'
     tone: Tone | None = None
     text: str = Field(default='', max_length=16)   # what to show; defaults to the spoken word
+
+
+class Accent(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    word: int = Field(ge=0)
+    kind: Literal['whip', 'rgb', 'ink', 'ripple']
+    duration: float = Field(default=.3, ge=.18, le=.5)
 
 
 class Keyword(BaseModel):
@@ -63,6 +70,8 @@ class CinemaPlan(BaseModel):
     model_config = ConfigDict(extra='ignore')
     reply: str = Field(default='', max_length=1500)
     title: str = Field(default='Edit', max_length=60)
+    visual_family: Literal['kinetic', 'editorial', 'atmospheric'] = 'kinetic'
+    accents: list[Accent] = Field(default_factory=list, max_length=8)
     mood: Literal['awakening', 'wonder', 'tension', 'warm'] = 'awakening'
     grade: Literal['cinema', 'forest', 'night'] = 'cinema'
     story: list[Span] = Field(min_length=1, max_length=40)
@@ -100,6 +109,16 @@ def check(plan, words):
         if span & seen: raise ValueError(f'story {k}: overlaps an earlier story span; each word plays once')
         seen |= span
     plan.moments = [m for m in plan.moments if m.word in seen]
+    kept = seen - plan.dropped()
+    plan.moments = [m for m in plan.moments if m.word in kept]
+    last = -99.
+    spaced = []
+    for accent in sorted(plan.accents, key=lambda a: words[a.word]['s'] if a.word < n else float('inf')):
+        if accent.word not in kept: continue
+        at = words[accent.word]['s']
+        if at-last < 1.5: continue
+        spaced.append(accent); last = at
+    plan.accents = spaced
     for b in plan.broll:
         if not b.from_word <= b.to_word < n: raise ValueError('broll: from_word <= to_word required')
     if plan.silence_before is not None and plan.silence_before not in seen:
