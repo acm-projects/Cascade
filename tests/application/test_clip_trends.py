@@ -93,7 +93,7 @@ class ClipTrendsTests(unittest.TestCase):
         from backend import cascade_llm
         from backend.editor import render
         s=Edit(**self.state);s.start=.2;s.end=9.5
-        video={'video_id':'abcdefghijk','title':'Mock recent example','url':'https://www.youtube.com/watch?v=abcdefghijk','channel':'Fixture','published_at':'2026-10-29T00:00:00Z','view_count':100}
+        video={'video_id':'abcdefghijk','title':'Mock recent funny skit example','url':'https://www.youtube.com/watch?v=abcdefghijk','channel':'Fixture','published_at':'2026-10-29T00:00:00Z','view_count':100}
         def search(query,limit):return [video]
         record={'topic':'talking head'}
         with patch.object(youtube_trends,'get_trending_videos',side_effect=search),patch.object(pipeline,'extract_tags',return_value={'pacing':'fast'}), \
@@ -132,6 +132,20 @@ class ClipTrendsTests(unittest.TestCase):
             result=trends.collect(pid,jid,index,user,s,{'topic':'t','added_references':['b5wlE9YvhlE']},lambda m:None)
         mine=result['references'][0]
         self.assertEqual(mine['id'],'b5wlE9YvhlE');self.assertTrue(mine['user_added']);self.assertEqual(mine['kind'],'example')
+    def test_only_related_english_references_are_kept_most_viewed_first(self):
+        from backend.trends import youtube_trends
+        self.assertFalse(youtube_trends.looks_english('Bhai ye kya hai 😂 funny prank'))
+        self.assertTrue(youtube_trends.looks_english('This prank went way too far'))
+        self.assertEqual(youtube_trends.spoken_language({'automatic_captions':{'en':[],'hi-orig':[],'hi':[]}}),'hi')
+        self.assertFalse(youtube_trends.looks_english('Funny prank on my friend',language=youtube_trends.spoken_language({'automatic_captions':{'hi-orig':[]}})))
+        subject,kind=['teddy'],['funny','skit','comedy']
+        videos=[{'video_id':'a','title':'Cooking pasta at home','view_count':9_000_000},
+                {'video_id':'b','title':'Funny skit with my roommate','view_count':200_000},
+                {'video_id':'c','title':'Teddy bear comedy skit','view_count':50_000},
+                {'video_id':'d','title':'Best funny skit of the year','view_count':3_000_000}]
+        kept=[v for v in videos if trends.match_tier(v,subject,kind)]
+        kept.sort(key=lambda v:(-trends.match_tier(v,subject,kind),-v['view_count']))
+        self.assertEqual([v['video_id'] for v in kept],['c','d','b'])
     def test_comparison_counts_majority_not_lexical_max(self):
         r=_compare_tags({'tone':'other'},[{'tone':'funny'},{'tone':'funny'},{'tone':'serious'}])
         self.assertIn("'funny'",r['missing_traits'][0])

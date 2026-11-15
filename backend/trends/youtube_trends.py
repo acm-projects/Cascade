@@ -28,6 +28,7 @@ def _velocity(item: dict[str, Any]) -> float:
 
 
 SHORT_SECONDS = 180  # YouTube Shorts are vertical clips of up to three minutes
+MAX_CHECKED = 24     # at most this many candidates are looked up per search
 
 
 def _seconds(iso: str) -> int:
@@ -46,6 +47,10 @@ _OTHER = set("el la los las que del y en es por para una un con lo se su al más
              "também não uma você com mais isso é le les des et est pour pas une dans qui ce avec sur "
              "yang dan ini itu di ke dari untuk tidak aku kamu und ist nicht ich mit auf ein eine zu von "
              "il che sono non è per ma ki hai nahi kya".split())
+# Romanized Hindi/Urdu ("Hinglish") is plain ASCII, so the script check alone lets it through.
+_HINGLISH = set("hai hain nahi nahin kya kyu kyun kaise ki ka ke ko mein bhi aur yeh ye woh wo tha thi bhai bhaiya yaar "
+                "karo kar raha rahi rahe wala wali wale dekho dekh accha acha bahut sab apna apni hum tum aap mera meri "
+                "tera teri kuch koi kab kahan jab tab sirf abhi phir ek do teen ji desi".split())
 
 
 def looks_english(*texts, language=None):
@@ -58,8 +63,34 @@ def looks_english(*texts, language=None):
     if letters and sum(c.isascii() for c in letters) / len(letters) < 0.9:
         return False   # mostly another script: Devanagari, Arabic, Cyrillic, Chinese, Korean, …
     words = __import__("re").findall(r"[a-zà-ÿ']+", text.lower())
+    hinglish = sum(w in _HINGLISH for w in words)
+    if hinglish >= 2 or (words and hinglish / len(words) > 0.15):
+        return False
     return sum(w in _OTHER for w in words) <= sum(w in _ENGLISH for w in words)
 
+
+def spoken_language(info):
+    """The language actually spoken in a video, from yt-dlp's data: YouTube marks the original-language
+    auto captions with an "-orig" suffix, and tags audio formats with their language. None when unknown."""
+    for code in (info.get("automatic_captions") or {}):
+        if code.endswith("-orig"):
+            return code[:-5]
+    for f in info.get("formats") or []:
+        if f.get("acodec") not in (None, "none") and f.get("language"):
+            return f["language"]
+    return info.get("language")
+
+
+ENGLISH_COUNTRIES = {"US", "GB", "CA", "AU", "NZ", "IE"}
+
+
+def _english_audio(language):
+    """YouTube reports this video's audio as English (en-IN is left out: it is mostly used for Hinglish)."""
+    return bool(language) and str(language).lower().startswith("en") and str(language).lower() != "en-in"
+
+
+def _views(item):
+    return int(item.get("view_count") or item.get("statistics", {}).get("viewCount") or 0)
 
 def says_something(title):
     """False for titles that are only hashtags/emoji (#viral #reels #shorts …): those are almost never relevant."""
@@ -68,7 +99,7 @@ def says_something(title):
 
 
 def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Search YouTube for a topic and return the top videos by view velocity.
+    """Search YouTube for a topic and return its most-viewed recent English Shorts.
 
     Returns a list of dicts: {video_id, title, channel, url, view_count, published_at}
     """
@@ -89,7 +120,7 @@ def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
             type="video",
             videoDuration="short",
             order="viewCount",
-            maxResults=25,
+            maxResults=50,
             publishedAfter=_recent_iso(days=14),
         )
         .execute()
@@ -107,8 +138,18 @@ def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
              if 0 < _seconds(i.get("contentDetails", {}).get("duration", "")) <= SHORT_SECONDS
              and says_something(i.get("snippet", {}).get("title", ""))
              and looks_english(i.get("snippet", {}).get("title", ""), i.get("snippet", {}).get("description", "")[:300],
-                               language=i.get("snippet", {}).get("defaultAudioLanguage") or i.get("snippet", {}).get("defaultLanguage"))]
-    items.sort(key=_velocity, reverse=True)
+                               language=i.get("snippet", {}).get("defaultAudioLanguage"))]
+    # relevanceLanguage barely filters, and many non-English Shorts report no audio language (or "en-IN"
+    # for Hinglish) under an English title. Unless the audio is reported as English, keep a video only
+    # when its channel is from an English-speaking country.
+    unsure = {i["snippet"]["channelId"] for i in items if not _english_audio(i["snippet"].get("defaultAudioLanguage"))}
+    countries = {}
+    if unsure:
+        for c in youtube.channels().list(id=",".join(list(unsure)[:50]), part="snippet").execute().get("items", []):
+            countries[c["id"]] = c.get("snippet", {}).get("country")
+    items = [i for i in items if _english_audio(i["snippet"].get("defaultAudioLanguage"))
+             or countries.get(i["snippet"]["channelId"]) in ENGLISH_COUNTRIES]
+    items.sort(key=_views, reverse=True)
 
     results = []
     for item in items[:limit]:
@@ -133,8 +174,8 @@ def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
 
 def public_search(topic,limit=5):
     """Real no-key discovery using the existing yt-dlp dependency, never invented refs.
-    Looks for YouTube Shorts (short vertical clips) from the last 14 days, checks every
-    candidate's real metadata at the same time, and ranks by views per hour."""
+    Looks for English YouTube Shorts (short vertical clips) from the last 14 days, checks every
+    candidate's real metadata (including the spoken language) at the same time, and ranks by total views."""
     import re
     import yt_dlp
     from concurrent.futures import ThreadPoolExecutor
@@ -142,13 +183,25 @@ def public_search(topic,limit=5):
     from .diagnostics import StageError,stage,ydl_options
     options={**ydl_options(),'skip_download':True,'noplaylist':True,'socket_timeout':15,'retries':1,
              'http_headers':{**ydl_options().get('http_headers',{}),'Accept-Language':'en-US,en;q=0.9'}}
-    # sp: uploaded this week, videos under 4 minutes, sorted by view count
+    # sp: sorted by view count, uploaded this month, videos only, under 4 minutes (the 14-day cutoff is applied below)
     # hl/gl: ask for the English, US version of the results (each video's language is checked again below)
-    url='https://www.youtube.com/results?'+urlencode({'search_query':topic+' #shorts','sp':'CAMSBAgDEAE%3D','hl':'en','gl':'US'})
-    with yt_dlp.YoutubeDL({**options,'extract_flat':True,'playlistend':20}) as y:
+    url='https://www.youtube.com/results?'+urlencode({'search_query':topic+' #shorts','sp':'CAMSBggEEAEYAQ==','hl':'en','gl':'US'})
+    with yt_dlp.YoutubeDL({**options,'extract_flat':True,'playlistend':30}) as y:
         listing=stage('discovery',y.extract_info,url,download=False)
-    candidates=[e for e in listing.get('entries',[]) if e and re.fullmatch(r'[A-Za-z0-9_-]{11}',e.get('id',''))
-                and not (isinstance(e.get('duration'),(int,float)) and e['duration']>SHORT_SECONDS)]
+    entries=list(listing.get('entries') or [])
+    # The results page leaves out its Shorts shelf, so also read the topic's hashtag Shorts page
+    # (e.g. #funnyskit), which lists that hashtag's most-watched Shorts.
+    tag=re.sub(r'[^a-z0-9]','',topic.lower())
+    if tag:
+        try:
+            with yt_dlp.YoutubeDL({**options,'extract_flat':True,'playlistend':30}) as y:
+                entries+=list(y.extract_info(f'https://www.youtube.com/hashtag/{tag}/shorts',download=False).get('entries') or [])
+        except Exception as exc:
+            logging.getLogger('cascade.trends').info('hashtag=%s unavailable: %s',tag,str(exc)[:120])
+    seen=set()
+    candidates=[e for e in entries if e and re.fullmatch(r'[A-Za-z0-9_-]{11}',e.get('id',''))
+                and not (isinstance(e.get('duration'),(int,float)) and e['duration']>SHORT_SECONDS)
+                and not (e['id'] in seen or seen.add(e['id']))]
     cutoff=datetime.fromisoformat(_recent_iso(14).replace('Z','+00:00'))
     log=logging.getLogger('cascade.trends')
 
@@ -163,25 +216,31 @@ def public_search(topic,limit=5):
             log.info('reference=%s excluded=not_a_recent_short upload_day=%s duration=%s',entry['id'],date,info.get('duration'));return None
         if not says_something(info.get('title','')):
             log.info('reference=%s excluded=hashtag_only_title',entry['id']);return None
-        if not looks_english(info.get('title',''),(info.get('description') or '')[:300],language=info.get('language')):
-            log.info('reference=%s excluded=not_english language=%s',entry['id'],info.get('language'));return None
+        spoken=spoken_language(info)
+        if not looks_english(info.get('title',''),(info.get('description') or '')[:300],language=spoken):
+            log.info('reference=%s excluded=not_english language=%s',entry['id'],spoken);return None
         return {'video_id':entry['id'],'title':info.get('title',''),'channel':info.get('channel') or info.get('uploader',''),
             'url':'https://www.youtube.com/watch?v='+entry['id'],'view_count':info.get('view_count') or 0,**_engagement(info),
             'published_at':published.isoformat(),'publication_precision':'day','discovery_provider':'youtube-public-search',
             'tags':(info.get('tags') or [])[:15],'description':(info.get('description') or '')[:300]}
 
+    # Most-viewed candidates first, verified 8 at a time until there are enough: checking every
+    # candidate means hundreds of requests per analysis, which makes YouTube ask for a bot check.
+    candidates.sort(key=lambda e:-(e.get('view_count') or 0))
     results=[];failures=[]
-    with ThreadPoolExecutor(max_workers=min(8,max(1,len(candidates)))) as pool:
-        for future in [pool.submit(check,e) for e in candidates]:
-            try:
-                found=future.result()
-                if found:results.append(found)
-            except Exception as exc:
-                if isinstance(exc,StageError):failures.append(exc.detail)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for start in range(0,min(len(candidates),MAX_CHECKED),8):
+            for future in [pool.submit(check,e) for e in candidates[start:start+8]]:
+                try:
+                    found=future.result()
+                    if found:results.append(found)
+                except Exception as exc:
+                    if isinstance(exc,StageError):failures.append(exc.detail)
+            if len(results)>=limit or any(f.get('code')=='youtube_bot_challenge' for f in failures):break
     if not results and failures:
         from .diagnostics import ResearchFailure
         raise ResearchFailure('Public YouTube discovery found candidates but metadata could not be verified.',failures)
-    results.sort(key=lambda r:_velocity({'statistics':{'viewCount':r['view_count']},'snippet':{'publishedAt':r['published_at']}}),reverse=True)
+    results.sort(key=_views,reverse=True)
     results=results[:limit]
     if results and failures:results[0]['discovery_failures']=failures
     return results
