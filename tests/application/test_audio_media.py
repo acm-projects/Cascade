@@ -77,6 +77,7 @@ class AudioMediaTests(unittest.TestCase):
         self.assertFalse(info['has_video']);self.assertTrue(info['has_audio']);self.assertTrue(info['cues'])
         draft=info['draft'];draft['state'].update(start=.25,end=1.25)
         draft['state']['texts']={'0':'Edited podcast transcript'}
+        draft['state']['captions']['enabled']=True   # captions are opt-in; this test exports the transcript
         self.assertEqual(self.client.put(url,headers=self.headers,json=draft).status_code,200)
         response=self.client.post(url+'/export',headers=self.headers,json=draft['state'])
         self.assertEqual(response.status_code,200)
