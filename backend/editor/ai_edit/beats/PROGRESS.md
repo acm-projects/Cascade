@@ -12,7 +12,7 @@ Engine switch: `CASCADE_EDIT_ENGINE=beats` (Cinema stays the default and is unto
 | 2 Director + critic | done offline; **live model runs blocked** (see Blocked) | Stage 2 commit |
 | 3 Chat integration | done | Stage 3 commit |
 | 4 Remotion renderer | done: example plan renders end to end (2680/2680 frames, worst beat start 0.4 frame, audio offset 0 ms, 627 s on 2 CPUs; one changed beat re-renders 2 beats in 97 s) | Stage 4 commit |
-| 5 Real assets | in progress | |
+| 5 Real assets | done: speaker cut-outs (U^2-Net, cleaned for the mic-arm / fast-hand case), Pexels search + ranking + cache (blocked here, generated backgrounds used), 15 synthesized sound effects mixed under the speech at -14 LUFS | Stage 5 commit |
 | 6 Polish vs reference | not started | |
 
 ## Blocked here (run on the Mac)
@@ -49,6 +49,15 @@ Engine switch: `CASCADE_EDIT_ENGINE=beats` (Cinema stays the default and is unto
   reference frames (blur-to-sharp entrance, glow, whip/glitch transitions working; gaps noted for Stage 6).
 - Full render of `examples/edit_plan_example.json` over `examples/source/source.mov`: `checks.ok = true`.
 - All 10 templates and 6 transitions render; stills of every template were checked by eye.
+
+## Stage 5 results
+
+- Cut-outs: 237 frames for beats 1, 5, 16, 21 in 218 s. Mic-arm case checked on a magenta background: the speaker,
+  hands, watch and mic head are kept; the teal arm drops out; stray hand fragments and half-transparent ghosts
+  (from fast gestures) are removed by `assets.clean_matte`.
+- B-roll: the real Pexels call was made with the `.env` key and refused by this sandbox's network ("Could not reach
+  Pexels"), so all 10 b-roll subjects used generated motion backgrounds (no placeholder blocks).
+- Render with assets: only the 8 affected beats re-rendered (407 s); `checks.ok = true`.
 
 ## Resume
 

@@ -109,15 +109,17 @@ def render_version(folder, data, source, stock=None, progress=None):
     """Render a saved plan version to vNNN/edited.mp4 (Remotion; see render.py). Returns (duration or None, a note for the
     chat). Beats already rendered for an earlier version are reused. Never raises: a plan stays usable without its video."""
     import os
-    from . import render
+    from . import assets, render
     report = progress or (lambda amount, stage: None)
     if os.getenv('CASCADE_BEATS_RENDER', 'on').strip().lower() == 'off': return None, ''
     why = render.available()
     if why: return None, f'\nThe preview video was not made: {why}'
     folder = Path(folder)
     out = folder/data['version']/'edited.mp4'
+    folders = [p for p in (Path.home()/'Desktop'/'AI video editor'/'B-roll',) if p.is_dir()]
     try:
-        result = render.render(data['plan'], source, out, folder/'beats-render', progress=report)
+        result = render.render(data['plan'], source, out, folder/'beats-render', audio=assets.mix, progress=report,
+                               make_assets=lambda work, size: assets.prepare(data['plan'], work, stock, folders, size))
     except Exception as exc:
         logging.getLogger(__name__).warning('beat plan render failed', exc_info=True)
         return None, f"\nThe preview video could not be made ({getattr(exc, 'detail', None) or exc}). The plan is saved."
