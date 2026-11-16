@@ -21,6 +21,11 @@
   background: linear-gradient(160deg, #7ff0ec, #3fc2dc 35%, #1f9fd6 75%);
 }
 
+/* Up through the surface: bright, sunlit water at the top, like the How it works pond's sky */
+.camera-transition-rise {
+  background: linear-gradient(180deg, #f2fdff 0%, #a8ecf2 30%, #5cc6da 70%, #7cc6d8 100%);
+}
+
 .camera-transition-cover {
   animation: camera-wash-in var(--wash-for) ease-in var(--wash-from) both;
 }

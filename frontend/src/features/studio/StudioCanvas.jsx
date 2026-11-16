@@ -64,7 +64,7 @@ function StudioCanvas({ nodes, edges, nodeTypes, edgeTypes, onNodeClick, onDropF
         nodesConnectable={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant="dots" gap={24} size={1.5} />
+        <Background variant="dots" gap={24} size={2.4} />
         <Controls position="bottom-right" showInteractive={false} />
         {/* React Flow's default minimap is 200 x 150; this one is smaller so it covers less canvas */}
         <MiniMap pannable zoomable position="bottom-left" style={{ width: 130, height: 90 }} />

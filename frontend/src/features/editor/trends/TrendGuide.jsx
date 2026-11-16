@@ -1,10 +1,10 @@
-import Capybara from '../../../components/Capybara';
+import Mascot from '../../../components/Mascot';
 
-// Cascade's capybara walks the user through the analysis: a mascot with a speech bubble.
-//   big  - the full, idling capybara (top of the window); otherwise just its head (beside each step)
+// Cascade's frog walks the user through the analysis: a mascot with a speech bubble.
+//   big  - the full, idling frog (top of the window); otherwise just its head (beside each step)
 export default function Guide({ children, big = false, tone = 'info', live = false }) {
   return <div className={`ta-guide${big ? ' ta-guide-big' : ''} ta-guide-${tone}`}>
-    <span className="ta-guide-mascot">{big ? <Capybara variant="full" size={170} /> : <Capybara variant="head" size={52} />}</span>
+    <span className="ta-guide-mascot">{big ? <Mascot variant="full" size={170} /> : <Mascot variant="head" size={52} />}</span>
     <p className="ta-bubble" role={live ? 'status' : undefined}>{children}</p>
   </div>;
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import "./ProjectsPage.css";
-import leafCream from "../assets/icons/leaf-cream.svg";
+import logo from "../assets/icons/cascade-logo.svg";
 import searchIcon from "../assets/icons/search.svg";
 import { useProject } from "../context/projectContextValue";
 import { useLeafNavigate } from "../context/leafTransitionValue";
@@ -11,6 +11,7 @@ import IsoWorld from "../features/landing3d/IsoWorld";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
+import Mascot from "../components/Mascot";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import Modal from "../components/ui/Modal";
@@ -220,10 +221,20 @@ function ProjectsPage() {
       {/* Green top bar */}
       <header className="projects-bar">
         <Link to="/" className="projects-brand" title="Back to the home page">
-          <img src={leafCream} alt="" className="projects-leaf" />
+          <img src={logo} alt="" className="projects-leaf" />
           <span>Cascade</span>
         </Link>
-        <UserAvatar />
+        <div className="projects-bar-right">
+          {/* "Discover" is a placeholder: it looks like a link but doesn't go anywhere yet */}
+          <nav className="projects-nav" aria-label="Site">
+            <Link to="/how-it-works" className="projects-nav-link" onClick={(event) => {
+              event.preventDefault();
+              leafNavigate("/how-it-works", { style: "rise", ready: import("./HowItWorksPage") });
+            }}>How it works</Link>
+            <button type="button" className="projects-nav-link" title="Coming soon">Discover</button>
+          </nav>
+          <UserAvatar />
+        </div>
       </header>
 
       <div className="projects-body" ref={bodyRef}>
@@ -242,6 +253,7 @@ function ProjectsPage() {
               {v.label}
             </button>
           ))}
+          <TrendsTip />
         </nav>
 
         {/* Main area */}
@@ -253,7 +265,7 @@ function ProjectsPage() {
             </div>
 
             <div className="projects-actions">
-              {view.id === "trash" && <Button size="sm" disabled={loading || deleting || updating.size > 0 || trashedProjects.length === 0}
+              {view.id === "trash" && <Button className="projects-empty-trash" disabled={loading || deleting || updating.size > 0 || trashedProjects.length === 0}
                 onClick={() => setEmptyTrashOpen(true)}>Empty trash</Button>}
               <label className="projects-search">
                 <img src={searchIcon} alt="" />
@@ -300,3 +312,21 @@ function ProjectsPage() {
 }
 
 export default ProjectsPage;
+
+// In the empty corner under the sidebar: the frog, pointing out the Trends analysis.
+// The × hides it for now; it comes back whenever the page is refreshed or opened again.
+function TrendsTip() {
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
+  const hide = () => setHidden(true);
+  return (
+    <div className="projects-tip" role="note">
+      <p className="projects-tip-bubble">
+        <button type="button" className="projects-tip-close" onClick={hide} aria-label="Hide this tip">×</button>
+        <b>Psst!</b> Try the new <b>Trends analysis</b>. Open a project and press <b>Trends</b> in the Editor
+        to see how your clip compares with what's trending right now.
+      </p>
+      <Mascot className="projects-tip-frog" size={150} />
+    </div>
+  );
+}

@@ -250,7 +250,8 @@
 .ta-chart svg { display: block; overflow: visible; }
 .ta-grid line { stroke: var(--ta-line); stroke-width: 1; }
 .ta-grid, .ta-grid text { fill: var(--ta-soft); font: 700 11px var(--font-ui); }
-.ta-guide { stroke: var(--ta-ink); stroke-dasharray: 3 3; opacity: .45; }
+/* the dotted line under the cursor on a chart (only the <line>: the frog guide shares the class name) */
+.ta-chart line.ta-guide { stroke: var(--ta-ink); stroke-dasharray: 3 3; opacity: .45; }
 .ta-line { fill: none; stroke: var(--series); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.1s cubic-bezier(.3,.6,.2,1); }
 .ta-chart.is-drawn .ta-line { stroke-dashoffset: 0; }
 .ta-dot { fill: #fff; stroke: var(--series); stroke-width: 2; opacity: 0; transition: opacity .3s ease .9s, r .15s; }
@@ -369,7 +370,8 @@ button.ta-stamp:hover { background: color-mix(in srgb, var(--ta-edit) 20%, #fff)
 .ta-hero-compact { grid-template-columns: minmax(0, 1.5fr) minmax(220px, .8fr); align-items: center; }
 .ta-hero-compact h1 span { display: inline; }
 .ta-guide { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
-.ta-guide-mascot { flex: none; }
+/* position + z-index: keeps the frog above the moving water behind the header (which is positioned) */
+.ta-guide-mascot { flex: none; position: relative; z-index: 1; }
 .ta-bubble {
   position: relative; padding: 12px 16px; border-radius: 16px 16px 16px 4px; background: #fff; color: var(--ta-ink);
   font: 600 .95rem/1.45 var(--font-body); box-shadow: var(--ta-shadow); border: 1px solid var(--ta-line); max-width: 62ch;

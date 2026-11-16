@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import WaterFlow from "../components/WaterFlow";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
+import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import AIEditorChat from "../features/editor/AIEditorChat";
 import SequenceControls from "../features/editor/SequenceControls";
 import { sameEdit, isAIUndo, canUndoAI } from "../features/editor/editorTransactions";
@@ -55,7 +55,7 @@ const panelInfo = {
 // Built from the Figma "Editor" wireframe (node 560:2716), connected to backend/editor_backend.py.
 // Shows the clips picked in AI Studio; every edit is saved to the backend automatically.
 function EditorPage() {
-  const navigate = useNavigate();
+  const leafNavigate = useLeafNavigate();
   const { projectId } = useParams();
   const layout = EDITOR_LAYOUT;
   const api = useApi();
@@ -95,6 +95,10 @@ function EditorPage() {
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   const hasClips = Boolean(clips?.length);
+  // Nothing more to load (an error, or no clips): let a waterfall page change fall away. With clips,
+  // ClipWorkspace says so once the clip's edits have loaded.
+  const settled = Boolean(error || (clips && !hasClips));
+  useEffect(() => { if (settled) markPageReady(); }, [settled]);
 
   // Save the clip you're on, then open another one
   async function selectClip(clip, { trends = false } = {}) {
@@ -143,11 +147,11 @@ function EditorPage() {
     body = (
       <div className="editor-empty-choices">
         <EmptyState icon="scissors" title="No clips yet"
-          text="Upload your own video to edit it right away, or let Canvas find the best clips for you." />
+          text="Upload your own video to edit it right away, or let Studio Island find the best clips for you." />
         <div className="editor-empty-actions">
           <UploadClipButton projectId={projectId} onUploaded={addOwnClip} className="btn btn-primary" label="Upload your own clip" />
-          <button type="button" className="btn" onClick={() => navigate(`/projects/${projectId}/studio`)}>
-            <Icon name="sparkles" /> Find clips with Canvas
+          <button type="button" className="btn" onClick={() => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" })}>
+            <Icon name="sparkles" /> Find clips on Studio Island
           </button>
         </div>
       </div>
@@ -156,14 +160,13 @@ function EditorPage() {
 
   return (
     <div className={`editor leaf-page editor-${layout}`}>
-      <WaterFlow />
       <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} />
       {body ? (
         <div className="editor-empty">{body}</div>
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
           clips={clips} openTrends={trendsFor === currentKey} onSelectClipForTrends={clip => selectClip(clip, { trends: true })}
-          registerFlush={registerFlush} onExport={() => navigate(`/projects/${projectId}/export`)} />
+          registerFlush={registerFlush} onExport={() => leafNavigate(`/projects/${projectId}/export`, { style: "falls" })} />
       )}
     </div>
   );
@@ -196,6 +199,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const selectedBroll = state?.broll?.some(s => s.id === selectedSegment) ? selectedSegment : null;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
+  const loaded = Boolean((info && state) || draft.error);
+  useEffect(() => { if (loaded) markPageReady(); }, [loaded]);   // the Editor is ready to use
   // The background edit for this clip. It keeps running if you switch clips or reload; this picks it back up.
   const [aiJob, setAIJob] = useState(null);
   const serverJob = info?.ai_job;
@@ -318,7 +323,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const preview = draft.error ? (
     <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
   ) : info && state ? (
-    <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+    <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
       framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
   ) : (
     <ClipLoading />
@@ -433,7 +438,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
             {draft.error ? (
               <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
-              <ClipPlayer leafLoading projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
+              <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
                 framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
             ) : (
               <ClipLoading />
@@ -455,13 +460,17 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
                   <span className="es-tab-label">{tab}</span>
                 </button>
               ))}
-              <button type="button" className="btn btn-small btn-primary es-trends"
+            </div>
+            <div className="editor-panel-content">
+              {panelContent}
+              {/* Trends: in the top-right corner of the tool area, next to the tab's own controls. It's inside the
+                  scrolling part, so it scrolls away with the controls instead of floating over them. */}
+              <button type="button" className="btn btn-small btn-primary es-trends es-trends-corner"
                 disabled={!state || info?.has_video === false} aria-haspopup="dialog" aria-expanded={trendsOpen}
                 onClick={() => setTrendsOpen(true)}>
                 <Icon name="sparkles" size={18} /> Trends
               </button>
             </div>
-            <div className="editor-panel-content">{panelContent}</div>
             </div>
           </aside>
           {timeline && <section className="es-timeline" aria-label="Timeline">{timeline}</section>}

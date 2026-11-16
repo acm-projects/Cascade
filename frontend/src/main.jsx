@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import './styles/theme.css'
+import './styles/test-background.css' // TEST: waterfall background. Delete this line to go back to the leaves.
 import App from './App.jsx'
 import AuthGate from './auth/AuthGate.jsx'
 import { ProjectProvider } from './context/ProjectContext.jsx'

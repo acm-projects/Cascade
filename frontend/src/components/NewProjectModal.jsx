@@ -112,7 +112,7 @@ function NewProjectModal({ onCreate, onClose }) {
           ) : (
             <>
               <strong>Drag a video here or click to browse</strong>
-              <span>{ownClip ? "Required: this is the clip you'll edit" : "Optional: you can also pick it in Canvas"}</span>
+              <span>{ownClip ? "Required: this is the clip you'll edit" : "Optional: you can also pick it on Studio Island"}</span>
             </>
           )}
           <input ref={fileInput} type="file" accept={ownClip ? VIDEO_ACCEPT : MEDIA_ACCEPT} hidden

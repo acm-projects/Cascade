@@ -10,6 +10,9 @@ import ExportPage from "./pages/ExportPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import Spinner from "./components/ui/Spinner";
 
+// "How it works" brings in its own 3D pond, so it's downloaded only when someone opens it
+const HowItWorksPage = lazy(() => import("./pages/HowItWorksPage"));
+
 // AI Studio brings in React Flow (a big library), so it's downloaded only when someone opens it
 const StudioPage = lazy(() => import("./pages/StudioPage"));
 
@@ -27,6 +30,7 @@ function App() {
       {(location) => <Routes location={location}>
         <Route path="/" element={<LandingPage />} />
         <Route path="/sign-in/*" element={<SignInPage />} />
+        <Route path="/how-it-works" element={<Suspense fallback={null}><HowItWorksPage /></Suspense>} />
 
         {/* Everything inside here needs a signed-in user (or dev mode) */}
         <Route element={<RequireSignIn />}>
@@ -34,7 +38,7 @@ function App() {
           <Route
             path="/projects/:projectId/studio/:sessionId?"
             element={
-              <Suspense fallback={<div className="page-loading"><Spinner size={48} label="Loading Canvas" /></div>}>
+              <Suspense fallback={<div className="page-loading"><Spinner size={48} label="Loading Studio Island" /></div>}>
                 <StudioPage />
               </Suspense>
             }

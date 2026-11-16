@@ -10,7 +10,7 @@ import Icon from "../../../components/ui/Icon";
 //   data.onChooseFile(f)  - a video was picked
 //   data.onPreviewSource  - watch the video
 // "nodrag" on the clickable parts stops React Flow from treating a click as dragging the box.
-function SourceNode({ data }) {
+export function SourceCard({ data, children }) {
   const { session, sourceName, pendingFile, onChooseFile, onPreviewSource } = data;
   const hasVideo = Boolean(session.source_job || pendingFile);
 
@@ -36,8 +36,17 @@ function SourceNode({ data }) {
           <span className="btn btn-primary btn-small">{pendingFile ? "Change media" : "⬆ Choose video or audio"}</span>
         </label>
       )}
-      <Handle type="source" position={Position.Right} />
+      {children}
     </div>
+  );
+}
+
+// On the flat React Flow canvas: the card, with the dot the vine starts from
+function SourceNode({ data }) {
+  return (
+    <SourceCard data={data}>
+      <Handle type="source" position={Position.Right} />
+    </SourceCard>
   );
 }
 

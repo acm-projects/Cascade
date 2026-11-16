@@ -1,11 +1,11 @@
 import { Link, NavLink, useParams } from "react-router-dom";
-import UserAvatar, { UserName } from "./UserAvatar";
+import { useLeafNavigate } from "../context/leafTransitionValue";
+import UserAvatar from "./UserAvatar";
 import "./TopNav.css";
-import "./WorkflowNav.css";
-import leafIcon from "../assets/icons/leaf-cream.svg";
+import usePixelLogo from "./usePixelLogo";
 
 const steps = [
-  { id: "studio", label: "Canvas" },
+  { id: "studio", label: "Studio Island" },
   { id: "editor", label: "Editor" },
   { id: "export", label: "Export" },
 ];
@@ -25,13 +25,15 @@ function stepPath(projectId, stepId, sessionId) {
 //   canOpenExport  - same for Export
 function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpenExport = false }) {
   const params = useParams();
+  const leafNavigate = useLeafNavigate();
   const id = projectId ?? params.projectId;
   const unlocked = { studio: true, editor: canOpenEditor, export: canOpenExport };
+  const pixelLogo = usePixelLogo(19);   // the logo as pixel art: 19 x 19 squares, 2px each at 38px
 
   return (
-    <header className={`topnav${["studio", "editor", "export"].includes(active) ? " topnav--compact" : ""}`}>
+    <header className="topnav">
       <Link to="/projects" className="topnav-brand" title="Back to your projects">
-        <img src={leafIcon} alt="" className="topnav-leaf" />
+        <img src={pixelLogo} alt="" className="topnav-leaf" />
         <span className="topnav-name">Cascade</span>
       </Link>
 
@@ -59,14 +61,18 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
           }
 
           return (
-            <NavLink key={step.id} to={stepPath(id, step.id, params.sessionId)} className={className}>
+            <NavLink key={step.id} to={stepPath(id, step.id, params.sessionId)} className={className}
+              onClick={(event) => {
+                if (step.id === active || !leafNavigate) return;
+                event.preventDefault();   // a waterfall covers the change while the next step loads
+                leafNavigate(stepPath(id, step.id, params.sessionId), { style: "falls" });
+              }}>
               {content}
             </NavLink>
           );
         })}
       </nav>
 
-      <UserName className="topnav-user" />
       <UserAvatar className="topnav-avatar" />
     </header>
   );

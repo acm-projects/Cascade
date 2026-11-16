@@ -12,14 +12,14 @@ import Icon from "../../../components/ui/Icon";
 //   data.revision   - a "more like this" update still running/failed for this slot (or null)
 //   data.highlighted - the ref whose chip is hovered in the chat (that clip glows)
 //   data.editorClips, data.onToggle(ref), data.onPreview(clip, ref), data.onRetry(jobId)
-function ClipNode({ data }) {
+export function ClipCard({ data, children }) {
   const { clip, ref, label, number, revision, editorClips, highlighted, onToggle, onPreview, onRetry, referenceLabels = [] } = data;
   const selected = editorClips.some((item) => sameRef(item, ref));
   const updating = revision && ["queued", "processing"].includes(revision.state);
 
   return (
     <div className={`studio-node studio-clip-node${selected ? " is-selected" : ""}${highlighted && sameRef(highlighted, ref) ? " is-highlighted" : ""}`}>
-      <Handle type="target" position={Position.Left} />
+      {children}
       <div className="studio-clip-head">
         <span>P{number} · Clip {label}</span>
         <span>{formatTime(clip.end - clip.start)}</span>
@@ -53,8 +53,17 @@ function ClipNode({ data }) {
           aria-label={`Pick prompt ${number} clip ${label}: ${clip.title || "clip"}`} />
         {selected ? <>Picked <Icon name="check" /></> : "Pick clip"}
       </label>
-      <Handle type="source" position={Position.Right} />
     </div>
+  );
+}
+
+// On the flat React Flow canvas: the card, with the dots the vines connect to
+function ClipNode({ data }) {
+  return (
+    <ClipCard data={data}>
+      <Handle type="target" position={Position.Left} />
+      <Handle type="source" position={Position.Right} />
+    </ClipCard>
   );
 }
 

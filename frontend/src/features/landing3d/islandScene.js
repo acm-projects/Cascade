@@ -219,7 +219,7 @@ function isRiver(x) {
 
 // ---------- The sea ----------
 
-const SEA_VERTEX = `
+export const SEA_VERTEX = `
   varying vec2 vPlace;
   void main() {
     vPlace = position.xz;
@@ -227,7 +227,7 @@ const SEA_VERTEX = `
   }
 `;
 
-const SEA_FRAGMENT = `
+export const SEA_FRAGMENT = `
   uniform float uTime;
   uniform sampler2D uShore;
   uniform float uRange;
@@ -376,8 +376,56 @@ function buildWater(root, random) {
     root.add(plane);
   }
 
+  // Raised banks along both sides of each flat stretch, so the water sits in a channel cut into the grass
+  // (like the rivers on Studio Island): a brown dirt wall facing the water, a flat grassy top with little
+  // pebbles on it, then a grassy slope back down to the ground. They stop short of each waterfall, and leave a
+  // gap where the bridge crosses (z -0.3 to 0.9 on the middle stretch) so they don't poke through its planks.
+  const BANK_HEIGHT = 0.2;    // the bank's top, above the water
+  const BANK_TOP = 0.24;      // how wide its flat grassy top is
+  const BANK_SLOPE = 0.16;    // how far out its outer side slopes back down
+  const bankMaterial = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.9, flatShading: true, side: THREE.DoubleSide });
+  const wallMaterial = bankMaterial(COLORS.dirt[1]);
+  const topMaterial = bankMaterial(COLORS.grass[0]);
+  const slopeMaterial = bankMaterial(COLORS.grass[3]);
+  const pebbles = [];
+  const PEBBLES = ["#a8784a", "#b88a5a", "#9a6a40", "#c29a6a", "#8c6038"];
+  const bankRuns = [[RIVER_BACK, -2.62, HIGH], [-2.38, -0.3, MID], [0.9, 2.38, MID], [2.62, EDGE - 0.12, LOW]];
+  for (const [from, to, ground] of bankRuns) {
+    const water = ground - 0.1;
+    for (const side of [-1, 1]) {
+      const edge = side < 0 ? RIVER_MIN_X : RIVER_MAX_X;
+      // a strip running from z = from to z = to, between two lines alongside the river: [out from the water's edge, height]
+      const strip = ([out1, y1], [out2, y2], stripMaterial) => {
+        const geometry = new THREE.BufferGeometry();
+        const x1 = edge + side * out1;
+        const x2 = edge + side * out2;
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+          x1, y1, from, x2, y2, from, x1, y1, to, x2, y2, to,
+        ], 3));
+        geometry.setIndex([0, 1, 2, 1, 3, 2]);
+        geometry.computeVertexNormals();
+        root.add(withShadow(new THREE.Mesh(geometry, stripMaterial)));
+      };
+      const wallFoot = [-0.04, water - 0.04];
+      const wallTop = [0.02, water + BANK_HEIGHT];
+      const topEnd = [0.02 + BANK_TOP, water + BANK_HEIGHT];
+      const slopeFoot = [0.02 + BANK_TOP + BANK_SLOPE, ground - 0.01];
+      strip(wallFoot, wallTop, wallMaterial);
+      strip(wallTop, topEnd, topMaterial);
+      strip(topEnd, slopeFoot, slopeMaterial);
+      for (let z = from + 0.12; z < to - 0.1; z += 0.2 + random() * 0.09) {
+        const size = 0.09 + random() * 0.06;
+        pebbles.push({
+          x: edge + side * (0.02 + BANK_TOP * (0.3 + random() * 0.4)), y: water + BANK_HEIGHT - 0.02, z: z + (random() - 0.5) * 0.05,
+          sx: size, sy: size * 0.5, sz: size, ry: random() * Math.PI * 2, color: pick(PEBBLES, random),
+        });
+      }
+    }
+  }
+  instanced(root, lumpyBall(1, makeRandom(5), 0.12, 1), new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true }), pebbles, true);
+
   // Waterfalls: [z, top, bottom]
-  const falls = [[-2.48, HIGH - 0.08, MID - 0.14], [2.52, MID - 0.08, LOW - 0.14], [EDGE + 0.03, LOW - 0.08, SEA_LEVEL]];
+  const falls =[[-2.48, HIGH - 0.08, MID - 0.14], [2.52, MID - 0.08, LOW - 0.14], [EDGE + 0.03, LOW - 0.08, SEA_LEVEL]];
   for (const [z, top, bottom] of falls) {
     const height = top - bottom;
     const texture = add(waterTexture(random, 1, height / 2.4, false), 0.95);
@@ -741,14 +789,26 @@ function buildCritters(root) {
   beak.position.set(0, -0.01, 0.1);
   head.add(beak);
   parrot.add(head);
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.14), material("#2d6cdf"));
-  wing.position.set(0.11, -0.02, -0.02);
-  parrot.add(wing);
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.04), material("#2d6cdf"));
-  tail.position.set(0, -0.22, -0.06);
-  tail.rotation.x = -0.4;
+  const blue = material("#2d6cdf");
+  for (const side of [1, -1]) {   // a folded wing on each side, tucked against the body
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.17, 0.13), blue);
+    wing.position.set(side * 0.1, -0.02, -0.02);
+    wing.rotation.x = 0.15;
+    parrot.add(wing);
+  }
+  // The tail sweeps back and down behind it, over the back of the roof
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.03), blue);
+  tail.position.set(0, -0.08, -0.13);
+  tail.rotation.x = 1.1;
   parrot.add(tail);
-  parrot.position.set(RIVER_X + 1.25, HIGH + 3.18, -6);
+  // Two little yellow feet gripping the roof
+  for (const side of [1, -1]) {
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.06, 0.06), material("#ffcf3d"));
+    foot.position.set(side * 0.045, -0.18, 0.02);
+    parrot.add(foot);
+  }
+  // Perched on the screen's roof (the frame stands at z = RIVER_BACK - 0.05; its roof top is 3 above HIGH)
+  parrot.position.set(RIVER_X + 1.25, HIGH + 3.2, RIVER_BACK - 0.02);
   parrot.rotation.y = 0.6;
   root.add(parrot);
 

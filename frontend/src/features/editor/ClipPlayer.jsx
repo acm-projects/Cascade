@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 import ClipLoading from "./ClipLoading";
-import PreviewLeaves from "./PreviewLeaves";
 import { formatTime } from "../../utils/time";
 import { clipMediaPath } from "./clips";
 import { dragFraming, frameSize } from "./playerMath";
@@ -20,12 +19,15 @@ import Icon from "../../components/ui/Icon";
 //                to choose what stays in the frame (one undo step per drag)
 //   onSourceMedia - optional: called with the source video URL once it loads (the timeline uses it for frames)
 //   onOpenTrends, trendsOpen - optional: show a Trends button that opens the Trends popup
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, leafLoading = false, saveStatus }) {
+//   versionsInBar - optional: put Original / Edited in the controls row under the video (as the Editor does
+//                   when it passes saveStatus), so the video gets the height that row would take
+//   onFitWidth(px) - optional: told how wide the video would be if it used the stage's full height, so the
+//                    page can make the player's column exactly that wide (no empty space beside the video)
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus, versionsInBar = false, onFitWidth }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const [url, setUrl] = useState(null);
-  const [readySource, setReadySource] = useState(null);
   const [render, setRender] = useState(null); // { key, url } or { key, error } for the last finished server render
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
@@ -182,13 +184,18 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
     return () => { cancelAnimationFrame(frame); video.style.objectPosition = ""; };
   }, [cropNow, framingPlan, url]);
 
-  if (error) return <div className="clip-player-message" role="alert">{error.message || error}</div>;
-  if (!url && !leafLoading) return <ClipLoading />;
-
   const { composition } = state;
   const audioOnly = info.has_video === false;
   const aiShape = composition.ratio !== "original" ? ratioOf(composition.ratio) : fileShape || 9 / 16;
   const ratio = view === "original" ? info.width / info.height : state.ai_edit ? aiShape : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : ratioOf(composition.ratio);
+  // How wide the video is when its height fills the stage (depends only on the height, so the page can size the
+  // column from it without the two chasing each other)
+  const fitWidth = stage.height > 0 && ratio > 0 ? Math.round(stage.height * ratio) : 0;
+  useEffect(() => { if (fitWidth) onFitWidth?.(fitWidth); }, [fitWidth, onFitWidth]);
+
+  if (error) return <div className="clip-player-message" role="alert">{error.message || error}</div>;
+  if (!url) return <ClipLoading />;
+
   // The biggest frame of this shape that fits the space
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
 
@@ -232,9 +239,10 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
       </div>
   );
 
+  const inBar = Boolean(saveStatus) || versionsInBar;
   return (
     <div className="clip-player">
-      {!saveStatus && versionControls}
+      {!inBar && versionControls}
       {onOpenTrends && <button type="button" className="editor-choice clip-player-trends"
         aria-haspopup="dialog" aria-expanded={trendsOpen} onClick={onOpenTrends}>Trends</button>}
       <div ref={stageRef} className="clip-player-stage">
@@ -245,7 +253,6 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
           {audioOnly ? <>
             <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}><Icon name="headphones" /> Audio recording</p>
             <audio muted={muted} onEnded={handleEnded} ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
-              onCanPlay={e => setReadySource(e.currentTarget.getAttribute("src"))}
               onError={() => setError(new Error("Unable to load the preview. Please try again."))}
               onLoadedMetadata={e => {e.target.currentTime=showEdited || view === "original" ? 0 : state.start;}}
               onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
@@ -260,7 +267,6 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
               objectPosition: `${composition.x * 100}% ${composition.y * 100}%`,
             }}
             onLoadedMetadata={(e) => { if (state.ai_edit && e.target.videoWidth) setFileShape(e.target.videoWidth / e.target.videoHeight); e.target.currentTime = showEdited || view === "original" ? 0 : state.start; }}
-            onCanPlay={e => setReadySource(e.currentTarget.getAttribute("src"))}
             onError={() => setError(new Error("Unable to load the preview. Please try again."))}
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
@@ -268,7 +274,6 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
             onPause={() => setPlaying(false)}
             onClick={togglePlay}
           />}
-          {leafLoading && <PreviewLeaves loading={readySource !== (showEdited ? rendered : url) || (view === "edited" && rendering)} />}
         </div>
       </div>
       {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? (state.ai_edit ? `AI edit ${state.ai_edit.version} · this exact file is what Export saves` : 'Rendered preview · same audio/effects as MP4 export') : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
@@ -287,7 +292,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
           onClick={() => setLoop((l) => !l)} aria-pressed={loop} title={loop ? "Looping: on" : "Looping: off"}>
           <Icon name="repeat" /> Loop
         </button>
-        {saveStatus && versionControls}
+        {inBar && versionControls}
       </div>
     </div>
   );

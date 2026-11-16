@@ -1,0 +1,250 @@
+/* "How it works": the 3D pond fills the page; the title, stage tags and the bottom panel sit on top.
+   Dark boxes with chunky shadows and cream tags, like a pixel-art game's menus. */
+.hiw {
+  --hiw-ink: #13303b;        /* the dark boxes */
+  --hiw-ink-edge: #071a21;
+  --hiw-cream: #f6e7c8;      /* the tags */
+  --hiw-text: #fff8e4;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #7cc6d8;
+  color: var(--hiw-text);
+}
+
+.hiw-world {
+  position: absolute;
+  inset: 0;
+}
+
+.hiw-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Top: the title card and the way back ---------- */
+.hiw-top {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.hiw-title {
+  margin: 0;
+  padding: 14px 24px 16px;
+  border: 3px solid var(--hiw-ink-edge);
+  border-radius: 6px;
+  background: var(--hiw-ink);
+  box-shadow: 6px 6px 0 var(--hiw-ink-edge);
+  color: var(--hiw-text);
+  font-family: var(--font-title);
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  pointer-events: auto;
+}
+
+.hiw-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 3px solid var(--hiw-ink-edge);
+  border-radius: 6px;
+  background: var(--hiw-cream);
+  box-shadow: 4px 4px 0 var(--hiw-ink-edge);
+  color: var(--hiw-ink);
+  font-family: var(--font-display);
+  font-size: 17px;
+  text-decoration: none;
+  pointer-events: auto;
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.hiw-back:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--hiw-ink-edge); }
+.hiw-back:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--hiw-ink-edge); }
+
+/* ---------- Stage tags, placed next to their lily pad by the 3D scene ---------- */
+.hiw-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hiw-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 5px 12px;
+  border: 3px solid var(--hiw-ink-edge);
+  border-radius: 4px;
+  background: var(--hiw-cream);
+  box-shadow: 3px 3px 0 var(--hiw-ink-edge);
+  color: var(--hiw-ink);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  opacity: 0;   /* shown once the scene has placed it */
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background-color 150ms ease-out;
+}
+
+.hiw-tag:hover { background: #fff3da; }
+
+.hiw-tag.active {
+  padding: 8px 16px;
+  font-size: 20px;
+  background: #ffd970;
+}
+
+.hiw-tag:focus-visible,
+.hiw-dot:focus-visible,
+.hiw-arrow:focus-visible,
+.hiw-back:focus-visible {
+  outline: 3px solid #ffd970;
+  outline-offset: 3px;
+}
+
+/* ---------- The bottom panel: what this stage is ---------- */
+.hiw-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: min(960px, calc(100% - 32px));
+  padding: 18px 22px;
+  border: 3px solid var(--hiw-ink-edge);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--hiw-ink) 94%, transparent);
+  box-shadow: 6px 6px 0 var(--hiw-ink-edge);
+  transform: translateX(-50%);
+}
+
+.hiw-panel-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border: 3px solid var(--hiw-ink-edge);
+  border-radius: 6px;
+  background: #5cb546;
+  color: var(--hiw-text);
+  font-size: 30px;
+}
+
+.hiw-panel-words {
+  flex: 1;
+  min-width: 0;
+}
+
+.hiw-panel-step {
+  margin: 0 0 4px;
+  color: #ffd970;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hiw-panel-title {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+}
+
+.hiw-panel-text {
+  margin: 0;
+  color: color-mix(in srgb, var(--hiw-text) 82%, transparent);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.hiw-panel-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.hiw-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.hiw-dot {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid var(--hiw-cream);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.hiw-dot.active { background: #ffd970; border-color: #ffd970; }
+
+.hiw-arrows {
+  display: flex;
+  gap: 10px;
+}
+
+.hiw-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 14px;
+  border: 3px solid var(--hiw-ink-edge);
+  border-radius: 6px;
+  background: var(--hiw-cream);
+  box-shadow: 3px 3px 0 var(--hiw-ink-edge);
+  color: var(--hiw-ink);
+  font-family: var(--font-display);
+  font-size: 18px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.hiw-arrow:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--hiw-ink-edge); }
+.hiw-arrow:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--hiw-ink-edge); }
+.hiw-arrow:disabled { opacity: 0.45; cursor: default; }
+
+.hiw-next { background: #8fe05a; }
+.hiw-flip { transform: scaleX(-1); }
+
+/* ---------- Phones: stack the panel ---------- */
+@media (max-width: 640px) {
+  .hiw-top { top: 12px; left: 12px; right: 12px; }
+  .hiw-back { padding: 8px 10px; font-size: 14px; }
+  .hiw-panel { flex-wrap: wrap; gap: 12px; bottom: 12px; padding: 14px; }
+  .hiw-panel-icon { width: 44px; height: 44px; font-size: 22px; }
+  .hiw-panel-title { font-size: 21px; }
+  .hiw-panel-text { font-size: 14px; }
+  .hiw-panel-nav { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+  .hiw-tag { font-size: 11px; padding: 3px 8px; }
+  .hiw-tag.active { font-size: 14px; padding: 5px 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hiw-tag, .hiw-back, .hiw-arrow { transition: none; }
+}

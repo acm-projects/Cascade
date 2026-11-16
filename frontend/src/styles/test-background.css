@@ -1,0 +1,13 @@
+/* TEST ONLY: a test picture behind Projects, AI Studio, Editor and Export.
+   To go back to the leaf backgrounds, delete the "test-background.css" import line in main.jsx.
+   Nothing else was changed, so the old backgrounds come straight back.
+   To try the other test picture, swap which url(...) line is commented out. */
+.projects,
+.studio.leaf-page,
+.editor.leaf-page,
+.export.leaf-page {
+  background-image: url("../assets/test/jungle-fog-bg.webp") !important;
+  /* background-image: url("../assets/test/waterfall-bg.webp") !important; */
+  background-size: cover !important;
+  background-position: center !important;
+}

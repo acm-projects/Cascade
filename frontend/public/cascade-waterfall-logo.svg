@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cascade's logo: a waterfall seen from the front, tumbling over three ledges and getting wider each time
+       (a cascade), into a pool. A mossy cliff behind it, chunky shapes and a navy outline. -->
+  <!-- the cliff, with grass along the top -->
+  <rect x="5" y="6" width="54" height="48" rx="7" fill="#5f6f6a" stroke="#12324f" stroke-width="3.5" />
+  <path d="M7 15C14 12 18 16 24 13M40 13C46 16 50 12 57 15" stroke="#4f5d58" stroke-width="3" stroke-linecap="round" />
+  <path d="M8.5 7.8H55.5Q57.2 7.8 57.2 9.5V12.5Q51 15.5 46 12.5Q40 16 32 13Q24 16 18 12.5Q12 15.5 6.8 12.5V9.5Q6.8 7.8 8.5 7.8Z" fill="#62cd36" />
+  <!-- the water: three falls, each wider than the one above -->
+  <path d="M25 9H39V22H45V38H51V52H13V38H19V22H25Z" fill="#7fdcf0" stroke="#12324f" stroke-width="3.5" stroke-linejoin="round" />
+  <!-- streaks running down each fall -->
+  <path d="M29 12V20M35 14V21M24 26V35M31 25V33M39 27V36M18 42V50M26 41V49M33 43V51M41 41V48M47 43V50"
+        stroke="#d6f7ff" stroke-width="2" stroke-linecap="round" />
+  <!-- white foam where the water rolls over each ledge -->
+  <path d="M19.5 23.5Q22 21.5 24.5 23.5T29.5 23.5T34.5 23.5T39.5 23.5T44.5 23.5" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" />
+  <path d="M13.5 39.5Q16 37.5 18.5 39.5T23.5 39.5T28.5 39.5T33.5 39.5T38.5 39.5T43.5 39.5T48.5 39.5T50.5 39.5" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" />
+  <!-- the pool -->
+  <ellipse cx="32" cy="55" rx="26" ry="5.5" fill="#3fb3cc" stroke="#12324f" stroke-width="3.5" />
+  <path d="M15 55Q19 53 23 55T31 55T39 55T47 55" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" />
+</svg>
