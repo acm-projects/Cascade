@@ -18,7 +18,7 @@ export function SpeakerCutoutIcons() {
   const r = rng(beat.id * 13);
   const spots = [[0.1, 0.22], [0.3, 0.12], [0.08, 0.62], [0.42, 0.7], [0.88, 0.16], [0.9, 0.7]].map(([x, y]) => [x + (r() - 0.5) * 0.05, y + (r() - 0.5) * 0.05]);
   const text = beat.emphasis_text || '';
-  const size = fit(text, W * 0.55, H * 0.2, 0.42);
+  const size = fit(text, W * 0.62, H * 0.26, 0.42);
   return <AbsoluteFill>
     <Backdrop mode="dark" tint="#0b1030" />
     <AbsoluteFill style={{ background: `radial-gradient(ellipse at 66% 45%, ${tone}33 0%, rgba(0,0,0,0) 55%)` }} />
@@ -28,8 +28,8 @@ export function SpeakerCutoutIcons() {
       const t = interpolate(frame - i * 2, [0, 10], [0, 1], { ...clamp, easing: easeOut });
       const bob = Math.sin((frame + i * 11) / 14) * H * 0.012;
       return <div key={i} style={{ position: 'absolute', left: x * W, top: y * H + bob, opacity: t, transform: `scale(${0.4 + 0.6 * t}) rotate(${(r() - 0.5) * 30}deg)`,
-        filter: `drop-shadow(0 0 10px ${tone})` }}>
-        <Icon name={icons[i % icons.length]} size={H * 0.11} color="#ffffff" />
+        filter: `drop-shadow(0 0 6px #ffffff) drop-shadow(0 0 18px ${tone})` }}>
+        <Icon name={icons[i % icons.length]} size={H * (i % 2 ? 0.13 : 0.17)} color="#ffffff" />
       </div>;
     })}
     <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'flex-start', padding: `0 0 ${H * 0.1}px ${W * 0.06}px` }}>

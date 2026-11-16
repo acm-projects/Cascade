@@ -103,5 +103,22 @@ class Sound(unittest.TestCase):
         self.assertAlmostEqual(riser['at']+riser['seconds'], 55.26-27.12, places=2)
 
 
+@unittest.skipUnless(__import__('shutil').which('ffmpeg'), 'needs FFmpeg')
+class Compare(unittest.TestCase):
+    def test_side_by_side_sheets_are_made(self):
+        import subprocess, tempfile
+        from backend.editor.ai_edit.beats import compare
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            for name, seconds, size in (('ref.mp4', 14, '1284x888'), ('ours.mp4', 45, '1284x704')):
+                subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'testsrc=size={size}:rate=10:duration={seconds}', '-pix_fmt', 'yuv420p',
+                                str(folder/name)], check=True)
+            matched, proportional = compare.sheets(folder/'ref.mp4', folder/'ours.mp4', EXAMPLE, folder/'out')
+            self.assertTrue(matched.stat().st_size > 10000 and proportional.stat().st_size > 10000)
+            pairs = json.loads((folder/'out'/'pairs.json').read_text())
+            self.assertEqual({p['template'] for p in pairs} & {'NUMBER_COUNTER'}, set())   # templates the plan does not use are skipped
+            self.assertIn('KINETIC_KEYWORD', {p['template'] for p in pairs})
+
+
 if __name__ == '__main__':
     unittest.main()

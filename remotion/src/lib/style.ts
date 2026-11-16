@@ -20,8 +20,8 @@ export const glow = (hex: string, strength = 1) =>
   `0 0 ${10 * strength}px ${hex}cc, 0 0 ${28 * strength}px ${hex}88, 0 0 ${64 * strength}px ${hex}44`;
 
 export const GRADES: Record<string, string> = {
-  bw: 'grayscale(1) contrast(1.32) brightness(0.92)',
-  color: 'saturate(1.12) contrast(1.08)',
+  bw: 'grayscale(1) contrast(1.5) brightness(1.06)',
+  color: 'saturate(1.1) contrast(1.14) brightness(1.02)',
 };
 
 /** Deterministic pseudo-random numbers, so every render of a beat is identical (needed for the beat cache). */

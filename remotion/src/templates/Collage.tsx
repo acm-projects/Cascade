@@ -26,13 +26,15 @@ export function Collage() {
   const size = fit(text, W * 0.7, H * 0.24);
   return <AbsoluteFill>
     <Backdrop mode={light ? 'light' : 'dark'} />
+    {light && <AbsoluteFill style={{ background: 'radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 65%)' }} />}
     {layout.map(([x, y, w, rot], i) => {
       const t = interpolate(frame - i * 4, [0, 10], [0, 1], { ...clamp, easing: easeOut });
       const from = i % 2 ? W * 0.6 : -W * 0.6;
       return <div key={i} style={{ position: 'absolute', left: x * W, top: y * H, width: w * W, height: w * W * 0.62, overflow: 'hidden',
         border: '8px solid #f7f5ee', boxShadow: '0 18px 50px rgba(0,0,0,0.5)',
         transform: `translateX(${(1 - t) * from}px) rotate(${rot * (0.6 + 0.4 * t)}deg)`, filter: `blur(${(1 - t) * 16}px)` }}>
-        <Media media={assets.broll?.[i]} query={subjects[i] || beat.broll_fallback_query || ''} seed={beat.id * 10 + i} grade={beat.grade} tone={color(beat.semantic_color)} scale={1.05 + frame * 0.0008} />
+        <Media media={assets.broll?.[i]} query={subjects[i] || beat.broll_fallback_query || ''} seed={beat.id * 10 + i} grade={beat.grade} tone={color(beat.semantic_color)}
+          scale={1.05 + frame * 0.0008} hue={[0, 28, -22, 48][i % 4]} />
       </div>;
     })}
     <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: H * 0.07 }}>

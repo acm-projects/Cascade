@@ -13,7 +13,7 @@ Engine switch: `CASCADE_EDIT_ENGINE=beats` (Cinema stays the default and is unto
 | 3 Chat integration | done | Stage 3 commit |
 | 4 Remotion renderer | done: example plan renders end to end (2680/2680 frames, worst beat start 0.4 frame, audio offset 0 ms, 627 s on 2 CPUs; one changed beat re-renders 2 beats in 97 s) | Stage 4 commit |
 | 5 Real assets | done: speaker cut-outs (U^2-Net, cleaned for the mic-arm / fast-hand case), Pexels search + ranking + cache (blocked here, generated backgrounds used), 15 synthesized sound effects mixed under the speech at -14 LUFS | Stage 5 commit |
-| 6 Polish vs reference | not started | |
+| 6 Polish vs reference | done: 3 rounds (see below); final edit `output/final_edit.mp4` + `output/REPORT.md` (gitignored) | Stage 6 commit |
 
 ## Blocked here (run on the Mac)
 
@@ -58,6 +58,55 @@ Engine switch: `CASCADE_EDIT_ENGINE=beats` (Cinema stays the default and is unto
 - B-roll: the real Pexels call was made with the `.env` key and refused by this sandbox's network ("Could not reach
   Pexels"), so all 10 b-roll subjects used generated motion backgrounds (no placeholder blocks).
 - Render with assets: only the 8 affected beats re-rendered (407 s); `checks.ok = true`.
+
+## Stage 6 rounds
+
+1. Cut-out speaker + rim glow + ghost word on dark keyword beats; brighter B&W grade; huge stacked text behind the
+   speaker with a red label; full-bleed light b-roll; filled glowing icons. (1681 s render)
+2. Text-behind word kept readable (left two-thirds); two-word keywords stack; lighter vignette. (1354 s)
+3. Generated b-roll stand-ins: soft focus + lens vignette, per-card tints, a better planet. (1477 s)
+Stopped: remaining differences are footage (Pexels blocked here) and plan choices, not template style.
+Final: 2680/2680 frames, worst beat start 0.4 frame, audio offset 0 ms, -14.9 LUFS.
+
+## What is next
+
+- Run the Step 0 model commands with a valid key; tune `prompts/director_prompt.txt`.
+- Render on the Mac with Pexels (`python -m backend.editor.ai_edit.beats.make_example`).
+- Click-to-edit beat rows in the chat UI (route exists); 9:16 template layouts; FCPXML export.
+
+## How to run it on the Mac
+
+One-time setup (repo root):
+```
+npm --prefix remotion ci                      # the renderer (Remotion downloads its own headless Chrome on first render)
+.venv/bin/pip install -r requirements.txt     # already has faster-whisper, onnxruntime, anthropic
+```
+`.env` (restart the backend after changing it):
+```
+CASCADE_EDIT_ENGINE=beats          # use the beats engine for new AI edits (Cinema stays the default without it)
+AI_EDITOR_MODEL=claude-sonnet-5-5  # any Anthropic model id
+ANTHROPIC_API_KEY=...              # must be a valid key (the current one is rejected: 401)
+PEXELS_API_KEY=...                 # b-roll; without it b-roll beats use generated backgrounds
+# optional:
+# CASCADE_BEATS_RENDER=off         # plans only, no video
+# CASCADE_REMOTION_CONCURRENCY=4   # parallel frames per beat render
+# CASCADE_REMOTION_BROWSER=/path/to/chrome
+# CASCADE_TRANSCRIBER=parakeet     # force a transcriber (whisper-cli | faster-whisper | parakeet)
+```
+Run the app: `.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000` and
+`npm --prefix frontend run dev`, open http://127.0.0.1:5173, upload a clip, AI Editor tab: "Edit this video",
+then "make it faster", "undo your last edit".
+
+Render the example without the app (no model needed, uses the kit's validated plan):
+```
+.venv/bin/python -m backend.editor.ai_edit.beats.make_example
+```
+Compare with the reference:
+```
+.venv/bin/python -m backend.editor.ai_edit.beats.compare --ref backend/editor/ai_edit/beats/reference/inspo.mov \
+  --ours backend/editor/ai_edit/beats/output/final_edit.mp4 --plan backend/editor/ai_edit/beats/examples/edit_plan_example.json \
+  --out backend/editor/ai_edit/beats/output/side_by_side
+```
 
 ## Resume
 

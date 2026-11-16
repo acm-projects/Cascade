@@ -197,7 +197,7 @@ def render(plan, source, out, work, assets=None, audio=None, progress=None, rati
     keys = segment_keys(plan, props)
     frames = frames_for(plan)
     dirty = [(i, a, b) for i, a, b in frames if not (segments/f'{keys[i]}.mp4').is_file()]
-    timings['prepare'] = round(time.time()-started, 1)
+    timings['prepare'] = round(time.time()-started-timings.get('assets', 0), 1)   # proxy, fonts, grain (assets timed apart)
     if dirty:
         report_progress(.08, 'Getting the renderer ready…')
         t = time.time(); served = bundle(work); timings['bundle'] = round(time.time()-t, 1)

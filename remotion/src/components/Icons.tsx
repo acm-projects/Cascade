@@ -23,6 +23,6 @@ export function iconsFor(text: string) {
 }
 export function Icon({ name, size, color, style }: { name: string; size: number; color: string; style?: object }) {
   return <svg viewBox="0 0 24 24" width={size} height={size} style={style}>
-    <path d={PATHS[name] || PATHS.spark} fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    <path d={PATHS[name] || PATHS.spark} fill={color} fillOpacity={0.9} stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
   </svg>;
 }

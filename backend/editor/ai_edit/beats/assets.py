@@ -41,12 +41,18 @@ def _frames(plan):
 
 # ---------------------------------------------------------------- speaker cut-outs
 
+def needs_cutout(beat):
+    """Text behind the speaker and the icon scene need the speaker cut out; so do dark keyword beats, where the
+    speaker stands out of a dimmed shot with a rim glow (the reference's look)."""
+    return beat['template'] in CUTOUT_TEMPLATES or (beat['template'] == 'KINETIC_KEYWORD' and beat.get('background_mode') == 'dark')
+
+
 def cutouts(plan, work, progress=None):
     """{beat id: {"dir", "fps", "count", "from"}} for the beats that need the speaker cut out."""
     from ..cinema import matte
     from .render import FPS, total_frames
     report = progress or (lambda amount, stage: None)
-    beats = [b for b in plan['beats'] if b['template'] in CUTOUT_TEMPLATES]
+    beats = [b for b in plan['beats'] if needs_cutout(b)]
     if not beats: return {}
     if not matte.available():
         LOG.warning('person matte unavailable; cut-out beats fall back to text in front')

@@ -31,9 +31,13 @@ export function Procedural({ query, seed, tone = '#3fd16f' }: { query: string; s
             <radialGradient id={`planet${seed}`} cx="38%" cy="35%" r="70%"><stop offset="0%" stopColor="#7fd4ff" /><stop offset="45%" stopColor="#1e6fb8" /><stop offset="80%" stopColor="#0a2a55" /><stop offset="100%" stopColor="#020a18" /></radialGradient>
             <radialGradient id={`air${seed}`} cx="50%" cy="50%" r="50%"><stop offset="86%" stopColor="#5fc8ff" stopOpacity="0" /><stop offset="93%" stopColor="#8fe0ff" stopOpacity="0.9" /><stop offset="100%" stopColor="#8fe0ff" stopOpacity="0" /></radialGradient>
           </defs>
-          <circle cx={500} cy={720 - frame * 0.15} r={420} fill={`url(#air${seed})`} transform="scale(1.08) translate(-38 -50)" />
+          <filter id={`cloud${seed}`}><feGaussianBlur stdDeviation="9" /></filter>
+          <circle cx={500} cy={720 - frame * 0.15} r={438} fill="#7fd8ff" opacity={0.35} filter={`url(#cloud${seed})`} />
           <circle cx={500} cy={720 - frame * 0.15} r={400} fill={`url(#planet${seed})`} />
-          {Array.from({ length: 9 }, (_, i) => <ellipse key={i} cx={360 + i * 40 + ((frame * 0.6) % 40)} cy={520 - (i % 3) * 60} rx={60 + (i % 4) * 25} ry={14} fill="#2f8a4a" opacity={0.55} />)}
+          <g filter={`url(#cloud${seed})`} opacity={0.55}>
+            {Array.from({ length: 7 }, (_, i) => <ellipse key={i} cx={330 + i * 60 + ((frame * 0.5) % 60)} cy={470 - (i % 3) * 55} rx={110 + (i % 3) * 40} ry={10 + (i % 2) * 8} fill="#ffffff" />)}
+          </g>
+          <circle cx={500} cy={720 - frame * 0.15} r={400} fill="none" stroke="#bff0ff" strokeWidth={3} opacity={0.9} filter={`url(#cloud${seed})`} />
         </>}
       </svg>
     </AbsoluteFill>;
@@ -84,8 +88,11 @@ export function Procedural({ query, seed, tone = '#3fd16f' }: { query: string; s
         opacity={0.25 + 0.25 * Math.sin(frame / 25 + t * 6)} />)}
       {kind === 'forest' && Array.from({ length: 14 }, (_, i) => <ellipse key={`l${i}`} cx={(i * 83 + frame * (0.4 + (i % 3) * 0.2)) % 1100 - 50} cy={(i * 47) % 560}
         rx={38} ry={13} fill="#1c4d23" opacity={0.75} transform={`rotate(${(i * 37 + frame) % 360} ${(i * 83) % 1000} ${(i * 47) % 560})`} />)}
-      {bokeh.map(([x, y, s, t], i) => <circle key={`b${i}`} cx={x + Math.sin(frame / 40 + t * 6) * 12} cy={y - frame * 0.25 * t} r={s} fill="#fff6c8"
-        opacity={interpolate(Math.sin(frame / 30 + t * 9), [-1, 1], [0.04, 0.22])} />)}
+      <defs><filter id={`soft${seed}`}><feGaussianBlur stdDeviation="3" /></filter><filter id={`deep${seed}`}><feGaussianBlur stdDeviation="14" /></filter></defs>
+      <g filter={`url(#soft${seed})`}>{bokeh.map(([x, y, s, t], i) => <circle key={`b${i}`} cx={x + Math.sin(frame / 40 + t * 6) * 12} cy={y - frame * 0.25 * t} r={s} fill="#fff6c8"
+        opacity={interpolate(Math.sin(frame / 30 + t * 9), [-1, 1], [0.05, 0.3])} />)}</g>
+      {kind === 'forest' && <g filter={`url(#deep${seed})`}>{[[80, 520, 260, 120, -20], [930, 60, 240, 110, 30], [860, 560, 300, 140, 10], [120, 20, 220, 90, 40]].map(([x, y, rx, ry, rot], i) =>
+        <ellipse key={`f${i}`} cx={x + Math.sin(frame / 50 + i) * 10} cy={y} rx={rx} ry={ry} fill="#06140a" opacity={0.85} transform={`rotate(${rot} ${x} ${y})`} />)}</g>}
     </svg>
   </AbsoluteFill>;
 }
