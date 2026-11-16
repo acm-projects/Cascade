@@ -28,8 +28,9 @@
 }
 
 .topnav-leaf {
-  width: 38px;   /* the Cascade waterfall logo (assets/icons/cascade-waterfall-logo.svg) */
+  width: 38px;   /* the Cascade logo as pixel art (usePixelLogo): 19 squares across, 2px each */
   height: 38px;
+  image-rendering: pixelated;
 }
 
 .topnav-name {

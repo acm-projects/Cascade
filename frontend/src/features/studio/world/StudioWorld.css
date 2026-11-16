@@ -146,10 +146,10 @@
   border-radius: 12px;
   box-shadow: 0 3px 0 var(--surface-edge), 0 8px 12px rgba(8, 60, 90, 0.3);
 }
-.studio-world.is-far .studio-clip-node { width: 176px; }
-.studio-world.is-far .studio-source-node { width: 176px; height: auto; }
+.studio-world.is-far .studio-clip-node { width: 152px; }
+.studio-world.is-far .studio-source-node { width: 152px; height: auto; }
 .studio-world.is-far .studio-clip-node .studio-poster,
-.studio-world.is-far .studio-source-node .studio-poster { flex: none; height: 74px; font-size: 11px; }
+.studio-world.is-far .studio-source-node .studio-poster { flex: none; height: 64px; font-size: 11px; }
 .studio-world.is-far .studio-clip-why,
 .studio-world.is-far .studio-combination-badge,
 .studio-world.is-far .studio-blend-details,

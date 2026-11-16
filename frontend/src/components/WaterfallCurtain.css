@@ -1,5 +1,6 @@
 /* The waterfall page change (WaterfallCurtain.jsx). The sheet of water starts above the screen, pours down
-   to cover it, holds while the next page loads, then keeps falling and drops away off the bottom. */
+   to cover it, holds while the next page loads, then keeps falling and drops away off the bottom.
+   It's pixel art, drawn on a canvas by WaterfallCurtain.jsx. */
 .waterfall-curtain {
   position: fixed;
   inset: 0;
@@ -8,35 +9,15 @@
   pointer-events: auto;
 }
 
+/* A little taller than the screen, so the foam edges sit just past the top and bottom while it covers */
 .waterfall-sheet {
   position: absolute;
   left: 0;
   right: 0;
-  top: -6vh;
-  height: 112vh;
-  transform: translateY(-110%);
+  top: -4vh;
+  height: 108vh;
+  transform: translateY(-115%);
   will-change: transform;
-}
-
-/* The 3D sheet reaches 10vh past the screen at the top and bottom, so the foam along the water's
-   edges can bulge out past it instead of being cut off in a straight line. Only the middle part (the
-   screen's height) is solid water; the extra strips are see-through apart from the foam. */
-.waterfall-sheet-3d {
-  top: -10vh;
-  height: 120vh;
-  isolation: isolate;
-}
-
-/* One opaque surface behind the water, the size of the screen. It moves with the 3D layers,
-   so nothing shows through before WebGL has drawn its first frame. */
-.waterfall-sheet-3d::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 10vh;
-  bottom: 10vh;
-  background: linear-gradient(90deg, #218fbd, #27afd0 45%, #218fbd);
 }
 
 /* Pouring in: speeds up as it falls, like water */
@@ -54,56 +35,22 @@
 }
 
 @keyframes waterfall-pour-in {
-  from { transform: translateY(-110%); }
+  from { transform: translateY(-115%); }
   to { transform: translateY(0); }
 }
 
 @keyframes waterfall-pour-out {
   from { transform: translateY(0); }
-  to { transform: translateY(110%); }
+  to { transform: translateY(115%); }
 }
 
-/* The 3D water fills the opaque sheet; CSS moves all its layers together. */
-.waterfall-3d {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* Stretched up from a small canvas, so the water stays chunky pixels (like the Landing sea) */
+/* The pixel-art water: a small canvas stretched up without smoothing, so the pixels stay crisp squares */
 .waterfall-canvas {
   display: block;
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
-}
-
-/* Bumpy white foam along the top and bottom edges of the sheet */
-.waterfall-foam {
-  position: absolute;
-  left: -2%;
-  right: -2%;
-  height: 46px;
-  background:
-    radial-gradient(circle at 10px 22px, #f3fffd 14px, transparent 15px) 0 0 / 34px 46px repeat-x,
-    radial-gradient(circle at 27px 26px, #e3f9fb 12px, transparent 13px) 0 0 / 34px 46px repeat-x;
-  filter: drop-shadow(0 2px 0 rgba(31, 159, 214, 0.35));
-}
-
-.waterfall-foam.is-top { top: -24px; }
-.waterfall-foam.is-bottom { bottom: -24px; }
-
-/* A soft mist rolling off the bottom while it covers the screen */
-.waterfall-mist {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 22vh;
-  background: linear-gradient(to top, rgba(255, 255, 255, 0.55), transparent);
-  pointer-events: none;
+  background: #2aa6d1;   /* before the first frame is drawn */
 }
 
 /* What's loading, in the middle while it holds */
@@ -118,7 +65,7 @@
   color: #fff8e4;
   font-family: var(--font-display);
   font-size: clamp(20px, 2.4vw, 30px);
-  text-shadow: 0 3px 0 #12324f, 0 6px 18px rgba(10, 50, 80, 0.45);
+  text-shadow: 0 3px 0 #12324f;
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.92);
   transition: opacity 200ms ease-out, transform 200ms ease-out;
@@ -127,7 +74,8 @@
 .waterfall-label img {
   width: 72px;
   height: 72px;
-  filter: drop-shadow(0 4px 0 #12324f);
+  image-rendering: pixelated;   /* the logo is pixel art (WaterfallCurtain.jsx): keep its squares crisp */
+  filter: drop-shadow(0 3px 0 #12324f);
   animation: waterfall-bob 1.4s ease-in-out infinite;
 }
 
@@ -137,7 +85,7 @@
 }
 
 @keyframes waterfall-bob {
-  50% { transform: translateY(-8px) rotate(-4deg); }
+  50% { transform: translateY(-9px); }   /* straight up and down: tilting pixel art would make its squares jagged */
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -449,13 +449,17 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
                   <span className="es-tab-label">{tab}</span>
                 </button>
               ))}
-              <button type="button" className="btn btn-small btn-primary es-trends"
+            </div>
+            <div className="editor-panel-content">
+              {panelContent}
+              {/* Trends: in the top-right corner of the tool area, next to the tab's own controls. It's inside the
+                  scrolling part, so it scrolls away with the controls instead of floating over them. */}
+              <button type="button" className="btn btn-small btn-primary es-trends es-trends-corner"
                 disabled={!state || info?.has_video === false} aria-haspopup="dialog" aria-expanded={trendsOpen}
                 onClick={() => setTrendsOpen(true)}>
                 <Icon name="sparkles" size={18} /> Trends
               </button>
             </div>
-            <div className="editor-panel-content">{panelContent}</div>
             </div>
           </aside>
           {timeline && <section className="es-timeline" aria-label="Timeline">{timeline}</section>}

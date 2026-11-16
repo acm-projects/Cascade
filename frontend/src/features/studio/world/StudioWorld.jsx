@@ -20,8 +20,8 @@ import "./StudioWorld.css";
 // and top-to-bottom (clips of the same prompt) is stretched, so stacked cards sit side by side on screen.
 // These are the middle of each kind of box, from its top-left corner.
 const CENTER = { source: [110, 95], generation: [65, 50], clip: [95, 130] };
-const ACROSS = 0.85 / 100;   // world units per graph pixel, along the flow
-const DOWN = 1.95 / 100;     // world units per graph pixel, down a stack of clips (enough that cards never overlap)
+const ACROSS = 1.5 / 100;    // world units per graph pixel, along the flow (each prompt well apart from the next)
+const DOWN = 3.4 / 100;      // world units per graph pixel, down a stack of clips (enough that cards never overlap)
 const CLIFF_ROOM = 5.2;      // the waterfall cliff is big: it sits this much further back
 // Card size vs. zoom: below FAR_IN the full cards turn into small labels; zooming back past FAR_OUT
 // brings the full cards back

@@ -56,14 +56,6 @@ export default function ExportSettings({ settings, onChange, downloads, selected
         Include captions
       </label>
 
-      <details className="export-help">
-        <summary>Advanced settings</summary>
-        <p>
-          {audioOnly
-            ? "Audio exports are MP3. Enabled transcript captions are included as VTT files in ZIP downloads; they can't be burned into audio."
-            : "1080p and 720p set the video's short side, so vertical and wide clips both stay sharp. Smaller videos keep their size. Captions are burned into the picture."}
-        </p>
-      </details>
 
       {selectedCount > 10 && <p className="export-note" role="note">Rendering more than 10 clips may take a few minutes.</p>}
       {downloads.progressText && <p className="export-note" role="status" aria-live="polite">{downloads.progressText}</p>}

@@ -2,7 +2,7 @@ import { Link, NavLink, useParams } from "react-router-dom";
 import { useLeafNavigate } from "../context/leafTransitionValue";
 import UserAvatar from "./UserAvatar";
 import "./TopNav.css";
-import logo from "../assets/icons/cascade-logo.svg";
+import usePixelLogo from "./usePixelLogo";
 
 const steps = [
   { id: "studio", label: "Studio Island" },
@@ -28,11 +28,12 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
   const leafNavigate = useLeafNavigate();
   const id = projectId ?? params.projectId;
   const unlocked = { studio: true, editor: canOpenEditor, export: canOpenExport };
+  const pixelLogo = usePixelLogo(19);   // the logo as pixel art: 19 x 19 squares, 2px each at 38px
 
   return (
     <header className="topnav">
       <Link to="/projects" className="topnav-brand" title="Back to your projects">
-        <img src={logo} alt="" className="topnav-leaf" />
+        <img src={pixelLogo} alt="" className="topnav-leaf" />
         <span className="topnav-name">Cascade</span>
       </Link>
 

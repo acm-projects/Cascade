@@ -29,7 +29,7 @@ const SEA = -0.6;          // the sea's surface
 const LOW = 0.6;           // the top of the lowest terrace
 const STEP = 1.2;          // how much each terrace steps down
 const VIEW_HEIGHT = 18;    // world units shown top to bottom at zoom 1
-const START_AZIMUTH = Math.PI / 4;                    // around the island (0 = from +z)
+const START_AZIMUTH = 1.12;                           // around the island (0 = from +z); turned so a prompt's clips spread sideways
 const START_ELEVATION = Math.atan2(1.2, Math.SQRT2);  // up from the ground (about 40°)
 const MIN_ELEVATION = 0.22;
 const MAX_ELEVATION = 1.4;
@@ -1142,6 +1142,8 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
     const unitsPerPixel = VIEW_HEIGHT / height / camera.zoom;
     offset.x -= ((coverLeft - coverRight) / 2) * unitsPerPixel;
     offset.y += ((coverTop - coverBottom) / 2) * unitsPerPixel;
+    // Remember this framing: moving and zooming out are kept within reach of it (keepIslandInView)
+    home = { x: offset.x, y: offset.y, zoom: camera.zoom, reach: Math.max(spanX, spanY) / 2 };
     if (smooth && !still) {
       glide = { pivot: pivot.clone(), x: offset.x, y: offset.y, zoom: camera.zoom };
       pivot.copy(before.pivot);
@@ -1152,6 +1154,26 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
       glide = null;
     }
     placeCamera();
+  }
+
+  // Limits, so you can't lose the island: you can move it toward the edge of the screen but never off it
+  // (a good part of it always stays in view), and zoom out only a little past the view that fits it all.
+  let home = null;   // { x, y, zoom, reach }: the last fitted view, and how far the island reaches from its middle
+  function minZoom() {
+    return home ? Math.max(0.12, home.zoom * 0.6) : 0.12;
+  }
+  function keepIslandInView() {
+    if (!home) return;
+    // the open part of the screen (not under the page's panels), in world units
+    const cover = insets() || {};
+    const unitsPerPixel = VIEW_HEIGHT / height / camera.zoom;
+    const openHalfX = (Math.max(width * 0.3, width - (cover.left || 0) - (cover.right || 0)) / 2) * unitsPerPixel;
+    const openHalfY = (Math.max(height * 0.3, height - (cover.top || 0) - (cover.bottom || 0)) / 2) * unitsPerPixel;
+    // the island's middle may move most of the way out, but the island always stays across the open area's middle
+    const maxX = Math.max(openHalfX * 0.5, home.reach * 0.8);
+    const maxY = Math.max(openHalfY * 0.5, home.reach * 0.8);
+    offset.x = THREE.MathUtils.clamp(offset.x, home.x - maxX, home.x + maxX);
+    offset.y = THREE.MathUtils.clamp(offset.y, home.y - maxY, home.y + maxY);
   }
 
   // Turn around the island's middle
@@ -1168,8 +1190,9 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
   }
 
   function zoomBy(factor) {
-    camera.zoom = THREE.MathUtils.clamp(camera.zoom * factor, 0.12, 3);
-    camera.updateProjectionMatrix();
+    camera.zoom = THREE.MathUtils.clamp(camera.zoom * factor, minZoom(), 3);
+    keepIslandInView();
+    placeCamera();
   }
 
   // Slide the view across the screen (the offset is where the screen's middle is, in world units)
@@ -1177,6 +1200,7 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
     const scale = pixelsPerUnit();
     offset.x -= dx / scale;
     offset.y += dy / scale;
+    keepIslandInView();
     placeCamera();
   }
 

@@ -19,7 +19,11 @@ import Icon from "../../components/ui/Icon";
 //                to choose what stays in the frame (one undo step per drag)
 //   onSourceMedia - optional: called with the source video URL once it loads (the timeline uses it for frames)
 //   onOpenTrends, trendsOpen - optional: show a Trends button that opens the Trends popup
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus }) {
+//   versionsInBar - optional: put Original / Edited in the controls row under the video (as the Editor does
+//                   when it passes saveStatus), so the video gets the height that row would take
+//   onFitWidth(px) - optional: told how wide the video would be if it used the stage's full height, so the
+//                    page can make the player's column exactly that wide (no empty space beside the video)
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus, versionsInBar = false, onFitWidth }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -180,13 +184,18 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
     return () => { cancelAnimationFrame(frame); video.style.objectPosition = ""; };
   }, [cropNow, framingPlan, url]);
 
-  if (error) return <div className="clip-player-message" role="alert">{error.message || error}</div>;
-  if (!url) return <ClipLoading />;
-
   const { composition } = state;
   const audioOnly = info.has_video === false;
   const aiShape = composition.ratio !== "original" ? ratioOf(composition.ratio) : fileShape || 9 / 16;
   const ratio = view === "original" ? info.width / info.height : state.ai_edit ? aiShape : audioOnly ? 16/9 : state.fablecut?.ratio === '9:16' ? 9/16 : composition.ratio === "original" ? info.width / info.height : ratioOf(composition.ratio);
+  // How wide the video is when its height fills the stage (depends only on the height, so the page can size the
+  // column from it without the two chasing each other)
+  const fitWidth = stage.height > 0 && ratio > 0 ? Math.round(stage.height * ratio) : 0;
+  useEffect(() => { if (fitWidth) onFitWidth?.(fitWidth); }, [fitWidth, onFitWidth]);
+
+  if (error) return <div className="clip-player-message" role="alert">{error.message || error}</div>;
+  if (!url) return <ClipLoading />;
+
   // The biggest frame of this shape that fits the space
   const { width: frameWidth, height: frameHeight } = frameSize(stage, ratio);
 
@@ -230,9 +239,10 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
       </div>
   );
 
+  const inBar = Boolean(saveStatus) || versionsInBar;
   return (
     <div className="clip-player">
-      {!saveStatus && versionControls}
+      {!inBar && versionControls}
       {onOpenTrends && <button type="button" className="editor-choice clip-player-trends"
         aria-haspopup="dialog" aria-expanded={trendsOpen} onClick={onOpenTrends}>Trends</button>}
       <div ref={stageRef} className="clip-player-stage">
@@ -282,7 +292,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
           onClick={() => setLoop((l) => !l)} aria-pressed={loop} title={loop ? "Looping: on" : "Looping: off"}>
           <Icon name="repeat" /> Loop
         </button>
-        {saveStatus && versionControls}
+        {inBar && versionControls}
       </div>
     </div>
   );

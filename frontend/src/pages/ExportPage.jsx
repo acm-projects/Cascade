@@ -12,6 +12,7 @@ import { formatTime } from "../utils/time";
 import { clipKey, flattenClips } from "../features/editor/clips";
 import useClipDraft from "../features/editor/useClipDraft";
 import useAutoFraming from "../features/editor/useAutoFraming";
+import useFilmstrip from "../features/editor/useFilmstrip";
 import ClipPlayer from "../features/editor/ClipPlayer";
 import useDownloads from "../features/export/useDownloads";
 import ExportSettings from "../features/export/ExportSettings";
@@ -49,6 +50,7 @@ function ExportPage() {
   const [settings, setSettings] = useState({ resolution: "original", includeCaptions: true });
   const [destination, setDestination] = useState("download");   // "download" | "youtube"
   const [configured, setConfigured] = useState(false);          // touched a setting: step 3 is underway
+  const [videoWidth, setVideoWidth] = useState(0);              // the preview's width at full height: the middle column hugs it
   const downloads = useDownloads(api, projectId, projectName, settings);
   const activeFlush = useRef(null);
   const registerFlush = useCallback((fn) => { activeFlush.current = fn; }, []);
@@ -132,7 +134,7 @@ function ExportPage() {
             <StepBar step={step} />
           </div>
 
-          <div className="export-body">
+          <div className="export-body" style={videoWidth ? { "--export-video-width": `${videoWidth}px` } : undefined}>
             <aside className="export-panel export-left" aria-label="Clips and destination">
               <section aria-labelledby="export-select-title">
                 <header className="export-panel-head">
@@ -192,7 +194,7 @@ function ExportPage() {
               clipNumber={clips.indexOf(current) + 1} destination={destination} settings={settings}
               onSettings={(next) => { setSettings(next); setConfigured(true); }}
               onAddClip={() => leave(`/projects/${projectId}/studio`)} onDone={() => navigate("/projects")}
-              onOpenEditor={() => leave(`/projects/${projectId}/editor`)}
+              onOpenEditor={() => leave(`/projects/${projectId}/editor`)} onVideoWidth={setVideoWidth}
             />
           </div>
         </>
@@ -255,7 +257,7 @@ function TreeGroup({ label, title, checked, onCheck, children }) {
 
 // The middle and right columns, for the clip on screen. key={clip key}, so it follows the chosen clip.
 function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected, downloads, clipNumber, registerFlush,
-  destination, settings, onSettings, onAddClip, onDone, onOpenEditor }) {
+  destination, settings, onSettings, onAddClip, onDone, onOpenEditor, onVideoWidth }) {
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [trendsOpen, setTrendsOpen] = useState(false);
@@ -323,19 +325,14 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
 
         <div className="export-player">
           {error ? <p role="alert">{error.message}</p>
-            : info && state ? <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} />
+            : info && state ? <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} versionsInBar onFitWidth={onVideoWidth} />
               : <Spinner label="Loading clip" />}
         </div>
 
         {/* Every clip, as a strip of cards; the last card goes back to AI Studio to pick more */}
         <div className="export-strip" aria-label="Clips">
           {clips.map((item, i) => (
-            <button key={clipKey(item)} type="button" className={`export-strip-card${i === index ? " active" : ""}`}
-              onClick={() => goTo(i)} aria-label={`Clip ${i + 1}: ${item.title || "clip"}`} aria-current={i === index}>
-              <span className="export-strip-play"><Icon name="play" /></span>
-              <b>Clip {i + 1}</b>
-              <span className="export-strip-time">{formatTime(item.end - item.start)}</span>
-            </button>
+            <StripCard key={clipKey(item)} projectId={projectId} clip={item} number={i + 1} active={i === index} onClick={() => goTo(i)} />
           ))}
           <button type="button" className="export-strip-card export-strip-add" onClick={onAddClip}>
             <Icon name="plus" />
@@ -403,6 +400,22 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
         )}
       </aside>
     </>
+  );
+}
+
+// One clip in the strip under the preview: a frame from the clip (from the same film strip the Editor's timeline
+// uses, so it's only grabbed once), its number and length. Until the frame is ready it shows the dark tile.
+function StripCard({ projectId, clip, number, active, onClick }) {
+  const strip = useFilmstrip(projectId, clip, clip.end - clip.start, !isAudioClip(clip));
+  const frame = strip.frames[Math.min(strip.frames.length - 1, 6)];   // a little way in, past any fade-in
+  return (
+    <button type="button" className={`export-strip-card${active ? " active" : ""}${frame ? " has-frame" : ""}`}
+      onClick={onClick} aria-label={`Clip ${number}: ${clip.title || "clip"}`} aria-current={active}>
+      {frame && <img className="export-strip-frame" src={frame} alt="" draggable="false" />}
+      <span className="export-strip-play"><Icon name="play" /></span>
+      <b>Clip {number}</b>
+      <span className="export-strip-time">{formatTime(clip.end - clip.start)}</span>
+    </button>
   );
 }
 

@@ -10,7 +10,7 @@ import "./CaptionsTab.css";
 const POSITION_ICONS = { top: "⤒", middle: "≡", bottom: "⤓" };
 
 // The Editor's Captions tab: an on/off switch, then two sub-tabs
-//   Style - presets, font, size, colors, outline, box, position
+//   Style - style presets (big cards, first), animation, highlight, font, size, colors, outline, box, position
 //   Text  - fix the words of each caption line
 // Props:
 //   state, info                 - the draft and the clip's info (cues, burned_in)
@@ -76,24 +76,34 @@ function CaptionsTab({ state, info, change, patch, recordUndo, player, view, onV
 
 
       <fieldset className="editor-controls" disabled={!captions.enabled}>
+        {/* Style presets first: big cards, each showing a caption drawn in that look */}
+        {view === "Style" && (
+          <div className="editor-control captions-presets-block">
+            <span>Style presets</span>
+            <div className="captions-presets">
+              {PRESETS.map((preset) => {
+                const chosen = presetMatches(captions, preset);
+                const look = presetLook(preset.values, captions);
+                return (
+                  <button key={preset.name} type="button" aria-pressed={chosen}
+                    className={`captions-preset${chosen ? " active" : ""}`}
+                    onClick={() => change((s) => ({ ...s, captions: applyPreset(s.captions, preset) }))}>
+                    <span className="captions-preset-sample">
+                      <span className="captions-preset-words" style={look.words}>
+                        Hey <span style={look.highlight}>there</span>
+                      </span>
+                    </span>
+                    <span className="captions-preset-name">{preset.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <label className="editor-control">Animation<select value={captions.animation || "none"} onChange={e => setStyle({ animation: e.target.value })}><option value="none">None</option><option value="pop">Pop in</option><option value="karaoke">Highlighted words (estimated timing)</option></select></label>
         <label className="editor-control">Highlight color<input type="color" value={captions.highlight || "#ffdc39"} onChange={e => setStyle({ highlight: e.target.value })} /></label>
         {view === "Style" ? (
           <>
-            <div className="editor-control">
-              <span>Presets</span>
-              <div className="captions-presets">
-                {PRESETS.map((preset) => (
-                  <button key={preset.name} type="button"
-                    className={`captions-preset${presetMatches(captions, preset) ? " active" : ""}`}
-                    onClick={() => change((s) => ({ ...s, captions: applyPreset(s.captions, preset) }))}>
-                    <span className="captions-preset-sample" style={presetSample(preset.values, captions)}>Aa</span>
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="captions-row">
               <label className="editor-control">
                 <span>Font</span>
@@ -150,14 +160,21 @@ function CaptionsTab({ state, info, change, patch, recordUndo, player, view, onV
   );
 }
 
-// What a preset's "Aa" sample looks like (fields the preset doesn't set come from the current captions)
-function presetSample(values, captions) {
+// How a preset's sample caption looks (fields the preset doesn't set come from the current captions).
+// The second word gets the highlight color when the animation highlights words, like the real captions.
+function presetLook(values, captions) {
   const look = { ...captions, ...values };
   return {
-    color: look.color,
-    fontWeight: look.bold ? 800 : 500,
-    WebkitTextStroke: look.thickness ? `${Math.min(look.thickness, 2) / 2}px ${look.stroke}` : undefined,
-    background: look.opacity ? `color-mix(in srgb, ${look.background} ${look.opacity * 100}%, transparent)` : "#4b5d4f",
+    words: {
+      color: look.color,
+      fontFamily: look.font,
+      fontWeight: look.bold ? 800 : 600,
+      WebkitTextStroke: look.thickness ? `${Math.min(look.thickness, 3) / 2}px ${look.stroke}` : undefined,
+      paintOrder: "stroke fill",
+      background: look.opacity ? `color-mix(in srgb, ${look.background} ${look.opacity * 100}%, transparent)` : undefined,
+      padding: look.opacity ? "2px 8px" : undefined,
+    },
+    highlight: look.animation === "karaoke" ? { color: look.highlight || "#ffdc39" } : undefined,
   };
 }
 
