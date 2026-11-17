@@ -121,6 +121,12 @@ def first(folder, source, state, message, progress):
     return data, text
 
 
+def can_render():
+    import os
+    from . import render
+    return os.getenv('CASCADE_BEATS_RENDER', 'on').strip().lower() != 'off' and render.available() is None
+
+
 def render_version(folder, data, source, stock=None, progress=None):
     """Render a saved plan version to vNNN/edited.mp4 (Remotion; see render.py). Returns (duration or None, a note for the
     chat). Beats already rendered for an earlier version are reused. Never raises: a plan stays usable without its video."""

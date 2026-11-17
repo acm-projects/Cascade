@@ -231,6 +231,17 @@ class Rendering(Chat):
         reply, _ = self.say(self.draft['state'], 'undo your last edit')
         self.assertEqual((reply['state']['ai_plan']['version'], reply['state']['ai_edit']['version']), ('v001', 'v001'))   # the earlier film comes back too
 
+    def test_a_follow_up_renders_a_plan_that_never_got_its_video(self):
+        from backend.editor.ai_edit.beats import render as beats_render
+        with mock.patch.object(beats_render, 'render', side_effect=beats_render.RenderError('timing check failed')):
+            self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
+        self.assertIsNone(self.published[-1]['version'])
+        same = self.saved('v001')['plan']
+        _, job = self.say(self.draft['state'], 'render', {'reply': 'Nothing to change.', 'changed_beat_ids': [], 'plan': same})
+        self.assertEqual((job['status'], self.published[-1]['version']), ('done', 'v001'))
+        self.assertIn('Preview ready', self.published[-1]['text'])
+        self.assertFalse((self.folder/'v002').exists())
+
     def test_a_render_failure_keeps_the_plan(self):
         from backend.editor.ai_edit.beats import render as beats_render
         with mock.patch.object(beats_render, 'render', side_effect=beats_render.RenderError('Chrome went away.')):

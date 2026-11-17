@@ -224,7 +224,7 @@ def render(plan, source, out, work, assets=None, audio=None, progress=None, rati
     out = Path(out); out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(out.stem+'.part.mp4')
     _run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-i', str(picture), '-i', str(sound), '-map', '0:v', '-map', '1:a', '-c:v', 'copy',
-          '-c:a', 'aac', '-b:a', '256k', '-t', f'{total/FPS:.5f}', '-movflags', '+faststart', str(part)])
+          '-af', 'apad', '-c:a', 'aac', '-b:a', '256k', '-t', f'{total/FPS:.5f}', '-movflags', '+faststart', str(part)])   # a clip's sound can end a few ms before its picture: pad with silence
     part.replace(out)
     checks = verify(plan, out)
     timings['total'] = round(time.time()-started, 1)
