@@ -46,3 +46,7 @@ backend/editor/ai_edit/beats/examples/source/
 backend/editor/ai_edit/beats/output/
 remotion/node_modules/
 remotion/build/
+
+# Demo mode (demo branches): the saved demo clips live in git; the full source video is too big for it
+!demo_assets/**/clip_*.mp4
+demo_assets/**/source.mp4

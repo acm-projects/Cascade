@@ -1,0 +1,37 @@
+{
+ "clips": [
+  {
+   "start": 758.9,
+   "end": 795.2,
+   "title": "A Jaguar Walks Right By",
+   "explanation": "He recounts being close to a jaguar that looked at him and kept walking, illustrating how little it seemed to care."
+  },
+  {
+   "start": 799.3,
+   "end": 825.8,
+   "title": "The Rare Jaguar Attack",
+   "explanation": "He says jaguar attacks are unheard of in his Amazon region, then describes an old jaguar attacking a farmer."
+  },
+  {
+   "start": 738.5,
+   "end": 758.8,
+   "title": "Hidden in the Forest",
+   "explanation": "He explains how a jaguar’s spotted pattern can blend into dappled forest light, making it hard to see even nearby."
+  },
+  {
+   "start": 660.6,
+   "end": 686.9,
+   "title": "The Jaguar’s Powerful Bite",
+   "explanation": "He compares jaguars with leopards and describes their build and powerful bite, including how they attack caimans."
+  },
+  {
+   "start": 68.4,
+   "end": 80.0,
+   "title": "Jaguars on the Beach",
+   "explanation": "He recalls jaguars walking onto a remote beach and says the animals did not seem to care about his presence."
+  }
+ ],
+ "prompt": "Find 5 clips where they talk about jaguars, the animal.",
+ "source_name": "mock_presentations_Demo.mov",
+ "from_job": "79ad24e599f942dcb8c16ef196690e8e"
+}

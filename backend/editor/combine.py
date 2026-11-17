@@ -9,6 +9,7 @@ carried over with their times shifted. The result goes first in the Editor's cli
 """
 import hashlib
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -21,6 +22,7 @@ from uuid import uuid4
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field
 
+from backend import demo
 from backend.core import config, jobs as job_service, storage as storage_service
 from backend.services import projects_store
 
@@ -174,9 +176,12 @@ def _combine(pid, user, body, refs, parts):
     folder.mkdir(parents=True)
     try:
         joined = folder/'combined.mp4'
-        command = join_command([(p['path'], 0., p['duration'], p['info']['has_audio']) for p in parts], joined, width, height)
-        run = subprocess.run(command, capture_output=True, text=True, timeout=1800)
-        if run.returncode or not joined.is_file():
+        quick = demo.enabled() and demo.same_format([p['info'] for p in parts]) and demo.concat_copy([p['path'] for p in parts], joined)
+        if quick and abs(probe_media(joined)['duration']-total) > .5:
+            joined.unlink(missing_ok=True); quick = False        # the copy came out the wrong length: encode instead
+        run = None if quick else subprocess.run(join_command([(p['path'], 0., p['duration'], p['info']['has_audio']) for p in parts],
+                                                             joined, width, height), capture_output=True, text=True, timeout=1800)
+        if run is not None and (run.returncode or not joined.is_file()):
             logging.getLogger(__name__).error('Combining clips failed: %s', run.stderr[-1500:])
             raise HTTPException(500, 'Could not combine the clips. Try again, or pick different clips.')
         source = folder/'source.video'
@@ -192,7 +197,10 @@ def _combine(pid, user, body, refs, parts):
                  'combined_from': [{**r.model_dump(), 'start': p['start'], 'end': p['end']} for r, p in zip(refs, parts)],
                  'user_folder': storage['folder'], 'folder_source': storage['source'], **info}
         job_service.save_json(folder/'owner.json', owner)
-        shutil.copyfile(source, folder/'clip_1.mp4')
+        try:
+            os.link(source, folder/'clip_1.mp4')
+        except OSError:
+            shutil.copyfile(source, folder/'clip_1.mp4')
         (folder/'clip_1.vtt').write_text(merged_captions([(p['captions'], p['duration']) for p in parts]), encoding='utf-8')
         numbers = ', '.join(f'clip {r.clip_index+1}' for r in refs)
         clip = {'clip_id': f'{job_id}:0', 'start': 0.0, 'end': info['duration'], 'title': title,
@@ -211,7 +219,7 @@ def _combine(pid, user, body, refs, parts):
         studio.set_selection(project['studio'], [ref, *project['studio'].get('editor_clips', [])])
         project['editor_selection'] = ref
         studio.save(project, user)
-    if not storage_service.uses_local_storage():
+    if not storage_service.uses_local_storage() and not demo.enabled():
         from .own_clip import _back_up
         threading.Thread(target=_back_up, args=(folder, job_id), daemon=True).start()
     return {**ref, 'title': title, 'duration': info['duration'], 'parts': len(parts)}

@@ -410,7 +410,11 @@ def upload_video(
             with job_service.jobs_lock:
                 job_service.jobs[job_id].update(
                     submission_seconds=round(time.monotonic() - submission_started, 3), queued_at=time.time())
-            job_service.worker.submit(process_upload if engine=='agent' else feature_workers.process_search,
+            from backend import demo
+            if demo.enabled():   # the saved clips are ready before this request even returns
+                demo.instant_clips(job_id, video_path, search, mode, clip_length)
+            else:
+                job_service.worker.submit(process_upload if engine=='agent' else feature_workers.process_search,
                           job_id, video_path, search, mode if engine=='agent' else engine, clip_length)
         except Exception:
             projects_store.fail_feature(job_id, 'Could not queue generation. Retry this request.')

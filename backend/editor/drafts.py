@@ -8,6 +8,8 @@ from .runtime import jobs_dir, load_json, save_json, metadata_exists, public_cli
 from backend.services.projects_store import project_dir, require_project, project_jobs, lock
 
 def editor_index(pid: str, request: Request, selected_only: bool = False):
+    from backend import demo
+    joined = demo.editor_clips(pid, request) if selected_only and demo.enabled() else None
     project = require_project(pid, request.state.user_id)
     jobs = list(reversed(project_jobs(pid, request.state.user_id)))
     by_id = {j['job_id']: j for j in jobs}
@@ -41,9 +43,12 @@ def editor_index(pid: str, request: Request, selected_only: bool = False):
             group['session_id'] = match['id']
         if selected_only:
             group['clips'] = [c for c in group['clips'] if (c['job_id'], c['clip_index']) in allowed]
+    if joined:   # demo: the Editor shows only the picked clips joined into one
+        for group in sessions:
+            group['clips'] = [c for c in group['clips'] if (c['job_id'], c['clip_index']) == (joined['job_id'], joined['clip_index'])]
     sessions = label_waves(sessions)
     sessions = [group for group in sessions if group['clips']]
-    selection = chosen[0] if selected_only and chosen else project.get('editor_selection')
+    selection = joined or (chosen[0] if selected_only and chosen else project.get('editor_selection'))
     return {'sessions': sessions, 'selection': selection}
 
 
