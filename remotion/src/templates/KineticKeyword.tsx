@@ -3,6 +3,7 @@ import { Accent, Keyword, fit } from '../components/Words';
 import { Backdrop } from '../components/Backdrop';
 import { Footage } from '../components/Footage';
 import { Cutout, hasCutout } from '../components/Cutout';
+import { StockBackground, hasStock } from '../components/StockBackground';
 import { FONTS } from '../lib/style';
 import { useBeat } from '../lib/context';
 import { drift } from '../lib/motion';
@@ -31,9 +32,10 @@ export function KineticKeyword() {
   }
   const size = fit(longest, W * 0.5, H * (stacked ? 0.27 : 0.36));
   const zoom = drift(frame, length, 0.07) * 1.04;
-  const cut = hasCutout(assets);
+  const stock = hasStock(assets);   // a stock clip behind the words instead of the speaker
+  const cut = hasCutout(assets) && !stock;
   return <AbsoluteFill>
-    <Footage scale={zoom} darken={cut ? 0.62 : 0.22} blur={cut ? 3 : 0} origin="65% 35%" />
+    {stock ? <StockBackground scale={zoom} shade="rgba(0,0,0,0.35)" /> : <Footage scale={zoom} darken={cut ? 0.62 : 0.22} blur={cut ? 3 : 0} origin="65% 35%" />}
     {cut && <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'flex-end', paddingRight: W * 0.02 }}>
       <div style={{ fontFamily: FONTS.heading, fontSize: H * 0.62, lineHeight: 0.9, color: 'rgba(255,255,255,0.05)', WebkitTextStroke: '2px rgba(255,255,255,0.16)',
         textTransform: 'uppercase', whiteSpace: 'nowrap', transform: `scale(${zoom})` }}>{text.split(' ').at(-1)}</div>

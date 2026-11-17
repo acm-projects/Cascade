@@ -96,3 +96,33 @@ def dramatic(total, hits=(), seed=3):
     fade = min(len(out), int(.25*SR))
     if fade: out[-fade:] *= np.linspace(1, 0, fade)[:, None]
     return out
+
+
+AUDIO = ('.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg')
+
+
+def track_file():
+    """The user's own music for the edit: CASCADE_BEATS_MUSIC_FILE, else the first audio file in demo_assets/music/."""
+    import os
+    from pathlib import Path
+    from backend.core.config import PROJECT_DIR
+    named = os.getenv('CASCADE_BEATS_MUSIC_FILE', '').strip()
+    if named and Path(named).is_file(): return Path(named)
+    folder = Path(PROJECT_DIR)/'demo_assets'/'music'
+    files = sorted(p for p in folder.glob('*') if p.suffix.lower() in AUDIO) if folder.is_dir() else []
+    return files[0] if files else None
+
+
+def from_file(path, total, start=0.):
+    """`total` seconds of a music file as a stereo float array at 48 kHz: looped if short, faded in and out."""
+    import subprocess
+    run = subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-ss', f'{start:.3f}', '-i', str(path), '-f', 'f32le', '-ac', '2',
+                          '-ar', str(SR), '-'], capture_output=True, timeout=300, check=True)
+    x = np.frombuffer(run.stdout, dtype='<f4').reshape(-1, 2).astype(np.float64)
+    n = int(total*SR)
+    if not len(x): return np.zeros((n, 2))
+    x = np.tile(x, (n//len(x)+1, 1))[:n]
+    fade_in, fade_out = min(n, int(.08*SR)), min(n, int(.6*SR))
+    if fade_in: x[:fade_in] *= np.linspace(0, 1, fade_in)[:, None]
+    if fade_out: x[-fade_out:] *= np.linspace(1, 0, fade_out)[:, None]
+    return x

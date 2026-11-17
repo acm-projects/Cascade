@@ -166,7 +166,10 @@ def render_version(folder, data, source, stock=None, progress=None):
     if why: return None, f'\nThe preview video was not made: {why}'
     folder = Path(folder)
     out = folder/data['version']/'edited.mp4'
-    folders = [p for p in (Path.home()/'Desktop'/'AI video editor'/'B-roll',) if p.is_dir()]
+    from backend.core.config import PROJECT_DIR
+    extra = os.getenv('CASCADE_BROLL_FOLDER', '').strip()
+    folders = [p for p in ((Path(extra) if extra else None), Path(PROJECT_DIR)/'demo_assets'/'broll',
+                           Path.home()/'Desktop'/'AI video editor'/'B-roll') if p and p.is_dir()]
     try:
         from . import tighten
         try:

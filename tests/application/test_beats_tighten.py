@@ -1,8 +1,10 @@
 """Pause removal and the dramatic score for beat renders."""
 import json
+import os
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import numpy as np
@@ -82,6 +84,67 @@ class Sound(unittest.TestCase):
     def test_hits_come_from_impact_beats(self):
         hits = assets.hit_times(EXAMPLE)
         self.assertIn(round(56.62-27.12, 2), [round(h, 2) for h in hits])        # beat 16, impact_hit_big
+
+
+
+class Broll(unittest.TestCase):
+    PLAN = {'beats': [
+        {'id': 1, 'template': 'BROLL_OVERLAY', 'broll_query': 'jaguar close up walking past camera in rainforest'},
+        {'id': 2, 'template': 'KINETIC_KEYWORD', 'background_mode': 'dark', 'broll_query': 'jaguar eyes staring'},
+        {'id': 3, 'template': 'MAP_CALLOUT', 'broll_query': 'Amazon rainforest canopy aerial'},
+        {'id': 4, 'template': 'BROLL_OVERLAY', 'broll_query': 'old jaguar walking in jungle wildlife documentary'}]}
+
+    class Store:
+        def __init__(self):
+            self.searched = []
+        def search(self, query, **kw):
+            self.searched.append(query)
+            pages = ['sunlight-filtering-through-lush-green-jungle-canopy-1', 'close-up-of-sloth-in-rainforest-habitat-2']
+            if 'jaguar' in query and query.split()[0] == 'jaguar' and len(query.split()) <= 3:
+                pages += ['a-jaguar-resting-on-a-branch-3', 'jaguar-walking-in-the-jungle-4']
+            return {'results': [{'id': p, 'source_url': f'https://www.pexels.com/video/{p}/'} for p in pages]}
+        def media(self, asset_id):
+            return f'/stock/{asset_id}.mp4'
+
+    def test_the_edit_subject_comes_from_its_searches(self):
+        self.assertEqual(assets.plan_subject(self.PLAN), 'jaguar')
+        self.assertIsNone(assets.plan_subject({'beats': [{'broll_query': 'city skyline'}]}))
+
+    def test_a_jaguar_edit_never_gets_a_sloth(self):
+        store, used = self.Store(), set()
+        path, record = assets.find_broll(self.PLAN['beats'][0]['broll_query'], None, store, used, subject='jaguar')
+        self.assertIn('jaguar', path)
+        self.assertIn('jaguar close up', store.searched)                     # the long search found no jaguar; a plain one did
+        path2, _ = assets.find_broll('old jaguar walking', None, store, used, subject='jaguar')
+        self.assertNotEqual(path, path2)                                       # the second beat gets the other jaguar clip
+        path3, record3 = assets.find_broll('old jaguar walking', None, store, used, subject='jaguar')
+        self.assertIsNone(path3); self.assertIn('no clip', record3['note'])   # out of jaguars: a generated background, not a sloth
+
+    def test_your_own_footage_comes_first_matched_on_the_beat_words(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ('jaguar-walking-walked-past', 'jaguar-teeth-roaring-attack-attacked', 'jaguar-roar-teeth-mouth-snarling-ending'):
+                (Path(tmp)/f'{name}.mp4').write_bytes(b'x')
+            store, used = self.Store(), set()
+            walk, record = assets.find_broll('jaguar close up walking past camera', None, store, used, [tmp], 'jaguar', 'He walked right by me')
+            self.assertIn('walking', walk); self.assertEqual(record['license'], 'local footage'); self.assertEqual(store.searched, [])
+            attack, _ = assets.find_broll('jaguar resting in rainforest', None, store, used, [tmp], 'jaguar', 'ATTACKED attacked by a Jaguar.')
+            self.assertIn('attacked', attack)
+            end, _ = assets.find_broll('jaguar teeth mouth close up snarling', None, store, used, [tmp], 'jaguar', 'TEETH their teeth go.')
+            self.assertIn('ending', end)
+
+    def test_your_own_music_track_is_looped_to_length(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            track = Path(tmp)/'song.mp3'
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'sine=f=220:duration=2', '-c:a', 'libmp3lame', str(track)], check=True)
+            with patch.dict(os.environ, {'CASCADE_BEATS_MUSIC_FILE': str(track)}):
+                self.assertEqual(music.track_file(), track)
+            x = music.from_file(track, 5.)
+            self.assertEqual(x.shape, (5*music.SR, 2))
+            self.assertGreater(np.abs(x[3*music.SR:4*music.SR]).max(), .05)   # looped, not silent after 2 s
+
+    def test_dark_graphic_beats_get_footage_behind_them(self):
+        self.assertFalse(assets.needs_cutout(self.PLAN['beats'][1]))          # sits over its stock clip, no cutout needed
+        self.assertTrue(assets.needs_cutout({'template': 'KINETIC_KEYWORD', 'background_mode': 'dark'}))
 
 
 if __name__ == '__main__':

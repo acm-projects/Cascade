@@ -1,5 +1,6 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import { Backdrop } from '../components/Backdrop';
+import { StockBackground, hasStock } from '../components/StockBackground';
 import { Accent, Keyword, fit } from '../components/Words';
 import { useBeat } from '../lib/context';
 import { clamp, easeOut } from '../lib/motion';
@@ -9,7 +10,7 @@ import { color, rng } from '../lib/style';
  * is drawn, so nothing about the place's shape is invented.) */
 export function MapCallout() {
   const frame = useCurrentFrame();
-  const { beat, props } = useBeat();
+  const { beat, props, assets } = useBeat();
   const { width: W, height: H } = props;
   const place = beat.data?.place || beat.emphasis_text || '';
   const tone = color(beat.semantic_color === 'white' ? 'yellow' : beat.semantic_color);
@@ -22,7 +23,7 @@ export function MapCallout() {
   const px = W * 0.32, py = H * 0.55;
   const size = fit(place.toUpperCase(), W * 0.45, H * 0.2);
   return <AbsoluteFill>
-    <Backdrop mode="dark" tint="#0a1233" />
+    {hasStock(assets) ? <StockBackground scale={1.1 - frame * 0.0006} shade="rgba(10,18,51,0.6)" /> : <Backdrop mode="dark" tint="#0a1233" />}
     <svg viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', width: '100%', height: '100%', transform: `scale(${1.1 - frame * 0.0006})` }}>
       {roads.map((d, i) => <path key={i} d={d} fill="none" stroke="#5f7cff" strokeOpacity={0.18} strokeWidth={1.5 + (i % 3)} />)}
     </svg>

@@ -17,6 +17,7 @@ Sound: each beat's `sfx` names a dark sound synthesized here, under a dramatic s
 under the voice. No sample packs, nothing to license.
 """
 import json
+import re
 import logging
 import math
 import shutil
@@ -29,6 +30,7 @@ import numpy as np
 LOG = logging.getLogger(__name__)
 CUTOUT_TEMPLATES = ('TEXT_BEHIND_SUBJECT', 'SPEAKER_CUTOUT_ICONS')
 BROLL_TEMPLATES = ('BROLL_OVERLAY', 'COLLAGE')
+STOCK_BEHIND = ('KINETIC_KEYWORD', 'NUMBER_COUNTER', 'MAP_CALLOUT')   # dark graphic beats that sit over their stock clip
 CUTOUT_FPS = 30
 TAIL = 14          # the next beat's transition draws this beat for up to 14 more frames
 SR = 48000
@@ -45,7 +47,9 @@ def _frames(plan):
 def needs_cutout(beat):
     """Text behind the speaker and the icon scene need the speaker cut out; so do dark keyword beats, where the
     speaker stands out of a dimmed shot with a rim glow (the reference's look)."""
-    return beat['template'] in CUTOUT_TEMPLATES or (beat['template'] == 'KINETIC_KEYWORD' and beat.get('background_mode') == 'dark')
+    if beat['template'] in CUTOUT_TEMPLATES: return True
+    # a dark keyword beat with a b-roll search sits over its stock clip instead, so it needs no cutout
+    return beat['template'] == 'KINETIC_KEYWORD' and beat.get('background_mode') == 'dark' and not beat.get('broll_query')
 
 
 def cutouts(plan, work, progress=None):
@@ -122,27 +126,55 @@ def subjects(beat):
     return [s.strip() for s in query.split('|') if s.strip()] if beat['template'] == 'COLLAGE' else ([query] if query else [])
 
 
-def find_broll(query, fallback, store, used, folders=()):
-    """(path, record) for the best clip: query, then the fallback, on the stock store; then local folders."""
+def plan_subject(plan):
+    """The thing the whole edit is about, from its b-roll searches ("jaguar" when most searches name a jaguar), or None."""
+    from collections import Counter
+    from ..picture import LOOK_WORDS, _stem
+    generic = LOOK_WORDS | {'jungle', 'rainforest', 'forest', 'wildlife', 'documentary', 'amazon', 'river', 'tree', 'trees', 'nature',
+                            'old', 'young', 'big', 'small', 'camera', 'background', 'scene', 'people', 'man', 'woman', 'person'}
+    counts = Counter()
+    for beat in plan.get('beats', []):
+        words = {_stem(w) for q in (beat.get('broll_query'), beat.get('broll_fallback_query')) if q
+                 for w in re.findall(r'[a-z]+', q.lower()) if len(w) > 2 and w not in generic}
+        counts.update(words)
+    if not counts: return None
+    word, n = counts.most_common(1)[0]
+    return word if n >= 2 else None
+
+
+def _shows(asset, subject):
+    from ..picture import _stem
+    slug = re.sub(r'[^a-z]+', ' ', (asset.get('source_url') or '').lower().rsplit('/video/', 1)[-1])
+    return subject in {_stem(w) for w in slug.split()}
+
+
+def find_broll(query, fallback, store, used, folders=(), subject=None, words=''):
+    """(path, record) for the best clip: query, then the fallback, on the stock store; then local folders.
+    With a subject (the edit's main thing, e.g. "jaguar") only clips whose page names it are used, and plain
+    searches for the subject are tried last, so a jaguar edit never gets a sloth. Local footage (the user's own
+    clips, named by what they show) is tried first, matched on the search plus the beat's own `words`."""
     from ..cinema import broll as cinema_broll
     from ..picture import ranked
-    for attempt in (query, fallback):
+    for folder in folders:
+        path = cinema_broll.from_folder(f'{query or fallback or ""} {words}', folder, used)
+        if path: return path, {'query': query, 'source': Path(path).name, 'license': 'local footage'}
+    attempts = [query, fallback] + ([f'{subject} close up', subject] if subject else [])
+    for attempt in attempts:
         if not attempt or store is None: continue
         try:
             results = [a for a in store.search(attempt, orientation='landscape', hd=True).get('results', []) if a['id'] not in used]
         except Exception as exc:   # no key, no network: say why once in the report, keep going
             LOG.info('stock search failed for %r: %s', attempt, getattr(exc, 'detail', exc))
             return None, {'query': query, 'error': str(getattr(exc, 'detail', exc))[:200]}
-        for pick in (ranked(attempt, results) or [])[:3]:
+        picks = ranked(attempt, results) or []
+        if subject: picks = [a for a in (picks or results) if _shows(a, subject)] or [a for a in results if _shows(a, subject)]
+        for pick in picks[:3]:
             try:
                 path = store.media(pick['id'])
             except Exception:
                 continue
             used.add(pick['id'])
             return str(path), {'query': query, 'searched': attempt, 'id': pick['id'], 'source': pick.get('source_url', ''), 'license': 'Pexels License'}
-    for folder in folders:
-        path = cinema_broll.from_folder(query or fallback or '', folder, used)
-        if path: return path, {'query': query, 'source': path, 'license': 'local footage'}
     return None, {'query': query, 'note': 'no clip found; generated background'}
 
 
@@ -165,13 +197,16 @@ def broll(plan, work, store=None, folders=(), size=(1284, 704)):
     (public/'broll').mkdir(parents=True, exist_ok=True)
     frames = _frames(plan)
     used, media, credits = set(), {}, []
+    subject = plan_subject(plan)
     for beat in plan['beats']:
-        if beat['template'] not in BROLL_TEMPLATES: continue
+        behind = beat['template'] in STOCK_BEHIND and beat.get('background_mode') != 'light' and beat.get('broll_query')
+        if beat['template'] not in BROLL_TEMPLATES and not behind: continue
         a, b = frames[beat['id']]
         seconds = (b-a+TAIL)/FPS+.5
         found = []
-        for subject in subjects(beat):
-            path, record = find_broll(subject, beat.get('broll_fallback_query'), store, used, folders)
+        for thing in (subjects(beat) if not behind else [beat['broll_query']]):
+            words = f"{beat.get('emphasis_text') or ''} {beat.get('spoken_text') or ''}"
+            path, record = find_broll(thing, beat.get('broll_fallback_query'), store, used, folders, subject, words)
             credits.append({'beat': beat['id'], **record})
             if not path: found.append(None); continue
             name = f"broll/{Path(path).stem}-{int(seconds*1000)}.mp4"
@@ -286,7 +321,8 @@ def _read(path):
         return x.reshape(-1, w.getnchannels())
 
 
-MUSIC_UNDER_VOICE_DB = -15.   # the score sits this far under the voice while someone speaks (louder between lines)
+MUSIC_UNDER_VOICE_DB = -9.    # the score sits this far under the voice while someone speaks (louder between lines);
+                              # CASCADE_BEATS_MUSIC_DB overrides it (e.g. -15 for a quieter bed)
 
 
 def hit_times(plan):
@@ -307,8 +343,20 @@ def mix(plan, source, work):
     seconds = len(voice)/SR
     fx, placed = effects_track(plan, seconds)
     on = os.getenv('CASCADE_BEATS_MUSIC', 'on').strip().lower() != 'off'
-    bed = music.dramatic(seconds, hit_times(plan)) if on else np.zeros((len(voice), 2))
+    own = music.track_file() if on else None
+    if own:
+        try:
+            start = float(os.getenv('CASCADE_BEATS_MUSIC_START', '0') or 0)
+        except ValueError:
+            start = 0.
+        bed = music.from_file(own, seconds, start)
+    else:
+        bed = music.dramatic(seconds, hit_times(plan)) if on else np.zeros((len(voice), 2))
     final = work/'mix.wav'
-    score.mix(voice, bed, fx*.6, -80., final, music_under=MUSIC_UNDER_VOICE_DB)
-    (work/'effects.json').write_text(json.dumps({'music': 'dramatic' if on else None, 'effects': placed}, indent=1))
+    try:
+        under = float(os.getenv('CASCADE_BEATS_MUSIC_DB', MUSIC_UNDER_VOICE_DB))
+    except ValueError:
+        under = MUSIC_UNDER_VOICE_DB
+    score.mix(voice, bed, fx*.6, -80., final, music_under=under)
+    (work/'effects.json').write_text(json.dumps({'music': (own.name if own else 'dramatic') if on else None, 'effects': placed}, indent=1))
     return final

@@ -50,3 +50,6 @@ remotion/build/
 # Demo mode (demo branches): the saved demo clips live in git; the full source video is too big for it
 !demo_assets/**/clip_*.mp4
 demo_assets/**/source.mp4
+# Demo b-roll and music are other people's footage/songs: kept on this computer only, never pushed
+demo_assets/broll/
+demo_assets/music/

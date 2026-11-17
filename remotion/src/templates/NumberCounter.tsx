@@ -1,9 +1,10 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import { Backdrop } from '../components/Backdrop';
+import { StockBackground, hasStock } from '../components/StockBackground';
 import { Accent } from '../components/Words';
 import { useBeat } from '../lib/context';
 import { clamp, easeOut, entrance } from '../lib/motion';
-import { FONTS, color, glow, rng } from '../lib/style';
+import { FONTS, color, glow } from '../lib/style';
 
 /** Format like the speech: "-$70,000", "3.5", "1,200". Money if the beat's words talk about money. */
 export function formatNumber(value: number, money: boolean, decimals: number) {
@@ -12,10 +13,10 @@ export function formatNumber(value: number, money: boolean, decimals: number) {
   return `${sign}${money ? '$' : ''}${body}`;
 }
 
-/** An animated number counting to data.number, with a chart line that falls (red) or climbs (other colours). */
+/** An animated number counting up to data.number (no chart: just the big number), over the beat's b-roll if it has one. */
 export function NumberCounter() {
   const frame = useCurrentFrame();
-  const { beat, length, props } = useBeat();
+  const { beat, length, props, assets } = useBeat();
   const { width: W, height: H } = props;
   const target = beat.data?.number ?? 0;
   const money = /\$|dollar|money|debt|cost|paid|pay|price|salary|income|worth/i.test(`${beat.spoken_text} ${beat.emphasis_text}`);
@@ -24,19 +25,11 @@ export function NumberCounter() {
   const value = target * p;
   const light = beat.background_mode === 'light';
   const tone = color(beat.semantic_color === 'white' ? (target < 0 ? 'red' : 'green') : beat.semantic_color);
-  const falling = beat.semantic_color === 'red' || target < 0;
-  const r = rng(beat.id * 7);
-  const pts = Array.from({ length: 12 }, (_, i) => [i / 11, (falling ? 0.25 + i * 0.06 : 0.85 - i * 0.06) + (r() - 0.5) * 0.12]);
-  const draw = interpolate(frame, [0, length * 0.8], [0, 1], clamp);
   const e = entrance(frame, 0);
   const label = formatNumber(Number(value.toFixed(decimals)), money, decimals);
   const size = Math.min(H * 0.3, (W * 0.8) / Math.max(4, label.length * 0.55));
   return <AbsoluteFill>
-    <Backdrop mode={light ? 'light' : 'dark'} />
-    <svg viewBox="0 0 1000 560" preserveAspectRatio="none" style={{ position: 'absolute', width: '100%', height: '100%' }}>
-      <polyline points={pts.map(([x, y]) => `${x * 1000},${y * 560}`).join(' ')} fill="none" stroke={tone} strokeWidth={5} pathLength={1}
-        strokeDasharray={1} strokeDashoffset={1 - draw} style={{ filter: `drop-shadow(0 0 8px ${tone})` }} />
-    </svg>
+    {!light && hasStock(assets) ? <StockBackground scale={1 + frame * 0.0008} shade="rgba(0,0,0,0.6)" /> : <Backdrop mode={light ? 'light' : 'dark'} />}
     <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ fontFamily: FONTS.ui, fontWeight: 800, fontSize: size, color: tone, textShadow: light ? 'none' : glow(tone, 1),
         transform: `skewX(-9deg) scale(${e.scale})`, filter: `blur(${e.blur}px)`, opacity: e.opacity, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{label}</div>
