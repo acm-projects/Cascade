@@ -108,29 +108,11 @@
 .chat-panel-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
 }
 
-.chat-panel-count {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: 13px;
-}
 
-.chat-panel-count input {
-  width: 56px;
-  padding: 4px 6px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
-  font-weight: 700;
-}
 
 .chat-panel-send {
   font-size: 16px;
