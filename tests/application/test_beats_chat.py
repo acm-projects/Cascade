@@ -77,7 +77,7 @@ class Chat(unittest.TestCase):
         for patch in (mock.patch.object(jobs, 'root', lambda *a: self.folder), mock.patch.object(jobs, '_publish', publish),
                       mock.patch.object(jobs.threading, 'Thread', InlineThread), mock.patch('backend.editor.storage.media', media),
                       mock.patch('backend.editor.storage.selected', lambda *a: {}), mock.patch.object(workflow, 'transcribe', transcribe),
-                      mock.patch.dict(os.environ, {'CASCADE_EDIT_ENGINE': 'beats', 'AI_EDITOR_MODEL': 'test-model', 'CASCADE_BEATS_RENDER': 'off'})):
+                      mock.patch.dict(os.environ, {'CASCADE_EDIT_ENGINE': 'beats', 'AI_EDITOR_PROVIDER': 'anthropic', 'AI_EDITOR_MODEL': 'test-model', 'CASCADE_BEATS_RENDER': 'off', 'CASCADE_BEATS_DEMO_PLAN': ''})):
             patch.start(); self.addCleanup(patch.stop)
 
     def say(self, state, message, *replies):
@@ -169,7 +169,8 @@ class Chat(unittest.TestCase):
         self.assertEqual(self.saved('v001')['plan']['source_window'], {'start': 27.12, 'end': 71.78})
 
     def test_failures_are_friendly_and_change_nothing(self):
-        with mock.patch.dict(os.environ, {'AI_EDITOR_MODEL': ''}):
+        from backend.editor.ai_edit.beats import demo
+        with mock.patch.dict(os.environ, {'AI_EDITOR_MODEL': ''}), mock.patch.object(demo, 'matching_plan', return_value=None):
             _, job = self.say(Edit(**TRIM), 'Edit this video')
         self.assertEqual(job['status'], 'failed')
         self.assertEqual(self.published[-1]['text'], 'NOT CHANGED: The AI editor is not set up on this server yet.')
@@ -181,6 +182,19 @@ class Chat(unittest.TestCase):
         self.assertIn('the edit is unchanged', self.published[-1]['text'])
         self.assertIn('current plan is still in place', self.published[-1]['text'])
         self.assertFalse((self.folder/'v002').exists())
+
+    def test_the_demo_clip_gets_the_ready_made_plan_when_the_planner_cannot_answer(self):
+        with mock.patch.dict(os.environ, {'AI_EDITOR_MODEL': ''}):          # no planner at all
+            _, job = self.say(Edit(**TRIM), 'Edit this video')
+        self.assertEqual((job['status'], job['version']), ('done', 'v001'))
+        self.assertEqual([b['template'] for b in self.saved('v001')['plan']['beats']], [b['template'] for b in EXAMPLE['beats']])
+        _, job = self.say(Edit(**TRIM), 'Edit this video', 'not json', 'still not json')
+        self.assertEqual((job['status'], self.saved(job['version'])['model']), ('done', 'ready-made plan'))
+
+    def test_the_ready_made_plan_can_be_forced_for_a_demo(self):
+        with mock.patch.dict(os.environ, {'CASCADE_BEATS_DEMO_PLAN': 'on'}):
+            _, job = self.say(Edit(**TRIM), 'Edit this video')                 # no model call at all
+        self.assertEqual(self.saved('v001')['plan']['beats'][15]['emphasis_text'], 'CHURCH')
 
     def test_patch_waits_for_a_running_job(self):
         self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 90, 'fixed_plan': EXAMPLE})

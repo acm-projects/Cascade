@@ -85,11 +85,27 @@ def choose_window(words, start, end):
 
 
 def first(folder, source, state, message, progress):
-    llm.model()   # fail before minutes of transcription if the planner is not set up
+    from . import demo
+    try:
+        llm.model(); unready = None   # know before minutes of transcription whether the planner is set up
+    except PlanError as exc:
+        unready = exc
     words = transcribe(source, transcript_folder(folder), lambda amount, stage: progress(.05+amount*.4, stage))
     inside, window = choose_window(words, state.start, state.end)
     progress(.5, 'Planning the edit…' if window else 'Finding the strongest 30 to 60 seconds and planning the edit…')
-    result = service.make_plan(inside, window, message, source_video=EXAMPLE_NAME)
+    ready_made = demo.matching_plan(words, state.start, state.end) if demo.forced() or unready else None
+    if ready_made is None and unready: raise unready
+    if ready_made is None:
+        try:
+            result = service.make_plan(inside, window, message, source_video=EXAMPLE_NAME)
+        except PlanError:
+            ready_made = demo.matching_plan(words, state.start, state.end)   # the demo clip still gets its edit
+            if ready_made is None: raise
+            logging.getLogger(__name__).warning('planner failed; using the ready-made plan for this clip', exc_info=True)
+    if ready_made is not None:
+        result = service.PlanResult(plan=ready_made, notes=['ready-made plan for this clip'], model='ready-made plan',
+                                    issues=[i.as_dict() for i in validator.validate(ready_made, words)])
+        window = ready_made['source_window']
     chosen = result.plan['source_window']
     if window is None and not (inside[0]['start']-1e-6 <= chosen['start'] < chosen['end'] <= inside[-1]['end']+1e-6
                                and 25 <= chosen['end']-chosen['start'] <= MAX_WINDOW+2):

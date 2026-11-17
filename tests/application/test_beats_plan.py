@@ -122,7 +122,7 @@ def critic_ok(plan, score=91):
 
 class Service(unittest.TestCase):
     def setUp(self):
-        patch = mock.patch.dict(os.environ, {'AI_EDITOR_MODEL': 'test-model'})
+        patch = mock.patch.dict(os.environ, {'AI_EDITOR_MODEL': 'test-model', 'AI_EDITOR_PROVIDER': 'anthropic'})
         patch.start(); self.addCleanup(patch.stop)
 
     def run_with(self, script, fn, *args, **kwargs):
@@ -237,6 +237,52 @@ class Service(unittest.TestCase):
             self.run_with(script, service.revise_plan, EXAMPLE, TRANSCRIPT, 'kinetic everywhere')
         self.assertIn('unchanged', caught.exception.user_message)
         self.assertEqual(EXAMPLE, original)
+
+
+class OpenAI(unittest.TestCase):
+    def test_openai_gets_the_same_conversation_in_json_mode(self):
+        calls = []
+        class Responses:
+            def create(self, **kw):
+                calls.append(kw)
+                part = mock.Mock(type='output_text', text='{"ok": 1}')
+                return mock.Mock(status='completed', output=[mock.Mock(type='message', content=[part])])
+        client = mock.Mock(responses=Responses())
+        with mock.patch.dict(os.environ, {'AI_EDITOR_PROVIDER': 'openai', 'AI_EDITOR_OPENAI_MODEL': 'gpt-test'}), \
+                mock.patch('backend.cascade_llm.clients.make_client', return_value=client):
+            text = llm.complete('SYSTEM', [{'role': 'user', 'content': 'example'}, {'role': 'assistant', 'content': '{}'}, {'role': 'user', 'content': 'real'}])
+        self.assertEqual(text, '{"ok": 1}')
+        call = calls[0]
+        self.assertEqual((call['model'], call['instructions'], call['text']), ('gpt-test', 'SYSTEM', {'format': {'type': 'json_object'}}))
+        self.assertEqual([t['role'] for t in call['input']], ['user', 'assistant', 'user'])
+        self.assertIn('JSON', call['input'][-1]['content'])
+
+    def test_provider_choice(self):
+        with mock.patch.dict(os.environ, {'AI_EDITOR_PROVIDER': '', 'ANTHROPIC_API_KEY': ''}):
+            self.assertEqual(llm.provider(), 'openai')
+        with mock.patch.dict(os.environ, {'AI_EDITOR_PROVIDER': '', 'ANTHROPIC_API_KEY': 'k'}):
+            self.assertEqual(llm.provider(), 'anthropic')
+        with mock.patch.dict(os.environ, {'AI_EDITOR_PROVIDER': 'openai', 'ANTHROPIC_API_KEY': 'k'}):
+            self.assertEqual(llm.provider(), 'openai')
+
+
+class ReadyMade(unittest.TestCase):
+    def test_the_example_plan_lands_on_a_clip_cut_elsewhere_with_slightly_different_word_times(self):
+        from backend.editor.ai_edit.beats import demo
+        import random
+        rand = random.Random(3)
+        clip = [{'word': w['word'].lower().strip('.,?'), 'start': round(w['start']-20+rand.uniform(-.06, .06), 2),
+                 'end': round(w['end']-20+rand.uniform(-.06, .06), 2)} for w in TRANSCRIPT if 15 <= w['start'] < 80]
+        plan = demo.matching_plan(clip)
+        self.assertIsNotNone(plan)
+        self.assertAlmostEqual(plan['source_window']['start'], 7.12, delta=.1)
+        self.assertEqual([b['template'] for b in plan['beats']], [b['template'] for b in EXAMPLE['beats']])
+        self.assertEqual([i for i in validator.validate(plan, clip) if i.rule == 0 or 'gap' in i.problem], [])
+
+    def test_other_speech_or_a_clip_too_short_gets_nothing(self):
+        from backend.editor.ai_edit.beats import demo
+        self.assertIsNone(demo.matching_plan([w for w in TRANSCRIPT if w['start'] > 100]))
+        self.assertIsNone(demo.matching_plan(TRANSCRIPT, 30, 60))           # the trim cuts into the demo section
 
 
 class ParseJson(unittest.TestCase):

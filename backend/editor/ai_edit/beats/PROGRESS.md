@@ -108,6 +108,13 @@ Compare with the reference:
   --out backend/editor/ai_edit/beats/output/side_by_side
 ```
 
+## Planner provider and the demo clip (on demo-mock)
+
+- `AI_EDITOR_PROVIDER=openai` plans with OpenAI (`OPENAI_API_KEY`, model `AI_EDITOR_OPENAI_MODEL` or Cascade's
+  default OpenAI model); `anthropic` uses `AI_EDITOR_MODEL`. Unset: Anthropic if its key is set, else OpenAI.
+- `demo.py`: when a clip contains the demo podcast's 27.12-71.78 s speech, the kit's validated plan is moved onto
+  the clip's word times. Used when the planner cannot answer, and always with `CASCADE_BEATS_DEMO_PLAN=on`.
+
 ## Resume
 
 ```
