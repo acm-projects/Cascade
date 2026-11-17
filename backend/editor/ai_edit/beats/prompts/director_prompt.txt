@@ -15,6 +15,7 @@ visual beats that makes the video fast, cinematic, and meaning-driven.
 - window (optional): {start, end}. If absent and the transcript is longer than
   60s, choose a 30-60s window that STARTS on the strongest self-contained
   statement (so the hook is in the first 3 seconds) and ENDS at a sentence boundary.
+  If user_instructions contain a LENGTH line, choose a window of that length instead.
 - user_instructions (optional): extra direction from the user.
 
 ## Templates (use only these)

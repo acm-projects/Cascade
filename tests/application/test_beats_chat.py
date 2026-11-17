@@ -242,6 +242,23 @@ class Rendering(Chat):
         self.assertIn('Preview ready', self.published[-1]['text'])
         self.assertFalse((self.folder/'v002').exists())
 
+    def test_a_new_short_edit_is_a_fresh_plan_at_the_asked_length(self):
+        self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
+        short = copy.deepcopy(EXAMPLE)
+        short['beats'] = [b for b in short['beats'] if b['end'] <= 42.88+1e-6]
+        short['source_window'] = {'start': 27.12, 'end': 42.88}
+        message = 'Make a 15-second high-energy jaguar fan edit, like the reference video.'
+        self.assertTrue(workflow.wants_new(message))
+        self.assertEqual(workflow.requested_length(message), 15.)
+        _, job = self.say(self.draft['state'], message, short, {'issues': [], 'score': 90, 'fixed_plan': short})
+        self.assertEqual((job['status'], job['version']), ('done', 'v002'), job)
+        v2 = self.saved('v002')
+        self.assertEqual((v2['kind'], v2['parent_id']), ('edit', None))
+        self.assertAlmostEqual(v2['plan']['total_duration'], 15.76, places=2)
+        self.assertIn('LENGTH: the user wants a 15-second edit', v2['message'])
+        for change in ('make it faster', 'add more b-roll', 'make the text red'):
+            self.assertFalse(workflow.wants_new(change), change)
+
     def test_render_re_renders_the_current_plan_without_the_planner(self):
         self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
         _, job = self.say(self.draft['state'], 'Render it again', )   # no scripted model reply: the planner is not asked

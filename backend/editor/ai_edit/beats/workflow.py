@@ -77,12 +77,34 @@ def save_version(folder, plan, *, message, kind, parent=None, changed=None, crit
     return record
 
 
-def choose_window(words, start, end):
-    """The words inside the user's trim and the window to plan: all of it if it is 60 s or less, else the director picks."""
+LENGTH = re.compile(r'\b(\d{1,3})\s*-?\s*(?:seconds?|secs?|s)\b', re.I)
+NEW_EDIT = re.compile(r'\b(new edit|start over|from scratch|fan[- ]?edit|high[- ]energy reel)\b'
+                      r'|\bmake\s+(?:this\s+|it\s+|me\s+)?(?:into\s+)?(?:a|an)\b[^.]{0,60}?\b(edit|reel|short|video|montage|trailer)\b', re.I)
+
+
+def requested_length(message):
+    """Seconds the user asked the edit to last ("a 15-second edit"), 8-60, or None."""
+    m = LENGTH.search(message or '')
+    return float(min(60, max(8, int(m.group(1))))) if m else None
+
+
+def wants_new(message):
+    """A request for a whole new edit (a fan edit, a 15-second reel…) rather than a change to the current plan."""
+    return bool(NEW_EDIT.search(message or ''))
+
+
+def window_bounds(target):
+    """(shortest, longest) source window the director may pick: 25-62 s, or around the length the user asked for."""
+    return (25., MAX_WINDOW+2) if not target else (max(6., target*.6), max(target*1.6, target+8.))
+
+
+def choose_window(words, start, end, target=None):
+    """The words inside the user's trim and the window to plan: all of it if it is short enough, else the director picks."""
     inside = [w for w in words if start-1e-6 <= w['start'] < end]
     if not inside: raise PlanError('I could not find any speech in this part of the clip to edit around.')
     span = {'start': inside[0]['start'], 'end': inside[-1]['end']}
-    return inside, (span if span['end']-span['start'] <= MAX_WINDOW else None)
+    longest = MAX_WINDOW if not target else window_bounds(target)[1]
+    return inside, (span if span['end']-span['start'] <= longest else None)
 
 
 def first(folder, source, state, message, progress):
@@ -92,9 +114,13 @@ def first(folder, source, state, message, progress):
     except PlanError as exc:
         unready = exc
     words = transcribe(source, transcript_folder(folder), lambda amount, stage: progress(.05+amount*.4, stage))
-    inside, window = choose_window(words, state.start, state.end)
+    target = requested_length(message)
+    inside, window = choose_window(words, state.start, state.end, target)
+    if target and window is None:
+        message = (f'{message}\nLENGTH: the user wants a {target:.0f}-second edit. Choose a source_window of about {target:.0f} seconds '
+                   f'(this replaces the usual 30-60 s window), starting on the strongest hook.')
     progress(.5, 'Planning the edit…' if window else 'Finding the strongest 30 to 60 seconds and planning the edit…')
-    ready_made = demo.matching_plan(words, state.start, state.end) if demo.forced() or unready else None
+    ready_made = demo.matching_plan(words, state.start, state.end) if (demo.forced() or unready) and not target else None
     if ready_made is None and unready: raise unready
     if ready_made is None:
         try:
@@ -108,8 +134,9 @@ def first(folder, source, state, message, progress):
                                     issues=[i.as_dict() for i in validator.validate(ready_made, words)])
         window = ready_made['source_window']
     chosen = result.plan['source_window']
+    shortest, longest = window_bounds(target)
     if window is None and not (inside[0]['start']-1e-6 <= chosen['start'] < chosen['end'] <= inside[-1]['end']+1e-6
-                               and 25 <= chosen['end']-chosen['start'] <= MAX_WINDOW+2):
+                               and shortest <= chosen['end']-chosen['start'] <= longest):
         raise PlanError('The AI editor picked a part of the clip it should not have. Try again.', f'bad window {chosen}')
     progress(.95, 'Saving the plan…')
     data = save_version(folder, result.plan, message=message, kind='edit', critic_score=result.critic_score,
