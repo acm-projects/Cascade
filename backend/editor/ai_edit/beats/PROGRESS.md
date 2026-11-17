@@ -123,3 +123,16 @@ npm --prefix remotion ci
 .venv/bin/python -m pytest tests/application/test_beats_*.py tests/application/test_cinema.py tests/application/test_ai_edit.py
 npm --prefix remotion test
 ```
+
+## Sound and pacing (demo-mock)
+
+- Score: every render now has a dramatic, serious music bed (`beats/music.py`: D minor low strings, ostinato, taiko
+  drums on the bar and a big drum on each impact beat), ducked under the voice by `cinema/score.mix`, -14 LUFS.
+  `CASCADE_BEATS_MUSIC=off` leaves it out.
+- Effects: all dark (air, drums, booms, rumbles, noise risers); tonal sine risers and shimmers removed. Effect names
+  the director invents map by what they contain (`deep_rumble`, `low_hit`, `counter_tick`, ...).
+- Pauses: `beats/tighten.py` cuts gaps longer than 0.3 s between words before rendering and drops empty "pause"
+  beats. The saved plan is unchanged; the render uses the tight plan over a joined source. `CASCADE_BEATS_TIGHTEN=off`
+  keeps pauses. Checked with a real render of beats 12-17 of the example plan (2.5 s of 8.3 s cut, frames and
+  audio verified).
+- A bare "render" / "render it again" in the chat re-renders the current version without calling the planner.

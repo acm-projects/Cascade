@@ -237,10 +237,21 @@ class Rendering(Chat):
             self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
         self.assertIsNone(self.published[-1]['version'])
         same = self.saved('v001')['plan']
-        _, job = self.say(self.draft['state'], 'render', {'reply': 'Nothing to change.', 'changed_beat_ids': [], 'plan': same})
+        _, job = self.say(self.draft['state'], 'keep it as it is', {'reply': 'Nothing to change.', 'changed_beat_ids': [], 'plan': same})
         self.assertEqual((job['status'], self.published[-1]['version']), ('done', 'v001'))
         self.assertIn('Preview ready', self.published[-1]['text'])
         self.assertFalse((self.folder/'v002').exists())
+
+    def test_render_re_renders_the_current_plan_without_the_planner(self):
+        self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
+        _, job = self.say(self.draft['state'], 'Render it again', )   # no scripted model reply: the planner is not asked
+        self.assertEqual((job['status'], self.published[-1]['version']), ('done', 'v001'))
+        self.assertIn('Rendering v001 again.', self.published[-1]['text'])
+        self.assertFalse((self.folder/'v002').exists())
+        for message in ('render', 're-render', 'Rerender the video please', 'redo it'):
+            self.assertTrue(workflow.wants_render(message), message)
+        for message in ('render beat 3 in red', 'make the music dramatic', 'remove the pauses and render'):
+            self.assertFalse(workflow.wants_render(message), message)
 
     def test_a_render_failure_keeps_the_plan(self):
         from backend.editor.ai_edit.beats import render as beats_render

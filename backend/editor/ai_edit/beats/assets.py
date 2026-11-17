@@ -13,7 +13,8 @@ B-roll: BROLL_OVERLAY and COLLAGE subjects are searched on Pexels through the pr
 the query (ai_edit/picture.ranked), then the fallback query, then local footage folders. A subject with no clip
 gets the renderer's generated background (no placeholder blocks). Every stock clip used is recorded with its URL.
 
-Sound effects: each beat's `sfx` names a sound synthesized here (no sample packs, nothing to license).
+Sound: each beat's `sfx` names a dark sound synthesized here, under a dramatic score (beats/music.py) that ducks
+under the voice. No sample packs, nothing to license.
 """
 import json
 import logging
@@ -197,17 +198,6 @@ def _noise(n, seed):
     return np.random.default_rng(seed).standard_normal(n)
 
 
-def _sweep(seconds, f0, f1, seed=1):
-    """A rising tone + noise riser that ends at full level (it should land on the next cut)."""
-    from scipy.signal import butter, sosfilt
-    n = int(seconds*SR); t = np.arange(n)/SR
-    f = f0*(f1/f0)**(t/seconds)
-    tone = np.sin(2*math.pi*np.cumsum(f)/SR)*.35
-    hiss = sosfilt(butter(2, [1500, 9000], 'bandpass', fs=SR, output='sos'), _noise(n, seed))*.5
-    env = (t/seconds)**2.2
-    return (tone+hiss*env)*env
-
-
 def _scribble(seconds=.55, seed=3):
     from scipy.signal import butter, sosfilt
     n = int(seconds*SR); t = np.arange(n)/SR
@@ -232,34 +222,41 @@ def _drone(seconds, f=55.):
     return x*np.minimum(1, t/.4)*np.minimum(1, (seconds-t)/.3)
 
 
-def _shimmer(seconds, seed=2, low=False):
+def _dark_riser(seconds, seed=1):
+    """A serious build: filtered noise opening upward over a growing sub rumble, no musical tone."""
+    from scipy.signal import butter, sosfilt
     n = int(seconds*SR); t = np.arange(n)/SR
-    notes = (220, 277.2, 329.6) if low else (880, 1108.7, 1318.5, 1760)
-    x = sum(np.sin(2*math.pi*f*t)*(.6+.4*np.sin(2*math.pi*(3+i)*t)) for i, f in enumerate(notes))/len(notes)
-    return x*np.sin(np.pi*np.minimum(1, t/seconds))**1.5
+    x = _noise(n, seed)
+    lo = sosfilt(butter(2, [120, 700], 'bandpass', fs=SR, output='sos'), x)
+    hi = sosfilt(butter(2, [900, 5000], 'bandpass', fs=SR, output='sos'), x)
+    p = t/seconds
+    rumble = np.sin(2*math.pi*np.cumsum(38+20*p)/SR)*.8
+    env = p**2.4
+    return (lo*(1-p)+hi*p*.8+rumble)*env
+
+
+def _tick(seed=4):
+    from ..cinema import score
+    return score._thump(140, .18, .3)*.6+_noise(int(.18*SR), seed)*np.exp(-np.arange(int(.18*SR))/(.006*SR))*.25
 
 
 def sound(name, seconds):
-    """(samples, where) for one effect: where is "cut" (centred on the cut), "start", "span" or "end" (lands on the next cut)."""
+    """(samples, where) for one effect: where is "cut" (centred on the cut), "start", "span" or "end" (lands on the next cut).
+    Every sound is dark and serious: air, drums, booms and rumbles, no bright tones. Names the director invents are matched
+    by what they contain (\"deep_rumble\" is a rumble, \"low_hit\" is a hit)."""
     from ..cinema import score
     name = (name or '').lower()
-    if name in ('whoosh', 'whoosh_soft'): return score._air(.55, True, 2)*(.55 if name == 'whoosh_soft' else 1), 'cut'
-    if name == 'wave_whoosh':
-        air = score._air(.5, True, 5)*.7
-        return air+score._splash(6, .9)[:len(air)]*.5, 'cut'
-    if name == 'impact_hit': return score._thump(62, .7)*1.1, 'start'
-    if name in ('impact_hit_big', 'impact_outro'): return score._boom(49, 2.4 if name == 'impact_outro' else 1.8), 'start'
-    if name == 'riser_short': return _sweep(min(.9, seconds), 300, 1800), 'end'
-    if name == 'riser_build': return _sweep(max(.6, seconds), 180, 2400, 4), 'end'
-    if name == 'glitch_hit': return _glitch(), 'start'
-    if name == 'pop_sparkle':
-        drop = score._drop(1900)
-        return drop+_shimmer(.35)[:len(drop)]*.4, 'start'
-    if name == 'pen_scribble': return _scribble(), 'start'
-    if name == 'low_drone': return _drone(seconds), 'span'
-    if name in ('shimmer_swell', 'soft_swell'): return _shimmer(seconds, low=name == 'soft_swell'), 'span'
-    if name == 'wind_air': return score._air(seconds, True, 9)*.6, 'span'
-    return score._air(.45, True, 2)*.6, 'cut'
+    has = lambda *words: any(w in name for w in words)
+    if has('outro', 'big', 'boom', 'slam'): return score._boom(46, 2.4 if 'outro' in name else 1.8), 'start'
+    if has('riser', 'build', 'swell', 'suck'): return _dark_riser(min(max(.6, seconds), 2.5), 4), 'end'
+    if has('rumble', 'drone'): return _drone(seconds, 41.), 'span'
+    if has('hit', 'impact', 'thud', 'punch'): return score._thump(55, .9)*1.1, 'start'
+    if has('glitch'): return _glitch(), 'start'
+    if has('pen', 'scribble', 'marker', 'swipe'): return _scribble(), 'start'
+    if has('tick', 'counter', 'clock', 'ping', 'pop', 'sparkle', 'click'): return _tick(), 'start'
+    if has('whoosh_soft', 'soft'): return score._air(.55, True, 2)*.5, 'cut'
+    if has('wind', 'air'): return score._air(min(max(.5, seconds), 1.5), True, 9)*.6, 'cut'
+    return score._air(.55, True, 2), 'cut'
 
 
 LEVELS = {'start': .34, 'cut': .28, 'end': .26, 'span': .16}   # peak level of each kind, under the voice
@@ -289,22 +286,29 @@ def _read(path):
         return x.reshape(-1, w.getnchannels())
 
 
+MUSIC_UNDER_VOICE_DB = -15.   # the score sits this far under the voice while someone speaks (louder between lines)
+
+
+def hit_times(plan):
+    """Where the score lands a big drum: the beats whose sound is an impact."""
+    origin = plan['source_window']['start']
+    return [b['start']-origin for b in plan['beats'] if any(w in (b.get('sfx') or '').lower() for w in ('impact', 'boom', 'slam', 'big'))]
+
+
 def mix(plan, source, work):
-    """speech.wav (the window's own sound) + effects, loudness-normalised to -14 LUFS. Returns the wav path."""
+    """speech.wav (the window's own sound) + a dramatic score ducked under the voice + effects, at -14 LUFS.
+    Returns the wav path (same length as the speech). CASCADE_BEATS_MUSIC=off leaves the score out."""
+    import os
+    from ..cinema import score
+    from . import music
     from .render import speech
     work = Path(work)
-    voice = _read(speech(plan, source, work/'speech.wav'))
-    seconds = plan['source_window']['end']-plan['source_window']['start']
+    voice = _read(speech(plan, source, work/'speech.wav')).astype(np.float64)
+    seconds = len(voice)/SR
     fx, placed = effects_track(plan, seconds)
-    n = min(len(voice), len(fx))
-    out = voice[:n]+fx[:n]
-    out = out/max(1., np.abs(out).max()/.98)
-    raw = work/'mix.raw.wav'
-    with wave.open(str(raw), 'wb') as w:
-        w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
-        w.writeframes((out*32767).astype('<i2').tobytes())
+    on = os.getenv('CASCADE_BEATS_MUSIC', 'on').strip().lower() != 'off'
+    bed = music.dramatic(seconds, hit_times(plan)) if on else np.zeros((len(voice), 2))
     final = work/'mix.wav'
-    subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-i', str(raw), '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', str(SR), str(final)],
-                   **RUN, check=True, timeout=600)
-    (work/'effects.json').write_text(json.dumps(placed, indent=1))
+    score.mix(voice, bed, fx*.6, -80., final, music_under=MUSIC_UNDER_VOICE_DB)
+    (work/'effects.json').write_text(json.dumps({'music': 'dramatic' if on else None, 'effects': placed}, indent=1))
     return final

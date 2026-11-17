@@ -13,6 +13,7 @@ so the Edited preview and Export keep using the user's own timeline until plans 
 """
 import copy
 import json
+import re
 import logging
 import time
 import uuid
@@ -140,17 +141,34 @@ def render_version(folder, data, source, stock=None, progress=None):
     out = folder/data['version']/'edited.mp4'
     folders = [p for p in (Path.home()/'Desktop'/'AI video editor'/'B-roll',) if p.is_dir()]
     try:
-        result = render.render(data['plan'], source, out, folder/'beats-render', audio=assets.mix, progress=report,
-                               make_assets=lambda work, size: assets.prepare(data['plan'], work, stock, folders, size))
+        from . import tighten
+        try:
+            words = cached_transcript(folder)
+        except PlanError:
+            words = []
+        report(.01, 'Taking out the pauses…')
+        plan, footage, removed = tighten.prepare(data['plan'], words, source, folder/'beats-render'/'tight')
+        result = render.render(plan, footage, out, folder/'beats-render', audio=assets.mix, progress=report,
+                               make_assets=lambda work, size: assets.prepare(plan, work, stock, folders, size))
     except Exception as exc:
         logging.getLogger(__name__).warning('beat plan render failed', exc_info=True)
         return None, f"\nThe preview video could not be made ({getattr(exc, 'detail', None) or exc}). The plan is saved."
     record = load(folder, data['version'])
     record['render'] = {k: result[k] for k in ('frames', 'seconds', 'size', 'rendered_beats', 'reused_beats', 'timings', 'checks', 'credits')}
+    record['render']['pauses_removed'] = removed
     _jobs()._write(folder/data['version']/PLAN_FILE, record)
     reused = len(result['reused_beats'])
     return result['seconds'], (f"\nPreview ready: {result['seconds']:.1f}s at 60 fps"
+                               f"{f', {removed:.1f}s of pauses cut' if removed else ''}"
                                f"{f', {reused} unchanged beats reused' if reused else ''}. The Edited view plays it.")
+
+
+RENDER_ONLY = re.compile(r"^\s*(please\s+)?(re-?render|render|redo|remake)(\s+(it|this|the\s+(video|edit|preview)))?(\s+again)?(\s+please)?\s*[.!]*\s*$", re.I)
+
+
+def wants_render(message):
+    """True for a bare "render" / "render it again": re-render the current plan without asking the planner."""
+    return bool(RENDER_ONLY.match(message or ''))
 
 
 def film(folder, version):
