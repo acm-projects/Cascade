@@ -462,3 +462,38 @@ button.ta-stamp:hover { background: color-mix(in srgb, var(--ta-edit) 20%, #fff)
   .ta-skeleton { animation: none; }
   .ta-spinner { animation-duration: 3s; }
 }
+
+/* ---------- Simple report: short version, you vs the top videos, what to do, details folded ---------- */
+.ta-short { display: grid; gap: 6px; padding: 18px 20px; border-radius: var(--ta-radius); background: var(--ta-card); border: 1px solid var(--ta-line); box-shadow: var(--ta-shadow); }
+.ta-short h2 { font: 800 1.35rem var(--font-ui); color: var(--ta-ink); }
+.ta-short p { color: var(--ta-soft); line-height: 1.5; margin: 0; }
+.ta-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ta-vs { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--ta-card); border: 1px solid var(--ta-line); border-radius: var(--ta-radius); box-shadow: var(--ta-shadow); overflow: hidden; }
+.ta-vs th, .ta-vs td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--ta-line); font: 600 .95rem var(--font-ui); color: var(--ta-ink); vertical-align: top; }
+.ta-vs thead th { font: 800 .74rem var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ta-soft); }
+.ta-vs tbody tr:last-child > * { border-bottom: 0; }
+.ta-vs tbody th { font-weight: 800; }
+.ta-vs td small { display: block; margin-top: 4px; color: var(--ta-soft); font-weight: 500; }
+.ta-verdict-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font: 800 .82rem var(--font-ui); white-space: nowrap; }
+.ta-vs .is-good .ta-verdict-chip { background: color-mix(in srgb, var(--ta-edit) 18%, #fff); color: var(--ta-edit-deep); }
+.ta-vs .is-behind .ta-verdict-chip { background: color-mix(in srgb, var(--ta-warn) 22%, #fff); color: #7a4300; }
+.ta-refcards { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.ta-refcards > li { display: grid; gap: 10px; align-content: start; padding: 14px 16px; border-radius: var(--ta-radius); background: var(--ta-card); border: 1px solid var(--ta-line); box-shadow: var(--ta-shadow); }
+.ta-refcards header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; }
+.ta-refcards header strong { display: block; font: 800 .95rem/1.3 var(--font-ui); color: var(--ta-ink); }
+.ta-refcards header small { color: var(--ta-soft); }
+.ta-refcards-rank { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--ta-ref); color: #fff; font: 800 .8rem var(--font-ui); }
+.ta-refcards ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ta-ink); font-size: .9rem; line-height: 1.4; }
+.ta-refcards-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ta-todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; counter-reset: todo; }
+.ta-todo-list > li { counter-increment: todo; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; padding: 16px 18px; border-radius: var(--ta-radius); background: var(--ta-card); border: 1px solid var(--ta-line); box-shadow: var(--ta-shadow); }
+.ta-todo-list > li::before { content: counter(todo); grid-row: 1 / 3; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--ta-edit); color: #fff; font: 800 .9rem var(--font-ui); }
+.ta-todo-list strong { font: 800 1.02rem var(--font-ui); color: var(--ta-ink); }
+.ta-todo-list p { margin: 4px 0 0; color: var(--ta-soft); line-height: 1.45; font-size: .92rem; }
+.ta-ask { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--ta-bg); border: 1px dashed var(--ta-line); }
+.ta-ask q { flex: 1 1 240px; font-style: italic; color: var(--ta-ink); line-height: 1.4; }
+.ta-more { margin-top: 8px; }
+.ta-more > summary { cursor: pointer; padding: 12px 16px; border-radius: 12px; background: var(--ta-card); border: 1px solid var(--ta-line); font: 800 .95rem var(--font-ui); color: var(--ta-ink); list-style-position: inside; }
+.ta-more[open] > summary { margin-bottom: 16px; }
+.ta-more > .ta-section { margin-top: 18px; }
+@media (max-width: 720px) { .ta-vs th, .ta-vs td { padding: 10px; font-size: .88rem; } }

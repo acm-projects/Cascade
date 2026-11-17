@@ -372,7 +372,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   );
   const trendsModal = trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush}
     change={change} clips={clips} onSelectClip={onSelectClipForTrends} onClose={() => setTrendsOpen(false)}
-    onOpenEditor={(t) => { setTrendsOpen(false); if (Number.isFinite(t)) setTimeout(() => player.current?.seek(t), 50); }} />;
+    onOpenEditor={(t) => { setTrendsOpen(false); if (Number.isFinite(t)) setTimeout(() => player.current?.seek(t), 50); }}
+    onAskAI={(prompt) => { setTrendsOpen(false); setPanelTab("AI Editor"); sendChat(prompt); }} />;
 
   // ---------- New layout (Figma "Editor Page – Revamp") ----------
   if (layout === "revamp") {
