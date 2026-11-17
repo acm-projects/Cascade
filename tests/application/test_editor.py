@@ -288,9 +288,13 @@ class EditorTests(unittest.TestCase):
             return subprocess.check_output(['ffmpeg','-v','error','-ss','0.5','-i',str(path),'-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','-'])
         self.assertNotEqual(frame(exported),frame(plain))
 
+    def test_new_clips_start_with_captions_off(self):
+        self.assertFalse(self.get()['draft']['state']['captions']['enabled'])
+
     def test_caption_text_state_export_and_invalid_rasters(self):
         from PIL import Image
         draft=self.get()['draft']; draft['state']['texts']={'0':'Changed caption'}
+        draft['state']['captions']['enabled']=True   # captions are opt-in; this test exports them
         self.assertEqual(self.client.put(self.url,headers=self.headers,json=draft).status_code,200)
         self.assertEqual(self.get()['draft']['state']['texts'],{'0':'Changed caption'})
         state=editor.Edit(**draft['state'])
