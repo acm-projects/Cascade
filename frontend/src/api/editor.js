@@ -55,6 +55,17 @@ export function uploadEditorClip(token, projectId, file) {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/upload`, { token, method: 'POST', form });
 }
 
+/**
+ * POST /api/projects/{projectId}/editor/combine
+ * Join picked clips (in the order given) into one new Editor clip; it goes first in the Editor's clip list.
+ * @param {{job_id: string, clip_index: number}[]} clips  two or more
+ * @returns {Promise<{ job_id, clip_index, title, duration, parts }>}
+ */
+export function combineClips(token, projectId, clips, title) {
+  const body = { clips: clips.map(({ job_id, clip_index }) => ({ job_id, clip_index })), ...(title ? { title } : {}) };
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/combine`, { token, method: 'POST', body });
+}
+
 export function getDraft(token, projectId, jobId, index) {
   return apiFetch(clipPath(projectId, jobId, index), { token });
 }

@@ -271,6 +271,10 @@ function StudioPage() {
   function goToEditor() {
     leafNavigate(`/projects/${projectId}/editor`, { style: "falls" });   // a waterfall covers the change
   }
+  // Multi-clip editing: the Editor joins the picked clips (e.g. clip 1 + clip 3) into one edit and opens it
+  function combineAndEdit() {
+    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", state: { combine: true } });
+  }
 
   // ---------- What to show ----------
   // No (or an unknown) session in the URL: go to the one the backend says is active
@@ -362,6 +366,12 @@ function StudioPage() {
           title={editorClips.length ? undefined : "Pick at least one clip first"} onClick={goToEditor}>
           Go to Editor →
         </button>
+        {editorClips.length >= 2 && (
+          <button type="button" className="btn btn-small btn-primary" onClick={combineAndEdit}
+            title={`Join the ${editorClips.length} picked clips into one video and open it in the Editor`}>
+            Combine {editorClips.length} clips & edit →
+          </button>
+        )}
       </SessionBar>
 
       <div className="studio-body">

@@ -32,6 +32,8 @@ class EditorRouteTests(unittest.TestCase):
         # The AI Editor beats pipeline: read one plan version, edit one beat by hand.
         additions += [[prefix+'/beats/{version}', ['GET']], [prefix+'/beats/{version}/{beat_id}', ['PATCH']]]
         additions.append(['/api/projects/{project_id}/generations/{job_id}/backup/retry', ['POST']])
+        # Multi-clip editing: join picked clips into one Editor clip.
+        additions.append(['/api/projects/{pid}/editor/combine', ['POST']])
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
 
     def test_editor_modules_remain_small(self):
