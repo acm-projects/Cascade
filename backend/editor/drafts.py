@@ -84,6 +84,17 @@ def save_draft(pid: str, jid: str, index: int, body: Draft, request: Request):
     with lock:
         path = draft_path(pid, jid, index, request.state.user_id)
         path.parent.mkdir(parents=True, exist_ok=True)
+        from backend import demo
+        if demo.enabled() and not body.state.ai_edit and metadata_exists(path):
+            # demo: the finished edit lands in a fraction of a second, before the page has fetched it; a save from the page
+            # made just before then must not wipe it (or the chat reply that came with it)
+            try:
+                saved = Draft.model_validate(load_json(path))
+            except ValueError:
+                saved = None
+            if saved and saved.state.ai_edit:
+                body.state.ai_edit, body.state.ai_plan = saved.state.ai_edit, saved.state.ai_plan
+                if len(saved.chat) > len(body.chat): body.chat = saved.chat
         save_json(path, body.model_dump())
         project = require_project(pid, request.state.user_id)
         project['editor_selection'] = {'job_id': jid, 'clip_index': index}

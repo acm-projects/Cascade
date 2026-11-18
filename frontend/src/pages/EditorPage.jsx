@@ -301,7 +301,15 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     try {
       const result = await api.sendEditorChat(projectId, clip.job_id, clip.clip_index, { state, chat: history, message, ...research,
         result_ids: (brollSearch?.results || []).map(a => a.id), selected_segment: selectedBroll });
-      if (result.ai_job) setAIJob(result.ai_job);
+      if (result.ai_job) {
+        setAIJob(result.ai_job);
+        // A finished edit can already be waiting (the demo makes it instantly): fetch it now, not on the next poll
+        api.getAIEdit(projectId, clip.job_id, clip.clip_index).then(({ job, saved }) => {
+          if (job?.status !== "done" || !saved?.ai_edit) return;
+          setAIJob(job);
+          adoptAIEdit(saved.ai_edit, saved.chat?.length ? [...history, { role: "user", text: message }, ...saved.chat.slice(-1)] : null, saved.ai_plan ?? null);
+        }).catch(() => {});
+      }
       if (draft.getRevision() !== sentRevision || !sameEdit(latestState.current, sent)) {
         draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: "NOT APPLIED: The clip changed while I was planning. Your newer manual edits were preserved. Send the request again to plan against the current timeline." }]);
         return;
