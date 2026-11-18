@@ -26,6 +26,7 @@ import { describeChanges } from "../features/editor/chatChanges";
 import ReelControls from "../features/editor/ReelControls";
 import TrendsModal from "../features/editor/TrendsModal";
 import MusicControls from "../features/editor/MusicControls";
+import { prefetchMusic } from "../features/editor/musicCache";
 import Icon from "../components/ui/Icon";
 import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import ClipLoading from "../features/editor/ClipLoading";
@@ -242,6 +243,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const api = useApi();
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
+  // Get the Music tab's track list now, in the background, so opening the tab shows it at once
+  useEffect(() => { prefetchMusic(api, projectId, clip).catch(() => {}); }, [api, projectId, clip]);
   const [panelTab, setPanelTab] = useState("Trim");
   const [trendsOpen, setTrendsOpen] = useState(Boolean(openTrends));
   const [chatChanges, setChatChanges] = useState({});

@@ -6,13 +6,26 @@ import { clipKey, flattenClips } from "./clips";
 //   drafts: one clip's { info, state, chat }, kept up to date as you edit (useClipDraft writes it back)
 const indexes = new Map();
 const drafts = new Map();
+
+// Also kept in sessionStorage (this tab only), so a page refresh still opens the Editor straight away
+const STORE = 'cascade.editorCache.v1';
+function readStore() {
+  try { return JSON.parse(sessionStorage.getItem(STORE)) || {}; } catch { return {}; }
+}
+function writeStore(kind, key, value) {
+  try {
+    const all = readStore();
+    all[kind] = { ...all[kind], [key]: value };
+    sessionStorage.setItem(STORE, JSON.stringify(all));
+  } catch { /* storage full or blocked: memory still works */ }
+}
 const loading = new Map();
 const prefetching = new Map();   // projectId -> the Studio prefetch still on its way
 
 export const draftKey = (projectId, jobId, index) => `${projectId}:${jobId}:${index}`;
 
 export function cachedIndex(projectId) {
-  return indexes.get(projectId) ?? null;
+  return indexes.get(projectId) ?? readStore().index?.[projectId] ?? null;
 }
 
 // The picked-clip list Studio started fetching, if it hasn't arrived yet (the Editor waits on it instead of asking again)
@@ -22,14 +35,19 @@ export function pendingIndex(projectId) {
 
 export function rememberIndex(projectId, index) {
   indexes.set(projectId, index);
+  writeStore('index', projectId, index);
 }
 
 export function cachedDraft(key) {
-  return drafts.get(key) ?? null;
+  return drafts.get(key) ?? readStore().draft?.[key] ?? null;
 }
 
+let storeTimer = null;
 export function rememberDraft(key, value) {
-  drafts.set(key, { ...drafts.get(key), ...value });
+  const next = { ...cachedDraft(key), ...value };
+  drafts.set(key, next);
+  clearTimeout(storeTimer);   // edits come fast (dragging); write the tab copy once they pause
+  storeTimer = setTimeout(() => writeStore('draft', key, next), 400);
 }
 
 // Load one clip's draft (once at a time) and remember it.

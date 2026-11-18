@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -104,6 +104,10 @@ function StudioPage() {
     }
     setPendingFile(file);
   }, [session, toast]);
+
+  // Clips already picked when Studio opens: get the Editor ready now, too
+  const hasPicks = editorClips.length > 0;
+  useEffect(() => { if (hasPicks) warmEditor(api, projectId); }, [api, projectId, hasPicks]);
 
   const toggleClip = useCallback((ref) => {
     const next = editorClips.some((item) => sameRef(item, ref))

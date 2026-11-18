@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import useApi from '../../api/useApi';
 import { audioAssetPath } from '../../api/editor';
 import Spinner from '../../components/ui/Spinner';
+import { prefetchMusic, trackKey, trackLists } from './musicCache';
 import './EditorControls.css';
 
 function AudioPreview({ path }) {
@@ -17,15 +18,16 @@ function AudioPreview({ path }) {
 
 export default function MusicControls({ projectId, clip, state, duration, change }) {
   const api = useApi();
-  const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [ready] = useState(() => trackLists.get(trackKey(projectId, clip))?.settled ?? null);
+  const [assets, setAssets] = useState(ready ?? []);
+  const [loading, setLoading] = useState(!ready);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   // Fetch the track list. The first load uses the initial "loading" state; Retry switches it back on first.
   const load = useCallback(() =>
-    api.listAudioAssets(projectId, clip.job_id, clip.clip_index).then(data => setAssets(data.assets)).catch(e => setError(e.message)).finally(() => setLoading(false)),
-  [api, projectId, clip.job_id, clip.clip_index]);
-  const reload = () => { setLoading(true); setError(''); load(); };
+    prefetchMusic(api, projectId, clip).then(setAssets).catch(e => setError(e.message)).finally(() => setLoading(false)),
+  [api, projectId, clip]);
+  const reload = () => { trackLists.delete(trackKey(projectId, clip)); setLoading(true); setError(''); load(); };
   useEffect(() => { load(); }, [load]);
   const segments = state.audio || [];
   function add(asset) {
@@ -48,7 +50,7 @@ export default function MusicControls({ projectId, clip, state, duration, change
   async function upload(e) {
     const file = e.target.files[0]; if (!file) return;
     setUploading(true); setError('');
-    try { const item = await api.uploadAudioAsset(projectId, clip.job_id, clip.clip_index, file); setAssets(items => [...items, item]); }
+    try { const item = await api.uploadAudioAsset(projectId, clip.job_id, clip.clip_index, file); setAssets(items => { const next = [...items, item]; const cached = trackLists.get(trackKey(projectId, clip)); if (cached) cached.settled = next; return next; }); }
     catch (err) { setError(err.message); }
     finally { setUploading(false); e.target.value = ''; }
   }
