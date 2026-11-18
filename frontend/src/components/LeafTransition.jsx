@@ -22,7 +22,7 @@ const MOVES = {
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
 const FALLS = { cover: 300, reveal: 400, least: 0, most: 8000 };
-const INSTANT = true;   // page changes skip the transition animations entirely   // the waterfall: pour in, at least / at most hold, fall away
+const INSTANT = false;  // true skips the page-change animations (the waterfall) entirely   // the waterfall: pour in, at least / at most hold, fall away
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
