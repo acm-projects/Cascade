@@ -8,6 +8,7 @@ import { useToast } from "../components/ui/ToastContext";
 import { useProject } from "../context/projectContextValue";
 import { useLeafNavigate } from "../context/leafTransitionValue";
 import useApi from "../api/useApi";
+import { prefetchEditor, warmEditor } from "../features/editor/draftCache";
 import SessionBar from "../features/studio/SessionBar";
 import ChatPanel from "../features/studio/ChatPanel";
 import StudioWorld from "../features/studio/world/StudioWorld";
@@ -113,7 +114,8 @@ function StudioPage() {
       return;
     }
     setStudio((current) => ({ ...current, editor_clips: next })); // show it right away
-    api.setEditorSelection(projectId, next).catch((err) => {
+    // Picking clips gets the Editor ready in the background (joined clip + its edits), so opening it is instant
+    api.setEditorSelection(projectId, next).then(() => { if (next.length) warmEditor(api, projectId); }).catch((err) => {
       toast.show(err.message, "error");
       refresh(); // put back what the server really has
     });
@@ -264,12 +266,13 @@ function StudioPage() {
 
   // ---------- Go to Editor ----------
   // The Editor loads the picked clips from the backend itself (they're saved as editor_clips)
+  // The clips and the first clip's edits load while the waterfall is up, so the Editor opens already filled in.
   function goToEditor() {
-    leafNavigate(`/projects/${projectId}/editor`, { style: "falls" });
+    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", ready: prefetchEditor(api, projectId) });
   }
   // Multi-clip editing: the Editor joins the picked clips (e.g. clip 1 + clip 3) into one edit and opens it
   function combineAndEdit() {
-    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", state: { combine: true } });
+    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", state: { combine: true }, ready: prefetchEditor(api, projectId) });
   }
 
   // ---------- What to show ----------

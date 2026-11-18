@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import useApi from "../../api/useApi";
+import { cachedDraft, draftKey, loadDraft, rememberDraft } from "./draftCache";
 
 const SAVE_DELAY_MS = 700;   // save this long after the last change
 const HISTORY_LIMIT = 50;
@@ -16,10 +17,13 @@ const HISTORY_LIMIT = 50;
 //   saveStatus - "saved" | "saving" | "error"
 export default function useClipDraft(projectId, clip) {
   const api = useApi();
-  const [info, setInfo] = useState(null);
+  const cacheKey = draftKey(projectId, clip.job_id, clip.clip_index);
+  // Already loaded in this tab (by the Editor, Export or Studio's prefetch): show it at once, no spinner
+  const [cached] = useState(() => cachedDraft(cacheKey));
+  const [info, setInfo] = useState(cached?.info ?? null);
   const [error, setError] = useState(null);
-  const [history, setHistory] = useState({ past: [], present: null, future: [] });
-  const [chat, setChat] = useState([]);
+  const [history, setHistory] = useState({ past: [], present: cached?.state ?? null, future: [] });
+  const [chat, setChat] = useState(cached?.chat ?? []);
   const [saveStatus, setSaveStatus] = useState("saved");
   const revision = useRef(0);
   const getRevision = useCallback(() => revision.current, []);
@@ -54,8 +58,9 @@ export default function useClipDraft(projectId, clip) {
   }, [persist]);
 
   useEffect(() => {
+    if (cached?.state) return undefined;   // shown from memory; it's kept up to date below
     let active = true;
-    api.getDraft(projectId, clip.job_id, clip.clip_index)
+    loadDraft(api, projectId, clip.job_id, clip.clip_index)
       .then((result) => {
         if (!active) return;
         const { draft, ...details } = result;
@@ -67,10 +72,15 @@ export default function useClipDraft(projectId, clip) {
     return () => {
       active = false;
     };
-  }, [api, projectId, clip.job_id, clip.clip_index]);
+  }, [api, projectId, clip.job_id, clip.clip_index, cached]);
+
+  // Keep the remembered copy current, so the next page opens this clip exactly as you left it
+  const state = history.present;
+  useEffect(() => {
+    if (info && state) rememberDraft(cacheKey, { info, state, chat });
+  }, [cacheKey, info, state, chat]);
 
   // Auto-save a moment after the last change
-  const state = history.present;
   useEffect(() => {
     if (!state) return;
     if (!loaded.current) {

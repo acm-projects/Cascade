@@ -21,7 +21,7 @@ const MOVES = {
   rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
-const FALLS = { cover: 350, hold: 60, reveal: 450 };   // quick: the page switches under the water, no waiting on data
+const FALLS = { cover: 400, hold: 100, reveal: 450, most: 1000 };   // about 1 s; the page switches under the water
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,7 +75,8 @@ function LeafTransition({ children }) {
     if (chosen === "falls") {
       setStyle("falls");
       setPhase("cover");
-      await wait(FALLS.cover);
+      // Wait for the cover, and for the next page's data if given (never past FALLS.most), then switch
+      await Promise.all([wait(FALLS.cover), Promise.race([Promise.resolve(ready).catch(() => {}), wait(FALLS.most)])]);
       navigate(to, { state });
       await wait(FALLS.hold);
       setPhase("reveal");

@@ -106,11 +106,16 @@ def turn(pid, jid, index, user, clip, body, info, stock, audio_store):
            'request': body.message[:500], 'version': None, 'message': '', 'started': time.time(), 'finished': None}
     _write(folder/'job.json', job)
     from backend import demo
-    if demo.enabled() and demo.final_edit():   # demo: the finished edit, straight away, whatever was asked
-        job.update(status='running', progress=.6, stage='Editing…')
-        demo.run_final_edit(folder, pid, jid, index, user, body.state.model_copy(deep=True), body.message, job, _publish, _write)
-        # handed back as still running so the Editor fetches the finished edit on its first check (right away)
-        return _reply(body.state, 'Editing your clip…', {**job, 'status': 'running', 'progress': .9, 'stage': 'Editing…'})
+    if demo.enabled() and demo.final_edit():   # demo: about 6 s of editing steps, then the saved finished edit, whatever was asked
+        job.update(status='running', progress=.05, stage='Watching the clip…')
+        _write(folder/'job.json', job)
+        with GUARD: RUNNING[str(folder)] = True   # marks it running, so a status check doesn't call it interrupted
+
+        def finished():
+            with GUARD: RUNNING.pop(str(folder), None)
+        demo.run_final_edit_later(folder, pid, jid, index, user, body.state.model_copy(deep=True), body.message, job, _publish, _write,
+                                  done=finished)
+        return _reply(body.state, 'Editing your clip…', dict(job))
     args = (folder, pid, jid, index, user, clip, info, body.state.model_copy(deep=True), [m.model_dump() for m in body.chat], body.message, stock, audio_store, job)
     thread = threading.Thread(target=_run, args=args, daemon=True, name='cascade-ai-edit')
     with GUARD: RUNNING[str(folder)] = thread

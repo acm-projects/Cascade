@@ -29,6 +29,7 @@ import MusicControls from "../features/editor/MusicControls";
 import Icon from "../components/ui/Icon";
 import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import ClipLoading from "../features/editor/ClipLoading";
+import { cachedIndex, pendingIndex, rememberIndex } from "../features/editor/draftCache";
 import UploadClipButton from "../features/editor/UploadClipButton";
 import CombineClips from "../features/editor/CombineClips";
 import "../features/editor/EditorRevamp.css";
@@ -67,9 +68,16 @@ function EditorPage() {
   const { project, setExportHandoff } = useProject();
   const exportHandoffId = useId();
   const knownName = project?.id === projectId ? project.name : null;
-  const [clips, setClips] = useState(null); // null = loading
+  // The picked clips: shown at once when Studio already fetched them (during the waterfall), refreshed quietly after
+  const [startIndex] = useState(() => cachedIndex(projectId));
+  const [clips, setClips] = useState(() => startIndex && flattenClips(startIndex)); // null = loading
   const [error, setError] = useState(null);
-  const [currentKey, setCurrentKey] = useState(null);
+  const [currentKey, setCurrentKey] = useState(() => {
+    if (!startIndex) return null;
+    const list = flattenClips(startIndex);
+    const first = startIndex.selection && list.find((clip) => clipKey(clip) === clipKey(startIndex.selection));
+    return first ? clipKey(first) : list[0] && clipKey(list[0]);
+  });
   const [projectName, setProjectName] = useState(knownName);
   const flushCurrent = useRef(null);
   const registerFlush = useCallback(value => { flushCurrent.current = value; }, []);
@@ -85,13 +93,16 @@ function EditorPage() {
         .then((project) => { if (active) setProjectName(project.name); })
         .catch(() => {}); // The project title can fall back to the TopNav placeholder.
     }
-    api.getEditorIndex(projectId, { selectedOnly: true })
+    // Studio may still be fetching the list (during the waterfall): use that answer rather than asking twice
+    (pendingIndex(projectId) ?? api.getEditorIndex(projectId, { selectedOnly: true }))
       .then((index) => {
         if (!active) return;
+        rememberIndex(projectId, index);
         const list = flattenClips(index);
-        setClips(list);
+        setClips((shown) => (shown && JSON.stringify(shown) === JSON.stringify(list) ? shown : list));
         const first = index.selection && list.find((clip) => clipKey(clip) === clipKey(index.selection));
-        setCurrentKey(first ? clipKey(first) : list[0] && clipKey(list[0]));
+        setCurrentKey((key) => (key && list.some((clip) => clipKey(clip) === key) ? key
+          : first ? clipKey(first) : list[0] && clipKey(list[0])));
       })
       .catch((err) => active && setError(err));
     return () => {
@@ -142,7 +153,8 @@ function EditorPage() {
     autoCombine.current = false;
     navigate(location.pathname, { replace: true, state: null });
     const parts = combinable(clips);
-    if (parts.length >= 2) combine(parts).catch(() => {});
+    // Already joined (demo mode joins the picks itself): open it as is, don't join again
+    if (parts.length >= 2 && !clips.some((clip) => clip.kind === "combined")) combine(parts).catch(() => {});
   }, [clips, combine, navigate, location.pathname]);
   const combineButton = (className, compact) => <CombineClips key={clips?.length} clips={clips} onCombine={combine} busy={combining} className={className} compact={compact} />;
 
@@ -269,7 +281,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
         setPanelTab("AI Editor");
       }
     }).catch(() => {});
-    const timer = setInterval(poll, 2000);
+    const timer = setInterval(poll, 1000);
     poll();
     return () => { active = false; clearInterval(timer); };
   }, [api, projectId, clip.job_id, clip.clip_index, jobRunning, adoptAIEdit]);

@@ -34,8 +34,8 @@ export function applyTrends(token, projectId, jobId, index, body) {
  * @returns {Promise<{ sessions: { job_id, prompt, session_name?, clips: { job_id, clip_index, start, end, title }[] }[],
  *                     selection: { job_id, clip_index } | null }>}  selection = the clip to open first
  */
-export function getEditorIndex(token, projectId, { selectedOnly = false } = {}) {
-  const query = selectedOnly ? "?selected_only=true&wait_for_join=false" : "";
+export function getEditorIndex(token, projectId, { selectedOnly = false, waitForJoin = false } = {}) {
+  const query = selectedOnly ? `?selected_only=true&wait_for_join=${waitForJoin}` : "";
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor${query}`, { token });
 }
 

@@ -49,7 +49,7 @@ function ExportPage() {
   const incoming = location.state?.exportSelection;
   const selection = navigationType === "PUSH" && incoming?.projectId === projectId ? incoming : null;
   const handoff = exportHandoff?.id === selection?.id ? exportHandoff : null;
-  const [saving, setSaving] = useState(Boolean(handoff?.saving));
+  const [, setSaving] = useState(Boolean(handoff?.saving));
   const [saveError, setSaveError] = useState(null);
   const [clips, setClips] = useState(() => selection?.clips ?? null);
   const [error, setError] = useState(null);
@@ -136,8 +136,8 @@ function ExportPage() {
   }
 
   let message;
-  if (saving) message = <Spinner size={48} label="Saving your edits" />;
-  else if (saveError) message = <EmptyState icon="cloud" title="Couldn't save your edits" text={saveError.message}
+  // Edits keep saving in the background; the page doesn't wait for them
+  if (saveError) message = <EmptyState icon="cloud" title="Couldn't save your edits" text={saveError.message}
     action={{ label: "Try again", onClick: retrySave }} />;
   else if (error) message = <EmptyState icon="cloud" title="Couldn't open Export" text={error.message} />;
   else if (!clips) message = <Spinner size={48} label="Loading your clips" />;

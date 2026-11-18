@@ -327,6 +327,27 @@ def final_edit():
 DONE_TEXT = "Done! Here's your jaguar fan edit. Press play on the Edited view."
 
 
+EDIT_SECONDS = float(os.getenv('CASCADE_DEMO_EDIT_SECONDS', '') or 5.8)   # how long the AI chat "works" before the edit shows
+EDIT_STAGES = ((.1, 'Watching the clip…'), (.3, 'Planning the edit…'), (.55, 'Adding captions and B-roll…'), (.8, 'Rendering your edit…'))
+
+
+def run_final_edit_later(folder_path, pid, jid, index, user, state, message, job, publish, write, done=None):
+    """The AI chat in demo mode: show editing steps for EDIT_SECONDS (about 6 s), then the saved finished edit."""
+    import threading
+    def run():
+        try:
+            for amount, stage in EDIT_STAGES:
+                job.update(status='running', progress=amount, stage=stage)
+                write(Path(folder_path)/'job.json', job)
+                time.sleep(EDIT_SECONDS/len(EDIT_STAGES))
+            run_final_edit(folder_path, pid, jid, index, user, state, message, job, publish, write)
+        finally:
+            if done: done()
+    thread = threading.Thread(target=run, daemon=True, name='cascade-demo-edit')
+    thread.start()
+    return thread
+
+
 def run_final_edit(folder_path, pid, jid, index, user, state, message, job, publish, write):
     """The AI chat in demo mode: any request shows the saved finished edit straight away, as the clip's next version."""
     from backend.editor.ai_edit.beats import workflow

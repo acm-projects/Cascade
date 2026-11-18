@@ -151,10 +151,17 @@ class DemoMode(unittest.TestCase):
         published = []
         folder = Path(self.temp.name)/'edit'
         try:
-            with patch.object(jobs, 'root', lambda *a: folder), patch.object(jobs, '_publish', lambda *a, **k: published.append((a, k))):
+            import time
+            from backend import demo as demo_module
+            with patch.object(jobs, 'root', lambda *a: folder), patch.object(jobs, '_publish', lambda *a, **k: published.append((a, k))), \
+                    patch.object(demo_module, 'EDIT_SECONDS', .2):
                 body = SimpleNamespace(state=Edit(start=0, end=5), chat=[], message='whatever you like', research_id=None)
                 reply = jobs.turn('p', 'j', 0, 'u', {}, body, {'has_video': True}, None, None)
-            self.assertEqual(reply['ai_job']['status'], 'running')                       # the Editor checks once and finds it done
+                self.assertEqual(reply['ai_job']['status'], 'running')                   # editing steps first (about 6 s in the demo)
+                self.assertEqual(json.loads((folder/'job.json').read_text())['status'], 'running')
+                for _ in range(100):
+                    if json.loads((folder/'job.json').read_text())['status'] == 'done': break
+                    time.sleep(.05)
             self.assertEqual(json.loads((folder/'job.json').read_text())['status'], 'done')
             self.assertTrue((folder/'v001'/'edited.mp4').is_file())
             self.assertEqual(published[0][0][5], 'v001')
