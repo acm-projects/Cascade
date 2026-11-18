@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./LeafTransition.css";
-import { LeafTransitionContext } from "../context/leafTransitionValue";
+import { LeafTransitionContext, WATERFALL_READY } from "../context/leafTransitionValue";
 import WaterfallCurtain from "./WaterfallCurtain";
 
 // Page changes that feel like a camera moving through the world (like an isometric camera gliding across a model):
@@ -58,24 +58,35 @@ function LeafTransition({ children }) {
   const [style, setStyle] = useState("push");
   const running = useRef(false);
   const shownLocation = useLocation();   // the page to draw (App.jsx passes it to <Routes>)
-  const coveredLocationKey = useRef(null);
+  const coveredPath = useRef(null);
 
   useLayoutEffect(() => {
-    if (coveredLocationKey.current === null || coveredLocationKey.current === shownLocation.key) return;
-
-    // The route has committed, including any loading UI it needs to show.
-    coveredLocationKey.current = null;
-    setPhase("reveal");
-    const timer = setTimeout(() => {
-      setPhase("idle");
-      running.current = false;
-    }, FALLS.reveal);
+    if (coveredPath.current !== shownLocation.pathname) return;
+    coveredPath.current = null;
+    let revealTimer;
+    function reveal() {
+      window.removeEventListener(WATERFALL_READY, onReady);
+      clearTimeout(loadTimer);
+      setPhase("reveal");
+      revealTimer = setTimeout(() => {
+        setPhase("idle");
+        running.current = false;
+      }, FALLS.reveal);
+    }
+    function onReady(event) {
+      if (event.detail === shownLocation.pathname) reveal();
+    }
+    window.addEventListener(WATERFALL_READY, onReady);
+    // If a request never settles, let the user see the Editor and navigate away.
+    const loadTimer = setTimeout(reveal, 45000);
     return () => {
-      clearTimeout(timer);
+      window.removeEventListener(WATERFALL_READY, onReady);
+      clearTimeout(loadTimer);
+      clearTimeout(revealTimer);
       setPhase("idle");
       running.current = false;
     };
-  }, [shownLocation.key]);
+  }, [shownLocation.pathname]);
 
   // style: "push" (the default) or "dive" (from Landing). ready: an optional promise to wait for (the next page's code).
   const leafNavigate = useCallback(async (to, { state, ready, style: chosen = "push" } = {}) => {
@@ -88,12 +99,12 @@ function LeafTransition({ children }) {
 
     running.current = true;
 
-    // The destination shows its own loading state while its data arrives.
+    // Keep the curtain in place while the destination prepares its initial view.
     if (chosen === "falls") {
       setStyle("falls");
       setPhase("cover");
       await wait(FALLS.cover);
-      coveredLocationKey.current = shownLocation.key;
+      coveredPath.current = to;
       navigate(to, { state });
       return;
     }
@@ -115,7 +126,7 @@ function LeafTransition({ children }) {
     await wait(move.reveal);
     setPhase("idle");
     running.current = false;
-  }, [navigate, shownLocation.key]);
+  }, [navigate]);
 
   const move = MOVES[style] ?? MOVES.push;
   return (

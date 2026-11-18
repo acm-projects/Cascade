@@ -1,4 +1,5 @@
-import { createContext, useContext } from "react";
+import { createContext, useCallback, useContext } from "react";
+import { useLocation } from "react-router-dom";
 
 export const LeafTransitionContext = createContext(null);
 
@@ -13,4 +14,13 @@ export const LeafTransitionContext = createContext(null);
 // or "instant" (navigate directly between project steps without an animation).
 export function useLeafNavigate() {
   return useContext(LeafTransitionContext);
+}
+
+export const WATERFALL_READY = "cascade:waterfall-ready";
+
+export function useWaterfallReady() {
+  const { pathname } = useLocation();
+  return useCallback(() => {
+    window.dispatchEvent(new CustomEvent(WATERFALL_READY, { detail: pathname }));
+  }, [pathname]);
 }

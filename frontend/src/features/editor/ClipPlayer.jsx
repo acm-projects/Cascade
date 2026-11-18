@@ -24,7 +24,7 @@ import { cueText } from "./captionStyles";
 //                   when it passes saveStatus), so the video gets the height that row would take
 //   onFitWidth(px) - optional: told how wide the video would be if it used the stage's full height, so the
 //                    page can make the player's column exactly that wide (no empty space beside the video)
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus, versionsInBar = false, onFitWidth }) {
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus, versionsInBar = false, onFitWidth, onPreviewSettled }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -98,6 +98,12 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [api, projectId, clip]);
+
+  useEffect(() => {
+    if (error) onPreviewSettled?.(true);
+  }, [error, onPreviewSettled]);
+
+  const previewLoaded = () => onPreviewSettled?.(true);
 
   // Measure the space we have, so the frame can be as big as fits (and captions scale with it)
   useEffect(() => {
@@ -264,6 +270,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
             <p style={{textAlign:'center',padding:'2rem',color:'#f5f0de'}}><Icon name="headphones" /> Audio recording</p>
             <audio muted={muted} onEnded={handleEnded} ref={videoRef} src={showEdited ? rendered : url} aria-label="Edited audio preview"
               onError={() => setError(new Error("Unable to load the preview. Please try again."))}
+              onLoadedData={previewLoaded}
               onLoadedMetadata={e => {e.target.currentTime=showEdited || view === "original" ? 0 : state.start;}}
               onTimeUpdate={handleTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
           </> : <video
@@ -276,6 +283,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
               objectFit: cropNow ? "cover" : "contain",
               objectPosition: `${composition.x * 100}% ${composition.y * 100}%`,
             }}
+            onLoadedData={previewLoaded}
             onLoadedMetadata={(e) => { if (state.ai_edit && e.target.videoWidth) setFileShape(e.target.videoWidth / e.target.videoHeight); e.target.currentTime = showEdited || view === "original" ? 0 : state.start; }}
             onError={() => setError(new Error("Unable to load the preview. Please try again."))}
             onTimeUpdate={handleTimeUpdate}

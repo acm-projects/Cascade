@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
-import { useLeafNavigate } from "../context/leafTransitionValue";
+import { useLeafNavigate, useWaterfallReady } from "../context/leafTransitionValue";
 import AIEditorChat from "../features/editor/AIEditorChat";
 import SequenceControls from "../features/editor/SequenceControls";
 import { sameEdit, isAIUndo, canUndoAI } from "../features/editor/editorTransactions";
@@ -58,6 +58,7 @@ const panelInfo = {
 // Shows the clips picked in AI Studio; every edit is saved to the backend automatically.
 function EditorPage() {
   const leafNavigate = useLeafNavigate();
+  const waterfallReady = useWaterfallReady();
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams();
@@ -147,6 +148,9 @@ function EditorPage() {
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   const hasClips = Boolean(clips?.length);
+  useEffect(() => {
+    if (error || (clips && !current)) waterfallReady();
+  }, [clips, current, error, waterfallReady]);
   // Save the clip you're on, then open another one
   async function selectClip(clip, { trends = false } = {}) {
     try { await flushCurrent.current?.(); setTrendsFor(trends ? clipKey(clip) : null); setCurrentKey(clipKey(clip)); } catch (e) { toast.show(e.message, "error"); }
@@ -215,14 +219,14 @@ function EditorPage() {
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
           clips={clips} openTrends={trendsFor === currentKey} onSelectClipForTrends={clip => selectClip(clip, { trends: true })}
-          registerFlush={registerFlush} onExport={goToExport} />
+          registerFlush={registerFlush} onExport={goToExport} canReveal={!combining} onPreviewReady={waterfallReady} />
       )}
     </div>
   );
 }
 
 // Everything for the clip being edited. It has key={clip key}, so switching clips loads that clip's own draft.
-function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, registerFlush, clips, openTrends, onSelectClipForTrends }) {
+function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, registerFlush, clips, openTrends, onSelectClipForTrends, canReveal, onPreviewReady }) {
   const api = useApi();
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
@@ -372,11 +376,15 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     )}
     {framing.status === "error" && <span className="editor-save editor-save-error" role="alert"><Icon name="alert" /> {framing.message}</span>}
   </>;
+  const [previewSettled, setPreviewSettled] = useState(false);
+  useEffect(() => {
+    if (canReveal && (previewSettled || draft.error)) onPreviewReady();
+  }, [canReveal, draft.error, onPreviewReady, previewSettled]);
   const preview = draft.error ? (
     <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
   ) : info && state ? (
     <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
-      framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
+      framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} onPreviewSettled={setPreviewSettled} />
   ) : (
     <ClipLoading />
   );
@@ -492,7 +500,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
               <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
             ) : info && state ? (
               <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
-                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
+                framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} onPreviewSettled={setPreviewSettled} />
             ) : (
               <ClipLoading />
             )}
