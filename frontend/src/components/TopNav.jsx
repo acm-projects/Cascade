@@ -64,8 +64,8 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
             <NavLink key={step.id} to={stepPath(id, step.id, params.sessionId)} className={className}
               onClick={(event) => {
                 if (step.id === active || !leafNavigate) return;
-                event.preventDefault();   // a waterfall covers the change while the next step loads
-                leafNavigate(stepPath(id, step.id, params.sessionId), { style: "falls" });
+                event.preventDefault();
+                leafNavigate(stepPath(id, step.id, params.sessionId), { style: "instant" });
               }}>
               {content}
             </NavLink>

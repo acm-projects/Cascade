@@ -180,7 +180,7 @@ function EditorPage() {
           text="Upload your own video to edit it right away, or let Studio Island find the best clips for you." />
         <div className="editor-empty-actions">
           <UploadClipButton projectId={projectId} onUploaded={addOwnClip} className="btn btn-primary" label="Upload your own clip" />
-          <button type="button" className="btn" onClick={() => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" })}>
+          <button type="button" className="btn" onClick={() => leafNavigate(`/projects/${projectId}/studio`, { style: "instant" })}>
             <Icon name="sparkles" /> Find clips on Studio Island
           </button>
         </div>
@@ -196,7 +196,7 @@ function EditorPage() {
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
           clips={clips} openTrends={trendsFor === currentKey} onSelectClipForTrends={clip => selectClip(clip, { trends: true })}
-          registerFlush={registerFlush} onExport={() => leafNavigate(`/projects/${projectId}/export`, { style: "falls" })} />
+          registerFlush={registerFlush} onExport={() => leafNavigate(`/projects/${projectId}/export`, { style: "instant" })} />
       )}
     </div>
   );

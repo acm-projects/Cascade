@@ -94,7 +94,7 @@ function ExportPage() {
   }
 
   async function leave(to) {
-    try { await activeFlush.current?.(); leafNavigate(to, { style: "falls" }); }   // a waterfall covers the change
+    try { await activeFlush.current?.(); leafNavigate(to, { style: "instant" }); }
     catch (err) { toast.show(err.message, "error"); }
   }
 
@@ -111,7 +111,7 @@ function ExportPage() {
   else if (!clips.length) {
     message = (
       <EmptyState icon="box" title="Nothing to export yet" text="Pick clips on Studio Island and edit them, then export them here."
-        action={{ label: "Go to Studio Island", onClick: () => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" }) }} />
+        action={{ label: "Go to Studio Island", onClick: () => leafNavigate(`/projects/${projectId}/studio`, { style: "instant" }) }} />
     );
   }
 

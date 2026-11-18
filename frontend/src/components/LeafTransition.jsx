@@ -9,7 +9,7 @@ import WaterfallCurtain from "./WaterfallCurtain";
 //          waterfall meets the sea, the view sinks into deep blue, then on Projects the camera keeps sinking to the sea floor.
 //   "push" (Projects -> AI Studio): the cards fade, the underwater camera pushes forward into the beam of light,
 //          and AI Studio appears out of the water.
-//   "falls" (between AI Studio, the Editor and Export): a waterfall pours down over the screen, the next page
+//   "falls" (optional waterfall transition): a waterfall pours down over the screen, the next page
 //          opens behind it, and the water falls away (see WaterfallCurtain.jsx).
 //   "rise" (Projects -> How it works): the underwater camera swims up to the bright surface, then on How it works
 //          the camera comes down onto the pond from above.
@@ -22,7 +22,6 @@ const MOVES = {
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
 const FALLS = { cover: 220, reveal: 280 };
-const INSTANT = false;  // true skips the page-change animations (the waterfall) entirely   // the waterfall: pour in, at least / at most hold, fall away
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -82,8 +81,7 @@ function LeafTransition({ children }) {
   const leafNavigate = useCallback(async (to, { state, ready, style: chosen = "push" } = {}) => {
     if (running.current) return;   // already on the way (a double click)
 
-    // Straight to the page: no camera move or waterfall to wait through (the demo branch keeps page changes instant)
-    if (INSTANT || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (chosen === "instant" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       navigate(to, { state });
       return;
     }
