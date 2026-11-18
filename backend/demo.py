@@ -91,24 +91,18 @@ def instant_clips(job_id, video_path, search, mode, target):
 
 # ---------- Editor: picked clips -> one joined clip ----------
 
-def _created(job_id):
-    try:
-        return job_service.load_json(job_service.JOBS_DIR/job_id/'owner.json').get('created_at', 0)
-    except Exception:
-        return 0
-
-
 def ordered_picks(chosen):
-    """Picked clips (not already-joined ones) in story order: oldest generation first, then clip 1, 2, 3…"""
-    picks = []
+    """Picked clips in story order: oldest generation first, then clip number."""
+    paths = {ref['job_id']: job_service.JOBS_DIR/ref['job_id']/'owner.json' for ref in chosen}
+    documents = job_service.metadata_store().read_many(paths.values())
+    picks = {}
     for ref in chosen:
-        try:
-            kind = job_service.load_json(job_service.JOBS_DIR/ref['job_id']/'owner.json').get('kind')
-        except Exception:
-            continue
-        if kind != 'combined' and (ref['job_id'], ref['clip_index']) not in [(p['job_id'], p['clip_index']) for p in picks]:
-            picks.append({'job_id': ref['job_id'], 'clip_index': ref['clip_index']})
-    return sorted(picks, key=lambda r: (_created(r['job_id']), r['clip_index']))
+        job_id, index = ref['job_id'], ref['clip_index']
+        owner = documents.get(paths[job_id])
+        if owner is not None and owner.get('kind') != 'combined':
+            picks[(job_id, index)] = owner.get('created_at', 0)
+    return [{'job_id': job_id, 'clip_index': index}
+            for job_id, index in sorted(picks, key=lambda key: (picks[key], key[1]))]
 
 
 def _matches_join(job_id, owner, want):
@@ -174,9 +168,10 @@ def ready_editor_clip(pid, user, project):
 
 def _current_join_matches(pid, user, job_id, chosen):
     path = job_service.JOBS_DIR/job_id/'owner.json'
-    if not job_service.metadata_exists(path):
+    try:
+        owner = job_service.load_json(path)
+    except FileNotFoundError:
         return False
-    owner = job_service.load_json(path)
     if (owner.get('kind') != 'combined' or owner.get('user_id') != user
             or owner.get('project_id') != pid or owner.get('project_deleted')):
         return False

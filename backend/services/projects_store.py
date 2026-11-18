@@ -26,9 +26,10 @@ def require_project(project_id, user_id):
     if not re.fullmatch(r'[0-9a-f]{32}', project_id):
         raise HTTPException(404, 'Project not found.')
     path = project_dir(user_id) / (project_id + '.json')
-    if not job_service.metadata_exists(path):
-        raise HTTPException(404, 'Project not found.')
-    data = project_defaults(job_service.load_json(path))
+    try:
+        data = project_defaults(job_service.load_json(path))
+    except FileNotFoundError:
+        raise HTTPException(404, 'Project not found.') from None
     if data['user_id'] != user_id:
         raise HTTPException(404, 'Project not found.')
     return data
@@ -67,16 +68,34 @@ def owner_for_job(project_id, job_id, user_id):
 
 
 def selected_clip(project_id, body, user_id):
-    owner = owner_for_job(project_id, body.job_id, user_id)
-    path = job_service.JOBS_DIR / body.job_id / 'results.json'
-    if not job_service.metadata_exists(path):
+    if not re.fullmatch(r'[0-9a-f]{32}', project_id):
+        raise HTTPException(404, 'Project not found.')
+    if not re.fullmatch(r'[0-9a-f]{32}', body.job_id):
+        require_project(project_id, user_id)
+        raise HTTPException(404, 'Job not found.')
+    project_path = project_dir(user_id) / (project_id + '.json')
+    folder = job_service.JOBS_DIR / body.job_id
+    owner_path = folder / 'owner.json'
+    results_path = folder / 'results.json'
+    documents = job_service.metadata_store().read_many([project_path, owner_path, results_path])
+    project = documents.get(project_path)
+    if project is None or project.get('user_id') != user_id:
+        raise HTTPException(404, 'Project not found.')
+    owner = documents.get(owner_path)
+    if owner is None:
+        raise HTTPException(404, 'Job not found. Upload the video again.')
+    if owner.get('user_id') != user_id or owner.get('project_deleted'):
+        raise HTTPException(404, 'Job not found.')
+    if owner.get('project_id') != project_id:
+        raise HTTPException(404, 'Job not found in this project.')
+    if results_path not in documents:
         with job_service.jobs_lock:
             running = job_service.jobs.get(body.job_id, {})
             clips = list(running.get('clips', [])) if running.get('state') == 'processing' else []
         if not clips:
             raise HTTPException(409, 'Clip is not ready.')
     else:
-        clips = job_service.load_json(path).get('clips', [])
+        clips = documents[results_path].get('clips', [])
     if body.clip_index < 0 or body.clip_index >= len(clips):
         raise HTTPException(404, 'Clip not found.')
     return owner, clips[body.clip_index]
