@@ -24,12 +24,8 @@ export default function useAutoFraming(projectId, clip, state, info, patch) {
     composition.current = state?.composition;
   });
 
-  // Start the "who is talking" analysis as soon as the clip opens, so picking a shape later is instant.
-  // A finished analysis is found again by its content, so nothing needs to be saved for it.
-  useEffect(() => {
-    if (!info || info.has_video === false || !composition.current) return;
-    api.startReframe(projectId, clip.job_id, clip.clip_index, { composition: composition.current, focus: "auto", selection: null }).catch(() => {});
-  }, [api, projectId, clip.job_id, clip.clip_index, info?.has_video]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The "who is talking" analysis starts only when an edit actually crops the video (below), not on every clip
+  // opened: it is heavy, and it would slow everything else down while it runs.
 
   useEffect(() => {
     if (!wanted) return;

@@ -37,7 +37,9 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const aiDuration = state.ai_edit?.duration;
   const clock = useMemo(() => aiDuration ? { duration: aiDuration, output: t => t, source: t => t } : timelineClock(state), [state, aiDuration]);
   const styled = Boolean(state.stylize?.events?.length);
-  const advanced = true; // Edited always uses the same server renderer as MP4 export.
+  // Edited uses the same server renderer as MP4 export, but only when there is something for it to draw: a plain clip
+  // (captions included: they are drawn live) plays straight away instead of being re-rendered whole.
+  const advanced = needsRender(state);
   const snapshot = JSON.stringify(state);
   // The render for the current edit (+ retry count). An older render's result is ignored, so
   // "rendering" is simply: the last finished render isn't this one yet.
@@ -317,4 +319,13 @@ export default ClipPlayer;
 function hexAlpha(hex, alpha) {
   const n = parseInt((hex || "#000000").slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+// Does the Edited view need the server's render? Not for the clip as it is (trimmed or not, captions drawn live).
+function needsRender(state) {
+  if (!state) return false;
+  if (state.ai_edit || state.reel || state.fablecut || state.stylize?.events?.length) return true;
+  if (["broll", "audio", "motion", "text_overlays", "timeline", "speed", "accents"].some(key => state[key]?.length)) return true;
+  if (state.composition && state.composition.ratio !== "original") return true;
+  return state.dialogue_volume !== undefined && state.dialogue_volume !== 1;
 }
