@@ -35,7 +35,7 @@ export function applyTrends(token, projectId, jobId, index, body) {
  *                     selection: { job_id, clip_index } | null }>}  selection = the clip to open first
  */
 export function getEditorIndex(token, projectId, { selectedOnly = false } = {}) {
-  const query = selectedOnly ? "?selected_only=true" : "";
+  const query = selectedOnly ? "?selected_only=true&wait_for_join=false" : "";
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor${query}`, { token });
 }
 

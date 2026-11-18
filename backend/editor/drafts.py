@@ -7,10 +7,15 @@ from .reframe import read_analysis
 from .runtime import jobs_dir, load_json, save_json, metadata_exists, public_clip
 from backend.services.projects_store import project_dir, require_project, project_jobs, lock
 
-def editor_index(pid: str, request: Request, selected_only: bool = False):
+def editor_index(pid: str, request: Request, selected_only: bool = False, wait_for_join: bool = True):
     from backend import demo
-    joined = demo.editor_clips(pid, request) if selected_only and demo.enabled() else None
-    project = require_project(pid, request.state.user_id)
+    user = request.state.user_id
+    joined = None
+    if selected_only and demo.enabled() and wait_for_join:
+        joined = demo.editor_clips(pid, request)
+    project = require_project(pid, user)
+    if selected_only and demo.enabled() and not wait_for_join:
+        joined = demo.ready_editor_clip(pid, user, project)
     jobs = list(reversed(project_jobs(pid, request.state.user_id)))
     by_id = {j['job_id']: j for j in jobs}
     groups = {}

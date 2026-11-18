@@ -83,6 +83,20 @@ class DemoMode(unittest.TestCase):
         for i in range(1, 6):
             self.assertEqual(self.client.get(f'/clips/{job}/clip_{i}.mp4', headers=self.h).status_code, 200)
 
+    def test_editor_can_open_selected_clips_without_waiting_for_a_join(self):
+        job, _, _ = self.prompt('find jaguars')
+        picks = [{'job_id': job, 'clip_index': i} for i in (0, 2)]
+        with patch.object(demo, 'join_early'):
+            response = self.client.put(f'/api/projects/{self.pid}/studio/editor-selection',
+                                       headers=self.h, json={'clips': picks})
+        self.assertEqual(response.status_code, 200, response.text)
+        with patch.object(demo, 'editor_clips', side_effect=AssertionError('Editor must not wait for joining')):
+            response = self.client.get(f'/api/projects/{self.pid}/editor?selected_only=true&wait_for_join=false',
+                                       headers=self.h)
+        self.assertEqual(response.status_code, 200, response.text)
+        clips = [clip for session in response.json()['sessions'] for clip in session['clips']]
+        self.assertEqual([(clip['job_id'], clip['clip_index']) for clip in clips], [(job, 0), (job, 2)])
+
     def test_the_editor_opens_the_picked_clips_joined_in_order(self):
         job, _, _ = self.prompt('find jaguars')
         picks = [{'job_id': job, 'clip_index': i} for i in (4, 0, 3, 1)]     # picked out of order; clip 3 skipped

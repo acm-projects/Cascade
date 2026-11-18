@@ -151,16 +151,25 @@ def editor_clips(pid, request):
     with projects_store.lock:
         project = projects_store.require_project(pid, user)
         studio = project.get('studio', {})
-        chosen = studio.get('editor_clips', [])
-        if studio.get('selection_model') == 'shared-v1':
-            if len(chosen) < 2:
-                return None
-            # A completed early join is already selected. Check it without the join lock or job scan.
-            current = project.get('editor_selection')
-            if current in chosen and current['clip_index'] == 0 and _current_join_matches(pid, user, current['job_id'], chosen):
-                return current
+        if studio.get('selection_model') == 'shared-v1' and len(studio.get('editor_clips', [])) < 2:
+            return None
+        ready = ready_editor_clip(pid, user, project)
+        if ready:
+            return ready
     with JOINING:
         return _editor_clips(pid, request)
+
+
+def ready_editor_clip(pid, user, project):
+    """Reuse a finished join without waiting for FFmpeg or the join lock."""
+    studio = project.get('studio', {})
+    chosen = studio.get('editor_clips', [])
+    current = project.get('editor_selection')
+    if (studio.get('selection_model') == 'shared-v1' and len(chosen) >= 2
+            and current in chosen and current['clip_index'] == 0
+            and _current_join_matches(pid, user, current['job_id'], chosen)):
+        return current
+    return None
 
 
 def _current_join_matches(pid, user, job_id, chosen):
