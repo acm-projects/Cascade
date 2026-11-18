@@ -246,9 +246,9 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
     topic=derive_search(clip,info,goal,body.topic)
     if len(topic)<3:raise HTTPException(422,'Enter a topic with at least three characters.')
     from backend import demo
-    if demo.enabled() and demo.saved_trends():   # demo: the saved research, ready at once, whatever was asked
+    if demo.enabled() and demo.saved_trends():   # demo: about 3 s of progress, then the saved research, whatever was asked
         root=folder(pid,jid,index,user);record=demo.instant_trends(pid,jid,index,body.state,version(body.state))
-        put(root,record);return record
+        return demo.trends_later(record,lambda r:put(root,r),RUNNING)
     from backend.trends.claude_route import model as selected_model
     model=selected_model();root=folder(pid,jid,index,user);edit_version=version(body.state)
     added=reference_ids(body.references)

@@ -375,6 +375,31 @@ def saved_trends():
     return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None
 
 
+TREND_SECONDS = float(os.getenv('CASCADE_DEMO_TREND_SECONDS', '') or 2.9)   # how long "Analyze" works before the results show
+TREND_STEPS = ('Finding trending videos on YouTube…', 'Measuring their cuts and audio next to yours…', 'Comparing them with your edit…')
+
+
+def trends_later(record, save, running):
+    """Show the saved research as running for TREND_SECONDS (about 3 s), with progress messages, then finished."""
+    import threading
+    done = dict(record)
+    working = {key: value for key, value in record.items() if key != 'result'}
+    working.update(status='running', message=TREND_STEPS[0])
+    running.add(record['id'])
+    save(working)
+    def run():
+        try:
+            for step in TREND_STEPS[1:]:
+                time.sleep(TREND_SECONDS/len(TREND_STEPS))
+                save({**working, 'message': step})
+            time.sleep(TREND_SECONDS/len(TREND_STEPS))
+            save(done)
+        finally:
+            running.discard(record['id'])
+    threading.Thread(target=run, daemon=True, name='cascade-demo-trends').start()
+    return working
+
+
 def instant_trends(pid, jid, index, state, edit_version):
     """Any "Analyze" in demo mode: the saved YouTube research, finished at once, for the clip on screen."""
     import uuid

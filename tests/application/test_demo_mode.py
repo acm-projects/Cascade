@@ -209,6 +209,14 @@ class DemoMode(unittest.TestCase):
             self.assertEqual((record['status'], record['topic'], record['edit_version']), ('done', 'podcast / interview', 'v1'))
             self.assertEqual(record['result']['suggestions'], [{'title': 'Captions'}])
             self.assertGreater(record['expires_at'], time.time()+3600)
+            saves, running = [], set()
+            with patch.object(demo, 'TREND_SECONDS', .15):
+                shown = demo.trends_later(record, saves.append, running)
+                self.assertEqual((shown['status'], 'result' in shown, record['id'] in running), ('running', False, True))
+                for _ in range(60):
+                    if not running: break
+                    time.sleep(.02)
+            self.assertEqual((saves[-1]['status'], len(saves), running), ('done', 4, set()))
         finally:
             saved.unlink()
 
