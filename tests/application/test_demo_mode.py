@@ -199,6 +199,19 @@ class DemoMode(unittest.TestCase):
                          ('Published', 'https://www.youtube.com/watch?v=abcDEF12345', 'abcDEF12345'))
         self.assertEqual(self.client.get(url, headers=self.h).json()['status'], 'Published')
 
+    def test_trend_analysis_is_the_saved_research_at_once(self):
+        from backend.editor.models import Edit
+        saved = Path(self.assets.name)/'jaguar'/'trends.json'
+        saved.write_text(json.dumps({'topic': 'podcast / interview', 'goal': 'g', 'source': 'YouTube',
+                                     'result': {'summary': 's', 'suggestions': [{'title': 'Captions'}], 'references': [{'video_id': 'x'}]}}))
+        try:
+            record = demo.instant_trends('p', 'j', 0, Edit(start=0, end=5), 'v1')
+            self.assertEqual((record['status'], record['topic'], record['edit_version']), ('done', 'podcast / interview', 'v1'))
+            self.assertEqual(record['result']['suggestions'], [{'title': 'Captions'}])
+            self.assertGreater(record['expires_at'], time.time()+3600)
+        finally:
+            saved.unlink()
+
     def test_off_means_off(self):
         with patch.dict(os.environ, {'CASCADE_DEMO': 'off'}):
             self.assertFalse(demo.enabled())

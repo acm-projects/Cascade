@@ -367,6 +367,28 @@ def run_final_edit(folder_path, pid, jid, index, user, state, message, job, publ
     write(Path(folder_path)/'job.json', job)
 
 
+# ---------- Editor: Trend Analysis ----------
+
+def saved_trends():
+    """The trend analysis saved for the demo (demo_assets/<set>/trends.json), or None."""
+    path = folder()/'trends.json'
+    return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None
+
+
+def instant_trends(pid, jid, index, state, edit_version):
+    """Any "Analyze" in demo mode: the saved YouTube research, finished at once, for the clip on screen."""
+    import uuid
+    saved = saved_trends()
+    now = time.time()
+    record = {key: saved[key] for key in ('source', 'topic', 'goal', 'topic_override', 'model', 'revision', 'added_references') if key in saved}
+    record.update({'id': uuid.uuid4().hex, 'status': 'done', 'message': saved.get('message') or 'YouTube research ready; no edits applied.',
+                   'project_id': pid, 'job_id': jid, 'clip_index': index, 'edit_version': edit_version,
+                   'edit_state': state.model_dump(mode='json'), 'cache_key': 'demo', 'demo': True,
+                   'started_at': now, 'researched_at': now, 'expires_at': now+30*24*3600,
+                   'result': {**saved['result'], 'checked_at': now}})
+    return record
+
+
 # ---------- Export: publishing to YouTube ----------
 
 YOUTUBE = {}   # clip key -> the published record, for this server run
