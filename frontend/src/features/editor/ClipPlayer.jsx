@@ -9,6 +9,7 @@ import { timelineClock } from "./reelTiming";
 import { ratioOf } from "./aspectRatios";
 import useFramingPlan, { framingAt } from "./useFramingPlan";
 import Icon from "../../components/ui/Icon";
+import { cueText } from "./captionStyles";
 
 // Live preview of one clip with its edits: plays only the trimmed part (looping), in the chosen
 // aspect-ratio frame, with the captions drawn on top. The real render happens on Export.
@@ -239,6 +240,13 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
       </div>
   );
 
+  // Captions drawn live over the video while the server's render (which burns them in) is on its way
+  const captions = state.captions || {};
+  const cues = info?.cues || [];
+  const cueIndex = captions.enabled && view === "edited" && !showEdited && !state.ai_edit
+    ? cues.findIndex(cue => time >= cue.start && time < cue.end) : -1;
+  const liveCaption = cueIndex >= 0 ? cueText(state.texts, cues, cueIndex) : "";
+
   const inBar = Boolean(saveStatus) || versionsInBar;
   return (
     <div className="clip-player">
@@ -274,9 +282,15 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
             onPause={() => setPlaying(false)}
             onClick={togglePlay}
           />}
+          {liveCaption && <div className={`clip-player-caption at-${captions.position || "bottom"}`} aria-live="off"
+            style={{ fontFamily: captions.font, fontSize: Math.max(10, captions.size * frameHeight / 480), fontWeight: captions.bold ? 800 : 600,
+              color: captions.color, WebkitTextStroke: captions.thickness ? `${captions.thickness * frameHeight / 900}px ${captions.stroke}` : undefined,
+              paintOrder: "stroke fill", background: captions.opacity ? hexAlpha(captions.background, captions.opacity) : "transparent" }}>
+            {liveCaption}
+          </div>}
         </div>
       </div>
-      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? (state.ai_edit ? `AI edit ${state.ai_edit.version} · this exact file is what Export saves` : 'Rendered preview · same audio/effects as MP4 export') : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
+      {renderError && <div className="editor-control-note" role="status"><span role="alert">{renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
           <Icon name={playing ? "pause" : "play"} />
@@ -299,3 +313,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
 }
 
 export default ClipPlayer;
+
+function hexAlpha(hex, alpha) {
+  const n = parseInt((hex || "#000000").slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}

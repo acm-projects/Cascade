@@ -5,6 +5,9 @@ from .storage import selected_video, stock_store
 
 def stock_search(pid: str, jid: str, index: int, request: Request, query: str, page: int = 1):
     selected_video(pid,jid,index,request.state.user_id)
+    from backend import demo
+    if demo.enabled() and demo.broll_files():   # demo: the saved jaguar footage, whatever is typed
+        return demo.broll_results(stock_store(pid,jid,index,request.state.user_id), query, page)
     return stock_store(pid,jid,index,request.state.user_id).search(query,page)
 
 def stock_media(pid: str, jid: str, index: int, asset_id: str, request: Request):

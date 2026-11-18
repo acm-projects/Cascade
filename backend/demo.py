@@ -14,6 +14,7 @@ With CASCADE_DEMO off nothing here runs.
 """
 import json
 import os
+import time
 from pathlib import Path
 
 from backend.core import config, jobs as job_service
@@ -193,3 +194,99 @@ if __name__ == '__main__':
         sys.exit('usage: python -m backend.demo capture <job_id>')
     print('\n'.join(capture(sys.argv[2])))
     print('saved to', folder())
+
+
+# ---------- Editor tabs: instant jaguar b-roll, built-in music, the finished AI edit ----------
+
+BROLL = ROOT/'broll'
+MUSIC = ROOT/'music_library'
+VIDEO = ('.mp4', '.mov', '.m4v')
+
+
+def broll_files():
+    return sorted(p for p in BROLL.glob('*') if p.suffix.lower() in VIDEO) if BROLL.is_dir() else []
+
+
+def broll_results(store, query, page=1):
+    """Any B-roll search returns the saved footage at once (best name matches first), ready to add to the timeline."""
+    import re
+    import subprocess
+    from backend.broll import write_json
+    files = broll_files()
+    want = set(re.findall(r'[a-z]{3,}', (query or '').lower()))
+    files.sort(key=lambda p: -len(want & set(re.findall(r'[a-z]{3,}', p.stem.lower()))))
+    store.folder.mkdir(parents=True, exist_ok=True)
+    registry = store.registry()
+    results = []
+    for path in files:
+        number = int.from_bytes(path.stem.encode()[:6].ljust(6, b'_'), 'big') % 900000 + 9000000
+        ident = f'px-{number}-1'
+        target = store.folder/f'{ident}.mp4'
+        if not target.is_file(): _link(path, target)
+        thumb = store.folder/f'{ident}.jpg'
+        if not thumb.is_file():
+            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-ss', '0.5', '-i', str(path), '-frames:v', '1', '-vf', 'scale=480:-2',
+                            str(thumb)], capture_output=True, timeout=60)
+        info = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration:stream=width,height', '-of', 'json', str(path)],
+                              capture_output=True, text=True, timeout=30)
+        data = json.loads(info.stdout or '{}')
+        stream = (data.get('streams') or [{}])[0]
+        asset = {'id': ident, 'provider_id': number, 'creator': 'Cascade', 'creator_url': 'https://www.pexels.com/',
+                 'source_url': f'https://www.pexels.com/video/{path.stem}-{number}/', 'duration': round(float(data.get('format', {}).get('duration', 4)), 3),
+                 'width': int(stream.get('width', 1280)), 'height': int(stream.get('height', 720))}
+        registry[ident] = {'asset': asset, 'video': f'https://videos.pexels.com/video-files/{number}/{ident}.mp4',
+                           'image': f'https://images.pexels.com/videos/{number}/{ident}.jpg'}
+        results.append(asset)
+    write_json(store.folder/'assets.json', registry)
+    return {'results': results if page == 1 else [], 'page': page, 'query': query, 'has_more': False}
+
+
+def music_tracks():
+    return sorted(p for p in MUSIC.glob('*') if p.suffix.lower() in ('.mp3', '.wav', '.m4a')) if MUSIC.is_dir() else []
+
+
+def add_music(store, items):
+    """Put the built-in demo tracks into a clip's music list (converted to the store's wav once)."""
+    import hashlib
+    import subprocess
+    for path in music_tracks():
+        ident = 'aud-'+hashlib.sha256(('cascade-demo-v1:'+path.stem).encode()).hexdigest()[:32]
+        wav = store.folder/(ident+'.wav')
+        if not wav.is_file():
+            store.folder.mkdir(parents=True, exist_ok=True)
+            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-i', str(path), '-ac', '2', '-ar', '48000', '-c:a', 'pcm_s16le', str(wav)],
+                           capture_output=True, check=True, timeout=120)
+        if ident not in items:
+            seconds = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(wav)],
+                                           capture_output=True, text=True, timeout=30).stdout.strip() or 30)
+            items[ident] = {'id': ident, 'name': path.stem, 'kind': 'music', 'tags': ['demo'], 'duration': round(seconds, 3),
+                            'license': 'Cascade original', 'source': 'synthesized', 'demo': True}
+    return items
+
+
+def final_edit():
+    """(video, plan) of the finished AI edit saved for the demo, or None."""
+    video, plan = folder()/'final_edit.mp4', folder()/'final_plan.json'
+    return (video, json.loads(plan.read_text())) if video.is_file() and plan.is_file() else None
+
+
+DONE_TEXT = "Done! Here's your jaguar fan edit. Press play on the Edited view."
+
+
+def run_final_edit(folder_path, pid, jid, index, user, state, message, job, publish, write):
+    """The AI chat in demo mode: any request shows the saved finished edit straight away, as the clip's next version."""
+    from backend.editor.ai_edit.beats import workflow
+    from backend.media import probe_media
+    try:
+        video, plan = final_edit()
+        data = workflow.save_version(folder_path, plan, message=message, kind='edit', critic_score=None, issues=(), notes=(), model='')
+        out = Path(folder_path)/data['version']/'edited.mp4'
+        _link(video, out)
+        seconds = round(probe_media(out)['duration'], 3)
+        publish(pid, jid, index, user, state, data['version'], seconds, DONE_TEXT, plan=workflow.ref(data))
+        job.update(status='done', progress=1, stage='Done', version=data['version'], message=DONE_TEXT, finished=time.time())
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning('demo edit failed', exc_info=True)
+        job.update(status='failed', message='The edit could not be shown. Try again.', finished=time.time())
+    write(Path(folder_path)/'job.json', job)

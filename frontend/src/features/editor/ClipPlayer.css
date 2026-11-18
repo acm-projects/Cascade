@@ -205,3 +205,21 @@
 
 .clip-player-version-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .clip-player-save-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Live captions over the preview (until the rendered preview with burned-in captions arrives) */
+.clip-player-caption {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 88%;
+  padding: 0.1em 0.35em;
+  border-radius: 0.2em;
+  text-align: center;
+  line-height: 1.2;
+  pointer-events: none;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+}
+.clip-player-caption.at-bottom { bottom: 8%; }
+.clip-player-caption.at-top { top: 8%; }
+.clip-player-caption.at-middle { top: 50%; transform: translate(-50%, -50%); }

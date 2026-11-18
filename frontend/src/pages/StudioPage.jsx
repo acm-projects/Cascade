@@ -338,9 +338,7 @@ function StudioPage() {
 
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
   let note;
-  if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
-  else if (references.length) note = `${plural(references.length, "picked clip")} will guide this prompt: new clips branch from them and keep the originals.`;
-  else if (!session.source_job) note = pendingFile ? `“${pendingFile.name}” uploads when you send your first prompt.` : "Choose audio or video on the canvas, then describe the clips you want.";
+  if (!references.length && !session.source_job) note = pendingFile ? `“${pendingFile.name}” uploads when you send your first prompt.` : "Choose audio or video on the canvas, then describe the clips you want.";
   if (uploadProgress !== null) {
     note = (
       <span className="studio-upload">

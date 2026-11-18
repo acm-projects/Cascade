@@ -66,8 +66,11 @@ class AudioStore:
                     self.folder.mkdir(parents=True, exist_ok=True)
                     synth(self.folder/(ident+'.wav'), duration, sound)
                     items[ident]={'id':ident,'name':name,'kind':kind,'tags':tags,'duration':duration,'license':'Cascade procedural synthesis; no third-party recording','source':'synthesized'}
+            from backend import demo
+            if demo.enabled():   # demo: the built-in Cascade tracks first
+                items = demo.add_music(self, items)
             write_json(self.folder/'assets.json', items)
-            return list(items.values())
+            return sorted(items.values(), key=lambda item: not item.get('demo'))
     def upload(self, file, name, kind):
         self.folder.mkdir(parents=True, exist_ok=True)
         ident='aud-'+uuid.uuid4().hex

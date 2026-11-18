@@ -54,7 +54,6 @@ export default function MusicControls({ projectId, clip, state, duration, change
   }
   return <div className="editor-controls music-controls">
     <label className="editor-control">Upload your music<input type="file" accept="audio/*" aria-label="Upload music" onChange={upload} disabled={uploading} /></label>
-    <p className="editor-control-note">Use audio you have permission to use. Built-in tracks below are actual procedural synth recordings. Dialogue stays audible; ducking follows transcript speech windows.</p>
     {uploading && <p role="status">Uploading and validating audio…</p>}
     {error && <p role="alert">{error} <button className="editor-choice" onClick={reload}>Retry</button></p>}
     {loading && <Spinner label="Loading available music" />}
@@ -70,7 +69,7 @@ export default function MusicControls({ projectId, clip, state, duration, change
       <button className="editor-choice" onClick={() => change(s => ({ ...s, reel: s.reel ? { ...s.reel, beat_sync_current: false } : null, audio: s.audio.filter(a => a.id !== segment.id) }))}>Remove audio</button>
     </fieldset>)}
     <h3>Available music &amp; sounds</h3>
-    {assets.map(asset => <div className="music-asset" key={asset.id}><strong>{asset.name}</strong><small>{asset.kind} · {asset.duration.toFixed(1)}s · {asset.license}</small>
+    {assets.map(asset => <div className="music-asset" key={asset.id}><strong>{asset.name}</strong><small>{asset.kind} · {asset.duration.toFixed(1)}s</small>
       <AudioPreview path={audioAssetPath(projectId, clip.job_id, clip.clip_index, asset.id)} />
       <button type="button" className="editor-choice" disabled={uploading} onClick={() => add(asset)}>{asset.kind === 'music' && segments.some(s => s.track === 'music') ? 'Replace music' : 'Add'}</button>
     </div>)}
