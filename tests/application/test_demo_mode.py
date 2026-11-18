@@ -148,6 +148,19 @@ class DemoMode(unittest.TestCase):
         finally:
             (final/'final_edit.mp4').unlink(); (final/'final_plan.json').unlink()
 
+    def test_picking_clips_joins_them_before_the_editor_opens(self):
+        job, _, _ = self.prompt('find jaguars')
+        picks = [{'job_id': job, 'clip_index': i} for i in (0, 1, 3)]
+        self.client.put(f'/api/projects/{self.pid}/studio/editor-selection', headers=self.h, json={'clips': picks})
+        started = time.monotonic()
+        while time.monotonic()-started < 10 and not any((p/'owner.json').is_file() and 'combined' in (p/'owner.json').read_text()
+                                                         for p in core_jobs.JOBS_DIR.iterdir() if p.is_dir()):
+            time.sleep(.05)
+        made = [p for p in core_jobs.JOBS_DIR.iterdir() if (p/'owner.json').is_file() and '"combined"' in (p/'owner.json').read_text()]
+        self.assertEqual(len(made), 1)                                     # made in the background, before any Editor call
+        index = self.client.get(f'/api/projects/{self.pid}/editor?selected_only=true', headers=self.h).json()
+        self.assertEqual(index['selection']['job_id'], made[0].name)      # the Editor reuses it, no second join
+
     def test_off_means_off(self):
         with patch.dict(os.environ, {'CASCADE_DEMO': 'off'}):
             self.assertFalse(demo.enabled())

@@ -21,7 +21,7 @@ const MOVES = {
   rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
-const FALLS = { cover: 650, reveal: 750, least: 250, most: 8000 };   // the waterfall: pour in, at least / at most hold, fall away
+const FALLS = { cover: 300, reveal: 400, least: 0, most: 8000 };   // the waterfall: pour in, at least / at most hold, fall away
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

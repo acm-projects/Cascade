@@ -124,8 +124,29 @@ def existing(pid, user, picks):
     return None
 
 
+JOINING = __import__('threading').Lock()   # one join at a time, so the early join and the Editor never make two
+
+
+def join_early(pid, user):
+    """Studio picks changed: make the joined clip now, in the background, so opening the Editor finds it ready."""
+    import threading
+    from types import SimpleNamespace
+    def run():
+        try:
+            editor_clips(pid, SimpleNamespace(state=SimpleNamespace(user_id=user)))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).info('early join skipped', exc_info=True)
+    threading.Thread(target=run, daemon=True, name='cascade-demo-join').start()
+
+
 def editor_clips(pid, request):
     """The joined clip for the current picks (made now if needed), or None when fewer than two clips are picked."""
+    with JOINING:
+        return _editor_clips(pid, request)
+
+
+def _editor_clips(pid, request):
     from backend import studio
     from backend.services import projects_store
     user = request.state.user_id

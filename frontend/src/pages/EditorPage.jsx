@@ -130,7 +130,7 @@ function EditorPage() {
   const hasClips = Boolean(clips?.length);
   // Nothing more to load (an error, or no clips): let a waterfall page change fall away. With clips,
   // ClipWorkspace says so once the clip's edits have loaded.
-  const settled = Boolean(error || (clips && !hasClips));
+  const settled = Boolean(error || clips);   // the clip list is in: lift the waterfall now (the clip shows its own loading)
   useEffect(() => { if (settled) markPageReady(); }, [settled]);
 
   // Save the clip you're on, then open another one

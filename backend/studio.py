@@ -329,7 +329,10 @@ def editor_selection(pid: str, body: SelectionInput, request: Request):
                 seen.add(key)
         set_selection(project['studio'], entries)
         save(project, user)
-        return {'clips': entries}
+    from backend import demo
+    if demo.enabled() and len(entries) >= 2:
+        demo.join_early(pid, user)
+    return {'clips': entries}
 
 
 def submit(pid, sid, body, request, video=None):
