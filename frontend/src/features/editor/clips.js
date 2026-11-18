@@ -16,8 +16,13 @@ export function flattenClips(index) {
     session.clips.map((clip) => ({
       ...clip, sessionName: session.session_name || session.prompt,
       studioSession: session.session_name, studioSessionId: session.session_id,
-      waveId: session.job_id, wavePrompt: session.prompt,
+      waveId: session.job_id, wavePrompt: session.prompt, kind: session.kind,
     })));
+}
+
+/** The clips that can go into a combined edit: everything picked except edits that are already combined */
+export function combinable(clips) {
+  return (clips || []).filter((clip) => clip.kind !== "combined");
 }
 
 /** Save a Blob (e.g. a rendered MP4 or ZIP) to the user's Downloads folder as `filename` */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
 import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
@@ -11,7 +11,7 @@ import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
-import { clipKey, flattenClips } from "../features/editor/clips";
+import { clipKey, combinable, flattenClips } from "../features/editor/clips";
 import useClipDraft from "../features/editor/useClipDraft";
 import useAutoFraming from "../features/editor/useAutoFraming";
 import ClipPlayer from "../features/editor/ClipPlayer";
@@ -29,6 +29,7 @@ import Icon from "../components/ui/Icon";
 import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import ClipLoading from "../features/editor/ClipLoading";
 import UploadClipButton from "../features/editor/UploadClipButton";
+import CombineClips from "../features/editor/CombineClips";
 import "../features/editor/EditorRevamp.css";
 import "../features/editor/EditorSplit.css";
 const panelTabs = ["Trim", "Captions", "B-roll", "Trends", "Aspect Ratio", "Music", "Reel", "AI Editor"];
@@ -56,6 +57,8 @@ const panelInfo = {
 // Shows the clips picked in AI Studio; every edit is saved to the backend automatically.
 function EditorPage() {
   const leafNavigate = useLeafNavigate();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { projectId } = useParams();
   const layout = EDITOR_LAYOUT;
   const api = useApi();
@@ -66,6 +69,8 @@ function EditorPage() {
   const flushCurrent = useRef(null);
   const registerFlush = useCallback(value => { flushCurrent.current = value; }, []);
   const [trendsFor, setTrendsFor] = useState(null); // reopen Trend Analysis after picking another clip from inside it
+  const [combining, setCombining] = useState(false);
+  const autoCombine = useRef(Boolean(location.state?.combine)); // "Combine & edit" in AI Studio
   const toast = useToast();
 
   useEffect(() => {
@@ -93,6 +98,34 @@ function EditorPage() {
   }
   const saveCurrent = () => flushCurrent.current?.();
 
+  // Multi-clip editing: join the chosen clips into one new clip and open it
+  const combine = useCallback(async (chosen) => {
+    setCombining(true);
+    try {
+      await flushCurrent.current?.();
+      const made = await api.combineClips(projectId, chosen);
+      const list = flattenClips(await api.getEditorIndex(projectId, { selectedOnly: true }));
+      setClips(list);
+      setCurrentKey(clipKey(made));
+      toast.show(`Combined ${made.parts} clips into one edit (${formatTime(made.duration)}). Ask the AI Editor to edit it.`);
+    } catch (err) {
+      toast.show(`Couldn't combine the clips: ${err.message}`, "error");
+      throw err;
+    } finally {
+      setCombining(false);
+    }
+  }, [api, projectId, toast]);
+
+  // Came from "Combine & edit": join every picked clip once, then forget the request (a reload won't repeat it)
+  useEffect(() => {
+    if (!autoCombine.current || !clips) return;
+    autoCombine.current = false;
+    navigate(location.pathname, { replace: true, state: null });
+    const parts = combinable(clips);
+    if (parts.length >= 2) combine(parts).catch(() => {});
+  }, [clips, combine, navigate, location.pathname]);
+  const combineButton = (className, compact) => <CombineClips key={clips?.length} clips={clips} onCombine={combine} busy={combining} className={className} compact={compact} />;
+
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   const hasClips = Boolean(clips?.length);
   // Nothing more to load (an error, or no clips): let a waterfall page change fall away. With clips,
@@ -119,6 +152,7 @@ function EditorPage() {
         ))}
         <UploadClipButton projectId={projectId} onUploaded={addOwnClip} beforeUpload={saveCurrent}
           className="btn btn-small editor-upload-clip" label="Upload your own clip" />
+        {combineButton("btn btn-small editor-upload-clip")}
       </div>
     </aside>
   );
@@ -129,12 +163,13 @@ function EditorPage() {
       {clips?.map((clip, index) => (
         <button key={clipKey(clip)} type="button" role="tab" aria-selected={clipKey(clip) === currentKey}
           className={`er-clip-tab${clipKey(clip) === currentKey ? " active" : ""}`} onClick={() => selectClip(clip)} title={clip.title} aria-label={`Clip ${index + 1}`}>
-          <span className="er-clip-tab-name">{layout === "split" ? index + 1 : `Clip ${index + 1}`}</span>
+          <span className="er-clip-tab-name">{layout === "split" ? index + 1 : clip.kind === "combined" ? `Combined ${index + 1}` : `Clip ${index + 1}`}</span>
           {layout !== "split" && <span className="er-clip-tab-time">{formatTime(clip.end - clip.start)}</span>}
         </button>
       ))}
       <UploadClipButton projectId={projectId} onUploaded={addOwnClip} beforeUpload={saveCurrent}
         className="er-clip-tab er-clip-tab-upload" label="Upload clip" />
+      {combineButton("er-clip-tab", layout === "split")}
     </div>
   );
 
