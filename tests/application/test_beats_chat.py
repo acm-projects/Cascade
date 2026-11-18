@@ -262,9 +262,10 @@ class Rendering(Chat):
     def test_render_re_renders_the_current_plan_without_the_planner(self):
         self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
         _, job = self.say(self.draft['state'], 'Render it again', )   # no scripted model reply: the planner is not asked
-        self.assertEqual((job['status'], self.published[-1]['version']), ('done', 'v001'))
-        self.assertIn('Rendering v001 again.', self.published[-1]['text'])
-        self.assertFalse((self.folder/'v002').exists())
+        self.assertEqual((job['status'], self.published[-1]['plan'].version), ('done', 'v002'))
+        self.assertIn('Rendering v001 again as v002.', self.published[-1]['text'])
+        self.assertEqual(self.saved('v002')['plan'], self.saved('v001')['plan'])      # same plan, new version (the preview reloads)
+        self.assertEqual(self.saved('v002')['changed_beat_ids'], [])
         for message in ('render', 're-render', 'Rerender the video please', 'redo it'):
             self.assertTrue(workflow.wants_render(message), message)
         for message in ('render beat 3 in red', 'make the music dramatic', 'remove the pauses and render'):

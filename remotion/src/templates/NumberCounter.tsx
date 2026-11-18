@@ -23,13 +23,13 @@ export function NumberCounter() {
   const decimals = Number.isInteger(target) ? 0 : Math.min(2, String(target).split('.')[1]?.length || 1);
   const p = interpolate(frame, [2, Math.max(8, length * 0.6)], [0, 1], { ...clamp, easing: easeOut });
   const value = target * p;
-  const light = beat.background_mode === 'light';
+  const light = beat.background_mode === 'light' && !hasStock(assets);   // with a stock clip the number goes over it, dark style
   const tone = color(beat.semantic_color === 'white' ? (target < 0 ? 'red' : 'green') : beat.semantic_color);
   const e = entrance(frame, 0);
   const label = formatNumber(Number(value.toFixed(decimals)), money, decimals);
   const size = Math.min(H * 0.3, (W * 0.8) / Math.max(4, label.length * 0.55));
   return <AbsoluteFill>
-    {!light && hasStock(assets) ? <StockBackground scale={1 + frame * 0.0008} shade="rgba(0,0,0,0.6)" /> : <Backdrop mode={light ? 'light' : 'dark'} />}
+    {hasStock(assets) ? <StockBackground scale={1 + frame * 0.0008} shade="rgba(0,0,0,0.6)" /> : <Backdrop mode={light ? 'light' : 'dark'} />}
     <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ fontFamily: FONTS.ui, fontWeight: 800, fontSize: size, color: tone, textShadow: light ? 'none' : glow(tone, 1),
         transform: `skewX(-9deg) scale(${e.scale})`, filter: `blur(${e.blur}px)`, opacity: e.opacity, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{label}</div>

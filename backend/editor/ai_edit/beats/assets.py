@@ -30,7 +30,7 @@ import numpy as np
 LOG = logging.getLogger(__name__)
 CUTOUT_TEMPLATES = ('TEXT_BEHIND_SUBJECT', 'SPEAKER_CUTOUT_ICONS')
 BROLL_TEMPLATES = ('BROLL_OVERLAY', 'COLLAGE')
-STOCK_BEHIND = ('KINETIC_KEYWORD', 'NUMBER_COUNTER', 'MAP_CALLOUT')   # dark graphic beats that sit over their stock clip
+STOCK_BEHIND = ('KINETIC_KEYWORD', 'NUMBER_COUNTER', 'MAP_CALLOUT')   # graphic beats that sit over their stock clip when it has one
 CUTOUT_FPS = 30
 TAIL = 14          # the next beat's transition draws this beat for up to 14 more frames
 SR = 48000
@@ -199,7 +199,7 @@ def broll(plan, work, store=None, folders=(), size=(1284, 704)):
     used, media, credits = set(), {}, []
     subject = plan_subject(plan)
     for beat in plan['beats']:
-        behind = beat['template'] in STOCK_BEHIND and beat.get('background_mode') != 'light' and beat.get('broll_query')
+        behind = beat['template'] in STOCK_BEHIND and beat.get('broll_query')   # light ones turn dark over their clip
         if beat['template'] not in BROLL_TEMPLATES and not behind: continue
         a, b = frames[beat['id']]
         seconds = (b-a+TAIL)/FPS+.5

@@ -14,7 +14,7 @@ export function KineticKeyword() {
   const { beat, length, props, assets } = useBeat();
   const { width: W, height: H } = props;
   const text = beat.emphasis_text || '';
-  const light = beat.background_mode === 'light';
+  const light = beat.background_mode === 'light' && !hasStock(assets);   // with a stock clip the words go over it, dark style
   // two or more words stack so each line can be big ("BEAUTIFUL / LIFE")
   const words = text.split(' ').filter(Boolean);
   const lines = words.length > 1 && text.length > 8 ? [words.slice(0, -1).join(' '), words.at(-1) as string] : [text];

@@ -264,7 +264,11 @@ def _run_beats(folder, pid, jid, index, user, clip, state, message, job, progres
         seconds = None
         with RENDER_SLOT, media(jid, clip) as source:
             if state.ai_plan and workflow.wants_render(message) and workflow.can_render():
-                data, text = workflow.load(folder, state.ai_plan.version), f'Rendering {state.ai_plan.version} again.'
+                current = workflow.load(folder, state.ai_plan.version)   # same plan, saved as the next version so the preview refreshes
+                data = workflow.save_version(folder, current['plan'], message=message, kind='render', parent=current, changed=[],
+                                             critic_score=current.get('critic_score'), issues=current.get('issues', ()), notes=current.get('notes', ()),
+                                             model=current.get('model', ''))
+                text = f"Rendering {current['version']} again as {data['version']}."
             elif state.ai_plan and workflow.wants_new(message):   # a whole new edit (new window and length), as the next version
                 progress(.02, 'Getting the clip ready…')
                 data, text = workflow.first(folder, source, state, message, lambda a, s: progress(a*.5, s))
