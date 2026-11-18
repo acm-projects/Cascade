@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
-import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
+import { useLeafNavigate } from "../context/leafTransitionValue";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
@@ -74,9 +74,6 @@ function ExportPage() {
   }, [api, projectId]);
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
-  // Nothing more to load (an error, or no clips): the waterfall can fall away. Otherwise ClipExport says when.
-  const settled = Boolean(error || (clips && !clips.length));
-  useEffect(() => { if (settled) markPageReady(); }, [settled]);
   const tree = useMemo(() => exportTree(clips ?? []), [clips]);
   const picked = clips?.filter((clip) => inZip.includes(clipKey(clip))) ?? [];
 
@@ -262,8 +259,6 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   const draft = useClipDraft(projectId, clip);
   const [trendsOpen, setTrendsOpen] = useState(false);
   const { info, state, error, patch } = draft;
-  const loaded = Boolean((info && state) || error);
-  useEffect(() => { if (loaded) markPageReady(); }, [loaded]);   // the clip on screen is ready
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   // Fill (crop) exports need the framing analysis first; this starts it if the Editor didn't finish it
   const framing = useAutoFraming(projectId, clip, state, info, patch);

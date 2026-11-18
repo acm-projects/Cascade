@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
-import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
+import { useLeafNavigate } from "../context/leafTransitionValue";
 import AIEditorChat from "../features/editor/AIEditorChat";
 import SequenceControls from "../features/editor/SequenceControls";
 import { sameEdit, isAIUndo, canUndoAI } from "../features/editor/editorTransactions";
@@ -128,11 +128,6 @@ function EditorPage() {
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   const hasClips = Boolean(clips?.length);
-  // Nothing more to load (an error, or no clips): let a waterfall page change fall away. With clips,
-  // ClipWorkspace says so once the clip's edits have loaded.
-  const settled = Boolean(error || clips);   // the clip list is in: lift the waterfall now (the clip shows its own loading)
-  useEffect(() => { if (settled) markPageReady(); }, [settled]);
-
   // Save the clip you're on, then open another one
   async function selectClip(clip, { trends = false } = {}) {
     try { await flushCurrent.current?.(); setTrendsFor(trends ? clipKey(clip) : null); setCurrentKey(clipKey(clip)); } catch (e) { toast.show(e.message, "error"); }
@@ -234,8 +229,6 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const selectedBroll = state?.broll?.some(s => s.id === selectedSegment) ? selectedSegment : null;
   useEffect(() => { registerFlush(draft.flush); return () => registerFlush(null); }, [registerFlush, draft.flush]);
   const framing = useAutoFraming(projectId, clip, state, info, draft.patch);
-  const loaded = Boolean((info && state) || draft.error);
-  useEffect(() => { if (loaded) markPageReady(); }, [loaded]);   // the Editor is ready to use
   // The background edit for this clip. It keeps running if you switch clips or reload; this picks it back up.
   const [aiJob, setAIJob] = useState(null);
   const serverJob = info?.ai_job;

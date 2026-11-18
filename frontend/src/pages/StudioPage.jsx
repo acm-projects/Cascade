@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -6,7 +6,7 @@ import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
 import { useProject } from "../context/projectContextValue";
-import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
+import { useLeafNavigate } from "../context/leafTransitionValue";
 import useApi from "../api/useApi";
 import SessionBar from "../features/studio/SessionBar";
 import ChatPanel from "../features/studio/ChatPanel";
@@ -58,10 +58,6 @@ function StudioPage() {
   const toast = useToast();
   const { project } = useProject();
   const { studio, setStudio, groups, error, refresh } = useStudioData(projectId);
-  // Loaded (or failed): let a waterfall page change fall away and show the page
-  const loaded = Boolean(studio || error);
-  useEffect(() => { if (loaded) markPageReady(); }, [loaded]);
-
   // Video picked (here, or in the New Project pop-up), uploads with the first prompt
   const [pendingFile, setPendingFile] = useState(() => location.state?.file ?? null);
   const [uploadProgress, setUploadProgress] = useState(null); // 0-100 while the video uploads

@@ -1,14 +1,8 @@
 import { useEffect, useRef } from "react";
-import usePixelLogo from "./usePixelLogo";
 import "./WaterfallCurtain.css";
 
 // The page change between AI Studio, the Editor and Export (LeafTransition.jsx runs it):
-// a waterfall pours down and covers the screen, the next page loads behind it, and once that page says it's
-// ready the waterfall keeps falling and drops away, showing the page fully loaded.
-//   phase - "cover" (pouring down over the screen), "hold" (covering, while the next page loads),
-//           "reveal" (falling away off the bottom)
-//   label - what's loading, shown in the middle while it holds ("Opening the Editor")
-//
+// The waterfall covers the route swap, then falls away to reveal the next page.
 // The water is pixel art: it's drawn on a small canvas (one canvas pixel = PIXEL page pixels) and stretched
 // up without smoothing, so every pixel stays a crisp square. What's drawn, back to front:
 //   flat blue water -> long deep streams (slow) -> lighter streams (faster) -> white glints (fastest)
@@ -115,9 +109,8 @@ function drawFoam(context, columns, rows, { edge, radius, offset, down }) {
   }
 }
 
-function WaterfallCurtain({ phase, label }) {
+function WaterfallCurtain({ phase, durations }) {
   const canvasRef = useRef(null);
-  const logoSrc = usePixelLogo(24);   // the logo as pixel art, 24 x 24 squares (72px on screen: 3px each)
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -184,13 +177,9 @@ function WaterfallCurtain({ phase, label }) {
   }, []);
 
   return (
-    <div className={`waterfall-curtain is-${phase}`} aria-hidden="true">
+    <div className={`waterfall-curtain is-${phase}`} style={{ "--waterfall-duration": `${durations[phase]}ms` }} aria-hidden="true">
       <div className="waterfall-sheet">
         <canvas ref={canvasRef} className="waterfall-canvas" />
-      </div>
-      <div className="waterfall-label">
-        {logoSrc && <img src={logoSrc} alt="" />}
-        <span>{label}</span>
       </div>
     </div>
   );
