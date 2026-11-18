@@ -269,6 +269,14 @@ def _run_beats(folder, pid, jid, index, user, clip, state, message, job, progres
                                              critic_score=current.get('critic_score'), issues=current.get('issues', ()), notes=current.get('notes', ()),
                                              model=current.get('model', ''))
                 text = f"Rendering {current['version']} again as {data['version']}."
+            elif state.ai_plan and workflow.wants_music(message) and workflow.can_render():   # music up/down: same plan, new render
+                current = workflow.load(folder, state.ai_plan.version)
+                level = workflow.music_level(current['plan'], workflow.wants_music(message))
+                data = workflow.save_version(folder, {**current['plan'], 'music_db': level}, message=message, kind='render', parent=current,
+                                             changed=[], critic_score=current.get('critic_score'), issues=current.get('issues', ()),
+                                             notes=current.get('notes', ()), model=current.get('model', ''))
+                text = (f"{'Turning the music up' if level > current['plan'].get('music_db', -9.) else 'Turning the music down'} "
+                        f"(it now sits {abs(level):.0f} dB under the voice) and rendering {data['version']}.")
             elif state.ai_plan and workflow.wants_new(message):   # a whole new edit (new window and length), as the next version
                 progress(.02, 'Getting the clip ready…')
                 data, text = workflow.first(folder, source, state, message, lambda a, s: progress(a*.5, s))

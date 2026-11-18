@@ -259,6 +259,19 @@ class Rendering(Chat):
         for change in ('make it faster', 'add more b-roll', 'make the text red'):
             self.assertFalse(workflow.wants_new(change), change)
 
+    def test_add_music_turns_the_score_up_without_the_planner(self):
+        self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
+        _, job = self.say(self.draft['state'], 'PLEASE ADD SOME MUSIC')                # no scripted reply: the planner is not asked
+        self.assertEqual((job['status'], self.published[-1]['plan'].version), ('done', 'v002'))
+        self.assertEqual(self.saved('v002')['plan']['music_db'], -5.)
+        self.assertIn('Turning the music up', self.published[-1]['text'])
+        _, job = self.say(self.draft['state'], 'the music is too loud, make it quieter')
+        self.assertEqual(self.saved('v003')['plan']['music_db'], -9.)
+        for message in ('add music', 'make the music louder', 'I need bgm', 'turn up the soundtrack'):
+            self.assertEqual(workflow.wants_music(message), 1, message)
+        for message in ('make it faster', 'add more b-roll', 'Make a 15-second fan edit'):
+            self.assertIsNone(workflow.wants_music(message), message)
+
     def test_render_re_renders_the_current_plan_without_the_planner(self):
         self.say(Edit(**TRIM), 'Edit this video', EXAMPLE, {'issues': [], 'score': 92, 'fixed_plan': EXAMPLE})
         _, job = self.say(self.draft['state'], 'Render it again', )   # no scripted model reply: the planner is not asked

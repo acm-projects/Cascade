@@ -354,8 +354,8 @@ def mix(plan, source, work):
         bed = music.dramatic(seconds, hit_times(plan)) if on else np.zeros((len(voice), 2))
     final = work/'mix.wav'
     try:
-        under = float(os.getenv('CASCADE_BEATS_MUSIC_DB', MUSIC_UNDER_VOICE_DB))
-    except ValueError:
+        under = float(plan['music_db']) if plan.get('music_db') is not None else float(os.getenv('CASCADE_BEATS_MUSIC_DB', MUSIC_UNDER_VOICE_DB))
+    except (TypeError, ValueError):
         under = MUSIC_UNDER_VOICE_DB
     score.mix(voice, bed, fx*.6, -80., final, music_under=under)
     (work/'effects.json').write_text(json.dumps({'music': (own.name if own else 'dramatic') if on else None, 'effects': placed}, indent=1))

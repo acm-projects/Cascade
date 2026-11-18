@@ -196,6 +196,24 @@ def render_version(folder, data, source, stock=None, progress=None):
 RENDER_ONLY = re.compile(r"^\s*(please\s+)?(re-?render|render|redo|remake)(\s+(it|this|the\s+(video|edit|preview)))?(\s+again)?(\s+please)?\s*[.!]*\s*$", re.I)
 
 
+MUSIC = re.compile(r'\b(add|more|louder|bring\s+up|turn\s+up|boost|put|need|want|give)\b[^.]{0,40}\b(music|bgm|soundtrack|score|beat)\b'
+                   r'|\b(music|bgm|soundtrack|score)\b[^.]{0,25}\b(loud\w*|up|more|higher|stronger|quiet\w*|low\w*|soft\w*|hear)\b', re.I)
+QUIETER = re.compile(r'\b(quieter|softer|lower|less|turn\s+down|too\s+loud)\b', re.I)
+
+
+def wants_music(message):
+    """A request about the background music ("add some music", "make the music louder"), or None. Returns +1 or -1."""
+    if not MUSIC.search(message or ''): return None
+    return -1 if QUIETER.search(message) else 1
+
+
+def music_level(plan, direction):
+    """The plan's music level (dB under the voice) after one louder/quieter step: -9 by default, 4 dB a step, -1 to -21."""
+    from .assets import MUSIC_UNDER_VOICE_DB
+    now = plan.get('music_db', MUSIC_UNDER_VOICE_DB)
+    return float(max(-21., min(-1., now+4.*direction)))
+
+
 def wants_render(message):
     """True for a bare "render" / "render it again": re-render the current plan without asking the planner."""
     return bool(RENDER_ONLY.match(message or ''))
