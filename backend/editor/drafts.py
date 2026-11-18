@@ -1,5 +1,6 @@
 """Editor drafts; extracted without changing media behavior."""
 from fastapi import HTTPException, Request
+from backend.core import jobs as job_service
 from .models import Captions, Draft, Edit
 from .validation import details, validate_edit, validate_media_edit
 from .storage import draft_path, selected, stock_store
@@ -16,7 +17,11 @@ def editor_index(pid: str, request: Request, selected_only: bool = False, wait_f
     project = require_project(pid, user)
     if selected_only and demo.enabled() and not wait_for_join:
         joined = demo.ready_editor_clip(pid, user, project)
-    jobs = list(reversed(project_jobs(pid, request.state.user_id)))
+    jobs = list(reversed(project_jobs(pid, user)))
+    folder = jobs_dir()
+    paths = [folder / job['job_id'] / 'results.json' for job in jobs if job['kind'] != 'research']
+    paths.extend(folder / job['job_id'] / 'owner.json' for job in jobs if job['kind'] == 'caption-styles')
+    documents = job_service.metadata_store().read_many(paths)
     by_id = {j['job_id']: j for j in jobs}
     groups = {}
     for job in jobs:
@@ -26,16 +31,14 @@ def editor_index(pid: str, request: Request, selected_only: bool = False, wait_f
         visited = set()
         while root['kind'] == 'caption-styles' and root['job_id'] not in visited:
             visited.add(root['job_id'])
-            owner = load_json(jobs_dir() / root['job_id'] / 'owner.json')
+            owner = documents.get(folder / root['job_id'] / 'owner.json', {})
             parent = by_id.get(owner.get('parent_job'))
             if not parent:
                 break
             root = parent
         group = groups.setdefault(root['job_id'], {**root, 'clips': []})
-        path = jobs_dir() / job['job_id'] / 'results.json'
-        if metadata_exists(path):
-            clips = load_json(path).get('clips', [])
-            group['clips'].extend({**public_clip(c), 'job_id': job['job_id'], 'clip_index': i} for i, c in enumerate(clips))
+        clips = documents.get(folder / job['job_id'] / 'results.json', {}).get('clips', [])
+        group['clips'].extend({**public_clip(c), 'job_id': job['job_id'], 'clip_index': i} for i, c in enumerate(clips))
     from backend.editor_navigation import label_waves
     sessions = [group for group in groups.values() if group['clips']]
     studio = project.get('studio', {})
