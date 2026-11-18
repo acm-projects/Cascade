@@ -1,0 +1,193 @@
+{
+ "source_video": "source",
+ "source_window": {
+  "start": 30.58,
+  "end": 44.18
+ },
+ "hook": {
+  "text": "As close to him as I am to you.",
+  "start": 30.58,
+  "end": 31.94,
+  "reason": "A vivid, immediate claim of being face-to-face with a jaguar creates the strongest self-contained hook in the transcript."
+ },
+ "total_duration": 13.6,
+ "beats": [
+  {
+   "id": 1,
+   "start": 30.58,
+   "end": 31.94,
+   "spoken_text": "as close to him as I am to you.",
+   "intent": "Open on the close-encounter hook; put the speaker in front of oversized text.",
+   "template": "TEXT_BEHIND_SUBJECT",
+   "emphasis_text": "AS CLOSE",
+   "accent_word": "to you",
+   "semantic_color": "orange",
+   "background_mode": "dark",
+   "grade": "bw",
+   "transition_in": "whip_pan",
+   "broll_query": null,
+   "broll_fallback_query": null,
+   "data": {
+    "number": null,
+    "place": null,
+    "screenshot_target": null
+   },
+   "sfx": "impact_hit"
+  },
+  {
+   "id": 2,
+   "start": 31.94,
+   "end": 33.46,
+   "spoken_text": "He walked right by me,",
+   "intent": "Cut to a close-up of a jaguar moving past camera, matching the near encounter.",
+   "template": "BROLL_OVERLAY",
+   "emphasis_text": "WALKED RIGHT BY ME",
+   "accent_word": null,
+   "semantic_color": "orange",
+   "background_mode": "light",
+   "grade": "color",
+   "transition_in": "zoom_blur",
+   "broll_query": "jaguar close up walking past camera in rainforest",
+   "broll_fallback_query": "jaguar walking through jungle close up",
+   "data": {
+    "number": null,
+    "place": null,
+    "screenshot_target": null
+   },
+   "sfx": "low_boom"
+  },
+  {
+   "id": 3,
+   "start": 33.46,
+   "end": 36.15,
+   "spoken_text": "didn't care, didn't care at all.",
+   "intent": "Emphasize the animal's calm indifference with a tense, slow-motion close-up.",
+   "template": "KINETIC_KEYWORD",
+   "emphasis_text": "DIDN'T CARE",
+   "accent_word": null,
+   "semantic_color": "orange",
+   "background_mode": "dark",
+   "grade": "bw",
+   "transition_in": "flash_cut",
+   "broll_query": "jaguar eyes staring directly into camera",
+   "broll_fallback_query": "jaguar face intense eye close up",
+   "data": {
+    "number": null,
+    "place": null,
+    "screenshot_target": null
+   },
+   "sfx": "impact_hit"
+  },
+  {
+   "id": 4,
+   "start": 36.15,
+   "end": 38.21,
+   "spoken_text": "In our region of the Amazon, no one's ever been",
+   "intent": "Pin the anecdote to the Amazon while building tension toward the attack claim.",
+   "template": "MAP_CALLOUT",
+   "emphasis_text": "AMAZON",
+   "accent_word": null,
+   "semantic_color": "red",
+   "background_mode": "light",
+   "grade": "color",
+   "transition_in": "slide",
+   "broll_query": "Amazon rainforest canopy aerial over dense jungle",
+   "broll_fallback_query": "Amazon rainforest aerial view",
+   "data": {
+    "number": null,
+    "place": "Amazon",
+    "screenshot_target": null
+   },
+   "sfx": "riser_short"
+  },
+  {
+   "id": 5,
+   "start": 38.21,
+   "end": 39.19,
+   "spoken_text": "attacked by a Jaguar.",
+   "intent": "Land the attack claim over non-attacking jaguar footage, avoiding visuals that imply an attack occurred.",
+   "template": "BROLL_OVERLAY",
+   "emphasis_text": "ATTACKED",
+   "accent_word": "Jaguar",
+   "semantic_color": "red",
+   "background_mode": "dark",
+   "grade": "bw",
+   "transition_in": "whip_pan",
+   "broll_query": "jaguar resting in rainforest close up wildlife documentary footage",
+   "broll_fallback_query": "jaguar walking through rainforest side view",
+   "data": {
+    "number": null,
+    "place": null,
+    "screenshot_target": null
+   },
+   "sfx": "impact_hit"
+  },
+  {
+   "id": 6,
+   "start": 39.19,
+   "end": 41.15,
+   "spoken_text": "There was one old, old, this was 20",
+   "intent": "Introduce the rare past incident with a sharp number accent.",
+   "template": "NUMBER_COUNTER",
+   "emphasis_text": "20",
+   "accent_word": "old",
+   "semantic_color": "red",
+   "background_mode": "light",
+   "grade": "bw",
+   "transition_in": "glitch",
+   "broll_query": "old jaguar in rainforest wildlife documentary footage",
+   "broll_fallback_query": "elderly jaguar close up",
+   "data": {
+    "number": 20,
+    "place": null,
+    "screenshot_target": null
+   },
+   "sfx": "boom"
+  },
+  {
+   "id": 7,
+   "start": 41.15,
+   "end": 42.75,
+   "spoken_text": "years ago, one old Jag,",
+   "intent": "Flash back to the old jaguar being described.",
+   "template": "BROLL_OVERLAY",
+   "emphasis_text": "OLD JAG",
+   "accent_word": null,
+   "semantic_color": "red",
+   "background_mode": "dark",
+   "grade": "bw",
+   "transition_in": "zoom_blur",
+   "broll_query": "old jaguar walking in jungle wildlife documentary",
+   "broll_fallback_query": "jaguar face close up in rainforest",
+   "data": {
+    "number": null,
+    "place": null,
+    "screenshot_target": null
+   },
+   "sfx": "riser_short"
+  },
+  {
+   "id": 8,
+   "start": 42.75,
+   "end": 44.18,
+   "spoken_text": "you know, their teeth go.",
+   "intent": "End on a sharp, intimidating close-up of jaguar teeth.",
+   "template": "KINETIC_KEYWORD",
+   "emphasis_text": "TEETH",
+   "accent_word": "go",
+   "semantic_color": "red",
+   "background_mode": "light",
+   "grade": "color",
+   "transition_in": "flash_cut",
+   "broll_query": "jaguar teeth mouth close up snarling",
+   "broll_fallback_query": "jaguar roaring mouth close up",
+   "data": {
+    "number": null,
+    "place": null,
+    "screenshot_target": null
+   },
+   "sfx": "impact_hit_big"
+  }
+ ],
+ "music_db": -4.0
+}
