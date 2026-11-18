@@ -21,7 +21,8 @@ const MOVES = {
   rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
-const FALLS = { cover: 300, reveal: 400, least: 0, most: 8000 };   // the waterfall: pour in, at least / at most hold, fall away
+const FALLS = { cover: 300, reveal: 400, least: 0, most: 8000 };
+const INSTANT = true;   // page changes skip the transition animations entirely   // the waterfall: pour in, at least / at most hold, fall away
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -64,8 +65,8 @@ function LeafTransition({ children }) {
   const leafNavigate = useCallback(async (to, { state, ready, style: chosen = "push" } = {}) => {
     if (running.current) return;   // already on the way (a double click)
 
-    // People who turned off animations on their device just go to the page
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // Straight to the page: no camera move or waterfall to wait through (the demo branch keeps page changes instant)
+    if (INSTANT || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       navigate(to, { state });
       return;
     }

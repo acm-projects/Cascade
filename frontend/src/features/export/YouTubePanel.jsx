@@ -60,6 +60,8 @@ function YouTubePanel({ projectId, clip, post, state }) {
     });
     setUpload(result);
     if (result.status === "Failed" && !result.upload_attempted) submission.current = null;
+    // Published already (or as soon as YouTube says so): open it on YouTube
+    if (result.url && ["Published", "Scheduled"].includes(result.status)) window.open(result.url, "_blank", "noopener");
   }
 
   async function connectAndPublish() {

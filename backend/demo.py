@@ -311,3 +311,25 @@ def run_final_edit(folder_path, pid, jid, index, user, state, message, job, publ
         logging.getLogger(__name__).warning('demo edit failed', exc_info=True)
         job.update(status='failed', message='The edit could not be shown. Try again.', finished=time.time())
     write(Path(folder_path)/'job.json', job)
+
+
+# ---------- Export: publishing to YouTube ----------
+
+YOUTUBE = {}   # clip key -> the published record, for this server run
+
+
+def youtube_url():
+    """The finished video on YouTube: CASCADE_DEMO_YOUTUBE_URL (upload the edit once yourself and put its link here)."""
+    return os.getenv('CASCADE_DEMO_YOUTUBE_URL', '').strip() or 'https://www.youtube.com/'
+
+
+def youtube_channel():
+    return os.getenv('CASCADE_DEMO_YOUTUBE_CHANNEL', '').strip() or 'Cascade'
+
+
+def youtube_published(privacy='public'):
+    import re
+    url = youtube_url()
+    found = re.search(r'(?:v=|youtu\.be/|shorts/)([A-Za-z0-9_-]{6,})', url)
+    return {'status': 'Published', 'url': url, 'video_id': found.group(1) if found else 'demo', 'upload_attempted': True,
+            'privacy': privacy, 'channel': youtube_channel()}

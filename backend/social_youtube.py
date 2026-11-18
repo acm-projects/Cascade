@@ -343,6 +343,9 @@ def register(app, integration, selected, export, export_model):
     @app.get('/api/projects/{pid}/social/youtube')
     def connection(pid: str, request: Request):
         integration.require_project(pid, request.state.user_id)
+        from backend import demo
+        if demo.enabled():   # demo: already connected, no Google sign-in
+            return {'connected': True, 'channel': demo.youtube_channel(), 'can_schedule': False}
         rec = read('connection', request.state.user_id)
         can_schedule = False
         if rec:
@@ -566,6 +569,11 @@ def register(app, integration, selected, export, export_model):
     @app.post('/api/projects/{pid}/editor/{jid}/{index}/publish/youtube')
     def publish(pid: str, jid: str, index: int, body: Publish, request: Request):
         selected(pid, jid, index, request.state.user_id)
+        from backend import demo
+        if demo.enabled():   # demo: published the moment you click, with the link to the finished video
+            record = demo.youtube_published(body.privacy)
+            demo.YOUTUBE[job_key(pid, jid, index, request.state.user_id)] = record
+            return JSONResponse(record, status_code=200)
         edit = export_model.model_validate(body.edit)
         key = job_key(pid, jid, index, request.state.user_id)
         # Return persisted submissions before validating a now-expired original schedule.
@@ -591,6 +599,9 @@ def register(app, integration, selected, export, export_model):
     def status(pid: str, jid: str, index: int, request: Request):
         selected(pid, jid, index, request.state.user_id)
         key = job_key(pid, jid, index, request.state.user_id)
+        from backend import demo
+        if demo.enabled():
+            return demo.YOUTUBE.get(key, {'status': 'Ready'})
         rec = read('publish', key)
         if not rec:
             return {'status': 'Ready'}

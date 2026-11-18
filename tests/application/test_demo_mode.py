@@ -161,6 +161,23 @@ class DemoMode(unittest.TestCase):
         index = self.client.get(f'/api/projects/{self.pid}/editor?selected_only=true', headers=self.h).json()
         self.assertEqual(index['selection']['job_id'], made[0].name)      # the Editor reuses it, no second join
 
+    def test_youtube_publishes_the_moment_you_click(self):
+        job, _, _ = self.prompt('find jaguars')
+        conn = self.client.get(f'/api/projects/{self.pid}/social/youtube', headers=self.h).json()
+        self.assertTrue(conn['connected'])
+        url = f'/api/projects/{self.pid}/editor/{job}/0/publish/youtube'
+        self.assertEqual(self.client.get(url, headers=self.h).json()['status'], 'Ready')
+        body = {'title': 'Jaguar', 'description': '', 'hashtags': [], 'privacy': 'public',
+                'submission_id': '00000000-0000-4000-8000-000000000001', 'edit': {'start': 0, 'end': 2}}
+        with patch.dict(os.environ, {'CASCADE_DEMO_YOUTUBE_URL': 'https://www.youtube.com/watch?v=abcDEF12345'}):
+            started = time.monotonic()
+            done = self.client.post(url, headers=self.h, json=body)
+        self.assertLess(time.monotonic()-started, 1)
+        self.assertEqual(done.status_code, 200, done.text)
+        self.assertEqual((done.json()['status'], done.json()['url'], done.json()['video_id']),
+                         ('Published', 'https://www.youtube.com/watch?v=abcDEF12345', 'abcDEF12345'))
+        self.assertEqual(self.client.get(url, headers=self.h).json()['status'], 'Published')
+
     def test_off_means_off(self):
         with patch.dict(os.environ, {'CASCADE_DEMO': 'off'}):
             self.assertFalse(demo.enabled())
