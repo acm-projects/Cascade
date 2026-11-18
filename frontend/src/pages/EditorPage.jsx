@@ -113,7 +113,7 @@ function EditorPage() {
     saving?.catch(() => {}); // Export displays the save result, even if it settles before mounting.
     setExportHandoff({ id: exportHandoffId, flush, saving });
     leafNavigate(`/projects/${projectId}/export`, {
-      style: "instant",
+      style: "falls",
       state: { exportSelection: { id: exportHandoffId, projectId, clips, currentKey, projectName } },
     });
   }
@@ -203,7 +203,7 @@ function EditorPage() {
           text="Upload your own video to edit it right away, or let Studio Island find the best clips for you." />
         <div className="editor-empty-actions">
           <UploadClipButton projectId={projectId} onUploaded={addOwnClip} className="btn btn-primary" label="Upload your own clip" />
-          <button type="button" className="btn" onClick={() => leafNavigate(`/projects/${projectId}/studio`, { style: "instant" })}>
+          <button type="button" className="btn" onClick={() => leafNavigate(`/projects/${projectId}/studio`, { style: "falls" })}>
             <Icon name="sparkles" /> Find clips on Studio Island
           </button>
         </div>

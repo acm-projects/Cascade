@@ -1,7 +1,7 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./LeafTransition.css";
-import { LeafTransitionContext, WATERFALL_READY } from "../context/leafTransitionValue";
+import { LeafTransitionContext } from "../context/leafTransitionValue";
 import WaterfallCurtain from "./WaterfallCurtain";
 
 // Page changes that feel like a camera moving through the world (like an isometric camera gliding across a model):
@@ -21,7 +21,7 @@ const MOVES = {
   rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
-const FALLS = { cover: 400, reveal: 500 };
+const FALLS = { cover: 350, hold: 60, reveal: 450 };   // quick: the page switches under the water, no waiting on data
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -58,35 +58,6 @@ function LeafTransition({ children }) {
   const [style, setStyle] = useState("push");
   const running = useRef(false);
   const shownLocation = useLocation();   // the page to draw (App.jsx passes it to <Routes>)
-  const coveredPath = useRef(null);
-
-  useLayoutEffect(() => {
-    if (coveredPath.current !== shownLocation.pathname) return;
-    coveredPath.current = null;
-    let revealTimer;
-    function reveal() {
-      window.removeEventListener(WATERFALL_READY, onReady);
-      clearTimeout(loadTimer);
-      setPhase("reveal");
-      revealTimer = setTimeout(() => {
-        setPhase("idle");
-        running.current = false;
-      }, FALLS.reveal);
-    }
-    function onReady(event) {
-      if (event.detail === shownLocation.pathname) reveal();
-    }
-    window.addEventListener(WATERFALL_READY, onReady);
-    // If a request never settles, let the user see the Editor and navigate away.
-    const loadTimer = setTimeout(reveal, 45000);
-    return () => {
-      window.removeEventListener(WATERFALL_READY, onReady);
-      clearTimeout(loadTimer);
-      clearTimeout(revealTimer);
-      setPhase("idle");
-      running.current = false;
-    };
-  }, [shownLocation.pathname]);
 
   // style: "push" (the default) or "dive" (from Landing). ready: an optional promise to wait for (the next page's code).
   const leafNavigate = useCallback(async (to, { state, ready, style: chosen = "push" } = {}) => {
@@ -99,13 +70,18 @@ function LeafTransition({ children }) {
 
     running.current = true;
 
-    // Keep the curtain in place while the destination prepares its initial view.
+    // The waterfall covers the screen, the page switches right away, then the water falls away.
+    // The next page shows its own loading state, so the waterfall never waits on data.
     if (chosen === "falls") {
       setStyle("falls");
       setPhase("cover");
       await wait(FALLS.cover);
-      coveredPath.current = to;
       navigate(to, { state });
+      await wait(FALLS.hold);
+      setPhase("reveal");
+      await wait(FALLS.reveal);
+      setPhase("idle");
+      running.current = false;
       return;
     }
 
