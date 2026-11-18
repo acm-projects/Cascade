@@ -10,7 +10,7 @@ export const LeafTransitionContext = createContext(null);
 // "dive" (the island camera zooms down into the sea, used by Landing's Get Started)
 // "rise" (the underwater camera swims up to the surface, used by "How it works")
 // "falls" (a brief waterfall covers the route swap)
-// or "instant" (navigate directly, used between Studio, Editor and Export).
+// or "instant" (navigate directly between project steps without an animation).
 export function useLeafNavigate() {
   return useContext(LeafTransitionContext);
 }

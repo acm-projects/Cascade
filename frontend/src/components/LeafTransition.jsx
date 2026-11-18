@@ -21,7 +21,7 @@ const MOVES = {
   rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
-const FALLS = { cover: 220, reveal: 280 };
+const FALLS = { cover: 400, reveal: 500 };
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -265,11 +265,11 @@ function StudioPage() {
   // ---------- Go to Editor ----------
   // The Editor loads the picked clips from the backend itself (they're saved as editor_clips)
   function goToEditor() {
-    leafNavigate(`/projects/${projectId}/editor`, { style: "instant" });
+    leafNavigate(`/projects/${projectId}/editor`, { style: "falls" });
   }
   // Multi-clip editing: the Editor joins the picked clips (e.g. clip 1 + clip 3) into one edit and opens it
   function combineAndEdit() {
-    leafNavigate(`/projects/${projectId}/editor`, { style: "instant", state: { combine: true } });
+    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", state: { combine: true } });
   }
 
   // ---------- What to show ----------

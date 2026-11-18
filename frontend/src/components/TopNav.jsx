@@ -69,7 +69,8 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
                   onOpenExport();
                   return;
                 }
-                leafNavigate(stepPath(id, step.id, params.sessionId), { style: "instant" });
+                const style = active === "studio" && step.id === "editor" ? "falls" : "instant";
+                leafNavigate(stepPath(id, step.id, params.sessionId), { style });
               }}>
               {content}
             </NavLink>
