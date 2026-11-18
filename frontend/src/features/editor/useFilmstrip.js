@@ -3,7 +3,7 @@ import useApi from "../../api/useApi";
 import { clipMediaPath } from "./clips";
 import { filmstripTimes } from "./timelineMath";
 
-const FRAME_COUNT = 30;    // frames grabbed per clip
+const FRAME_COUNT = 12;    // frames grabbed per clip (few, so the editor opens light)
 const FRAME_HEIGHT = 96;   // pixels: sharp enough for a small tile, and small to keep in memory
 const SEEK_TIMEOUT = 8000; // give up on a frame the browser can't reach
 

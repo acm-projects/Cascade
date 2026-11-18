@@ -25,6 +25,9 @@ profile_cache_lock = Lock()
 
 
 def uses_local_storage():
+    # Demo mode keeps everything on this computer: no cloud checks, uploads or backups while presenting.
+    if os.getenv('CASCADE_DEMO', '').strip().lower() in ('1', 'on', 'true', 'yes'):
+        return True
     mode = os.getenv('CASCADE_STORAGE', 'auto').lower()
     if mode not in ('auto', 'local', 's3'):
         raise HTTPException(503, 'CASCADE_STORAGE must be auto, local, or s3.')

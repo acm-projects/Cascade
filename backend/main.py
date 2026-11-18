@@ -32,7 +32,9 @@ def warm_models():
 def start_model_warmup():
     auth.warn_dev_auth()
     # CASCADE_WARM_MODELS=0 skips it (the models hold roughly 700 MB of RAM once loaded).
-    if os.getenv("CASCADE_WARM_MODELS", "1") != "0":
+    # Demo mode never searches the video itself, so the models stay unloaded (memory and CPU stay free).
+    demo = os.getenv("CASCADE_DEMO", "").strip().lower() in ("1", "on", "true", "yes")
+    if os.getenv("CASCADE_WARM_MODELS", "1") != "0" and not demo:
         threading.Thread(target=warm_models, name="model-warmup", daemon=True).start()
 
 
