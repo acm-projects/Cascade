@@ -9,6 +9,8 @@ import useApi from "../api/useApi";
 import { deleteTrashedProjects, isTrashed, projectMatchesView } from "../utils/projectViews";
 import IsoWorld from "../features/landing3d/IsoWorld";
 import ProjectCard from "../components/ProjectCard";
+import DemoProjectCard from "../components/DemoProjects";
+import { demoProjectsFor } from "../utils/demoProjects";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
 import Mascot from "../components/Mascot";
@@ -103,6 +105,7 @@ function ProjectsPage() {
   const query = search.trim().toLowerCase();
   const trashedProjects = projects.filter(isTrashed);
   const shown = projects.filter((p) => projectMatchesView(p, view.id) && p.name.toLowerCase().includes(query));
+  const demoShown = demoProjectsFor(view.id, query);   // demo branch: earlier projects for the presentation
 
   function chooseView(id) {
     setSearchParams(id === "all" ? {} : { view: id });
@@ -184,7 +187,7 @@ function ProjectsPage() {
         </div>
       );
     }
-    if (projects.length === 0 && view.id === "all") {
+    if (projects.length === 0 && view.id === "all" && !demoShown.length) {
       return (
         <EmptyState
           icon="leaf"
@@ -194,7 +197,7 @@ function ProjectsPage() {
         />
       );
     }
-    if (shown.length === 0) {
+    if (shown.length === 0 && !demoShown.length) {
       return query ? (
         <EmptyState icon="search" title={`No projects match "${search.trim()}"`} text="Try a different name." />
       ) : (
@@ -203,6 +206,7 @@ function ProjectsPage() {
     }
     return (
       <div className="projects-grid">
+        {demoShown.map((project) => <DemoProjectCard key={project.id} project={project} />)}
         {shown.map((project) => (
           <ProjectCard key={project.id} project={project} onOpen={handleOpen} onUpdate={handleUpdate} busy={deleting || updating.has(project.id)} />
         ))}

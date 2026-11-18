@@ -207,3 +207,8 @@
 .project-card-star { color: #80610b; }
 .project-card-open:disabled { cursor: default; }
 .project-card-dots:disabled { opacity: .6; cursor: wait; }
+
+/* Demo projects (DemoProjects.jsx): same look as a real card, but nothing to click */
+.project-card-demo .project-card-open {
+  cursor: default;
+}
