@@ -27,9 +27,16 @@ export default function useClipDraft(projectId, clip) {
   const saveCount = useRef(0);
   const pending = useRef(null);
   const queue = useRef(Promise.resolve());
+  const queuedBody = useRef(null);
   const persist = useCallback((body) => {
+    if (queuedBody.current === body) return queue.current;
+    queuedBody.current = body;
     const next = queue.current.catch(() => {}).then(() => api.saveDraft(projectId, clip.job_id, clip.clip_index, body));
     queue.current = next;
+    const clearBody = () => {
+      if (queue.current === next) queuedBody.current = null;
+    };
+    next.then(clearBody, clearBody);
     return next;
   }, [api, projectId, clip.job_id, clip.clip_index]);
   const flush = useCallback(async () => {

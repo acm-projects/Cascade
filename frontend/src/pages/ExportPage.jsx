@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useNavigationType, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
 import { useLeafNavigate } from "../context/leafTransitionValue";
@@ -7,6 +7,7 @@ import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
+import { useProject } from "../context/projectContextValue";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
 import { clipKey, flattenClips } from "../features/editor/clips";
@@ -42,11 +43,19 @@ function ExportPage() {
   const leafNavigate = useLeafNavigate();
   const { projectId } = useParams();
   const api = useApi();
-  const [clips, setClips] = useState(null);
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const { exportHandoff } = useProject();
+  const incoming = location.state?.exportSelection;
+  const selection = navigationType === "PUSH" && incoming?.projectId === projectId ? incoming : null;
+  const handoff = exportHandoff?.id === selection?.id ? exportHandoff : null;
+  const [saving, setSaving] = useState(Boolean(handoff?.saving));
+  const [saveError, setSaveError] = useState(null);
+  const [clips, setClips] = useState(() => selection?.clips ?? null);
   const [error, setError] = useState(null);
-  const [projectName, setProjectName] = useState(null);
-  const [currentKey, setCurrentKey] = useState(null);
-  const [inZip, setInZip] = useState([]);       // clip keys to export
+  const [projectName, setProjectName] = useState(() => selection?.projectName ?? null);
+  const [currentKey, setCurrentKey] = useState(() => selection?.currentKey ?? null);
+  const [inZip, setInZip] = useState(() => selection?.clips.map(clipKey) ?? []);       // clip keys to export
   const [settings, setSettings] = useState({ resolution: "original", includeCaptions: true });
   const [destination, setDestination] = useState("download");   // "download" | "youtube"
   const [configured, setConfigured] = useState(false);          // touched a setting: step 3 is underway
@@ -57,13 +66,34 @@ function ExportPage() {
   const toast = useToast();
 
   useEffect(() => {
+    if (!handoff?.saving) return;
     let active = true;
-    Promise.all([api.getEditorIndex(projectId, { selectedOnly: true }), api.getProject(projectId)])
-      .then(([index, project]) => {
+    handoff.saving
+      .catch((err) => { if (active) setSaveError(err); })
+      .finally(() => { if (active) setSaving(false); });
+    return () => { active = false; };
+  }, [handoff]);
+
+  async function retrySave() {
+    setSaving(true);
+    setSaveError(null);
+    try { await handoff.flush(); }
+    catch (err) { setSaveError(err); }
+    finally { setSaving(false); }
+  }
+
+  useEffect(() => {
+    let active = true;
+    if (selection?.projectName == null) {
+      api.getProject(projectId)
+        .then((project) => { if (active) setProjectName(project.name); })
+        .catch(() => {}); // The project title can fall back to the TopNav placeholder.
+    }
+    if (!selection) api.getEditorIndex(projectId, { selectedOnly: true })
+      .then((index) => {
         if (!active) return;
         const list = flattenClips(index);
         setClips(list);
-        setProjectName(project.name);
         setCurrentKey(list[0] && clipKey(list[0]));
         setInZip(list.map(clipKey));
       })
@@ -71,7 +101,7 @@ function ExportPage() {
     return () => {
       active = false;
     };
-  }, [api, projectId]);
+  }, [api, projectId, selection]);
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   const tree = useMemo(() => exportTree(clips ?? []), [clips]);
@@ -106,7 +136,10 @@ function ExportPage() {
   }
 
   let message;
-  if (error) message = <EmptyState icon="cloud" title="Couldn't open Export" text={error.message} />;
+  if (saving) message = <Spinner size={48} label="Saving your edits" />;
+  else if (saveError) message = <EmptyState icon="cloud" title="Couldn't save your edits" text={saveError.message}
+    action={{ label: "Try again", onClick: retrySave }} />;
+  else if (error) message = <EmptyState icon="cloud" title="Couldn't open Export" text={error.message} />;
   else if (!clips) message = <Spinner size={48} label="Loading your clips" />;
   else if (!clips.length) {
     message = (

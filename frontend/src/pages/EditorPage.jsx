@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./EditorPage.css";
 import TopNav from "../components/TopNav";
@@ -9,6 +9,7 @@ import { sameEdit, isAIUndo, canUndoAI } from "../features/editor/editorTransact
 import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
 import { useToast } from "../components/ui/ToastContext";
+import { useProject } from "../context/projectContextValue";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
 import { clipKey, combinable, flattenClips } from "../features/editor/clips";
@@ -62,10 +63,13 @@ function EditorPage() {
   const { projectId } = useParams();
   const layout = EDITOR_LAYOUT;
   const api = useApi();
+  const { project, setExportHandoff } = useProject();
+  const exportHandoffId = useId();
+  const knownName = project?.id === projectId ? project.name : null;
   const [clips, setClips] = useState(null); // null = loading
   const [error, setError] = useState(null);
   const [currentKey, setCurrentKey] = useState(null);
-  const [projectName, setProjectName] = useState(null);
+  const [projectName, setProjectName] = useState(knownName);
   const flushCurrent = useRef(null);
   const registerFlush = useCallback(value => { flushCurrent.current = value; }, []);
   const [trendsFor, setTrendsFor] = useState(null); // reopen Trend Analysis after picking another clip from inside it
@@ -75,12 +79,16 @@ function EditorPage() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([api.getEditorIndex(projectId, { selectedOnly: true }), api.getProject(projectId)])
-      .then(([index, project]) => {
+    if (knownName == null) {
+      api.getProject(projectId)
+        .then((project) => { if (active) setProjectName(project.name); })
+        .catch(() => {}); // The project title can fall back to the TopNav placeholder.
+    }
+    api.getEditorIndex(projectId, { selectedOnly: true })
+      .then((index) => {
         if (!active) return;
         const list = flattenClips(index);
         setClips(list);
-        setProjectName(project.name);
         const first = index.selection && list.find((clip) => clipKey(clip) === clipKey(index.selection));
         setCurrentKey(first ? clipKey(first) : list[0] && clipKey(list[0]));
       })
@@ -88,7 +96,7 @@ function EditorPage() {
     return () => {
       active = false;
     };
-  }, [api, projectId]);
+  }, [api, projectId, knownName]);
 
   // After "Upload a clip": reload the list and open the new clip
   async function addOwnClip(added) {
@@ -97,6 +105,17 @@ function EditorPage() {
     setCurrentKey(clipKey(added));
   }
   const saveCurrent = () => flushCurrent.current?.();
+
+  function goToExport() {
+    const flush = flushCurrent.current;
+    const saving = flush?.();
+    saving?.catch(() => {}); // Export displays the save result, even if it settles before mounting.
+    setExportHandoff({ id: exportHandoffId, flush, saving });
+    leafNavigate(`/projects/${projectId}/export`, {
+      style: "instant",
+      state: { exportSelection: { id: exportHandoffId, projectId, clips, currentKey, projectName } },
+    });
+  }
 
   // Multi-clip editing: join the chosen clips into one new clip and open it
   const combine = useCallback(async (chosen) => {
@@ -190,13 +209,13 @@ function EditorPage() {
 
   return (
     <div className={`editor leaf-page editor-${layout}`}>
-      <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} />
+      <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} onOpenExport={goToExport} />
       {body ? (
         <div className="editor-empty">{body}</div>
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
           clips={clips} openTrends={trendsFor === currentKey} onSelectClipForTrends={clip => selectClip(clip, { trends: true })}
-          registerFlush={registerFlush} onExport={() => leafNavigate(`/projects/${projectId}/export`, { style: "instant" })} />
+          registerFlush={registerFlush} onExport={goToExport} />
       )}
     </div>
   );
@@ -340,9 +359,6 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   if (chatNote) chatMessages.push({ role: "system", text: chatNote });
 
   // ---------- Pieces both layouts use ----------
-  async function goToExport() {
-    try { await draft.flush(); onExport(); } catch (e) { toast.show(e.message, "error"); }
-  }
   const undoRedo = <>
     <button type="button" className="btn btn-small editor-history-btn" onClick={draft.undo} disabled={!draft.canUndo} aria-label="Undo" title="Undo"><Icon name="undo" /></button>
     <button type="button" className="btn btn-small editor-history-btn" onClick={draft.redo} disabled={!draft.canRedo} aria-label="Redo" title="Redo"><Icon name="redo" /></button>
@@ -452,7 +468,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
             <div className="er-stage-bar">
               {undoRedo}
               {statuses}
-              <button type="button" className="btn btn-small btn-primary er-export" onClick={goToExport}>Go to Export <Icon name="chevronRight" /></button>
+              <button type="button" className="btn btn-small btn-primary er-export" onClick={onExport}>Go to Export <Icon name="chevronRight" /></button>
             </div>
             {info?.warning && <p className="editor-warning">{info.warning}</p>}
           </main>
@@ -485,7 +501,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
           <aside className="es-panel">
             <div className="es-panel-workspace">
             <div className="editor-panel-tabs">
-              <button type="button" className="btn btn-small btn-primary es-export" onClick={goToExport}>Export →</button>
+              <button type="button" className="btn btn-small btn-primary es-export" onClick={onExport}>Export →</button>
               <div className="es-history">{undoRedo}</div>
               {splitTabs.map((tab) => (
                 <button key={tab} type="button" className={`editor-panel-tab${tab === activeTab ? " active" : ""}`}
@@ -524,7 +540,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
       <div className="editor-tools">
         {undoRedo}
         {statuses}
-        <button type="button" className="btn btn-small btn-primary editor-export" onClick={goToExport}>Go to Export →</button>
+        <button type="button" className="btn btn-small btn-primary editor-export" onClick={onExport}>Go to Export →</button>
       </div>
 
       <div className="editor-body">

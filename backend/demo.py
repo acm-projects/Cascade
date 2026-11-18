@@ -111,6 +111,11 @@ def ordered_picks(chosen):
     return sorted(picks, key=lambda r: (_created(r['job_id']), r['clip_index']))
 
 
+def _matches_join(job_id, owner, want):
+    made = [(p['job_id'], p['clip_index']) for p in owner.get('combined_from', [])]
+    return made == want and (job_service.JOBS_DIR/job_id/'clip_1.mp4').is_file()
+
+
 def existing(pid, user, picks):
     """The joined clip already made from exactly these picks, if any."""
     from backend.services import projects_store
@@ -118,8 +123,7 @@ def existing(pid, user, picks):
     for job in projects_store.project_jobs(pid, user):
         if job['kind'] != 'combined': continue
         owner = job_service.load_json(job_service.JOBS_DIR/job['job_id']/'owner.json')
-        made = [(p['job_id'], p['clip_index']) for p in owner.get('combined_from', [])]
-        if made == want and (job_service.JOBS_DIR/job['job_id']/'clip_1.mp4').is_file():
+        if _matches_join(job['job_id'], owner, want):
             return {'job_id': job['job_id'], 'clip_index': 0}
     return None
 
@@ -142,8 +146,33 @@ def join_early(pid, user):
 
 def editor_clips(pid, request):
     """The joined clip for the current picks (made now if needed), or None when fewer than two clips are picked."""
+    from backend.services import projects_store
+    user = request.state.user_id
+    with projects_store.lock:
+        project = projects_store.require_project(pid, user)
+        studio = project.get('studio', {})
+        chosen = studio.get('editor_clips', [])
+        if studio.get('selection_model') == 'shared-v1':
+            if len(chosen) < 2:
+                return None
+            # A completed early join is already selected. Check it without the join lock or job scan.
+            current = project.get('editor_selection')
+            if current in chosen and current['clip_index'] == 0 and _current_join_matches(pid, user, current['job_id'], chosen):
+                return current
     with JOINING:
         return _editor_clips(pid, request)
+
+
+def _current_join_matches(pid, user, job_id, chosen):
+    path = job_service.JOBS_DIR/job_id/'owner.json'
+    if not job_service.metadata_exists(path):
+        return False
+    owner = job_service.load_json(path)
+    if (owner.get('kind') != 'combined' or owner.get('user_id') != user
+            or owner.get('project_id') != pid or owner.get('project_deleted')):
+        return False
+    want = [(p['job_id'], p['clip_index']) for p in ordered_picks(chosen)]
+    return len(want) >= 2 and _matches_join(job_id, owner, want)
 
 
 def _editor_clips(pid, request):
