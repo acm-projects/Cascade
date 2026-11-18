@@ -766,7 +766,9 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
       for (let k = 0; k <= ACROSS; k += 1) {   // several points across the river, so its surface can ripple
         const t = (k / ACROSS) * 2 - 1;
         positions.push(point.x + side.x * t, point.y, point.z + side.z * t);
-        uvs.push(k / ACROSS, along / 2.4);
+        // counts down going downstream: the water's pattern scrolls toward lower values (see the flowing loop),
+        // so this way it runs downhill like the waterfalls do
+        uvs.push(k / ACROSS, -along / 2.4);
       }
       if (i < path.length - 1) {
         const row = i * (ACROSS + 1);
