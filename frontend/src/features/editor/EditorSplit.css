@@ -362,7 +362,7 @@
   .editor-split .es-panel .es-trends.es-trends-corner { right: 14px; }
 }
 
-/* Demo: a little frog holding the top of the Trends button (click it to type the edit prompt into the AI Editor) */
+/* A little frog holding the top of the Trends button (decoration) */
 .es-trends-frog {
   position: absolute;
   top: -19px;
@@ -370,7 +370,6 @@
   width: 40px;
   height: 24px;
   translate: -50% 0;
-  cursor: pointer;
 }
 .es-trends-frog-head {
   position: absolute;

@@ -33,7 +33,6 @@ import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import ClipLoading from "../features/editor/ClipLoading";
 import EditedTimeline from "../features/editor/EditedTimeline";
 import Mascot from "../components/Mascot";
-import { DEMO_EDIT_PROMPT, typeIntoAIChat } from "../features/editor/demoPrompt";
 import ClipLength from "../features/editor/ClipLength";
 import { cachedIndex, pendingIndex, rememberIndex } from "../features/editor/draftCache";
 import UploadClipButton from "../features/editor/UploadClipButton";
@@ -555,12 +554,8 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
                 disabled={!state || info?.has_video === false} aria-haspopup="dialog" aria-expanded={trendsOpen}
                 onClick={() => setTrendsOpen(true)}>
                 <Icon name="sparkles" size={18} /> Trends
-                {/* Demo: the frog holding the button types the edit prompt into the AI Editor chat */}
-                <span className="es-trends-frog" aria-hidden="true" onClick={(event) => {
-                  event.stopPropagation();
-                  setPanelTab("AI Editor");
-                  typeIntoAIChat(DEMO_EDIT_PROMPT);
-                }}>
+                {/* A little frog holding the top of the button (decoration; clicking it opens Trends like the button) */}
+                <span className="es-trends-frog" aria-hidden="true">
                   <span className="es-trends-frog-head"><Mascot variant="head" size={34} /></span>
                   <i className="es-trends-paw es-trends-paw-left" /><i className="es-trends-paw es-trends-paw-right" />
                 </span>

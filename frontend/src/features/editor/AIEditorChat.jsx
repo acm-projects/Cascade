@@ -1,4 +1,5 @@
 import ChatBox from '../../components/ChatBox';
+import { DEMO_EDIT_PROMPT } from './demoPrompt';
 import './AIEditorChat.css';
 
 export const AI_EDITOR_PROMPT = 'Make this a high-energy Instagram Reel with beat-synced cuts, punch-in zooms, animated captions, shakes, and music. Preserve complete spoken phrases and existing manual edits.';
@@ -43,7 +44,7 @@ export default function AIEditorChat({ messages, onSend, onClear, disabled, typi
   return <div className="ai-editor-chat">
     <ChatBox title="AI Editor" subtitle="Tell me the edit you want and I'll make it."
       messages={messages} onSend={onSend} disabled={disabled} typing={typing}
-      quickActions={suggestions} placeholder={placeholder} listenForPrompts />
+      quickActions={suggestions} placeholder={placeholder} autoPrompt={DEMO_EDIT_PROMPT} />
     {job && <section className="ai-edit-progress" role="status" aria-live="polite">
       <div className="ai-edit-progress-bar"><i style={{ width: `${Math.round((job.progress || 0) * 100)}%` }} /></div>
       <p>{job.stage}</p>

@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import useTypewriter from "../hooks/useTypewriter";
-import { TYPE_PROMPT, takeWaitingPrompt } from "../features/editor/demoPrompt";
 import "./ChatBox.css";
 import leafIcon from "../assets/icons/leaf.svg";
 import Icon from "./ui/Icon";
@@ -15,23 +14,16 @@ import Icon from "./ui/Icon";
 //   onRemoveTag      - called when the close (x) on the tag is clicked
 //   quickActions     - [{ label, prompt }]: buttons under the text box that send a ready-made prompt
 //   typing           - show the "…" bubble while the AI is answering
-//   listenForPrompts - demo: type in prompts sent with typeIntoAIChat() (the frog on the Trends button)
+//   autoPrompt       - demo: clicking the empty text box types this prompt in
 function ChatBox({
   title, subtitle, onNewChat, messages, onSend, placeholder = "Type a message...",
-  tag, onRemoveTag, quickActions = [], disabled, typing, listenForPrompts,
+  tag, onRemoveTag, quickActions = [], disabled, typing, autoPrompt,
 }) {
   const [text, setText] = useState("");
   const inputRef = useRef(null);
   const focusInput = useCallback(() => inputRef.current?.focus(), []);
-  const { type: typePrompt } = useTypewriter(setText, focusInput);
-  useEffect(() => {
-    if (!listenForPrompts) return undefined;
-    // A prompt sent while this tab was closed: type it once the box is really on screen
-    const pickUp = setTimeout(() => { const waiting = takeWaitingPrompt(); if (waiting) typePrompt(waiting); }, 0);
-    const onPrompt = (event) => { takeWaitingPrompt(); typePrompt(event.detail); };
-    window.addEventListener(TYPE_PROMPT, onPrompt);
-    return () => { clearTimeout(pickUp); window.removeEventListener(TYPE_PROMPT, onPrompt); };
-  }, [listenForPrompts, typePrompt]);
+  const { type: typePrompt, typing: autoTyping } = useTypewriter(setText, focusInput);
+  const fillPrompt = () => { if (autoPrompt && !text && !autoTyping && !disabled) typePrompt(autoPrompt); };
 
   function send(message) {
     if (message.trim() === "" || disabled) return;
@@ -87,6 +79,7 @@ function ChatBox({
       <div className="chatbox-input-row">
         <input
           ref={inputRef}
+          onClick={fillPrompt}
           className="chatbox-input"
           placeholder={placeholder}
           value={text}
