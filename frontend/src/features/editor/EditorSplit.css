@@ -361,3 +361,35 @@
 @media (max-width: 760px) {
   .editor-split .es-panel .es-trends.es-trends-corner { right: 14px; }
 }
+
+/* Demo: a little frog holding the top of the Trends button (click it to type the edit prompt into the AI Editor) */
+.es-trends-frog {
+  position: absolute;
+  top: -19px;
+  left: 50%;
+  width: 40px;
+  height: 24px;
+  translate: -50% 0;
+  cursor: pointer;
+}
+.es-trends-frog-head {
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 34px;
+  height: 21px;
+  overflow: hidden;
+}
+.es-trends-frog-head .mascot { display: block; transition: transform 0.2s ease; }
+.es-trends-frog:hover .es-trends-frog-head .mascot { transform: translateY(-2px); }
+.es-trends-paw {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 7px;
+  border: 1.5px solid #1f4d2a;
+  border-radius: 50% 50% 40% 40%;
+  background: #6cc24a;
+}
+.es-trends-paw-left { left: 2px; }
+.es-trends-paw-right { right: 2px; }
