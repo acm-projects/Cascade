@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 import { cachedDraft, draftKey, loadDraft, rememberDraft } from "./draftCache";
+import { announceClipLength } from "./aiFilm";
 
 const SAVE_DELAY_MS = 700;   // save this long after the last change
 const HISTORY_LIMIT = 50;
@@ -77,7 +78,7 @@ export default function useClipDraft(projectId, clip) {
   // Keep the remembered copy current, so the next page opens this clip exactly as you left it
   const state = history.present;
   useEffect(() => {
-    if (info && state) rememberDraft(cacheKey, { info, state, chat });
+    if (info && state) { rememberDraft(cacheKey, { info, state, chat }); announceClipLength(); }
   }, [cacheKey, info, state, chat]);
 
   // Auto-save a moment after the last change

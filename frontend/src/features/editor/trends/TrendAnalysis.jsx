@@ -16,6 +16,7 @@ import Viral from './TrendViral';
 import { EditVideo, ReferenceFacts, ReferenceVideo } from './TrendVideos';
 import { AudioChart, PacingChart, ShotTimeline } from './TrendCharts';
 import { ChangePreview, Improvements, Strengths } from './TrendReview';
+import { cachedTrends, forgetTrends, prefetchTrends } from '../trendsCache';
 import usePreview from './usePreview';
 import { clock, countWhere, editCues, editFindings, kept, measuredVideo, musicSpans, range, secs } from './trendMetrics';
 import { useCountUp, useReveal, useSimpleMotion } from './motion';
@@ -99,7 +100,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
   const backdrop = useRef(null), sheet = useRef(null), scrollRef = useRef(null), workspace = useRef(null);
   const editVideo = useRef(null), refVideo = useRef(null);
   const targets = useRef({});
-  const [record, setRecord] = useState(null), [previous, setPrevious] = useState(null);
+  const [record, setRecord] = useState(() => cachedTrends(projectId, clip)), [previous, setPrevious] = useState(null);
   const [error, setError] = useState(''), [starting, setStarting] = useState(false);
   const [topic, setTopic] = useState(''), [choice, setChoice] = useState(''), [links, setLinks] = useState([]), [linkDraft, setLinkDraft] = useState('');
   const [adding, setAdding] = useState(false), [linkError, setLinkError] = useState('');
@@ -116,11 +117,12 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
 
   useEffect(() => {
     alive.current = true; let cancelled = false;
-    api.getTrends(projectId, clip.job_id, clip.clip_index)
+    forgetTrends(projectId, clip);   // reopening Trends asks again, so the next open is current
+    prefetchTrends(api, projectId, clip)
       .then(data => { if (!cancelled) { setRecord(data); { const saved = data.topic_override || ''; const known = TOPICS.some(([key]) => key === saved.toLowerCase()); setChoice(known ? saved.toLowerCase() : saved ? 'other' : ''); setTopic(known ? '' : saved); } } })
       .catch(e => !cancelled && setError(friendly(e)));
     return () => { cancelled = true; alive.current = false; };
-  }, [api, projectId, clip.job_id, clip.clip_index]);
+  }, [api, projectId, clip]);
   useEffect(() => {
     if (record?.status !== 'running') return undefined;
     const timer = setTimeout(() => api.getTrends(projectId, clip.job_id, clip.clip_index, record.id)

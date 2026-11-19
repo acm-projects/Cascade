@@ -5,6 +5,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import useApi from '../../../api/useApi';
 import Icon from '../../../components/ui/Icon';
 import { clipMediaPath } from '../clips';
+import { loadAIFilm } from '../aiFilm';
 import { timelineClock } from '../reelTiming';
 import { aspect, clock } from './trendMetrics';
 
@@ -18,18 +19,27 @@ export const EditVideo = forwardRef(function EditVideo({ projectId, clip, state,
   const [source, setSource] = useState(null), [rendered, setRendered] = useState(null), [problem, setProblem] = useState('');
   const time = useMemo(() => timelineClock(state), [state]);
   const snapshot = JSON.stringify(state);
+  const aiEdit = Boolean(state.ai_edit);
   useEffect(() => {
+    if (!aiEdit) return undefined;   // a finished AI edit: show that file at once (shared with the Editor's player)
+    let active = true;
+    loadAIFilm(api, projectId, clip, JSON.parse(snapshot)).then(url => { if (active) setRendered(url); }).catch(e => active && setProblem(e.message));
+    return () => { active = false; };
+  }, [api, projectId, clip, snapshot, aiEdit]);
+  useEffect(() => {
+    if (aiEdit) return undefined;
     let active = true, url;
     api.getMedia(clipMediaPath(projectId, clip)).then(blob => { url = URL.createObjectURL(blob); if (active) setSource(url); }).catch(e => active && setProblem(e.message));
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [api, projectId, clip]);
+  }, [api, projectId, clip, aiEdit]);
   useEffect(() => {
+    if (aiEdit) return undefined;
     let active = true, url;
     api.exportClip(projectId, clip.job_id, clip.clip_index, JSON.parse(snapshot))
       .then(blob => { url = URL.createObjectURL(blob); if (active) setRendered(url); })
       .catch(() => {}); // the source keeps playing; the note below says so
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [api, projectId, clip.job_id, clip.clip_index, snapshot]);
+  }, [api, projectId, clip.job_id, clip.clip_index, snapshot, aiEdit]);
   useImperativeHandle(ref, () => ({
     seek(t, play = false) { // t = seconds in the edited video
       const v = video.current; if (!v) return;

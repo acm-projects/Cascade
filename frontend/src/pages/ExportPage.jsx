@@ -12,6 +12,7 @@ import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
 import { clipKey, flattenClips } from "../features/editor/clips";
 import useClipDraft from "../features/editor/useClipDraft";
+import ClipLength from "../features/editor/ClipLength";
 import useAutoFraming from "../features/editor/useAutoFraming";
 import useFilmstrip from "../features/editor/useFilmstrip";
 import ClipPlayer from "../features/editor/ClipPlayer";
@@ -189,7 +190,7 @@ function ExportPage() {
                                   <button type="button" className={`export-tree-clip-name${key === currentKey ? " active" : ""}`}
                                     onClick={() => pickClip(key)} title={clip.title}>
                                     <span>Clip {clips.indexOf(clip) + 1}</span>
-                                    <span className="export-tree-time">{formatTime(clip.end - clip.start)}</span>
+                                    <span className="export-tree-time"><ClipLength projectId={projectId} clip={clip} /></span>
                                   </button>
                                 </div>
                               );
@@ -329,7 +330,7 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   if (framing.status === "error") status = `Couldn't prepare framing: ${framing.message}`;
   else if (framing.status === "working") status = `Preparing automatic framing… ${Math.round(framing.progress * 100)}%`;
   else if (state) {
-    status = `${formatTime(state.end - state.start)} · ${audioOnly ? "Audio"
+    status = `${formatTime(state.ai_edit?.duration ?? state.end - state.start)} · ${audioOnly ? "Audio"
       : state.composition.ratio === "original" ? "Original" : state.composition.ratio} · captions ${state.captions.enabled ? "on" : "off"}`;
   }
 
@@ -442,7 +443,7 @@ function StripCard({ projectId, clip, number, active, onClick }) {
       {frame && <img className="export-strip-frame" src={frame} alt="" draggable="false" />}
       <span className="export-strip-play"><Icon name="play" /></span>
       <b>Clip {number}</b>
-      <span className="export-strip-time">{formatTime(clip.end - clip.start)}</span>
+      <span className="export-strip-time"><ClipLength projectId={projectId} clip={clip} /></span>
     </button>
   );
 }

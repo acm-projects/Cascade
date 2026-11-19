@@ -1,3 +1,4 @@
+import { loadAIFilm } from "./aiFilm";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 import ClipLoading from "./ClipLoading";
@@ -64,6 +65,12 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   useEffect(() => {
     if (!advanced) return;
     let active = true, objectUrl;
+    if (JSON.parse(snapshot).ai_edit) {   // a finished AI edit: one shared file, fetched once (aiFilm.js), no waiting
+      loadAIFilm(api, projectId, clip, JSON.parse(snapshot))
+        .then((url) => { if (active) setRender({ key: renderKey, url }); })
+        .catch((e) => { if (active) setRender({ key: renderKey, error: e.message }); });
+      return () => { active = false; };
+    }
     const timer = setTimeout(() => {
       api.exportClip(projectId, clip.job_id, clip.clip_index, { ...JSON.parse(snapshot), preview: true, resolution: '540p' }).then(blob => {
         if (!active) return;
@@ -71,7 +78,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
       }).catch(e => { if (active) setRender({ key: renderKey, error: e.message }); });
     }, 900);
     return () => { active = false; clearTimeout(timer); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [api, projectId, clip.job_id, clip.clip_index, snapshot, advanced, renderKey]);
+  }, [api, projectId, clip, snapshot, advanced, renderKey]);
   const [error, setError] = useState(null);
   const [time, setTime] = useState(state.start);
   const [playing, setPlaying] = useState(false);

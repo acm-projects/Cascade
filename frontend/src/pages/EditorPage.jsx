@@ -27,9 +27,12 @@ import ReelControls from "../features/editor/ReelControls";
 import TrendsModal from "../features/editor/TrendsModal";
 import MusicControls from "../features/editor/MusicControls";
 import { prefetchMusic } from "../features/editor/musicCache";
+import { prefetchTrends } from "../features/editor/trendsCache";
 import Icon from "../components/ui/Icon";
 import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import ClipLoading from "../features/editor/ClipLoading";
+import EditedTimeline from "../features/editor/EditedTimeline";
+import ClipLength from "../features/editor/ClipLength";
 import { cachedIndex, pendingIndex, rememberIndex } from "../features/editor/draftCache";
 import UploadClipButton from "../features/editor/UploadClipButton";
 import CombineClips from "../features/editor/CombineClips";
@@ -178,7 +181,7 @@ function EditorPage() {
             className={`editor-media-item${clipKey(clip) === currentKey ? " active" : ""}`}
             onClick={() => selectClip(clip)} title={clip.title}>
             {index + 1}. {clip.title || "Clip"}
-            <span>{clip.sessionName ? `${clip.sessionName} · ` : ""}{formatTime(clip.end - clip.start)}</span>
+            <span>{clip.sessionName ? `${clip.sessionName} · ` : ""}<ClipLength projectId={projectId} clip={clip} /></span>
           </button>
         ))}
         <UploadClipButton projectId={projectId} onUploaded={addOwnClip} beforeUpload={saveCurrent}
@@ -195,7 +198,7 @@ function EditorPage() {
         <button key={clipKey(clip)} type="button" role="tab" aria-selected={clipKey(clip) === currentKey}
           className={`er-clip-tab${clipKey(clip) === currentKey ? " active" : ""}`} onClick={() => selectClip(clip)} title={clip.title} aria-label={`Clip ${index + 1}`}>
           <span className="er-clip-tab-name">{layout === "split" ? index + 1 : clip.kind === "combined" ? `Combined ${index + 1}` : `Clip ${index + 1}`}</span>
-          {layout !== "split" && <span className="er-clip-tab-time">{formatTime(clip.end - clip.start)}</span>}
+          {layout !== "split" && <span className="er-clip-tab-time"><ClipLength projectId={projectId} clip={clip} /></span>}
         </button>
       ))}
       <UploadClipButton projectId={projectId} onUploaded={addOwnClip} beforeUpload={saveCurrent}
@@ -245,6 +248,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   const draft = useClipDraft(projectId, clip);
   // Get the Music tab's track list now, in the background, so opening the tab shows it at once
   useEffect(() => { prefetchMusic(api, projectId, clip).catch(() => {}); }, [api, projectId, clip]);
+  useEffect(() => { prefetchTrends(api, projectId, clip).catch(() => {}); }, [api, projectId, clip]);   // Trends opens filled in
   const [panelTab, setPanelTab] = useState("Trim");
   const [trendsOpen, setTrendsOpen] = useState(Boolean(openTrends));
   const [chatChanges, setChatChanges] = useState({});
@@ -403,7 +407,11 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   ) : (
     <ClipLoading />
   );
-  const timeline = info && state && (<>
+  // A finished AI edit is its own film: show its timeline (e.g. 0:13), not the source it was cut from
+  const timeline = info && state && state.ai_edit ? (
+    <EditedTimeline projectId={projectId} clip={clip} state={state} plan={beatPlan?.plan ?? beatPlan} player={player}
+      onOpenTool={(tool) => setPanelTab(tool)} />
+  ) : info && state && (<>
     <SequenceControls state={state} change={change} player={player} />
     <Timeline projectId={projectId} clip={clip} hasVideo={info.has_video !== false}
       duration={info.duration} cues={info.cues} state={state} player={player}

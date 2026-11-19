@@ -221,6 +221,9 @@ def latest(pid: str,jid: str,index: int,request: Request,research_id: str | None
         if not re.fullmatch('[a-f0-9]{32}',research_id):raise HTTPException(404,'Research not found.')
         record=read_record(root/(research_id+'.json'))
     else:record=read_record(root/'latest.json')
+    from backend import demo
+    if not record and not research_id and demo.enabled() and demo.saved_trends():   # demo: the saved research is already there
+        record=demo.instant_trends(pid,jid,index,_saved_state(pid,jid,index,user,clip),None);put(root,record)
     if not record:return {'status':'empty','topic':derive_search(clip,details(jid,clip)),'goal':'Help me improve this clip’s editing.'}
     if record['status']=='running' and record['id'] not in RUNNING:
         record={**record,'status':'error','message':'Research was interrupted by a restart. Analyze again.'}
@@ -229,6 +232,13 @@ def latest(pid: str,jid: str,index: int,request: Request,research_id: str | None
         suggestions=[{**s,'executable':not support(s,snapshot,info),'unavailable_reason':support(s,snapshot,info)} for s in record['result'].get('suggestions',[])]
         record={**record,'result':{**record['result'],'suggestions':suggestions,'speech_evidence':record['result'].get('speech_evidence') or speech_evidence(info)}}
     return {**record,'fresh':fresh(record)}
+
+def _saved_state(pid,jid,index,user,clip):
+    """The clip's saved edit (or a fresh one), for demo research that opens with the clip."""
+    from .models import Draft
+    path=draft_path(pid,jid,index,user)
+    try:return Draft.model_validate(load_json(path)).state
+    except Exception:return Edit(start=0,end=details(jid,clip)['duration'])
 
 def put(root,record):
     with LOCK:
