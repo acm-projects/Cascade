@@ -108,7 +108,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
   const [audio, setAudio] = useState('edit'); // whose sound is on
   const [accepted, setAccepted] = useState([]);
   const [startAt, setStartAt] = useState(null); // open the next reference at this second
-  const [details, setDetails] = useState(false); // the full player, charts and previews, folded away
+  const [details, setDetails] = useState(true); // the full player, charts and previews (open, so the graphs show)
   const alive = useRef(true);
 
   // ---------- data (same endpoints the Trends popup used) ----------
