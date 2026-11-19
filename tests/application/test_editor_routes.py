@@ -29,6 +29,7 @@ class EditorRouteTests(unittest.TestCase):
             ('/trends', 'GET'), ('/trends', 'POST'), ('/trends/apply', 'POST'), ('/style-progress', 'GET'), ('/ai-edit', 'GET'))]
         # The AI Editor chat reports its engine and free-tier usage (no credentials).
         additions.append(['/api/projects/{pid}/editor/ai-status', ['GET']])
+        additions.append(['/api/projects/{pid}/editor/demo-export', ['GET']])   # demo branches: Export shows the saved edit
         # The AI Editor beats pipeline: read one plan version, edit one beat by hand.
         additions += [[prefix+'/beats/{version}', ['GET']], [prefix+'/beats/{version}/{beat_id}', ['PATCH']]]
         additions.append(['/api/projects/{project_id}/generations/{job_id}/backup/retry', ['POST']])

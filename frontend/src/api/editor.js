@@ -66,6 +66,11 @@ export function combineClips(token, projectId, clips, title) {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/combine`, { token, method: 'POST', body });
 }
 
+/** GET …/editor/demo-export → { version, seconds } of the saved demo edit (404 when demo mode is off) */
+export function getDemoExport(token, projectId) {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/editor/demo-export`, { token });
+}
+
 export function getDraft(token, projectId, jobId, index) {
   return apiFetch(clipPath(projectId, jobId, index), { token });
 }

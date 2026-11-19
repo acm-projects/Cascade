@@ -16,11 +16,21 @@ from .combine import combine_clips
 router = APIRouter(prefix="/api/projects/{pid}/editor")
 
 
+def demo_export(pid: str, request: Request):
+    """Demo mode: Export shows the saved finished edit for the picked clip (404 when demo mode is off)."""
+    from fastapi import HTTPException
+    from backend import demo
+    info = demo.export_info() if demo.enabled() else None
+    if not info: raise HTTPException(404, 'Not in demo mode.')
+    return info
+
+
 def ai_edit_status(pid: str, jid: str, index: int, request: Request):
     from .ai_edit.jobs import status
     return status(pid, jid, index, request)
 
 
+router.add_api_route('/demo-export', demo_export, methods=['GET'])
 router.add_api_route('/{jid}/{index}/ai-edit', ai_edit_status, methods=['GET'])
 
 

@@ -2,8 +2,9 @@ import { useRef, useState } from 'react';
 import { needsFraming } from '../editor/useAutoFraming';
 import { fileSafe } from '../editor/clips';
 import { downloadName, exportEdit, saveBlob } from './downloads';
+import { withDemoEdit } from './demoExport';
 
-export default function useDownloads(api, projectId, projectName, settings) {
+export default function useDownloads(api, projectId, projectName, settings, demoEdit = null) {
   const [working, setWorking] = useState(false);
   const [progressText, setProgressText] = useState('');
   const [error, setError] = useState(null);
@@ -21,7 +22,7 @@ export default function useDownloads(api, projectId, projectName, settings) {
         if (needsFraming(info.draft.state, info) && !info.draft.state.reframe.analysis_id)
           throw Error(`Automatic framing for “${clip.title || 'Clip'}” is not ready. Open it in Export first or use Fit in the Editor.`);
         entries.push({ job_id: clip.job_id, clip_index: clip.clip_index,
-          edit: exportEdit(info.draft.state, settings) });
+          edit: exportEdit(withDemoEdit(info.draft.state, demoEdit), settings) });
       }
       const blob = batch ? await api.exportSelected(projectId, entries)
         : await api.exportClip(projectId, entries[0].job_id, entries[0].clip_index, entries[0].edit);

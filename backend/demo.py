@@ -326,6 +326,16 @@ def final_edit():
 
 DONE_TEXT = "Done! Here's your jaguar fan edit. Press play on the Edited view."
 
+EXPORT_VERSION = 'v000'   # Export shows every clip as the saved finished edit under this (never a real) version
+
+
+def export_info():
+    """Demo mode: what Export should show ({'version', 'seconds'} of the saved edit), or None."""
+    saved = final_edit()
+    if not saved: return None
+    from backend.media import probe_media
+    return {'version': EXPORT_VERSION, 'seconds': round(probe_media(saved[0])['duration'], 3)}
+
 
 EDIT_SECONDS = float(os.getenv('CASCADE_DEMO_EDIT_SECONDS', '') or 5.8)   # how long the AI chat "works" before the edit shows
 EDIT_STAGES = ((.1, 'Watching the clip…'), (.3, 'Planning the edit…'), (.55, 'Adding captions and B-roll…'), (.8, 'Rendering your edit…'))

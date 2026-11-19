@@ -59,6 +59,9 @@ def versions(folder):
 
 
 def rendered_path(pid, jid, index, user, version):
+    from backend import demo
+    if version == demo.EXPORT_VERSION and demo.enabled() and demo.final_edit():   # demo: Export shows the saved edit
+        return demo.final_edit()[0]
     if not re.fullmatch(r'v[0-9]{3}', version): raise HTTPException(422, 'Unknown edit version.')
     path = root(pid, jid, index, user)/version/'edited.mp4'
     if not path.is_file(): raise HTTPException(409, 'This edited version is no longer on this machine. Ask the AI Editor to edit the clip again.')
