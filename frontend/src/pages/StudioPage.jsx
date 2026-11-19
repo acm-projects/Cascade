@@ -268,12 +268,6 @@ function StudioPage() {
       .catch((err) => toast.show(`Couldn't save where you moved that box: ${err.message}`, "error"));
   }
 
-  // ---------- Go to Editor ----------
-  // The Editor loads the picked clips from the backend itself (they're saved as editor_clips)
-  // The clips and the first clip's edits load while the waterfall is up, so the Editor opens already filled in.
-  function goToEditor() {
-    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", ready: prefetchEditor(api, projectId) });
-  }
   // Multi-clip editing: the Editor joins the picked clips (e.g. clip 1 + clip 3) into one edit and opens it
   function combineAndEdit() {
     leafNavigate(`/projects/${projectId}/editor`, { style: "falls", state: { combine: true }, ready: prefetchEditor(api, projectId) });
@@ -361,11 +355,6 @@ function StudioPage() {
           onClick={() => setShowHistory(value => !value)}
           title="Earlier attempts stay saved. Picked clips and source references always remain visible.">
           {showHistory ? 'Show latest attempts' : 'Show earlier attempts'}
-        </button>
-        <button type="button" className={`btn btn-small ${editorClips.length ? "btn-primary" : "disabled"}`}
-          disabled={!editorClips.length}
-          title={editorClips.length ? undefined : "Pick at least one clip first"} onClick={goToEditor}>
-          Go to Editor →
         </button>
         {editorClips.length >= 2 && (
           <button type="button" className="btn btn-small btn-primary" onClick={combineAndEdit}

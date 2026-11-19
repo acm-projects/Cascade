@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./ChatPanel.css";
 import leafCream from "../../assets/icons/leaf-cream.svg";
 import Mascot from "../../components/Mascot";
+import useTypewriter from "../../hooks/useTypewriter";
 import { requestedClipCount } from './clipCount';
 
 // How many clips to find when the prompt doesn't say ("Find 10 funny clips…" asks for 10).
 const DEFAULT_CLIPS = 4;
 
-// The little frog next to Send types this into the prompt box, so nobody has to type it during a demo.
+// Clicking BufoBot's face types this into the prompt box, so nobody has to type it during a demo.
 export const FROG_PROMPT = "Find me a clip where they talk about an animal";
-const FROG_TYPE_MS = 28;   // time per letter
 
 // The AI Studio chat column: messages on top (they scroll), prompt box pinned at the bottom.
 //   messages         - [{ id?, role: "user" | "assistant", text }]
@@ -28,34 +28,11 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
   const listRef = useRef(null);
   const promptRefs = useRef(new Map());
   const lastMessageId = messages.at(-1)?.id;
-  const [frogTyping, setFrogTyping] = useState(false);
-  const frogTimer = useRef(null);
   const inputRef = useRef(null);
-
-  useEffect(() => () => clearInterval(frogTimer.current), []);
-
-  // Click the frog: it types FROG_PROMPT into the box one letter at a time
-  function frogFill() {
-    if (frogTyping || disabled) return;
-    clearInterval(frogTimer.current);
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setText(FROG_PROMPT);
-      inputRef.current?.focus();
-      return;
-    }
-    setFrogTyping(true);
-    let shown = 0;
-    setText("");
-    frogTimer.current = setInterval(() => {
-      shown += 1;
-      setText(FROG_PROMPT.slice(0, shown));
-      if (shown >= FROG_PROMPT.length) {
-        clearInterval(frogTimer.current);
-        setFrogTyping(false);
-        inputRef.current?.focus();
-      }
-    }, FROG_TYPE_MS);
-  }
+  // Demo: clicking BufoBot's face types FROG_PROMPT into the box (nothing on screen says so)
+  const focusInput = useCallback(() => inputRef.current?.focus(), []);
+  const { type: typePrompt, typing: frogTyping } = useTypewriter(setText, focusInput);
+  const frogFill = () => { if (!frogTyping && !disabled) typePrompt(FROG_PROMPT); };
 
   // Keep the newest message in view
   useEffect(() => {
@@ -95,7 +72,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
   return (
     <section className="chat-panel wood-panel" aria-label="AI assistant chat">
       <header className="chat-panel-header">
-        <span className="chat-panel-avatar"><Mascot variant="head" size={44} /></span>
+        <span className="chat-panel-avatar" onClick={frogFill} aria-hidden="true"><Mascot variant="head" size={44} /></span>
         <div>
           <h2>BufoBot</h2>
           <p>Tell me what to find and how many clips you want.</p>
@@ -148,12 +125,6 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
           onKeyDown={handleKeyDown}
         />
         <div className="chat-panel-row">
-          <button type="button" className={`chat-panel-frog${frogTyping ? " is-typing" : ""}`}
-            onClick={frogFill} disabled={disabled || frogTyping}
-            title="Fill in a prompt for me" aria-label={`Fill in the prompt: ${FROG_PROMPT}`}>
-            <Mascot variant="head" size={34} />
-            <span className="chat-panel-frog-tip">Try a prompt</span>
-          </button>
           <button type="submit" className="btn btn-primary btn-small chat-panel-send" disabled={disabled || frogTyping || !text.trim()}>
             <img src={leafCream} alt="" />
             Send

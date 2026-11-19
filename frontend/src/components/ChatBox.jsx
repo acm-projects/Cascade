@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import Mascot from "./Mascot";
+import useTypewriter from "../hooks/useTypewriter";
 import "./ChatBox.css";
 import leafIcon from "../assets/icons/leaf.svg";
 import Icon from "./ui/Icon";
@@ -13,11 +15,15 @@ import Icon from "./ui/Icon";
 //   onRemoveTag      - called when the close (x) on the tag is clicked
 //   quickActions     - [{ label, prompt }]: buttons under the text box that send a ready-made prompt
 //   typing           - show the "…" bubble while the AI is answering
+//   peekPrompt       - optional: a little frog peeks over the text box; clicking it types this prompt in (demo)
 function ChatBox({
   title, subtitle, onNewChat, messages, onSend, placeholder = "Type a message...",
-  tag, onRemoveTag, quickActions = [], disabled, typing,
+  tag, onRemoveTag, quickActions = [], disabled, typing, peekPrompt,
 }) {
   const [text, setText] = useState("");
+  const inputRef = useRef(null);
+  const focusInput = useCallback(() => inputRef.current?.focus(), []);
+  const { type: typePrompt, typing: peekTyping } = useTypewriter(setText, focusInput);
 
   function send(message) {
     if (message.trim() === "" || disabled) return;
@@ -71,7 +77,14 @@ function ChatBox({
       )}
 
       <div className="chatbox-input-row">
+        {peekPrompt && (
+          <span className={`chatbox-peek${peekTyping ? " is-typing" : ""}`} aria-hidden="true"
+            onClick={() => { if (!peekTyping && !disabled) typePrompt(peekPrompt); }}>
+            <Mascot variant="head" size={34} />
+          </span>
+        )}
         <input
+          ref={inputRef}
           className="chatbox-input"
           placeholder={placeholder}
           value={text}

@@ -36,14 +36,17 @@ function Storyboard({ board, cues, onSend, disabled }) {
 
 // The beat plan the AI Editor made (one row per visual beat). Plans only for now: nothing renders from them yet.
 // Each saved version records which beats changed from its parent; a first plan has no highlights.
-export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, clip, result, cues, job, aiEdit, beatPlan }) {
+// Demo: the frog peeking over the chat box types this in (it describes the saved demo edit)
+const DEMO_EDIT_PROMPT = "Make a 13-second cinematic jaguar edit: hook on “as close to him as I am to you”, fast cuts with jaguar b-roll, big keyword text (AS CLOSE, DIDN’T CARE, AMAZON, ATTACKED, 20, TEETH), orange then red, black-and-white mixed with color, impact hits, and a dramatic score.";
+
+export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, result, cues, job, aiEdit, beatPlan }) {
   const placeholder = job
     ? 'Working on the edit. You can ask for changes when it finishes…'
     : typing ? 'Starting…' : aiEdit || beatPlan ? 'Ask for a change to this edit…' : 'Type “edit this clip”, or describe the edit you want…';
   return <div className="ai-editor-chat">
     <ChatBox title="AI Editor" subtitle="Tell me the edit you want and I'll make it."
       messages={messages} onSend={onSend} disabled={disabled} typing={typing}
-      tag={clip.title || 'Selected clip'} quickActions={suggestions} placeholder={placeholder} />
+      quickActions={suggestions} placeholder={placeholder} peekPrompt={DEMO_EDIT_PROMPT} />
     {job && <section className="ai-edit-progress" role="status" aria-live="polite">
       <div className="ai-edit-progress-bar"><i style={{ width: `${Math.round((job.progress || 0) * 100)}%` }} /></div>
       <p>{job.stage}</p>
