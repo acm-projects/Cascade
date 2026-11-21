@@ -75,15 +75,14 @@ function NewProjectModal({ onCreate, onClose }) {
 
         <div className="new-project-modes" role="radiogroup" aria-label="How do you want to start?">
           {[
-            ["studio", "sparkles", "Find clips with AI", "Upload a long video and let AI pick the best moments"],
-            ["editor", "scissors", "Edit my own clip", "Skip the AI picking and go straight to the Editor"],
-          ].map(([id, icon, label, hint]) => (
+            ["studio", "sparkles", "Find clips with AI"],
+            ["editor", "scissors", "Edit my own clip"],
+          ].map(([id, icon, label]) => (
             <button key={id} type="button" role="radio" aria-checked={mode === id} disabled={creating}
               className={`new-project-mode${mode === id ? " active" : ""}`}
               onClick={() => { setMode(id); setError(null); }}>
               <Icon name={icon} size={20} />
               <strong>{label}</strong>
-              <span>{hint}</span>
             </button>
           ))}
         </div>
@@ -112,7 +111,7 @@ function NewProjectModal({ onCreate, onClose }) {
           ) : (
             <>
               <strong>Drag a video here or click to browse</strong>
-              <span>{ownClip ? "Required: this is the clip you'll edit" : "Optional: you can also pick it on Studio Island"}</span>
+              {ownClip && <span>Required: this is the clip you'll edit</span>}
             </>
           )}
           <input ref={fileInput} type="file" accept={ownClip ? VIDEO_ACCEPT : MEDIA_ACCEPT} hidden

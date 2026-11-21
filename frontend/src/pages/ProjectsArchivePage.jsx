@@ -80,7 +80,7 @@ function ProjectsArchivePage() {
           <div className="pa-head">
             <div>
               <h1>Your Projects</h1>
-              <p>Create, edit, and manage your videos</p>
+              <p>Dive back in, or start something new</p>
             </div>
             <div className="pa-actions">
               <label className="pa-search">

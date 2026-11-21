@@ -83,7 +83,7 @@
   color: var(--surface-ink);
   font-family: var(--font-heading);
   font-weight: 600;
-  font-size: calc(30 * var(--u));
+  font-size: calc(44 * var(--u));
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -93,7 +93,7 @@
   color: var(--surface-ink-soft);
   font-family: var(--font-ui);
   font-weight: 700;
-  font-size: calc(18 * var(--u));
+  font-size: calc(26 * var(--u));
 }
 
 /* ---------- The … menu, top-right corner ---------- */
@@ -188,19 +188,19 @@
 
 .project-card-new-plus {
   font-family: var(--font-display);
-  font-size: calc(64 * var(--u));
+  font-size: calc(84 * var(--u));
   line-height: 1;
 }
 
 .project-card-new-title {
   font-weight: 600;
-  font-size: calc(30 * var(--u));
+  font-size: calc(44 * var(--u));
 }
 
 .project-card-new-text {
   font-family: var(--font-ui);
   font-weight: 700;
-  font-size: calc(18 * var(--u));
+  font-size: calc(26 * var(--u));
 }
 
 .project-card:has(.project-card-popup) { z-index: 2; }

@@ -1,0 +1,19 @@
+/* Cassie, the 3D seahorse (Seahorse.jsx). The box keeps its size while the 3D is loading, so nothing jumps. */
+.seahorse {
+  display: block;
+  flex: none;
+  pointer-events: none;
+}
+
+.seahorse-holder,
+.seahorse-canvas,
+.seahorse img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* a soft shadow on the water behind her */
+.seahorse-full .seahorse-canvas {
+  filter: drop-shadow(0 10px 14px rgba(5, 35, 70, 0.35));
+}
