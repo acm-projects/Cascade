@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from backend.editor import openai_edit
 from pathlib import Path
 from unittest.mock import patch
 
@@ -224,9 +225,9 @@ class EditorTests(unittest.TestCase):
             self.assertEqual(ai.call_args.args[0]['transcript'][0]['start'],.5)
         with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'bad'}).status_code,422)
-        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':'','CASCADE_EDITOR_PROVIDER':'openai'}):
+        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':''}):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'}).status_code,503)
-        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(editor.ai,'structured_json',side_effect=RuntimeError('private info')):
+        with patch.object(openai_edit,'structured_json',side_effect=RuntimeError('private info')):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'})
             self.assertEqual(result.status_code,502)
             self.assertNotIn('private info',result.text)
@@ -236,18 +237,18 @@ class EditorTests(unittest.TestCase):
     def test_ai_request_schema_and_response_validation(self):
         from types import SimpleNamespace
         valid = {'message':'Which part should I keep?', 'actions':[]}
-        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data=valid)) as call:
+        with patch.object(openai_edit, 'structured_json', return_value=SimpleNamespace(data=valid)) as call:
             proposal = editor.request_edit({'request':'make it shorter'})
             self.assertEqual(proposal.actions, [])
             schema=call.call_args.args[1]
             self.assertFalse(schema['additionalProperties'])
             self.assertEqual(schema['required'],list(schema['properties']))
             self.assertIn('make it shorter',call.call_args.args[0])
-        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(editor.ai, 'structured_json', return_value=SimpleNamespace(data={'message':'ok','actions':[{'type':'shell'}]})):
+        with patch.object(openai_edit, 'structured_json', return_value=SimpleNamespace(data={'message':'ok','actions':[{'type':'shell'}]})):
             with self.assertRaises(HTTPException) as error:
                 editor.request_edit({})
             self.assertEqual(error.exception.status_code,502)
-            self.assertEqual(error.exception.detail,'The editing AI returned an invalid response. Try rephrasing.')
+            self.assertIn('unsupported edit plan',error.exception.detail)
         for actions, expected in [([editor.Action(type='keep_first',seconds=1)], (0,1)),
                                   ([editor.Action(type='trim_first',seconds=1), editor.Action(type='reset_trim')], (0,3))]:
             result=editor.apply_actions(editor.Edit(start=0,end=3),actions,3)

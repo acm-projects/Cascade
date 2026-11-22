@@ -71,7 +71,8 @@ class ClipTrendsTests(unittest.TestCase):
             a=self.client.post(self.base+'/apply',headers=self.headers,json={'state':self.state,'research_id':r['id']})
         self.assertEqual(a.status_code,200,a.text);state=a.json()['state']
         self.assertTrue(state['audio']);self.assertTrue(state['motion']);self.assertEqual(state['captions']['animation'],'pop')
-        self.assertTrue(any(s['status']=='failed' for s in a.json()['report']))
+        # This fixture grounds no B-roll search, so B-roll is reported as skipped (never generic stock).
+        self.assertTrue(any(s['action'].startswith('broll') and s['status'] in ('failed','skipped') for s in a.json()['report']))
         self.assertEqual(self.client.put(self.url,headers=self.headers,json={'state':state}).status_code,200)
         self.assertEqual(self.fx.get(),state)
         video=self.client.post(self.url+'/export',headers=self.headers,json=state)
@@ -84,7 +85,7 @@ class ClipTrendsTests(unittest.TestCase):
         self.assertEqual(a.json()['state']['audio'],self.state['audio'])
     def test_failure_is_persisted_and_flashy_chat_keeps_supported_edits(self):
         with patch.object(trends,'collect',side_effect=RuntimeError('private provider failure')),patch('backend.broll.Store.search',return_value={'results':[]}):
-            a=self.client.post(self.url+'/chat',headers=self.headers,json={'state':self.state,'message':'Make this a crazy flashy TikTok-style edit.'})
+            a=self.client.post(self.url+'/chat',headers=self.headers,json={'state':self.state,'message':'Apply crazy trend-informed edits.'})
         self.assertEqual(a.status_code,200,a.text);self.assertTrue(a.json()['state']['audio'])
         self.assertIn('RESEARCH',a.json()['message'].upper());self.assertNotIn('private provider',a.text)
         self.assertEqual(self.client.get(self.base,headers=self.headers).json()['status'],'error')

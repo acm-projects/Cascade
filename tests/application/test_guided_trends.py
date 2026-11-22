@@ -12,7 +12,7 @@ class GuidedTrendsTests(fixtures.ClipTrendsTests):
         with patch.object(trends.POOL,'submit'):
             r=self.client.post(self.base,headers=self.headers,json={'state':self.state,'goal':goal,'topic':goal})
         self.assertEqual(r.status_code,202,r.text);data=r.json()
-        self.assertEqual(data['goal'],goal);self.assertNotIn('Tell me',data['topic']);self.assertEqual(data['topic'],'comedy reaction editing')
+        self.assertEqual(data['goal'],goal);self.assertNotIn('Tell me',data['topic']);self.assertEqual(data['topic'],'comedy / skit')   # the Topic menu choice that fits this clip
         trends.RUNNING.discard(data['id'])
     def test_selected_batch_receipts_and_sequential_apply(self):
         r=self.analyze()

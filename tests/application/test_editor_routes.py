@@ -32,6 +32,12 @@ class EditorRouteTests(unittest.TestCase):
         additions.append(['/api/projects/{project_id}/generations/{job_id}/backup/retry', ['POST']])
         # Multi-clip editing: join picked clips into one Editor clip.
         additions.append(['/api/projects/{pid}/editor/combine', ['POST']])
+        # Editing your own uploaded clip.
+        additions.append(['/api/projects/{pid}/editor/upload', ['POST']])
+        # LinkedIn publishing: connect an account and post a clip.
+        additions += [[prefix+'/publish/linkedin', ['GET']], [prefix+'/publish/linkedin', ['POST']],
+                      ['/api/projects/{pid}/social/linkedin', ['GET']], ['/api/projects/{pid}/social/linkedin/connect', ['POST']],
+                      ['/api/social/linkedin/callback', ['GET']]]
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
 
     def test_editor_modules_remain_small(self):

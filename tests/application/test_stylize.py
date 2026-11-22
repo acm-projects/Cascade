@@ -78,7 +78,7 @@ class StyleChatRenderTests(unittest.TestCase):
         with patch.object(segmentation.Mattes, 'ensure', lambda self, spans, progress=None: None), \
                 patch.object(segmentation.Mattes, 'at', half):
             response = self.fx.client.post(self.fx.url+'/chat', headers=self.fx.headers,
-                                           json={'message': 'make it a fan edit, edited by Tester', 'state': state})
+                                           json={'message': 'apply a fan edit style, edited by Tester', 'state': state})
             self.assertEqual(response.status_code, 200, response.text)
             styled = response.json()['state']
             self.assertEqual(styled['stylize']['events'][-1]['kind'], 'title_card')

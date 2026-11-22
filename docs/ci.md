@@ -1,8 +1,9 @@
 # Pull request checks
 
-`.github/workflows/ci.yml` runs on every pull request and pushes to `main`.
-It needs no provider secrets. The `backend` job installs CPU-only PyTorch and
-FFmpeg, runs application unittest tests, both unittest and pytest agent tests,
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main` and
+`edit_updated`. It needs no provider secrets and never reads a `.env` file
+(`PYTHON_DOTENV_DISABLED=1`). The `backend` job installs CPU-only PyTorch and
+FFmpeg, checks that FFmpeg has libass (`ass`, `subtitles`) and `drawtext`, runs application unittest tests, both unittest and pytest agent tests,
 and all six standalone legacy JavaScript suites. The `frontend` job uses
 Node 20 and runs a clean npm install, lint, tests, and the production build.
 

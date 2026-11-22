@@ -2,7 +2,6 @@
 import json
 import logging
 from fastapi import HTTPException
-from backend.cascade_llm import structured_json, LLMConfigError
 from .models import Proposal
 
 LOG = logging.getLogger(__name__)

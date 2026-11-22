@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, edit_updated]
 
 permissions:
   contents: read
@@ -23,6 +23,7 @@ jobs:
       CASCADE_METADATA_STORE: local
       CASCADE_BROWSER_TESTS: '0'
       CASCADE_DEV_AUTH: '0'
+      PYTHON_DOTENV_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,6 +39,14 @@ jobs:
           node-version: '20'
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # Captions need libass (the ass/subtitles filters) and the AI Editor draws text (drawtext).
+      - name: Check FFmpeg has libass and drawtext
+        run: |
+          filters="$(ffmpeg -hide_banner -filters)"
+          for f in ass subtitles drawtext; do
+            echo "$filters" | grep -qE "^ [A-Z.]+ $f " || { echo "FFmpeg is missing the $f filter"; exit 1; }
+          done
+          ffmpeg -hide_banner -version | head -1
       - name: Install CPU PyTorch
         run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Install dependencies
