@@ -6,7 +6,6 @@ import "./NewProjectModal.css";
 import Icon from "./ui/Icon";
 
 const MAX_NAME = 100;          // the backend's limit
-const BIG_FILE = 2 * 1024 ** 3; // over 2 GB: warn (uploads still work, they just take a while)
 
 // 1572864 -> "1.5 MB"
 function fileSize(bytes) {
@@ -118,9 +117,6 @@ function NewProjectModal({ onCreate, onClose }) {
             onChange={(e) => choose(e.target.files[0])} />
         </div>
 
-        {file?.size > BIG_FILE && (
-          <p className="new-project-warning">This file is over 2 GB, so uploading may take a while.</p>
-        )}
         {creating && ownClip && <p className="new-project-warning" role="status">Uploading your clip and adding captions. Longer videos can take a minute.</p>}
         {error && <p className="new-project-error" role="alert">{error}</p>}
 
