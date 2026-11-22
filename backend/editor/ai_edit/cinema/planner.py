@@ -1,8 +1,11 @@
 """OpenAI plans Cinema edits through Cascade's shared structured client. Rules are explicit/offline only."""
+import json
+import logging
 import os
+from pathlib import Path
 from fastapi import HTTPException
 from ... import openai_edit
-from . import director, plan as plans
+from . import director, plan as plans, visual
 
 class Unavailable(Exception):
     """No plan could be produced; preserve the existing edit."""
@@ -33,10 +36,87 @@ def _direct(prompt, prep_dir, prep, windows):
     except ValueError:
         raise Unavailable('OpenAI did not return a usable edit plan. Try the request again.') from None
 
+def output(plan, words, new=True):
+    """The house output rules (style.json "output"): about 15 s, 9:16, no Cascade sign-off."""
+    from . import settings
+    plan.settings.stamp = bool(settings.get('output.stamp', False))
+    ratio = settings.get('output.ratio', '9:16')
+    if ratio and (new or plan.settings.ratio is None): plan.settings.ratio = ratio
+    target = settings.get('output.target_seconds', 15)
+    if target and isinstance(plan, visual.VisualPlan):
+        from . import score
+        message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
+        timing = visual.song_timing(plan, target)
+        if plan.song and not timing:   # an unknown song: Cascade's own score instead
+            plan.song, plan.lyrics, plan.intro = '', 'off', 'none'
+        if timing: visual.fit(plan, max(2., target-message), grid=timing[2], lead=timing[3])
+        else: visual.fit(plan, max(2., target-message), beat=60/score.MOODS.get(plan.mood, score.MOODS['awakening'])['bpm'])
+    elif target:
+        tail = settings.get('pacing.tail_seconds', .5)
+        message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
+        plans.fit(plan, words, max(3., target-tail-message), pause=settings.get('dialogue.max_pause', .16))
+    return plan
+
 def plan_edit(request, prep_dir, prep, windows, history):
-    if choice() == 'rules': return plans.auto(prep['words']), 'rules'
-    return _direct(director.new_edit(request, prep, windows, history), prep_dir, prep, windows)
+    if choice() == 'rules': return output(plans.auto(prep['words']), prep['words']), 'rules'
+    plan, who = _direct(director.new_edit(request, prep, windows, history)+'\n\n'+songs(), prep_dir, prep, windows)
+    return output(plan, prep['words']), who
 
 def revise(note, current, prep_dir, prep, windows, history):
     if choice() == 'rules': raise Unavailable('The planner is set to rules, which cannot take creative changes.')
-    return _direct(director.change(note, current, prep, windows, history), prep_dir, prep, windows)
+    if isinstance(current, visual.VisualPlan):
+        prompt = (f"Request (a change to the edit below): {note}\nChange only what this asks for and return the whole plan.\n\n"
+                  f"Current plan:\n{current.model_dump_json()}\n\nEarlier chat:\n{json.dumps(history[-8:])}\n\n{_footage(prep, windows)}")
+        return output(_watch(prompt, prep_dir, prep, windows), prep['words'], new=False), label('openai')
+    plan, who = _direct(director.change(note, current, prep, windows, history)+'\n\n'+songs(), prep_dir, prep, windows)
+    return output(plan, prep['words'], new=False), who
+
+
+# --- visual edits: clips where nobody speaks -------------------------------------------------------
+
+VISUAL_PROMPT = Path(__file__).parent/'prompts'/'visual.md'
+
+
+def _footage(prep, windows):
+    every = prep.get('sheet_every', 1)
+    motion = prep.get('motion') or []
+    return (f"Clip: {prep['duration']:.1f} s. Usable source ranges: {windows}. Contact sheets: one cell every {every} s, 8 across and 6 down, "
+            f"labelled with the source second. Camera cuts at seconds: {[round(c, 1) for c in prep.get('cuts', [])][:200]}.\n"
+            f"Motion per second (index = second): {motion[:600]}\n\n{songs()}")
+
+
+def songs():
+    """The Music Library as the planner reads it (empty library: the composed score)."""
+    from . import music, settings
+    try:
+        catalogue = music.catalogue(settings.get('output.target_seconds', 15) or 15)
+    except Exception:
+        logging.getLogger(__name__).warning('Music Library unavailable', exc_info=True)
+        catalogue = []
+    if not catalogue: return 'Music Library: empty. Set "song" to "" (Cascade composes a score in your chosen mood).'
+    return 'Music Library (pick "song" by id and "song_section" by number; sections start at their own drop or chorus):\n'+json.dumps(catalogue)
+
+
+def _watch(prompt, prep_dir, prep, windows, tries=2):
+    system, images = VISUAL_PROMPT.read_text(), director.images(prep_dir, prep)
+    schema, last = openai_edit.strict_schema(visual.VisualPlan), ''
+    for _ in range(tries):
+        try:
+            answer = openai_edit.ask(system, prompt+last, schema, images, name='cinema_visual_edit', tokens=8000)
+        except HTTPException as exc:
+            raise Unavailable(str(exc.detail)) from None
+        try:
+            plan = visual.VisualPlan.model_validate(answer)
+            visual.check(plan, prep['duration'], windows, prep.get('cuts', []))
+            return plan
+        except ValueError as exc:
+            logging.getLogger(__name__).warning('Visual plan rejected: %s', exc)
+            last = f'\n\nYour previous plan was rejected, fix this and return the whole plan: {str(exc)[:600]}'
+    raise Unavailable('OpenAI did not return a usable edit plan. Try the request again.')
+
+
+def plan_visual(request, prep_dir, prep, windows, history):
+    """A new edit of a clip with no speech: OpenAI watches the contact sheets and the motion and picks the moments."""
+    if choice() == 'rules': return output(visual.auto(prep, windows), []), 'rules'
+    prompt = f"Request: {request}\n\nEarlier chat:\n{json.dumps(history[-8:])}\n\n{_footage(prep, windows)}"
+    return output(_watch(prompt, prep_dir, prep, windows), []), label('openai')

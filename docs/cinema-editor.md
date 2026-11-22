@@ -14,7 +14,7 @@ on any particular model, and a saved edit can be reopened, changed and exported 
 AI chat "Edit this video"
   -> backend/editor/chat.py            routes edit requests to the job runner
   -> backend/editor/ai_edit/jobs.py    _run_cinema(): one background job per clip
-       1. prep.py                      word timings (whisper-cli, or faster-whisper), camera cuts, contact sheets (cached per clip)
+       1. prep.py                      word timings (Deepgram), camera cuts, contact sheets (cached per clip)
        2. cinema/planner.py            asks the configured planner for a CinemaPlan      <- the only AI step
             cinema/prompts/director.md   what the planner is told
             cinema/plan.py               the plan's schema, its checks, and the rule-based director (no AI)

@@ -2,7 +2,8 @@
 
 Every feature that needs a transcript (the clip agent, the website's speech/visual search, caption
 styles and the Trends tab) calls `transcribe_media()`. It accepts any audio or video file, extracts
-its own small mono MP3, sends it to Deepgram and returns sentence-level segments:
+its own small mono MP3, sends it to Deepgram and returns sentence-level segments
+(`transcribe_words()` returns per-word times for the AI Editor instead):
 
     [{"start": 0.0, "end": 3.2, "text": "Welcome back.", "speaker": 0}, ...]
 
@@ -77,6 +78,7 @@ def deepgram_request(
     api_key: str,
     client: httpx.Client | None = None,
     info: dict[str, Any] | None = None,
+    extra_params: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """POST the audio to Deepgram and return the parsed JSON response.
 
@@ -87,6 +89,7 @@ def deepgram_request(
         "model": DEEPGRAM_MODEL,
         "smart_format": "true",
         "punctuate": "true",
+        **(extra_params or {}),
     }
     headers = {"Authorization": f"Token {api_key}", "Content-Type": "audio/mpeg"}
     audio_bytes = audio_path.read_bytes()  # ~20 MB/hour; plain bytes keep a Content-Length
@@ -224,3 +227,30 @@ def transcribe_media(
         info["cost_usd"] = minutes * DEEPGRAM_USD_PER_MINUTE
     emit("Building transcript segments")
     return segments_from_deepgram(response)
+
+
+def transcribe_words(media_path: Path, filler_words: bool = True) -> list[dict[str, Any]]:
+    """Word-level transcript for the AI Editor: [{"w": "Hello", "s": 0.12, "e": 0.48}, ...] in seconds.
+
+    `filler_words` keeps "um"/"uh" in the transcript so the editor can cut them.
+    A file with no audio track returns []. Raises TranscriptionError when Deepgram is unavailable.
+    """
+    media_path = Path(media_path)
+    if not has_audio_stream(media_path):
+        return []
+    api_key = os.environ.get("DEEPGRAM_API_KEY", "").strip()
+    if not api_key:
+        raise TranscriptionError("DEEPGRAM_API_KEY is not set. Add it to .env and restart the server.")
+    with tempfile.TemporaryDirectory(prefix="stt_") as scratch:
+        audio_path = extract_audio(media_path, Path(scratch))
+        response = deepgram_request(audio_path, api_key, extra_params={"filler_words": "true"} if filler_words else None)
+    try:
+        words = response["results"]["channels"][0]["alternatives"][0].get("words", [])
+    except (KeyError, IndexError, TypeError):
+        return []
+    out = []
+    for word in words:
+        text = (word.get("punctuated_word") or word.get("word") or "").strip()
+        if text and word.get("start") is not None and word.get("end") is not None:
+            out.append({"w": text, "s": float(word["start"]), "e": float(word["end"])})
+    return out

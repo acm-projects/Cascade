@@ -69,30 +69,34 @@ class Transcribe(unittest.TestCase):
         self.assertAlmostEqual(seen['seconds'], 2, delta=.1)   # 16 kHz mono from the video's own audio
         self.assertEqual(words, [{'word': 'Hello', 'start': .1, 'end': .5}, {'word': 'there.', 'start': .5, 'end': 1.0}])
 
-    def test_falls_back_to_faster_whisper_and_caches_until_the_video_changes(self):
-        with mock.patch.object(prep, '_transcribe', return_value=None), \
-             mock.patch.object(prep, '_faster_whisper', return_value=[{'w': 'hi', 's': 0, 'e': .4}]) as fw:
+    def test_caches_until_the_video_changes(self):
+        with mock.patch.object(prep, '_transcribe', return_value=[{'w': 'hi', 's': 0, 'e': .4}]) as dg:
             first = asr.transcribe(self.video, self.folder/'work')
             again = asr.transcribe(self.video, self.folder/'work')
         self.assertEqual(first, again)
-        self.assertEqual(fw.call_count, 1)
+        self.assertEqual(dg.call_count, 1)
 
     def test_no_transcriber_is_a_clear_error(self):
-        with mock.patch.object(prep, '_transcribe', return_value=None), mock.patch.object(prep, '_faster_whisper', side_effect=OSError('no download')), \
-                mock.patch.object(asr, 'parakeet', return_value=None):
+        with mock.patch.object(prep, '_transcribe', return_value=None):
             with self.assertRaises(asr.TranscriptionUnavailable):
                 asr.transcribe(self.video, self.folder/'work')
 
 
-class Engines(unittest.TestCase):
-    def test_order_and_override(self):
-        self.assertEqual([name for name, _ in asr._engines()], ['whisper-cli', 'faster-whisper', 'parakeet'])
-        with mock.patch.dict('os.environ', {'CASCADE_TRANSCRIBER': 'parakeet'}):
-            self.assertEqual([name for name, _ in asr._engines()], ['parakeet'])
+class DeepgramWords(unittest.TestCase):
+    def test_without_a_deepgram_key_prep_falls_back(self):
+        from backend.cascade_stt import TranscriptionError
+        with mock.patch('backend.cascade_stt.transcribe_words', side_effect=TranscriptionError('no key')):
+            self.assertIsNone(prep._transcribe('voice.wav', None, [], None))
 
-    def test_parakeet_without_its_model_is_skipped(self):
-        with mock.patch.object(asr, 'parakeet_model', return_value=None):
-            self.assertIsNone(asr.parakeet('missing.wav'))
+    def test_word_times_are_snapped_and_never_overlap(self):
+        import numpy as np
+        db = np.full(300, -60.); db[50:250] = -20.   # voice from 0.5 s to 2.5 s
+        words = [{'w': 'Hello', 's': .52, 'e': 1.2}, {'w': 'there.', 's': 1.1, 'e': 2.4}]
+        with mock.patch('backend.cascade_stt.transcribe_words', return_value=words):
+            out = prep._transcribe('voice.wav', None, db, None)
+        self.assertEqual([w['w'] for w in out], ['Hello', 'there.'])
+        self.assertLessEqual(out[0]['e'], out[1]['s'] + .04)
+        self.assertLess(out[0]['s'], out[1]['s'])
 
 
 if __name__ == '__main__':

@@ -46,3 +46,7 @@ backend/editor/ai_edit/beats/examples/source/
 backend/editor/ai_edit/beats/output/
 remotion/node_modules/
 remotion/build/
+
+# Music Library: songs and their measurements stay local
+music_library/*
+!music_library/README.md

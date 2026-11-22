@@ -7,7 +7,7 @@ export function retryClipBackup(token, projectId, jobId) {
 
 // AI Studio clip generation: backend/project_actions.py and app1.py (/upload, /jobs)
 // Generating is an async job: the backend answers 202 { job_id } right away,
-// then you poll getJob(job_id) (see hooks/useJobPolling.js) until state is "done" or "error".
+// then you poll getJob(job_id) until state is "done" or "error".
 
 /**
  * POST /upload   (multipart form) - the first generation for a video file.

@@ -65,6 +65,6 @@ disposable source: keep `.env`, `video_jobs/`, input media, and model caches.
 
 See the [detailed map](docs/codebase-layout.md), [tests](tests/README.md),
 [setup](docs/setup.md), [database](docs/database/README.md),
-[CI](docs/ci.md), and [cleanup record](docs/codebase-organization.md).
+and [CI](docs/ci.md).
 Feature guides cover [editing](docs/editor.md), [B-roll](docs/broll.md),
 [Auto Reframe](docs/auto-reframe.md), and [generation performance](docs/generation-performance.md).

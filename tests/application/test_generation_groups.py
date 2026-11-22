@@ -12,7 +12,6 @@ from backend.core import jobs as core_jobs
 from backend.core import auth
 from backend.services import projects_store
 from backend.generation import followup_windows
-from backend.openai_scene import Proposal, choose_clips
 from backend.video_search.selection import select_matches
 
 
@@ -142,11 +141,6 @@ class GenerationGroupsTests(unittest.TestCase):
         self.assertEqual(len(result),2)
         self.assertEqual(followup_windows(selected,{'start':0,'end':100},'Expand this clip',100,30,5),[])
         self.assertEqual(followup_windows(selected,parent,'Find related moments',100,30,5),selected)
-
-    def test_selection_supports_five_and_returns_only_qualifying_matches(self):
-        proposal=Proposal(candidates=[{'start':i*20,'end':i*20+10,'score':8,'title':'Match','explanation':'Supported'} for i in range(7)],insufficient_material_reason='')
-        self.assertEqual(len(choose_clips(proposal,150,30,5)),5)
-        self.assertEqual(len(choose_clips(proposal,150,30,12)),7)
 
     def test_history_is_saved_before_queue_and_missing_configuration_fails_early(self):
         seen=[]

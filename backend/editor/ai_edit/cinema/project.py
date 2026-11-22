@@ -26,13 +26,16 @@ def save(folder, plan, report=None, planner='', request='', source=None):
 
 
 def load(folder):
-    """The CinemaPlan saved in `folder`, or None when it holds no Cinema project."""
+    """The CinemaPlan (or VisualPlan) saved in `folder`, or None when it holds no Cinema project."""
     folder = Path(folder)
     for name, key in (('project.json', 'plan'), ('plan.json', None)):
         try:
             data = json.loads((folder/name).read_text())
             data = data[key] if key else data
             if 'story' in data: return CinemaPlan.model_validate(data)
+            if data.get('kind') == 'visual':
+                from .visual import VisualPlan
+                return VisualPlan.model_validate(data)
         except (OSError, ValueError, KeyError):
             continue
     return None

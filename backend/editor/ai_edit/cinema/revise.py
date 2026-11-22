@@ -87,12 +87,15 @@ def apply(note, plan):
         clause = clause.replace('\x00', ',').replace('\x01', ' and ').strip()
         if len(clause) < 3: continue
         low, hit = clause.lower(), None
-        for pattern, change in TEXT_RULES:
-            m = re.search(pattern, clause, re.I)
-            if m: hit = change(new, m.group(1).strip()); break
-        if hit is None:
-            for pattern, change in RULES:
-                if re.search(pattern, low):
-                    hit = change(new); break
+        try:
+            for pattern, change in TEXT_RULES:
+                m = re.search(pattern, clause, re.I)
+                if m: hit = change(new, m.group(1).strip()); break
+            if hit is None:
+                for pattern, change in RULES:
+                    if re.search(pattern, low):
+                        hit = change(new); break
+        except AttributeError:   # a rule for spoken edits on a visual edit (no story, opener or b-roll): the planner decides
+            hit = None
         (done if hit else left).append(hit or clause)
     return new, done, left

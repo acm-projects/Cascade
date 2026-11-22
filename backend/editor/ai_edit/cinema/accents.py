@@ -20,6 +20,35 @@ def apply(frame, previous, kind, phase):
         out[:, :, 0] = cv2.warpAffine(frame[:, :, 0], np.float32([[1, 0, shift], [0, 1, 0]]), (w, h), borderMode=cv2.BORDER_REFLECT_101)
         out[:, :, 2] = cv2.warpAffine(frame[:, :, 2], np.float32([[1, 0, -shift], [0, 1, 0]]), (w, h), borderMode=cv2.BORDER_REFLECT_101)
         return out
+    if kind == 'flash':   # a white blow-out that clears to the new shot
+        k = (1-p)**2
+        return np.clip(frame.astype(np.float32)*(1-k)+255*k, 0, 255).astype(np.uint8)
+    if kind == 'invert':  # a negative frame that snaps back
+        return (255-frame) if p < .45 else frame
+    if kind == 'glitch':  # sliced, shifted bands with split colour
+        out = frame.copy()
+        rng = np.random.default_rng(int(p*30))
+        strength = (1-p)**1.5
+        for _ in range(9):
+            y0 = int(rng.integers(0, h)); band = int(rng.integers(h//60+1, h//12+2))
+            out[y0:y0+band] = np.roll(frame[y0:y0+band], int(rng.normal(0, w*.08*strength)), 1)
+        shift = max(1, int(w*.03*strength))
+        out[:, :, 0] = np.roll(out[:, :, 0], shift, 1); out[:, :, 2] = np.roll(out[:, :, 2], -shift, 1)
+        return out
+    if kind == 'leak':    # a warm light leak sweeping across
+        xs = np.linspace(-1, 1, w, dtype=np.float32)[None, :, None]
+        centre = -1.2+2.4*p
+        glow = np.exp(-((xs-centre)/.45)**2)*(1-p)*.85
+        warm = np.array([255, 150, 60], np.float32)
+        return np.clip(frame*(1-glow*.35)+warm*glow, 0, 255).astype(np.uint8)
+    if kind == 'zoom':    # a radial zoom blur into the new shot
+        k = (1-p)**2
+        out = frame.astype(np.float32)
+        for s in (1.04, 1.08, 1.12):
+            z = 1+(s-1)*k*2.5
+            M = cv2.getRotationMatrix2D((w/2, h/2), 0, z)
+            out += cv2.warpAffine(frame, M, (w, h), borderMode=cv2.BORDER_REFLECT_101)
+        return (out/4).astype(np.uint8)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     if kind == 'ink':
         # Multi-lobed irregular edge, smooth within a few pixels; no copied ink texture.

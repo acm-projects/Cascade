@@ -1,4 +1,4 @@
-Current UI behavior and verification are described in [Editor and Exports delivery update](editor-delivery.md). The implementation history below includes earlier controls that have since been replaced.
+The implementation history below includes earlier controls that have since been replaced.
 
 All HTML view markup now lives in `frontend/legacy/web/index.html`; names such as `editor_C.html` below refer to preserved public routes. CSS and JavaScript files remain separate.
 

@@ -36,7 +36,7 @@ def _speaker_models(path,mtime,size,requested_device):
         import torch
         import python_speech_features
     except ImportError as exc:
-        raise ValueError('Auto Reframe needs local dependencies. Run: python3 -m pip install -r requirements-reframe.txt; then python3 scripts/setup_reframe.py') from exc
+        raise ValueError('Auto Reframe needs local dependencies. Run: python3 -m pip install -r requirements.txt; then python3 scripts/setup_reframe.py') from exc
     folder=model_folder()
     if not all((folder/name).is_file() for name in ['yunet.onnx','light_asd.model']):
         raise ValueError('Auto Reframe models are missing. Run: python3 scripts/setup_reframe.py, then retry.')

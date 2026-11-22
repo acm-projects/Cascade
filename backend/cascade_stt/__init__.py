@@ -6,4 +6,5 @@ from .transcribe import (  # noqa: F401
     TRANSCRIPT_TAG,
     TranscriptionError,
     transcribe_media,
+    transcribe_words,
 )

@@ -342,6 +342,8 @@ class Composer:
             if o.kind in ('quote', 'message'):   # the picture falls back so the words can land
                 k = _ease((t-o.t0)/.4)
                 frame[:] = (frame*(1-.62*k)).astype(np.uint8)
+            elif o.kind == 'black':   # a black opening while the music builds
+                frame[:] = 0
         for o in active:
             if o.kind in ('behind', 'outline', 'soft'):
                 text, tone = o.data['text'], o.data['tone']
@@ -413,6 +415,8 @@ class Composer:
                 else:
                     look.paste(frame, sp, W*.5, H*.64, alpha=p)
                     accents.circle(frame, t-o.t0, look.TONES[o.data['tone']])
+        for o in active:
+            if o.kind == 'lyric': self._lyric(frame, t, o)
         if self.captions: self.captions.draw(frame, t, mute)
         for o in active:
             if o.kind != 'accent': continue
@@ -423,6 +427,45 @@ class Composer:
             frame = accents.apply(frame, self.accent_previous[key], o.data['kind'], phase)
         self.accent_previous = {k: v for k, v in self.accent_previous.items() if t < k[1]}
         return frame
+
+    LYRIC_COLOURS = {'bold': (246, 244, 238), 'serif': (246, 244, 238), 'glitch': (236, 40, 44), 'typewriter': (245, 205, 70)}
+
+    def _lyric(self, frame, t, o):
+        """One sung line, building word by word as it is sung (typewriter: letter by letter)."""
+        W, H, u = look.W, look.H, look.unit()
+        style, words = o.data.get('style', 'bold'), o.data['words']
+        shown = [w for w, at in words if at <= t]
+        if not shown: return
+        text = ' '.join(shown)
+        if style == 'typewriter':   # type the newest word out over its first 0.25 s
+            last_at = max(at for _, at in words if at <= t)
+            k = min(1., (t-last_at)/.25)
+            text = ' '.join(shown[:-1]+[shown[-1][:max(1, int(round(len(shown[-1])*k)))]])
+        full = ' '.join(w for w, _ in words)
+        upper = style in ('bold', 'glitch')
+        if upper: text, full = text.upper(), full.upper()
+        colour = self.LYRIC_COLOURS.get(style, look.WHITE)
+        if style in ('bold', 'glitch'):
+            f = look.fit_heavy(full, W*.86, int(min(H*.11, W*.2)), int(40*u))
+        else:
+            size = int(min(H*.075, W*.13))
+            f = (look.ITALIC if style == 'serif' else look.SERIF)(size)
+            while size > 30*u and f.getlength(full) > W*.86:
+                size = int(size*.9); f = (look.ITALIC if style == 'serif' else look.SERIF)(size)
+        sp = self._sprite(('lyric', style, text, W), lambda: look.text_sprite(text, f, fill=colour, shadow=.75))
+        fade = min(1., (t-o.t0)/.12)*min(1., max(0., (o.t1-t)/.18))
+        newest = max(at for _, at in words if at <= t)
+        pop = 1+.08*max(0., 1-(t-newest)/.14) if style != 'typewriter' else 1.
+        y = H*(.5 if style in ('bold', 'glitch') else .62)
+        if style == 'glitch' and t-newest < .16:
+            layer = np.zeros_like(frame)
+            look.paste(layer, sp, W/2, y, alpha=fade, scale=pop)
+            shift = int(10*u)
+            frame[..., 0] = np.maximum(frame[..., 0], np.roll(layer[..., 0], shift, 1))
+            frame[..., 1] = np.maximum(frame[..., 1], layer[..., 1])
+            frame[..., 2] = np.maximum(frame[..., 2], np.roll(layer[..., 2], -shift, 1))
+        else:
+            look.paste(frame, sp, W/2, y, alpha=fade, scale=pop)
 
     def _words(self, frame, t, o):
         """The payoff (quote) or the closing message: centred, word by word, each word as it is spoken."""

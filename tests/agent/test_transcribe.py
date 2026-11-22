@@ -257,6 +257,28 @@ def test_there_is_no_local_whisper_path_left():
     assert not hasattr(transcribe, "_transcribe_whisper") and not hasattr(transcribe, "provider")
     source = Path(transcribe.__file__).read_text(encoding="utf-8").lower()
     assert "import whisper" not in source and "faster_whisper" not in source
+    backend = Path(transcribe.__file__).resolve().parents[1]
+    for path in backend.rglob("*.py"):
+        if ".cache" in path.parts or "reference" in path.parts:
+            continue
+        assert "faster_whisper" not in path.read_text(encoding="utf-8"), path
+
+
+def test_transcribe_words_returns_deepgram_word_times(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "K")
+    monkeypatch.setattr(transcribe, "has_audio_stream", lambda path: True)
+    monkeypatch.setattr(transcribe, "extract_audio", lambda path, folder: audio_file(tmp_path))
+    seen = {}
+    def fake_request(audio, key, client=None, info=None, extra_params=None):
+        seen["params"] = extra_params
+        return {"results": {"channels": [{"alternatives": [{"words": [
+            {"word": "um", "punctuated_word": "Um,", "start": 0.1, "end": 0.3},
+            {"word": "hi", "start": 0.4, "end": 0.7},
+        ]}]}]}}
+    monkeypatch.setattr(transcribe, "deepgram_request", fake_request)
+    assert transcribe.transcribe_words(tmp_path / "clip.mp4") == [
+        {"w": "Um,", "s": 0.1, "e": 0.3}, {"w": "hi", "s": 0.4, "e": 0.7}]
+    assert seen["params"] == {"filler_words": "true"}
 
 
 def test_transcript_cache_key_carries_the_model(tmp_path):

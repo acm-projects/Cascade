@@ -1,0 +1,304 @@
+"""Visual edits: Cinema for clips where nobody speaks (sport, travel, b-roll, pets, music-only footage).
+
+The planner watches the contact sheets and the per-second motion and returns a VisualPlan: which moments of
+the source to play, in what order, at what speed, with which zooms, effects and words. Everything is
+addressed by source second, not by transcript word. Rendering reuses the Cinema picture and sound code
+(render.py, score.py) and, like the rest of the engine, calls no AI model."""
+import logging
+import time
+from pathlib import Path
+from typing import Literal
+
+import numpy as np
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from . import look, render, score, settings, stamp
+from .plan import Settings, Tone
+from .render import Overlay, Shot
+
+LOG = logging.getLogger(__name__)
+MESSAGE = settings.get('pacing.message_seconds', 3.4)
+ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.)}
+SHORTEST = .5   # seconds on screen
+
+
+class VisualShot(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+    start: float = Field(ge=0)                     # source seconds
+    end: float = Field(gt=0)
+    speed: float = Field(default=1., ge=.25, le=2.)   # .5 = half-speed slow motion, 2 = double speed
+    zoom: Literal['none', 'push', 'punch', 'pull'] = 'none'
+    focus_x: float = Field(default=.5, ge=0, le=1)   # where the subject is, left (0) to right (1), for vertical crops
+    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom'] | None = None   # a transition as this shot lands
+    text: str = Field(default='', max_length=16)       # one big word over the start of this shot
+    text_style: Literal['slam', 'perspective'] = 'perspective'
+    tone: Tone | None = None
+
+
+class VisualPlan(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+    kind: Literal['visual'] = 'visual'
+    reply: str = Field(default='', max_length=1500)
+    title: str = Field(default='', max_length=60)
+    shots: list[VisualShot] = Field(min_length=1, max_length=40)
+    mood: Literal['awakening', 'wonder', 'tension', 'warm'] = 'awakening'
+    grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm'] = 'cinema'
+    sound: Literal['both', 'score', 'original'] = 'both'   # music over the clip's own sound, music only, or only the clip's sound
+    song: str = Field(default='', max_length=40)          # a Music Library song id; '' = Cascade's composed score
+    song_section: int = Field(default=0, ge=0, le=5)       # which of that song's candidate sections plays
+    lyrics: Literal['off', 'bold', 'serif', 'glitch', 'typewriter'] = 'off'   # the song's sung words on screen, as they are sung
+    intro: Literal['none', 'black'] = 'none'               # 'black': open on black while the music builds, first shot on the beat
+    settings: Settings = Field(default_factory=Settings)
+    end_line: str = Field(default='', max_length=90)
+
+    @model_validator(mode='after')
+    def _tidy(self):
+        self.end_line = self.end_line.strip().rstrip('.')
+        self.settings.captions = False   # nothing is said, so there is nothing to caption
+        return self
+
+
+def check(plan, duration, windows=None, cuts=()):
+    """Raises ValueError naming what is wrong, in words a planner can fix. A shot edge a few frames from a
+    camera cut moves onto the cut, so no shot opens or closes on a flash of the neighbouring camera shot."""
+    for s in plan.shots:
+        for c in cuts:
+            if s.start < c < s.start+.35 and s.end-c >= .3: s.start = c
+            if s.end-.35 < c < s.end and c-s.start >= .3: s.end = c
+    for k, s in enumerate(plan.shots):
+        if s.end > duration+.05: raise ValueError(f'shots[{k}]: ends at {s.end:.1f} s but the clip is {duration:.1f} s long')
+        if s.end-s.start < .3: raise ValueError(f'shots[{k}]: needs end at least 0.3 s after start')
+        if windows and not any(s.start >= a-.05 and s.end <= b+.05 for a, b in windows):
+            raise ValueError(f'shots[{k}]: {s.start:.1f}-{s.end:.1f} s is outside the usable ranges {windows}')
+    for s in plan.shots: s.end = min(s.end, duration)
+
+
+def length(plan):
+    return sum((s.end-s.start)/s.speed for s in plan.shots)
+
+
+def fit(plan, seconds, beat=None, grid=None, lead=0.):
+    """Make the edit play in at most `seconds` (a black intro of `lead` seconds included): later shots go, the last
+    one is trimmed. Every cut lands on `grid` (edit times, e.g. a song's beats and half-beats) or on the half-beat
+    grid of `beat`."""
+    budget = seconds-lead
+    shots, used = [], 0.
+    for s in plan.shots:
+        on_screen = (s.end-s.start)/s.speed
+        if used+on_screen > budget:
+            room = budget-used
+            if room >= SHORTEST: shots.append(s.model_copy(update={'end': s.start+room*s.speed})); used += room
+            break
+        shots.append(s); used += on_screen
+    if grid is None and beat:
+        grid = [k*beat/2 for k in range(int(seconds/(beat/2))+2)]
+    if grid:
+        points = sorted(g for g in grid if lead+.3 <= g <= seconds+1e-6)
+        t, snapped = lead, []
+        for s in shots:
+            target = t+(s.end-s.start)/s.speed
+            options = [g for g in points if g-t >= .33]
+            if not options: break
+            end = min(options, key=lambda g: abs(g-target))
+            snapped.append(s.model_copy(update={'end': s.start+(end-t)*s.speed})); t = end
+        shots = _on_the_beat(snapped, points, lead) if snapped else shots
+    plan.shots = shots
+    return length(plan)+lead
+
+
+LONGEST = 1.8   # seconds a music edit holds one shot before cutting again on the beat
+
+
+def _on_the_beat(shots, points, lead):
+    """Long holds become jump cuts on the beat: the same moment carries on, the framing punches in and out,
+    so the picture moves with the music (effects and words stay on the first piece)."""
+    out, t = [], lead
+    for s in shots:
+        end = t+(s.end-s.start)/s.speed
+        if end-t <= LONGEST+.05:
+            out.append(s); t = end; continue
+        cuts, last = [], t
+        for g in points:
+            if last+.85 <= g <= end-.6: cuts.append(g); last = g
+        bounds = [t]+cuts+[end]
+        for k, (a, b) in enumerate(zip(bounds, bounds[1:])):
+            piece = {'start': s.start+(a-t)*s.speed, 'end': s.start+(b-t)*s.speed}
+            if k:
+                piece.update(effect=None, text='', zoom='punch' if k % 2 else ('push' if s.zoom == 'none' else s.zoom))
+            out.append(s.model_copy(update=piece))
+        t = end
+    return out
+
+
+def song_timing(plan, seconds):
+    """(song, where it starts, the cut grid in edit seconds, the black intro length) for a plan with a song, else None."""
+    if not plan.song: return None
+    from . import music
+    song = music.find(plan.song)
+    if not song: return None
+    options = music.sections(song, seconds)
+    start = options[min(plan.song_section, len(options)-1)]
+    beats = [b-start for b in song.get('beats', []) if start <= b <= start+seconds+2]
+    grid = sorted(set(beats+[(a+b)/2 for a, b in zip(beats, beats[1:])]))
+    lead = 0.
+    if plan.intro == 'black':
+        drop = song.get('drop')
+        if drop is not None and 1. <= drop-start <= 5.: lead = drop-start          # black until the drop
+        else: lead = next((b for b in beats if b >= 1.2), 1.5)                     # or the first beat after a moment
+    return song, start, grid, lead
+
+
+def auto(prep, windows=None, seconds=15.):
+    """The rule-based visual edit: the moments with the most movement, in story (source) order."""
+    motion = prep.get('motion') or [1]*max(1, int(prep['duration']))
+    duration = prep['duration']
+    inside = lambda t: not windows or any(a <= t and t+1.5 <= b for a, b in windows)
+    starts = [float(t) for t in range(0, max(1, int(duration-1.5))+1) if inside(t)] or [0.]
+    ranked = sorted(starts, key=lambda t: -sum(motion[int(t):int(t)+2]))
+    picked = []
+    for t in ranked:
+        if all(abs(t-p) >= 2 for p in picked): picked.append(t)
+        if len(picked)*1.6 >= seconds: break
+    shots = [VisualShot(start=t, end=min(duration, t+1.6), zoom='push' if n % 2 else 'none') for n, t in enumerate(sorted(picked))]
+    return VisualPlan(title='', shots=shots, reply='Nobody speaks in this clip, so I cut together its liveliest moments.')
+
+
+def lyric_lines(song, start, end, style):
+    """The song's sung words from `start` as on-screen lines (edit times), each building word by word."""
+    from . import music
+    words = [w for w in music.words_between(song, start, start+end) if w['s']-start < end-.2]
+    most = 2 if style in ('bold', 'glitch') else 5   # big styles show two words at a time, so they stay big
+    lines, run = [], []
+    for w in words:
+        if run and (w['s']-run[-1]['e'] > .55 or len(run) >= most or run[-1]['w'].rstrip().endswith(('.', ',', '?', '!'))):
+            lines.append(run); run = []
+        run.append(w)
+    if run: lines.append(run)
+    out = []
+    for n, line in enumerate(lines):
+        t0 = line[0]['s']-start-.04
+        t1 = min(end, line[-1]['e']-start+.45, (lines[n+1][0]['s']-start-.06) if n+1 < len(lines) else end)
+        if t1-t0 > .2:
+            out.append(Overlay(t0, t1, 'lyric', {'style': style, 'words': [(w['w'].strip(',.'), w['s']-start) for w in line]}))
+    return out
+
+
+def _natural(samples, sr, shots, total):
+    """The clip's own sound under each shot (muted under slow or fast motion), with short fades so cuts do not click."""
+    out = np.zeros((int(total*sr), 2), np.float32)
+    fade = int(.012*sr)
+    for s in shots:
+        if s.kind != 'aroll' or abs(s.rate-1) > .01: continue
+        a, n = int(s.src*sr), int((s.t1-s.t0)*sr)
+        piece = samples[a:a+n].copy()
+        if not len(piece): continue
+        ramp = np.linspace(0, 1, min(fade, len(piece)//2), dtype=np.float32)[:, None]
+        if len(ramp): piece[:len(ramp)] *= ramp; piece[-len(ramp):] *= ramp[::-1]
+        i = int(s.t0*sr)
+        out[i:i+len(piece)] += piece[:len(out)-i]
+    return out
+
+
+def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', lines=1080, faces=True):
+    """Render a VisualPlan over `source` to `out` (mp4). No AI model is called."""
+    from .engine import _audio
+    clock, timings = time.time(), {}
+    def lap(name):
+        nonlocal clock
+        timings[name] = round(time.time()-clock, 1); clock = time.time()
+    options = plan.settings
+    ratio = options.ratio or ratio or 'original'
+    progress = progress or (lambda a, s: None)
+    out = Path(out); out.parent.mkdir(parents=True, exist_ok=True)
+    info = render.probe(source)
+    look.configure(*render.size_for(info['width'], info['height'], ratio, lines))
+    W, H = look.W, look.H
+
+    # --- 1. the shots, back to back
+    progress(.05, 'Lining up the best moments…')
+    timing = song_timing(plan, settings.get('output.target_seconds', 15) or 15)
+    lead = timing[3] if timing else 0.
+    shots, overlays, events, t = [], [], [], lead
+    if lead:   # the opening black: the music plays, the picture waits for the beat
+        first = plan.shots[0]
+        shots.append(Shot(0, lead, 'aroll', str(source), first.start, cx=first.focus_x, grade=plan.grade))
+        overlays.append(Overlay(0, lead, 'black'))
+    for n, v in enumerate(plan.shots):
+        dur = (v.end-v.start)/v.speed
+        z0, z1 = ZOOMS[v.zoom]
+        cx = v.focus_x
+        face = render.find_face(source, v.start+(v.end-v.start)/2, ffmpeg) if faces and W < H else None
+        if face: cx = face[0]
+        shots.append(Shot(t, t+dur, 'aroll', str(source), v.start, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1, grade=plan.grade))
+        tone = v.tone or look.tone_of(v.text, None) or 'calm'
+        if v.effect and n:
+            overlays.append(Overlay(t, t+.32, 'accent', {'kind': v.effect}))
+            events.append((t, 'broll', 'water' if v.effect == 'ripple' else 'calm'))
+        if v.text.strip():
+            word = v.text.strip().upper()
+            if v.text_style == 'slam':
+                overlays.append(Overlay(t, min(t+dur, t+.95), 'slam', {'text': word, 'tone': tone}))
+                events.append((t, 'slam', tone))
+            else:
+                overlays.append(Overlay(t, min(t+dur, t+1.6), 'perspective', {'text': word, 'tone': tone}))
+                events.append((t, 'moment', tone))
+        t += dur
+    main_end = t
+    if plan.end_line:   # the closing message over a held, softened last moment
+        last = shots[-1]
+        shots.append(Shot(t, t+MESSAGE, 'aroll', str(source), last.src+(last.t1-last.t0)*last.rate, rate=min(1., last.rate), cx=last.cx,
+                          zoom0=1.08, zoom1=1.14, grade='mono', look='mono'))
+        parts = plan.end_line.split()
+        step = min(.32, 1.6/max(1, len(parts)))
+        overlays.append(Overlay(t+.15, t+MESSAGE, 'message', {'words': [(w, t+.35+k*step, None) for k, w in enumerate(parts)]}))
+        events.append((t+.3, 'boom', 'calm'))
+        main_end = t+MESSAGE
+    if plan.title:
+        overlays.append(Overlay(.15, min(2.2, main_end), 'title', {'text': plan.title}))
+    if timing and plan.lyrics != 'off':
+        overlays += lyric_lines(timing[0], timing[1], main_end, plan.lyrics)
+    lap('shots')
+
+    # --- 2. sound: the score, the clip's own sound, or both
+    progress(.15, 'Composing the score…')
+    total = main_end+(stamp.DURATION if options.stamp else 0)
+    samples = _audio(source, score.SR, ffmpeg) if info.get('has_audio', True) else np.zeros((0, 2), np.float32)
+    natural = _natural(samples, score.SR, shots, total) if plan.sound != 'score' and len(samples) else np.zeros((int(total*score.SR), 2), np.float32)
+    if timing:   # the song's chosen section, with a short fade in and a longer fade out
+        from . import music as library
+        music = library.samples(timing[0]['file'], score.SR, timing[1], main_end+.1)
+        n = len(music)
+        if n:
+            music[:int(.08*score.SR)] *= np.linspace(0, 1, min(n, int(.08*score.SR)), dtype=np.float32)[:, None]
+            tail = min(n, int(.9*score.SR)); music[n-tail:] *= np.linspace(1, 0, tail, dtype=np.float32)[:, None]
+        events = [e for e in events if e[1] == 'broll']   # a real song needs only the whooshes, not the score's hits
+    else:
+        music = score.compose(main_end, {'silence': None, 'end': main_end, 'hook_end': min(3., main_end)}, plan.mood)
+    if plan.sound == 'original' or not options.music: music = music*0
+    fx = score.sound_design(total, events)
+    wav = out.with_suffix('.mix.wav')
+    under = (10. if timing else 2.)+options.music_db if plan.sound == 'both' else settings.get('mix.music_under_voice_db', -17.)+options.music_db
+    lufs, peak = score.mix(natural, music, fx, 0, wav, ffmpeg, music_under=under,
+                           stamp=score.stamp_audio(stamp.DURATION) if options.stamp else None, stamp_at=main_end)
+    lap('sound')
+
+    # --- 3. picture
+    progress(.25, 'Composing the picture…')
+    composer = render.Composer(shots, overlays, None, main_end, None, ffmpeg, lambda a, s: progress(.25+.7*a, s))
+    def all_frames():
+        yield from composer.frames()
+        last = composer.last if composer.last is not None else np.zeros((H, W, 3), np.uint8)
+        if options.stamp: yield from stamp.frames(last)
+    render.encode(all_frames(), wav, out, ffmpeg)
+    wav.unlink(missing_ok=True)
+    lap('picture')
+    progress(1, 'Done')
+    timeline = {
+        'size': [W, H], 'fps': look.FPS, 'ends': round(total, 3),
+        'shots': [{'from': round(s.t0, 3), 'to': round(s.t1, 3), 'kind': s.kind, 'file': Path(s.path).name, 'source_from': round(s.src, 3),
+                   'speed': s.rate, 'look': s.look} for s in shots],
+        'overlays': [{'from': round(o.t0, 3), 'to': round(o.t1, 3), 'kind': o.kind, **({'text': o.data['text']} if 'text' in o.data else {})} for o in overlays],
+    }
+    return {'visual': True, 'song': timing[0]['credit'] if timing else None, 'seconds': round(total, 1), 'spoken_seconds': 0, 'pieces': len(plan.shots), 'removed_fillers': 0, 'removed_interjections': 0,
+            'broll': 0, 'broll_share': 0, 'moments': sum(1 for s in plan.shots if s.text.strip()), 'accents': sum(1 for s in plan.shots if s.effect),
+            'visual_family': 'visual', 'lufs': lufs, 'peak': peak, 'cut_out': False, 'size': f'{W}x{H}', 'timings': timings, 'timeline': timeline}

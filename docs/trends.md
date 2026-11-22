@@ -1,10 +1,5 @@
 # Clip Trends and executable research
 
-See [real pipeline verification](live-research-verification.md) for the subsequent
-live YouTube/Deepgram/OpenAI run, discovery fix, stage diagnostics and stronger
-flashy profile. That live run supersedes this document's original mocked-only
-verification limitation.
-
 Implemented locally in the existing `mlk` React editor. No commit, merge, push,
 stash application, secret-file edit, or publishing action is part of this work.
 

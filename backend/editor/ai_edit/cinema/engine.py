@@ -233,7 +233,8 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
     v = speech.render_voice(samples, score.SR, edit)
     i = int(offset*score.SR); voice[i:i+len(v)] = v[:len(voice)-i]
     hook_end = T(question[1], 1) if question and in_story(question[1]) else offset+3
-    music = score.compose(main_end, {'silence': silence, 'end': main_end, 'hook_end': hook_end}, plan.mood)
+    music = song_bed(plan, main_end)
+    if music is None: music = score.compose(main_end, {'silence': silence, 'end': main_end, 'hook_end': hook_end}, plan.mood)
     if not options.music: music = music*0
     if opener_path: events.append((.05, 'moment', 'water'))
     fx = score.sound_design(total, events)
@@ -274,10 +275,28 @@ def make(source, words, plan, out, cuts=(), find_broll=None, progress=None, ffmp
         'music_silence': [round(x, 3) for x in silence] if silence else None,
     }
     broll_seconds = sum(z-a for a, z in placed)
-    return {'seconds': round(total, 1), 'spoken_seconds': round(edit.total, 1), 'pieces': len(edit.pieces),
+    from . import music
+    song = music.find(plan.song) if plan.song else None
+    return {'song': song['credit'] if song else None, 'seconds': round(total, 1), 'spoken_seconds': round(edit.total, 1), 'pieces': len(edit.pieces),
             'removed_fillers': len(removed_fillers & set(range(len(words)))), 'removed_interjections': len(removed_others),
             'broll': len(placed), 'broll_share': round(broll_seconds/max(1, edit.total)*100), 'moments': len(plan.moments), 'accents': len(plan.accents), 'visual_family': plan.visual_family,
             'lufs': lufs, 'peak': peak, 'cut_out': matter is not None, 'size': f'{W}x{H}', 'timings': timings, 'timeline': timeline}
+
+
+def song_bed(plan, length):
+    """The chosen Music Library song under the voice (its chosen section, faded), or None for the composed score."""
+    if not getattr(plan, 'song', ''): return None
+    from . import music
+    song = music.find(plan.song)
+    if not song: return None
+    options = music.sections(song, settings.get('output.target_seconds', 15) or 15)
+    start = options[min(plan.song_section, len(options)-1)]
+    bed = music.samples(song['file'], score.SR, start, length+.1)
+    n = len(bed)
+    if not n: return None
+    bed[:min(n, int(.4*score.SR))] *= np.linspace(0, 1, min(n, int(.4*score.SR)), dtype=np.float32)[:, None]
+    tail = min(n, int(1.2*score.SR)); bed[n-tail:] *= np.linspace(1, 0, tail, dtype=np.float32)[:, None]
+    return bed
 
 
 def kw_tone(word):

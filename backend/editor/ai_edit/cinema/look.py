@@ -176,6 +176,12 @@ GRADES = {
               "curves=master='0/0.03 0.22/0.19 0.5/0.5 0.8/0.81 1/0.96'",
     'mono': "hue=s=0.08,eq=contrast=1.16:brightness=-0.035:gamma=0.95,curves=master='0/0.02 0.3/0.24 0.7/0.72 1/0.93'",
     'night': "eq=contrast=1.1:saturation=0.85:brightness=-0.04,colorbalance=rs=-0.06:bs=0.08:rm=-0.03:bm=0.05",
+    # looks for music edits
+    'vintage': "curves=preset=vintage,eq=saturation=0.78:contrast=1.04:gamma=1.03,colorbalance=rs=0.05:gs=0.02:bs=-0.06,noise=alls=14:allf=t",
+    'bw': "hue=s=0,eq=contrast=1.28:brightness=-0.02,curves=master='0/0 0.25/0.18 0.75/0.82 1/1',noise=alls=6:allf=t",
+    'cold': "eq=contrast=1.12:saturation=0.72:brightness=-0.03,colorbalance=rs=-0.08:gs=-0.02:bs=0.12:rm=-0.05:bm=0.08:rh=-0.03:bh=0.06",
+    'red': "eq=contrast=1.2:saturation=0.9:brightness=-0.05,colorchannelmixer=rr=1.1:rg=0.15:gg=0.55:gb=0.05:bb=0.5:br=0.1",
+    'warm': "eq=contrast=1.05:saturation=1.1:gamma=1.02,colorbalance=rs=0.06:gs=0.02:bs=-0.07:rm=0.05:bm=-0.05:rh=0.04:bh=-0.04",
 }
 
 

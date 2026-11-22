@@ -71,10 +71,15 @@ def wants(body, info):
     return bool(body.state.ai_edit) or bool(getattr(body.state, 'ai_plan', None)) or bool(EDIT_REQUEST.search(body.message))
 
 
+def beats_enabled():
+    """The beats engine (which plans with Claude) runs only when CASCADE_EDIT_ENGINE=beats; otherwise OpenAI plans every edit."""
+    return os.getenv('CASCADE_EDIT_ENGINE', 'cinema').strip().lower() == 'beats'
+
+
 def uses_beats(state):
-    """Beats follow-ups stay on beats; a new edit uses beats only when CASCADE_EDIT_ENGINE=beats (Cinema is the default)."""
-    if getattr(state, 'ai_plan', None): return True
-    return not state.ai_edit and os.getenv('CASCADE_EDIT_ENGINE', 'cinema').strip().lower() == 'beats'
+    """With beats enabled, beats follow-ups stay on beats and a new edit uses beats. Cinema (OpenAI) is the default."""
+    if not beats_enabled(): return False
+    return bool(getattr(state, 'ai_plan', None)) or not state.ai_edit
 
 
 def _reply(state, message, job=None):
@@ -88,6 +93,9 @@ def turn(pid, jid, index, user, clip, body, info, stock, audio_store):
     job = job_status(folder)
     if job and job['status'] in ('queued', 'running'):
         return _reply(body.state, 'Still working on your last request for this clip. I will take the next change as soon as it finishes.', job)
+    if getattr(body.state, 'ai_plan', None) and not beats_enabled():
+        # A leftover beats (Claude) plan: start over with a fresh OpenAI edit instead of continuing it.
+        body.state = body.state.model_copy(update={'ai_plan': None, 'ai_edit': None})
     current = body.state.ai_edit
     plan_ref = getattr(body.state, 'ai_plan', None)
     if plan_ref and GO_BACK.search(body.message):
@@ -184,7 +192,7 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
     """The Cinema engine (cinema/). An AI planner (any model, see cinema/planner.py) or the rule-based director
     decides the plan; the engine renders it. Simple follow-ups change the saved project with no AI at all."""
     from ..storage import media
-    from .cinema import broll, engine, planner, project, revise
+    from .cinema import broll, engine, planner, project, revise, visual
     def finish(status, text, **more):
         job.update(status=status, message=text, finished=time.time(), **more)
         _write(folder/'job.json', job)
@@ -192,13 +200,14 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
         with RENDER_SLOT, media(jid, clip) as source:
             progress(.02, 'Getting the clip ready…')
             prep_dir = folder/'prep'
-            prep = preparation.prepare(source, info.get('cues', []), prep_dir, progress, separate=False)
+            prep = preparation.prepare(source, info.get('cues', []), prep_dir, progress, separate=False, speech_optional=True)
             windows = _windows(state)
+            speechless = not prep['words']   # nobody speaks: a visual edit planned from the frames and the motion
             current = project.load(folder/state.ai_edit.version) if state.ai_edit else None
             notes = []
             if current is None:
                 progress(.3, 'Watching the clip and planning the edit…')
-                plan, who = planner.plan_edit(message, prep_dir, prep, windows, chat)
+                plan, who = (planner.plan_visual if speechless else planner.plan_edit)(message, prep_dir, prep, windows, chat)
                 if who == 'rules' and planner.choice() != 'rules':
                     notes.append("No AI planner was available, so Cascade's built-in director made this cut. Configure OpenAI for a story-led edit.")
             else:
@@ -223,20 +232,26 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
             ratio = getattr(composition, 'ratio', 'original') or 'original'   # the clip's own shape unless the user picked one (Reel = 9:16)
             local = [tools.folder()/'B-roll', tools.folder()/'Raw Footage']
             find = broll.resolver(stock, local)
-            report = engine.make(source, prep['words'], plan, out/'edited.part.mp4', prep['cuts'], find,
-                                 lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio)
+            if isinstance(plan, visual.VisualPlan):
+                report = visual.make(source, plan, out/'edited.part.mp4', lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio)
+            else:
+                report = engine.make(source, prep['words'], plan, out/'edited.part.mp4', prep['cuts'], find,
+                                     lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio)
             (out/'edited.part.mp4').replace(out/'edited.mp4')
             duration = preparation.probe(out/'edited.mp4')['duration']
             report.update(directed=who)
+            if report.get('song'): notes.append(report['song']+' Put this credit in your post caption.')
             project.save(out, plan, dict(report), who, message, {'job': jid, 'clip': index, 'duration': prep['duration'], 'credits': find.credits})
             report.pop('timeline', None)
             _write(out/'report.json', report)
             history = [*versions(folder), {'version': name, 'title': plan.title, 'request': message[:500], 'duration': duration, 'created': time.time()}]
             _write(folder/'versions.json', history)
             text = '\n'.join([(plan.reply if current is None or who not in ('no AI needed',) else '') or f'{plan.title} is ready.', *notes, '',
-                               f"{name} · {report['seconds']} s · {report['size']} · cut {report['removed_fillers']} ums and stumbles"
-                               f"{', '+str(report['removed_interjections'])+' interjections' if report['removed_interjections'] else ''} · "
-                               f"{report['broll']} b-roll shots · {report['lufs']} LUFS · planned by {who}.",
+                               (f"{name} · {report['seconds']} s · {report['size']} · visual edit, {report['pieces']} shots · {report['lufs']} LUFS · planned by {who}."
+                                if report.get('visual') else
+                                f"{name} · {report['seconds']} s · {report['size']} · cut {report['removed_fillers']} ums and stumbles"
+                                f"{', '+str(report['removed_interjections'])+' interjections' if report['removed_interjections'] else ''} · "
+                                f"{report['broll']} b-roll shots · {report['lufs']} LUFS · planned by {who}."),
                                'Ask for any change here.'])[:4000]
             _publish(pid, jid, index, user, state, name, duration, text)
             finish('done', text, progress=1, stage='Done', version=name, duration=duration)

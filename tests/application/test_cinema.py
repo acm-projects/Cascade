@@ -180,17 +180,166 @@ class RenderWithoutAI(unittest.TestCase):
             plan.end_line = 'Keep it wild'
             first = engine.make(tmp/'clip.mp4', w, plan, tmp/'v001'/'edited.mp4', use_matte=False, lines=180)
             project.save(tmp/'v001', plan, dict(first), who, 'edit this video')
-            self.assertEqual(first['size'], '320x180')                       # original shape by default
+            self.assertEqual(first['size'], '180x320')                       # 9:16 (iPhone) by default
+            self.assertFalse(plan.settings.stamp)                            # no Cascade sign-off by default
             self.assertTrue(first['timeline']['dialogue'] and first['timeline']['shots'])
             self.assertEqual(set(first['timings']), {'dialogue', 'framing', 'broll', 'sound', 'picture'})
 
             reopened = project.load(tmp/'v001')                               # a later session, any model or none
-            changed, done, left = revise.apply('make it a reel and remove the music', reopened)
+            changed, done, left = revise.apply('back to original shape and remove the music', reopened)
             self.assertEqual(left, [])
             second = engine.make(tmp/'clip.mp4', w, changed, tmp/'v002'/'edited.mp4', use_matte=False, lines=180)
-            self.assertEqual(second['size'], '180x320')                      # reframed 9:16
+            self.assertEqual(second['size'], '320x180')                      # back to the source shape
             self.assertEqual(second['timeline']['dialogue'], first['timeline']['dialogue'])   # same cut, only the switches moved
             probe = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type,width,height:format=duration', '-of', 'json',
                                                str(tmp/'v002'/'edited.mp4')], capture_output=True, text=True).stdout)
             self.assertEqual({s['codec_type'] for s in probe['streams']}, {'video', 'audio'})
             self.assertAlmostEqual(float(probe['format']['duration']), second['seconds'], delta=.5)
+
+
+class OutputRules(unittest.TestCase):
+    def test_new_edits_are_about_15_seconds_vertical_and_unsigned(self):
+        from backend.editor.ai_edit.cinema import planner
+        from backend.editor.ai_edit.cinema.plan import CinemaPlan
+        words, t = [], 0.
+        for n in range(120):   # 40 s of speech, a sentence every 6 words
+            words.append({'w': f'word{n}' + ('.' if n % 6 == 5 else ''), 's': t, 'e': t+.3}); t += .33
+        plan = CinemaPlan.model_validate({'story': [{'from_word': 0, 'to_word': 59}, {'from_word': 60, 'to_word': 119, 'role': 'payoff'}],
+                                          'broll': [{'from_word': 100, 'to_word': 102, 'query': 'forest aerial'}]})
+        plan = planner.output(plan, words)
+        spoken = sum(words[i]['e']-words[i]['s'] for s in plan.story for i in range(s.from_word, s.to_word+1))
+        self.assertLessEqual(spoken, 14.5)
+        self.assertGreater(spoken, 11)
+        self.assertTrue(words[plan.story[-1].to_word]['w'].endswith('.'))   # ends on a complete sentence
+        self.assertEqual((plan.settings.ratio, plan.settings.stamp), ('9:16', False))
+        self.assertEqual(plan.broll, [])                                    # b-roll on cut lines is gone
+
+
+class VisualEdits(unittest.TestCase):
+    """Clips where nobody speaks: planned from frames and motion, rendered with no AI (rules planner)."""
+
+    def test_fit_keeps_15_seconds_on_the_beat(self):
+        from backend.editor.ai_edit.cinema import visual
+        plan = visual.VisualPlan.model_validate({'shots': [{'start': n*3, 'end': n*3+2.3} for n in range(10)]})
+        beat = 60/70
+        used = visual.fit(plan, 15, beat=beat)
+        self.assertLessEqual(used, 15+1e-6)
+        self.assertGreater(used, 12)
+        edges, t = [], 0.
+        for s in plan.shots:
+            t += (s.end-s.start)/s.speed; edges.append(t)
+        for e in edges: self.assertAlmostEqual(e/(beat/2), round(e/(beat/2)), places=4)   # every cut on the half-beat grid
+
+    def test_shot_edges_move_onto_nearby_camera_cuts(self):
+        from backend.editor.ai_edit.cinema import visual
+        plan = visual.VisualPlan.model_validate({'shots': [{'start': 4.5, 'end': 6.9}, {'start': 1.0, 'end': 4.4}]})
+        visual.check(plan, 10, cuts=[4.53])
+        self.assertEqual((plan.shots[0].start, plan.shots[1].end), (4.53, 4.4))
+        with self.assertRaises(ValueError):
+            visual.check(visual.VisualPlan.model_validate({'shots': [{'start': 8, 'end': 12}]}), 10)
+
+    def test_speechless_clip_edits_end_to_end_without_ai(self):
+        from backend.editor.ai_edit import prep as preparation
+        from backend.editor.ai_edit.cinema import planner, project, revise, visual
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, NO_AI):
+            tmp = Path(tmp)
+            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=30:d=24',
+                            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', str(tmp/'clip.mp4')], check=True)
+            with self.assertRaises(ValueError):   # the older engines still need speech
+                preparation.prepare(tmp/'clip.mp4', [], tmp/'strict', lambda a, s: None, separate=False)
+            prep = preparation.prepare(tmp/'clip.mp4', [], tmp/'prep', lambda a, s: None, separate=False, speech_optional=True)
+            self.assertEqual(prep['words'], [])
+            self.assertEqual(len(prep['motion']), 24)
+            plan, who = planner.plan_visual('edit this clip', tmp/'prep', prep, [[0, 24]], [])
+            self.assertEqual((who, plan.settings.ratio, plan.settings.stamp, plan.settings.captions), ('rules', '9:16', False, False))
+            report = visual.make(tmp/'clip.mp4', plan, tmp/'v001'/'edited.mp4', faces=False, lines=180)
+            self.assertEqual(report['size'], '180x320')
+            self.assertLessEqual(report['seconds'], 15.05)
+            probe = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type:format=duration', '-of', 'json',
+                                               str(tmp/'v001'/'edited.mp4')], capture_output=True, text=True).stdout)
+            self.assertEqual({s['codec_type'] for s in probe['streams']}, {'video', 'audio'})   # a soundtrack even though the clip had none
+            self.assertAlmostEqual(float(probe['format']['duration']), report['seconds'], delta=.5)
+            project.save(tmp/'v001', plan, dict(report), who, 'edit this clip')
+            reopened = project.load(tmp/'v001')
+            self.assertIsInstance(reopened, visual.VisualPlan)
+            changed, done, left = revise.apply('make it square and remove the music, shorter', reopened)
+            self.assertEqual((changed.settings.ratio, changed.settings.music), ('1:1', False))
+            self.assertEqual(left, ['shorter'])   # a spoken-edit rule on a visual edit goes to the planner instead of crashing
+
+
+def _beat_song(path, bpm=128, seconds=30, drop_beat=16):
+    """A test song: a quiet kick, then a loud one from the drop."""
+    sr, beat = 44100, 60/bpm
+    t = np.arange(int(seconds*sr))/sr
+    out = .05*np.sin(2*np.pi*220*t)
+    for k in range(int(seconds/beat)):
+        i, n = int(k*beat*sr), int(.2*sr)
+        tt = np.arange(n)/sr
+        out[i:i+n] += (np.sin(2*np.pi*(55+90*np.exp(-tt*30))*tt)*np.exp(-tt*9)*(1. if k >= drop_beat else .2))[:len(out)-i]
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'f32le', '-ar', str(sr), '-ac', '1', '-i', '-', str(path)],
+                   input=(out/np.abs(out).max()*.9).astype(np.float32).tobytes(), check=True)
+    return drop_beat*beat
+
+
+class MusicLibrary(unittest.TestCase):
+    """Songs in the Music Library: measured offline (no Deepgram, no OpenAI), cut to and played."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)/'music'; self.dir.mkdir()
+        self.drop = _beat_song(self.dir/'Some Artist - Fly High [NCS Release].mp3')
+        lyrics = [{'w': w, 's': 4.5+n*.5, 'e': 4.9+n*.5} for n, w in enumerate('we will fly so high tonight'.split())]
+        self.patches = [patch.dict(os.environ, {'CASCADE_MUSIC_DIR': str(self.dir), **NO_AI}),
+                        patch('backend.editor.ai_edit.cinema.music._lyrics', return_value=lyrics),
+                        patch('backend.editor.ai_edit.cinema.music._mood', return_value={'mood': 'uplifting', 'energy': 'high', 'fits': ['sports'], 'genre': 'edm'})]
+        for p in self.patches: p.start()
+
+    def tearDown(self):
+        for p in self.patches: p.stop()
+        self.tmp.cleanup()
+
+    def test_measures_tempo_drop_and_credit(self):
+        from backend.editor.ai_edit.cinema import music
+        song = music.library()[0]
+        self.assertAlmostEqual(song['bpm'], 128, delta=.3)
+        self.assertAlmostEqual(song['beats'][40], 40*60/128, delta=.05)   # no drift across the song
+        self.assertAlmostEqual(song['drop'], self.drop, delta=.5)
+        self.assertEqual((song['artist'], song['title'], song['ncs']), ('Some Artist', 'Fly High', True))
+        self.assertIn('NoCopyrightSounds', song['credit'])
+        first = music.sections(song)[0]
+        self.assertTrue(self.drop-3 <= first <= self.drop)                # the first section builds into the drop
+        self.assertEqual(music.catalogue()[0]['sections'][0]['section'], 0)
+
+    def test_song_edit_cuts_on_beats_with_lyrics_and_plays_the_song(self):
+        from backend.editor.ai_edit.cinema import music, planner, visual
+        song = music.library()[0]
+        clip = Path(self.tmp.name)/'clip.mp4'
+        subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=30:d=20',
+                        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', str(clip)], check=True)
+        plan = visual.VisualPlan.model_validate({'song': song['id'], 'lyrics': 'glitch', 'intro': 'black', 'grade': 'cold', 'sound': 'score',
+                                                 'shots': [{'start': n*2, 'end': n*2+1.9, 'effect': e} for n, e in
+                                                           enumerate(['flash', 'glitch', 'invert', 'leak', 'zoom', 'whip', None, 'rgb', None])]})
+        plan = planner.output(plan, [])
+        _, start, grid, lead = visual.song_timing(plan, 15)
+        self.assertGreater(lead, 1)
+        t = lead
+        for s in plan.shots:
+            t += (s.end-s.start)/s.speed
+            self.assertLess(min(abs(t-g) for g in grid), 1e-6)            # every cut on a beat or half-beat
+        lines = visual.lyric_lines(song, start, 15, 'glitch')
+        self.assertTrue(lines and all(len(o.data['words']) <= 3 for o in lines))
+        report = visual.make(clip, plan, Path(self.tmp.name)/'v001'/'edited.mp4', faces=False, lines=180)
+        self.assertIn('Fly High', report['song'])
+        self.assertTrue(any(o['kind'] == 'lyric' for o in report['timeline']['overlays']))
+        self.assertTrue(any(o['kind'] == 'black' for o in report['timeline']['overlays']))
+        self.assertGreater(report['lufs'], -20)                              # the song is audible, not silence
+
+    def test_a_song_plays_under_speech(self):
+        from backend.editor.ai_edit.cinema import engine, music
+        from backend.editor.ai_edit.cinema.plan import CinemaPlan
+        song = music.library()[0]
+        plan = CinemaPlan.model_validate({'story': [{'from_word': 0, 'to_word': 0}], 'song': song['id']})
+        bed = engine.song_bed(plan, 10)
+        self.assertEqual(bed.shape[1], 2)
+        self.assertAlmostEqual(len(bed)/48000, 10.1, delta=.05)
+        self.assertIsNone(engine.song_bed(plan.model_copy(update={'song': 'nope'}), 10))   # an unknown song: the composed score

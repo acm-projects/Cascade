@@ -241,6 +241,14 @@ class Engines(unittest.TestCase):
             self.assertTrue(jobs.uses_beats(edit))
             self.assertFalse(jobs.uses_beats(edit.model_copy(update={'ai_edit': AIEditRef(version='v001', duration=9)})))  # a Cinema film keeps its engine
 
+    def test_a_leftover_beat_plan_goes_to_openai_when_beats_is_off(self):
+        from backend.editor.models import AIPlanRef
+        leftover = Edit(**TRIM).model_copy(update={'ai_plan': AIPlanRef.model_construct(version='v001')})
+        with mock.patch.dict(os.environ, {'CASCADE_EDIT_ENGINE': ''}):
+            self.assertFalse(jobs.uses_beats(leftover))
+        with mock.patch.dict(os.environ, {'CASCADE_EDIT_ENGINE': 'beats'}):
+            self.assertTrue(jobs.uses_beats(leftover))
+
     def test_a_cinema_edit_never_goes_back_to_a_beat_plan(self):
         with TemporaryDirectory() as folder, mock.patch.object(jobs, 'root', lambda *a: Path(folder)):
             jobs._write(Path(folder)/'versions.json', [{'version': 'v001', 'request': 'a', 'duration': 9}, {'version': 'v002', 'engine': 'beats', 'request': 'b'},

@@ -12,6 +12,7 @@
   "mix": {"music_under_voice_db": -17, "loudness_lufs": -14, "true_peak_db": -1.2},
   "broll": {"min_seconds": 1.5, "max_seconds": 3.4, "lead_seconds": 0.12},
   "pacing": {"longest_hold_seconds": 3.2, "message_seconds": 3.4, "tail_seconds": 0.5},
+  "output": {"target_seconds": 15, "ratio": "9:16", "stamp": false},
   "tones": {
     "water": [72, 198, 255], "life": [88, 227, 140], "hope": [126, 240, 196], "danger": [255, 64, 52],
     "money": [245, 197, 66], "earth": [255, 168, 76], "calm": [244, 241, 234]

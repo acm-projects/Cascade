@@ -16,13 +16,6 @@ def ffmpeg():
     return export_binary(True)  # the build with drawtext/libass
 
 
-def whisper():
-    binary = shutil.which('whisper-cli') or ('/opt/homebrew/bin/whisper-cli' if Path('/opt/homebrew/bin/whisper-cli').exists() else '')
-    models = folder()/'Tools'/'whisper-models'
-    model = next((m for m in (models/'ggml-large-v3-turbo-q5_0.bin', models/'ggml-base.en.bin') if m.is_file()), None)
-    return (binary, str(model)) if binary and model else None
-
-
 def demucs():
     python = folder()/'Tools'/'demucs-venv'/'bin'/'python'
     return str(python) if python.is_file() else None

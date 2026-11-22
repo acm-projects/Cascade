@@ -50,4 +50,4 @@ A scrapbook that tells the story of what is being said. Everything looks made by
 ## Tools
 
 - Caption burn-in needs `/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg`; the default `ffmpeg` lacks those filters.
-- Whisper: `whisper-cli` with the model in `Tools/whisper-models/`.
+- Word timings: Deepgram (`DEEPGRAM_API_KEY` in `.env`).

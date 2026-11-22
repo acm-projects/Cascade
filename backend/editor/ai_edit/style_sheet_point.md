@@ -46,4 +46,4 @@ Earth mode (every climate, environment and nature video; wins over Core where th
 ## Tools
 
 - Caption burn-in needs `/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg`; the default `ffmpeg` lacks those filters.
-- Whisper: `whisper-cli` with the model in `Tools/whisper-models/`.
+- Word timings: Deepgram (`DEEPGRAM_API_KEY` in `.env`).

@@ -35,9 +35,8 @@ for callers while their implementation lives in feature packages.
 ## Supporting files
 
 `tests/README.md` describes test groups. `scripts/` holds explicit developer
-commands. `docs/architecture/` holds integration maps; `docs/database/` holds
-database guidance and diagrams; `docs/deployment/` and `docs/verification/` hold
-evidence. Older investigation documents remain historical records.
+commands. `docs/architecture/` holds the frontend/backend map; `docs/database/` holds
+database guidance and diagrams; `docs/deployment/` holds deployment evidence.
 
 Root requirements files preserve existing install commands. Runtime packages are
 listed in `backend/requirements.txt` plus root integration dependencies.

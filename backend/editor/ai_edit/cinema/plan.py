@@ -83,6 +83,8 @@ class CinemaPlan(BaseModel):
     opener: Opener = Field(default_factory=Opener)
     settings: Settings = Field(default_factory=Settings)
     end_line: str = Field(default='', max_length=90)    # the closing message, shown on its own before the stamp
+    song: str = Field(default='', max_length=40)        # a Music Library song id under the voice; '' = the composed score
+    song_section: int = Field(default=0, ge=0, le=5)
 
     @model_validator(mode='after')
     def _tidy(self):
@@ -123,6 +125,37 @@ def check(plan, words):
         if not b.from_word <= b.to_word < n: raise ValueError('broll: from_word <= to_word required')
     if plan.silence_before is not None and plan.silence_before not in seen:
         plan.silence_before = None
+
+
+def fit(plan, words, seconds, pause=.16):
+    """Shorten `plan.story` so the spoken part plays in about `seconds` (pauses squeezed to `pause`).
+    Cuts at the last complete sentence that fits; drops later spans. Returns the estimated speech seconds."""
+    dropped, used, story = plan.dropped(), 0., []
+    for span in plan.story:
+        kept = [i for i in range(span.from_word, span.to_word+1) if i not in dropped]
+        total, last_end, cut = used, None, None
+        for i in kept:
+            w = words[i]
+            total += (w['e']-w['s']) + (min(pause, max(0, w['s']-last_end)) if last_end is not None else 0)
+            last_end = w['e']
+            if total > seconds: break
+            if w['w'].rstrip().endswith(('.', '?', '!')) or i == kept[-1]: cut, used_here = i, total
+        else:
+            story.append(span); used = total
+            continue
+        if cut is not None:
+            story.append(span.model_copy(update={'to_word': cut})); used = used_here
+        elif not story and kept:   # not even one sentence fits: stop at the last word that does
+            fits = [i for i in kept if words[i]['e']-words[kept[0]]['s'] <= seconds]
+            if fits: story.append(span.model_copy(update={'to_word': fits[-1]})); used = words[fits[-1]]['e']-words[kept[0]]['s']
+        break
+    if story and story != plan.story:
+        plan.story = story
+        playing = lambda i: any(s.from_word <= i <= s.to_word for s in story)
+        plan.broll = [b for b in plan.broll if playing(b.from_word)]
+        plan.keywords = [k for k in plan.keywords if playing(k.word)]
+        check(plan, words)   # re-tidy moments and accents that pointed at cut words
+    return used
 
 
 # --- the rule-based director -------------------------------------------------------------------
