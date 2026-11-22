@@ -1,7 +1,5 @@
-"""Finished edits directed by Claude, run from the AI Editor chat.
+"""Finished edits made from the AI Editor chat ("edit this clip").
 
-The same workflow as the "AI video editor" folder: isolate the voice, transcribe it, let Claude
-watch contact sheets and plan the whole edit against the style sheet, then cut the picture, compose
-the music, burn the captions with HyperFrames and check the result. Claude only ever gets the Read
-tool on a private folder of frames; everything else runs here, deterministically. See jobs.py.
+One engine, Cinema (cinema/): the clip is prepared (prep.py: words, camera cuts, contact sheets), OpenAI
+plans the edit, and the render is deterministic (FFmpeg and NumPy). Jobs run in the background (jobs.py).
 """

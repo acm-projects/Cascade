@@ -34,7 +34,7 @@ class ParallelTests(unittest.TestCase):
         find = cinema_broll.resolver(Store())
         queries = ['a', 'b', 'c', 'd']
         started = time.time()
-        with patch('backend.editor.ai_edit.picture.ranked', side_effect=lambda q, r: r):
+        with patch('backend.editor.ai_edit.cinema.broll.ranked', side_effect=lambda q, r: r):
             find.prefetch(queries)
             paths = [find(q) for q in queries]
         self.assertEqual(paths, ['/tmp/px-' + q + '.mp4' for q in queries])

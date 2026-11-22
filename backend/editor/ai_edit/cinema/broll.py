@@ -1,5 +1,5 @@
 """Finding b-roll for a query: the project's stock library (Pexels, licence-free) first, with the
-relevance check the old engine used, then any local folder of footage."""
+a relevance check on each result's page description, then any local folder of footage."""
 import logging
 import re
 import threading
@@ -8,6 +8,32 @@ from pathlib import Path
 
 LOG = logging.getLogger(__name__)
 VIDEO = ('.mp4', '.mov', '.m4v', '.webm')
+LOOK_WORDS = {'close', 'up', 'closeup', 'shot', 'aerial', 'view', 'slow', 'motion', 'footage', 'video', 'cinematic', 'b', 'roll',
+              'stock', 'wide', 'macro', 'drone', 'the', 'a', 'an', 'of', 'in', 'on', 'at', 'and', 'with', 'from', 'into', 'its',
+              'walking', 'running', 'moving', 'looking', 'face', 'powerful', 'beautiful', 'dark', 'night', 'day'}
+
+
+def _stem(word):
+    if word.endswith('ies'): return word[:-3]
+    if word.endswith('ing') and len(word) > 5: word = word[:-3]  # "roaring" matches a "lion-roars" clip
+    return word[:-1] if word.endswith('s') and len(word) > 3 else word
+
+
+def ranked(query, results):
+    """Stock results whose own page description names what the query is about, best first, or None.
+
+    Pexels returns loose matches (a search for "jaguar" can return a woman's face), and the first result is
+    often off. Each result's page address describes it ("/video/a-jaguar-resting-on-a-branch-123/"), so a
+    clip is used only when that description contains the query's subject words."""
+    subject = {_stem(w) for w in re.findall(r'[a-z]+', query.lower()) if w not in LOOK_WORDS and len(w) > 2}
+    if not subject: return None
+    def score(asset):
+        slug = re.sub(r'[^a-z]+', ' ', (asset.get('source_url') or '').lower().rsplit('/video/', 1)[-1])
+        words = {_stem(w) for w in slug.split()}
+        return len(subject & words)
+    needed = 1 if len(subject) <= 2 else 2  # "jaguar" needs jaguar; "caiman river amazon" needs two of them
+    scored = sorted(((score(a), i, a) for i, a in enumerate(results)), key=lambda x: (-x[0], x[1]))
+    return [a for n, _, a in scored if n >= needed]
 
 
 def _words(text):
@@ -32,10 +58,6 @@ def from_folder(query, folder, used):
 def from_stock(query, store, used, credits=None, lock=None):
     lock = lock or threading.Lock()
     if store is None: return None
-    try:
-        from ..picture import ranked
-    except Exception:
-        return None
     try:
         for orientation in ('portrait', 'landscape'):
             with lock: taken = set(used)

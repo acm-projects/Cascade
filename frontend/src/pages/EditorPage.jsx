@@ -249,7 +249,7 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
       if (!active || !job) return;
       setAIJob(job);
       if (job.status === "done" || job.status === "failed") {
-        if (saved?.chat) adoptAIEdit(saved.ai_edit ?? null, saved.chat, saved.ai_plan ?? null);
+        if (saved?.chat) adoptAIEdit(saved.ai_edit ?? null, saved.chat);
         setPanelTab("AI Editor");
       }
     }).catch(() => {});
@@ -257,16 +257,6 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     poll();
     return () => { active = false; clearInterval(timer); };
   }, [api, projectId, clip.job_id, clip.clip_index, jobRunning, adoptAIEdit]);
-  // The current beat plan (CASCADE_EDIT_ENGINE=beats), loaded whenever the plan version changes.
-  const planVersion = state?.ai_plan?.version;
-  const [beatPlan, setBeatPlan] = useState(null);
-  useEffect(() => {
-    if (!planVersion) return undefined;
-    let active = true;
-    api.getBeatPlan(projectId, clip.job_id, clip.clip_index, planVersion)
-      .then(saved => { if (active) setBeatPlan(saved); }).catch(() => { if (active) setBeatPlan(null); });
-    return () => { active = false; };
-  }, [api, projectId, clip.job_id, clip.clip_index, planVersion]);
   const waitingBoard = info?.storyboard; // a storyboard still waiting for notes or "render" after a reload
   useEffect(() => { if (waitingBoard) setEditorResult(current => current || { storyboard: waitingBoard }); }, [waitingBoard]);
 
@@ -275,13 +265,13 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
     const history = draft.chat;
     if (isAIUndo(message)) {
       const transaction = aiTransactions.current.at(-1);
-      if (!state.ai_edit && !state.ai_plan && !canUndoAI(transaction, state)) {
+      if (!state.ai_edit && !canUndoAI(transaction, state)) {
         draft.setChat([...history, { role: "user", text: message }, { role: "assistant", text: transaction
           ? "Not undone: manual edits changed this clip after the AI transaction. Use the shared Undo controls to review those edits first."
           : "No AI edit is available to undo in this editing session. Undo history resets when the page reloads." }]);
         return;
       }
-      if (state.ai_edit || state.ai_plan) return sendEdit(message);
+      if (state.ai_edit) return sendEdit(message);
       draft.undo();
       aiTransactions.current.pop();
       setEditorResult(null);
@@ -402,7 +392,6 @@ function ClipWorkspace({ projectId, clip, sidebar, layout, clipTabs, onExport, r
   ) : (
     <AIEditorChat messages={chatMessages} onSend={sendChat} onClear={clearChat} disabled={thinking || jobRunning} typing={thinking}
       clip={clip} result={editorResult} status={aiStatus} cues={info?.cues} job={jobRunning ? aiJob : null} aiEdit={state.ai_edit}
-      beatPlan={planVersion && beatPlan?.version === planVersion ? beatPlan : null}
       onUseTimeline={() => change(s => ({ ...s, ai_edit: null }))} />
   );
   const trendsModal = trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush}

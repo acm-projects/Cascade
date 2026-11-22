@@ -52,9 +52,8 @@ Set these in `.env` and restart the backend. Nothing else changes.
 |---|---|---|
 | `CASCADE_EDIT_PLANNER` | `openai` (default) | OpenAI plans every edit, using `OPENAI_API_KEY` |
 | | `rules` | No AI at all: the rule-based director |
-| `CASCADE_EDIT_ENGINE` | `cinema` (default), `legacy` | `legacy` brings back the older HyperFrames looks |
 
-The editor only calls AI through API keys. There is no Claude Code CLI or Gemini path.
+Cinema is the only edit engine, and it only calls AI through API keys (no Claude Code CLI, Gemini, beats or HyperFrames engine).
 
 ## What works with no AI model
 

@@ -95,20 +95,6 @@ export function getAIEdit(token, projectId, jobId, index) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/ai-edit`, { token });
 }
 
-/** GET …/{jobId}/{index}/beats/{version} → one saved beat-plan version: { version, plan_id, parent_version, changed_beat_ids, plan, … } */
-export function getBeatPlan(token, projectId, jobId, index, version) {
-  return apiFetch(`${clipPath(projectId, jobId, index)}/beats/${encodeURIComponent(version)}`, { token });
-}
-
-/**
- * PATCH …/{jobId}/{index}/beats/{version}/{beatId} - change one beat by hand
- * body: { emphasis_text?, accent_word?, semantic_color?, template? }. 422 with a plain reason if it breaks a rule.
- * @returns {Promise<{ plan: object, ai_plan: { version, plan_id }, message: string, warnings: string[] }>}
- */
-export function editBeat(token, projectId, jobId, index, version, beatId, changes) {
-  return apiFetch(`${clipPath(projectId, jobId, index)}/beats/${encodeURIComponent(version)}/${beatId}`, { token, method: "PATCH", body: changes });
-}
-
 export function sendEditorChat(token, projectId, jobId, index, body) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/chat`, { token, method: "POST", body });
 }
