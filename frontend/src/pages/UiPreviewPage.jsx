@@ -3,6 +3,9 @@ import TopNav from "../components/TopNav";
 import Button from "../components/ui/Button";
 import Modal from "../components/ui/Modal";
 import Spinner from "../components/ui/Spinner";
+import DolphinLoader from "../components/DolphinLoader";
+import Seahorse from "../components/Seahorse";
+import NewProjectModal from "../components/NewProjectModal";
 import EmptyState from "../components/ui/EmptyState";
 import { useToast } from "../components/ui/ToastContext";
 import "./UiPreviewPage.css";
@@ -11,6 +14,7 @@ import "./UiPreviewPage.css";
 // so reviewers and teammates can see them without clicking through the app.
 function UiPreviewPage() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const toast = useToast();
 
   return (
@@ -39,6 +43,7 @@ function UiPreviewPage() {
         <section className="ui-preview-card wood-panel">
           <h2>Modal</h2>
           <Button variant="primary" onClick={() => setModalOpen(true)}>Open modal</Button>
+          <Button variant="secondary" onClick={() => setNewProjectOpen(true)}>New Project pop-up</Button>
           <p className="ui-preview-hint">Close it with Esc, a click outside, or the close button.</p>
         </section>
 
@@ -59,6 +64,19 @@ function UiPreviewPage() {
           </div>
         </section>
 
+        <section className="ui-preview-card ui-preview-sea">
+          <h2>Loading screen</h2>
+          <DolphinLoader label="Opening Studio Island" />
+        </section>
+
+        <section className="ui-preview-card ui-preview-sea">
+          <h2>Cassie the seahorse</h2>
+          <div className="ui-preview-row">
+            <Seahorse size={150} />
+            <Seahorse variant="head" size={40} />
+          </div>
+        </section>
+
         <section className="ui-preview-card wood-panel">
           <h2>EmptyState</h2>
           <EmptyState
@@ -70,6 +88,7 @@ function UiPreviewPage() {
         </section>
       </main>
 
+      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={async () => setNewProjectOpen(false)} />}
       {modalOpen && (
         <Modal title="Delete this project?" onClose={() => setModalOpen(false)}>
           <p>This can't be undone. (It's only a demo, nothing gets deleted.)</p>

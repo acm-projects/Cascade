@@ -5,6 +5,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 // She is made in Blender: frontend/blender/seahorse.py builds her and exports public/models/seahorse.glb,
 // with one "Idle" clip (bobbing, swaying, a fluttering back fin, a curling tail, a blink).
 //
+// She glows like a deep-sea creature: her emissive parts (fins, crown, spots) breathe gently brighter and dimmer.
 // createSeahorseScene(canvas, { still }) - the whole seahorse floating, at about 30 frames a second.
 //   Returns a function that stops it and frees its memory.
 // seahorseHeadPicture(size) - draws her face once and resolves to a picture (a data URL),
@@ -30,11 +31,11 @@ function setUp(canvas, width, height) {
 
   // Underwater light: bright from above, a cool sea-blue bounce from below
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight("#fff6e6", "#4a8fb8", 2.0));
+  scene.add(new THREE.HemisphereLight("#fff6e6", "#3a6fb8", 1.8));
   const sun = new THREE.DirectionalLight("#fff3dc", 2.2);
   sun.position.set(2, 5, 4);
   scene.add(sun);
-  const rim = new THREE.DirectionalLight("#bdf3ff", 1.1);   // a cool edge light from behind, so she stands out on blue
+  const rim = new THREE.DirectionalLight("#9ff4ff", 1.6);   // a cool aqua edge light from behind, to go with her glow
   rim.position.set(-3, 2, -3);
   scene.add(rim);
   return { renderer, scene };
@@ -49,6 +50,22 @@ function addSeahorse(scene, gltf) {
   const idle = gltf.animations.find((item) => item.name === "Idle");
   if (idle) mixer.clipAction(idle).play();
   return mixer;
+}
+
+// Her glowing parts (fins, crown, spots, eye shine, tail tip are emissive in Blender), each with its own phase,
+// so the glow breathes softly across her body instead of blinking all at once
+function glowingParts(scene) {
+  const parts = [];
+  scene.traverse((object) => {
+    const material = object.material;
+    if (!material?.emissive || material.emissive.getHex() === 0 || parts.some((p) => p.material === material)) return;
+    parts.push({ material, base: material.emissiveIntensity, phase: parts.length * 1.3 });
+  });
+  return parts;
+}
+
+function breathe(parts, time) {
+  for (const { material, base, phase } of parts) material.emissiveIntensity = base * (0.8 + 0.3 * Math.sin(time * 1.8 + phase));
 }
 
 function freeAll(scene, renderer) {
@@ -73,17 +90,20 @@ export function createSeahorseScene(canvas, { still = false } = {}) {
 
   let stopped = false;
   let mixer = null;
+  let glow = [];
   let frame = 0;
   let timer = 0;
   const clock = new THREE.Clock();
   function loop() {
     mixer.update(clock.getDelta());
+    breathe(glow, clock.elapsedTime);
     renderer.render(scene, camera);
     timer = setTimeout(() => { frame = requestAnimationFrame(loop); }, 1000 / 30 - 4);
   }
   loadModel().then((gltf) => {
     if (stopped) return;
     mixer = addSeahorse(scene, gltf);
+    glow = glowingParts(scene);
     if (still) {
       mixer.update(0);
       renderer.render(scene, camera);

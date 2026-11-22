@@ -9,6 +9,9 @@ It makes:
     frontend/public/models/seahorse.glb  - the file the website loads (features/landing3d/seahorseScene.js)
 
 The look: chunky low-poly blocks with softly bevelled edges and flat shading, like the frog and the capybara.
+She glows in the dark like a deep-sea creature: her fins, crown, back ridges, eye shine, tail tip and two rows
+of little spots down her sides are emissive (glTF emissive + emissive_strength), so they stay bright whatever
+the light, and the website pulses them gently (seahorseScene.js).
 She is built side-on: the snout points +X, so the website's camera (looking from -Y) sees her classic profile.
 She is about 1.7 tall, with the bottom of her curled tail near Z = 0.
 One animation, "Idle" (a 4 second loop, an NLA track like the frog's clips):
@@ -43,19 +46,28 @@ COLORS = {
     "shine": "#ffffff",
     "cheek": "#ff7d97",
 }
+# The parts that glow, and how strongly (Blender's Emission Strength; the website pulses around it)
+GLOW = {
+    "body": 0.22, "body_dark": 0.16, "belly": 0.3, "belly_dark": 0.25, "snout_tip": 0.2, "cheek": 0.6,
+    "fin": 1.6, "fin_dark": 1.2, "crown": 1.4, "shine": 3.0, "spot_cyan": 3.2, "spot_pink": 3.0, "tail_glow": 3.0,
+}
+COLORS.update({"spot_cyan": "#8ff8ff", "spot_pink": "#ffb3f0", "tail_glow": "#9ffbff"})
 
 
 def srgb_to_linear(channel):
     return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
 
-def make_material(name, hex_color, roughness=0.8):
+def make_material(name, hex_color, roughness=0.8, glow=0.0):
     color = [srgb_to_linear(int(hex_color[i:i + 2], 16) / 255) for i in (1, 3, 5)]
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     shader = mat.node_tree.nodes["Principled BSDF"]
     shader.inputs["Base Color"].default_value = (*color, 1)
     shader.inputs["Roughness"].default_value = roughness
+    if glow:
+        shader.inputs["Emission Color"].default_value = (*color, 1)
+        shader.inputs["Emission Strength"].default_value = glow
     mat.diffuse_color = (*color, 1)
     return mat
 
@@ -183,7 +195,7 @@ def build():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     scene.render.fps = FPS
-    mats = {key: make_material(key, value) for key, value in COLORS.items()}
+    mats = {key: make_material(key, value, glow=GLOW.get(key, 0.0)) for key, value in COLORS.items()}
     mats["eye"].node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.35
     mats["fin"].node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.5
 
@@ -211,6 +223,17 @@ def build():
             spike(f"Ridge_{i}", 0.035, 0.09, (bx, 0, bz), mats["crown"], body,
                   tilt=math.atan2(-nx, -nz))
 
+    # --- Glowing spots: two rows down each side, alternating cyan and pink, like a deep-sea creature ---
+    for i in range(1, len(BODY) - 1):
+        x, z, width, depth = BODY[i]
+        for side in (-1, 1):
+            for row, (forward, colour) in enumerate(((0.12, "spot_cyan"), (-0.1, "spot_pink"))):
+                if (i + row) % 2:
+                    continue
+                size = 0.026 + 0.012 * math.sin(i * 1.7 + row)
+                dome(f"Spot_{i}_{row}_{'L' if side < 0 else 'R'}", size,
+                     (x + forward * width, side * (depth / 2 + 0.012), z), mats[colour], body, squash=(1, 0.45, 1))
+
     # --- Tail: a spiral of shrinking blocks, on its own pivot so it can curl ---
     tail = pivot("Tail", (-0.05, 0, 0.3), body)
     parts["tail"] = tail
@@ -221,7 +244,7 @@ def build():
         material = mats["body_dark"] if i % 3 == 2 else mats["body"]
         segment(f"TailSeg_{i}", previous, (x, z), thickness, thickness * 1.05, material, tail, overlap=1.45, bevel=0.025)
         previous = (x, z)
-    dome("TailTip", 0.04, (previous[0], 0, previous[1]), mats["body_dark"], tail)
+    dome("TailTip", 0.045, (previous[0], 0, previous[1]), mats["tail_glow"], tail)
 
     # --- Back fin: a fan of thin see-through-looking plates on the -X side of the body (flutters) ---
     fin = pivot("BackFin", (-0.13, 0, 0.74), body)

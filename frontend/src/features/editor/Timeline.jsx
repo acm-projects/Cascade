@@ -5,7 +5,6 @@ import useFilmstrip from "./useFilmstrip";
 import "./Timeline.css";
 import BrollTrack from "./BrollTrack";
 import Icon from "../../components/ui/Icon";
-import { timelineClock } from "./reelTiming";
 import { cueText, setCueText } from "./captionStyles";
 
 const pct = (t, duration) => `${timeToX(t, duration, 100)}%`; // a time as a % across the track
@@ -210,8 +209,6 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
 
   const step = rulerStep(duration);
   const label = (t) => (step < 1 ? `${t.toFixed(step < 0.5 ? 2 : 1)}s` : formatTime(t));
-  // Short clips need tenths of a second to be readable ("0.4s" instead of "0:00")
-  const time = (t) => (duration < 10 ? `${t.toFixed(1)}s` : formatTime(t));
 
   const music = (state.audio || []).filter((item) => item.track === "music");
   const soundEffects = (state.audio || []).filter((item) => item.track === "sfx");
@@ -326,14 +323,6 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
         </div>
       </div>
 
-      <div className="timeline-footer">
-        <span>Trim {time(state.start)} – {time(state.end)} · {time(timelineClock(state).duration)} long</span>
-        <span className="timeline-keys">
-          {selectedBroll ? "Drag to move · drag the edges to resize · Delete removes it"
-            : selected ? "Press Delete to remove it"
-            : <>Drag the green handles · click to jump · <kbd>[</kbd> <kbd>]</kbd> trim at playhead</>}
-        </span>
-      </div>
     </div>
   );
 }

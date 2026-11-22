@@ -15,7 +15,7 @@ function ReferenceChips({ chips, leftOut, onToggle, onHover }) {
         const on = !leftOut.some((item) => sameRef(item, ref));
         return (
           <button key={`${ref.job_id}:${ref.clip_index}`} type="button" aria-pressed={on}
-            className={`reference-chip${on ? " is-on" : ""}`} title={on ? "Guides this prompt. Click to leave it out." : "Left out. Click to use it."}
+            className={`reference-chip${on ? " is-on" : ""}`} title={`${label}${title ? ` · ${title}` : ""}\n${on ? "Guides this prompt. Click to leave it out." : "Left out. Click to use it."}`}
             onClick={() => onToggle(ref)} onMouseEnter={() => onHover(ref)} onMouseLeave={() => onHover(null)}
             onFocus={() => onHover(ref)} onBlur={() => onHover(null)}>
             <Icon name={on ? "leaf" : "circle"} /> {label}{title ? ` · ${title}` : ""}

@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import TopNav from "../components/TopNav";
 import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import EmptyState from "../components/ui/EmptyState";
-import Spinner from "../components/ui/Spinner";
+import DolphinLoader from "../components/DolphinLoader";
 import { useToast } from "../components/ui/ToastContext";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
@@ -141,7 +141,7 @@ function EditorPage() {
   if (error) {
     body = <EmptyState icon="cloud" title="Couldn't open the Editor" text={error.message} />;
   } else if (!clips) {
-    body = <div className="editor-loading"><Spinner size={48} label="Loading your clips" /></div>;
+    body = <div className="editor-loading"><DolphinLoader label="Loading your clips" /></div>;
   } else if (!hasClips) {
     body = (
       <div className="editor-empty-choices">

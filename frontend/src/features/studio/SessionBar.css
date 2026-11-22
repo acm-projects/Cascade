@@ -56,6 +56,24 @@
   font-size: 16px;
 }
 
+/* "3 of 12 clips picked": a quiet pill, so the green button is the one thing that stands out */
+.session-bar-count {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-leaf) 16%, transparent);
+  color: var(--color-jungle-deep);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.session-bar-count b {
+  font-family: var(--font-heading);
+  font-size: 16px;
+}
+.session-bar-go {
+  white-space: nowrap;
+}
+
 .session-bar {
   gap: 8px;
 }

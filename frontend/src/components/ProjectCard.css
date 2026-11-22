@@ -166,10 +166,11 @@
   justify-content: center;
   gap: calc(10 * var(--u));
   aspect-ratio: 382 / 292;   /* keeps the card shape as the cards stretch to fill the row */
-  border: max(2px, calc(4 * var(--u))) dashed var(--surface-ink-soft);
+  border: max(3px, calc(5 * var(--u))) dashed #3fa836;
   border-radius: calc(24 * var(--u));
-  background: color-mix(in srgb, var(--surface-light) 88%, transparent);
-  color: var(--surface-ink);
+  background: linear-gradient(180deg, #fbfff4, #e9f7d9);
+  color: #1d4a2c;
+  box-shadow: 0 max(4px, calc(8 * var(--u))) 0 #2f7d3a, 0 calc(14 * var(--u)) calc(24 * var(--u)) rgba(5, 30, 50, 0.35);
   font-family: var(--font-heading);
   cursor: pointer;
   transition: translate 0.14s, background 0.15s;
@@ -177,7 +178,7 @@
 
 .project-card-new:hover {
   translate: 0 -5px;
-  background: color-mix(in srgb, var(--surface-light) 97%, transparent);
+  background: linear-gradient(180deg, #ffffff, #f0fbe4);
 }
 
 .project-card-new:focus-visible,
@@ -186,10 +187,20 @@
   outline-offset: 3px;
 }
 
+/* a big round green "+" */
 .project-card-new-plus {
+  display: grid;
+  place-items: center;
+  width: calc(96 * var(--u));
+  height: calc(96 * var(--u));
+  border-radius: 50%;
+  background: linear-gradient(180deg, #84dc4f, #4cb83e 60%, #3fa836);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55), 0 calc(6 * var(--u)) 0 #1d6b34;
+  color: #fff;
   font-family: var(--font-display);
-  font-size: calc(84 * var(--u));
+  font-size: calc(64 * var(--u));
   line-height: 1;
+  text-shadow: 0 2px 0 #1d6b34;
 }
 
 .project-card-new-title {

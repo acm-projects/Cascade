@@ -8,7 +8,7 @@ import ProjectsPage from "./pages/ProjectsPage";
 import EditorPage from "./pages/EditorPage";
 import ExportPage from "./pages/ExportPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import Spinner from "./components/ui/Spinner";
+import DolphinLoader from "./components/DolphinLoader";
 
 // "How it works" brings in its own 3D pond, so it's downloaded only when someone opens it
 const HowItWorksPage = lazy(() => import("./pages/HowItWorksPage"));
@@ -38,7 +38,7 @@ function App() {
           <Route
             path="/projects/:projectId/studio/:sessionId?"
             element={
-              <Suspense fallback={<div className="page-loading"><Spinner size={48} label="Loading Studio Island" /></div>}>
+              <Suspense fallback={<div className="page-loading"><DolphinLoader label="Loading Studio Island" /></div>}>
                 <StudioPage />
               </Suspense>
             }

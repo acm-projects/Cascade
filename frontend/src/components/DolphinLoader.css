@@ -1,0 +1,144 @@
+/* DolphinLoader.jsx: dolphins leaping out of the page's pixel sea. No box: everything is drawn straight on the
+   water behind it. Each leap takes LEAP seconds; the three dolphins are a third of a leap apart. */
+.dolphin-loader {
+  --leap-time: 2.7s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+}
+
+/* the stretch of water the dolphins use: 360 x 200, the surface line near the bottom */
+.dolphin-loader-water {
+  position: relative;
+  width: 360px;
+  height: 200px;
+  max-width: 90vw;
+}
+
+.dolphin-loader-group {
+  position: absolute;
+  inset: 0;
+  /* each dolphin a third of a leap behind the one before, and a little to the side, so they don't overlap */
+  translate: calc((var(--leap) - 1) * 14px) calc((var(--leap) - 1) * 6px);
+}
+
+/* Each dolphin flies along the same arc: out of the water on the left, back in on the right.
+   offset-rotate: auto turns it to face along the arc, so it noses up, levels out and dives. */
+.dolphin-loader-leap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 104px;
+  height: 58px;
+  offset-path: path("M 70 170 Q 180 -40 290 170");
+  offset-rotate: auto;
+  animation: dolphin-loader-leap var(--leap-time) cubic-bezier(0.42, 0, 0.58, 1) infinite;
+  animation-delay: calc(var(--leap) * var(--leap-time) / -3);
+}
+
+.dolphin-loader-dolphin {
+  display: block;
+  width: 104px;
+  height: 58px;
+  filter: drop-shadow(0 0 8px rgba(190, 240, 255, 0.55));
+  user-select: none;
+}
+
+/* its shadow on the water, sliding from where it jumped to where it dives, smallest at the top of the leap */
+.dolphin-loader-shadow {
+  position: absolute;
+  top: 172px;
+  left: 70px;
+  width: 54px;
+  height: 10px;
+  margin: -5px 0 0 -27px;
+  border-radius: 50%;
+  background: rgba(8, 50, 95, 0.32);
+  animation: dolphin-loader-shadow var(--leap-time) cubic-bezier(0.42, 0, 0.58, 1) infinite;
+  animation-delay: calc(var(--leap) * var(--leap-time) / -3);
+}
+
+/* blocky pixel ripples, the same white as the sea's dashes: one where it breaks out, one where it dives in */
+.dolphin-loader-ripple {
+  position: absolute;
+  top: 172px;
+  width: 84px;
+  height: 30px;
+  margin: -15px 0 0 -42px;
+  fill: rgba(255, 255, 255, 0.85);
+  opacity: 0;
+  animation: dolphin-loader-ripple var(--leap-time) ease-out infinite;
+}
+.dolphin-loader-ripple.is-out {
+  left: 70px;
+  animation-delay: calc(var(--leap) * var(--leap-time) / -3);
+}
+.dolphin-loader-ripple.is-in {
+  left: 290px;
+  animation-delay: calc(var(--leap) * var(--leap-time) / -3 - var(--leap-time) * 0.88);
+}
+
+/* a burst of square droplets where it dives back in */
+.dolphin-loader-splash {
+  position: absolute;
+  top: 168px;
+  left: 290px;
+}
+.dolphin-loader-splash i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+  opacity: 0;
+  animation: dolphin-loader-splash var(--leap-time) ease-out infinite;
+  animation-delay: calc(var(--leap) * var(--leap-time) / -3);
+}
+.dolphin-loader-splash i:nth-child(1) { --dx: -26px; --dy: -22px; }
+.dolphin-loader-splash i:nth-child(2) { --dx: -14px; --dy: -36px; }
+.dolphin-loader-splash i:nth-child(3) { --dx: -2px; --dy: -44px; width: 8px; height: 8px; }
+.dolphin-loader-splash i:nth-child(4) { --dx: 12px; --dy: -38px; }
+.dolphin-loader-splash i:nth-child(5) { --dx: 24px; --dy: -24px; }
+.dolphin-loader-splash i:nth-child(6) { --dx: 34px; --dy: -10px; width: 4px; height: 4px; }
+
+.dolphin-loader-label {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 22px;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 0 rgba(10, 50, 95, 0.5), 0 0 14px rgba(190, 240, 255, 0.45);
+}
+
+/* rises out of the water (fading in), arcs, and fades back into it as it dives */
+@keyframes dolphin-loader-leap {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+@keyframes dolphin-loader-shadow {
+  0% { translate: 0 0; scale: 1; opacity: 0.9; }
+  50% { translate: 110px 0; scale: 0.55; opacity: 0.45; }
+  100% { translate: 220px 0; scale: 1; opacity: 0.9; }
+}
+
+@keyframes dolphin-loader-ripple {
+  0% { opacity: 0.95; transform: scale(0.35); }
+  45% { opacity: 0; transform: scale(1.25); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+
+@keyframes dolphin-loader-splash {
+  0%, 86% { opacity: 0; transform: translate(0, 0); }
+  89% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dolphin-loader-leap { animation: none; offset-distance: 50%; }
+  .dolphin-loader-group:not(:first-child), .dolphin-loader-ripple, .dolphin-loader-splash i { display: none; }
+  .dolphin-loader-shadow { animation: none; translate: 110px 0; scale: 0.55; }
+}

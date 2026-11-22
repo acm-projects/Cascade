@@ -108,28 +108,8 @@
 .chat-panel-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
-}
-
-.chat-panel-count {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-ui);
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.chat-panel-count input {
-  width: 56px;
-  padding: 4px 6px;
-  border: 2px solid var(--color-wood-dark);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-cream-card) 60%, white);
-  color: var(--color-wood-text);
-  font-family: var(--font-ui);
-  font-weight: 700;
 }
 
 .chat-panel-send {
@@ -147,32 +127,41 @@
   opacity: 0.75;
 }
 
-/* Picked clips that guide the next prompt (ReferenceChips) */
+/* Picked clips that guide the next prompt (ReferenceChips): one compact row that scrolls sideways, so a few
+   picks never push the prompt box down or cover the chat. White on deep green, so they're easy to read. */
 .reference-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
 }
 
 .reference-chip {
-  max-width: 100%;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 190px;
   overflow: hidden;
-  padding: 3px 10px;
-  border: 1px solid var(--color-wood-dark);
+  padding: 4px 10px;
+  border: 1.5px solid color-mix(in srgb, var(--color-wood-dark) 35%, transparent);
   border-radius: 999px;
-  background: var(--color-cream-card);
+  background: color-mix(in srgb, var(--color-cream-card) 70%, white);
   color: var(--color-wood-text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.6;
   cursor: pointer;
 }
 
 .reference-chip.is-on {
-  border-color: var(--color-leaf);
-  background: var(--color-leaf);
-  color: var(--color-jungle-deep);
-  opacity: 1;
+  border-color: #1f6b35;
+  background: #2e8a47;
+  color: #fff;
+  box-shadow: 0 2px 0 #1f6b35;
 }

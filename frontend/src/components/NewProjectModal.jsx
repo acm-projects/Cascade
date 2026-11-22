@@ -64,7 +64,7 @@ function NewProjectModal({ onCreate, onClose }) {
   }
 
   return (
-    <Modal title="New project" onClose={() => !creating && onClose()}>
+    <Modal title="New project" className="new-project-modal" onClose={() => !creating && onClose()}>
       <form className="new-project" onSubmit={submit}>
         <label className="new-project-field">
           <span>Project name</span>

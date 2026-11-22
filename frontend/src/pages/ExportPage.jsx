@@ -6,6 +6,7 @@ import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import Spinner from "../components/ui/Spinner";
+import DolphinLoader from "../components/DolphinLoader";
 import { useToast } from "../components/ui/ToastContext";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
@@ -110,7 +111,7 @@ function ExportPage() {
 
   let message;
   if (error) message = <EmptyState icon="cloud" title="Couldn't open Export" text={error.message} />;
-  else if (!clips) message = <Spinner size={48} label="Loading your clips" />;
+  else if (!clips) message = <DolphinLoader label="Loading your clips" />;
   else if (!clips.length) {
     message = (
       <EmptyState icon="box" title="Nothing to export yet" text="Pick clips on Studio Island and edit them, then export them here."

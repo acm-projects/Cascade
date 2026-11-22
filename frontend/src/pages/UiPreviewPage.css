@@ -73,3 +73,6 @@
 .ui-preview-row.ui-preview-actions {
   width: 100%;
 }
+
+/* loader and seahorse previews on deep water, the way they appear in the app */
+.ui-preview-sea { background: transparent !important; box-shadow: none !important; border: 0 !important; color: #fff; }

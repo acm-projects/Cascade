@@ -29,11 +29,13 @@ export function SourceCard({ data, children }) {
         <label className="studio-drop nodrag">
           <input type="file" accept={MEDIA_ACCEPT} hidden onChange={(e) => onChooseFile(e.target.files[0])} />
           <span className="studio-drop-icon"><Icon name={hasVideo ? "check" : "play"} /></span>
-          <span className="studio-drop-title">{pendingFile ? pendingFile.name : "Drop video or audio here"}</span>
+          <span className="studio-drop-title" title={pendingFile?.name}>{pendingFile ? pendingFile.name : "Drop your video or audio"}</span>
           <span className="studio-drop-hint">
             {pendingFile ? "Now describe the clips you want in the chat" : "or click to choose one"}
           </span>
-          <span className="btn btn-primary btn-small">{pendingFile ? "Change media" : "⬆ Choose video or audio"}</span>
+          <span className="btn btn-primary btn-small studio-drop-button">
+            <Icon name="upload" /> {pendingFile ? "Change file" : "Choose file"}
+          </span>
         </label>
       )}
       {children}

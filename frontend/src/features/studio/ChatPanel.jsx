@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import "./ChatPanel.css";
 import leafCream from "../../assets/icons/leaf-cream.svg";
 import Seahorse from "../../components/Seahorse";
-import { MAX_CLIPS, requestedClipCount } from './clipCount';
+import { requestedClipCount } from './clipCount';
 
-const MIN_CLIPS = 1;
+const DEFAULT_CLIPS = 4;   // when the prompt doesn't say how many
 
 // The AI Studio chat column: messages on top (they scroll), prompt box pinned at the bottom.
 //   messages         - [{ id?, role: "user" | "assistant", text }]
@@ -19,7 +19,6 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
   const [ownText, setOwnText] = useState("");
   const text = controlledText ?? ownText;
   const setText = onTextChange ?? setOwnText;
-  const [clipCount, setClipCount] = useState(4);
   const [countError, setCountError] = useState('');
   const listRef = useRef(null);
   const promptRefs = useRef(new Map());
@@ -44,10 +43,9 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
     const prompt = text.trim();
     if (!prompt || disabled) return;
     let count;
-    try { count = requestedClipCount(prompt, clipCount); }
+    try { count = requestedClipCount(prompt, DEFAULT_CLIPS); }   // "Find 10 funny clips" asks for 10
     catch (error) { setCountError(error.message); return; }
     setCountError('');
-    setClipCount(count);
     const sent = await onSend(prompt, count);
     if (sent !== false) setText("");
   }
@@ -116,16 +114,6 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
           onKeyDown={handleKeyDown}
         />
         <div className="chat-panel-row">
-          <label className="chat-panel-count">
-            Clips
-            <input
-              type="number"
-              min={MIN_CLIPS}
-              max={MAX_CLIPS}
-              value={clipCount}
-              onChange={(e) => setClipCount(e.target.value)}
-            />
-          </label>
           <button type="submit" className="btn btn-primary btn-small chat-panel-send" disabled={disabled || !text.trim()}>
             <img src={leafCream} alt="" />
             Send

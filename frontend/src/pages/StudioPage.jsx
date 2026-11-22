@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
 import EmptyState from "../components/ui/EmptyState";
-import Spinner from "../components/ui/Spinner";
+import DolphinLoader from "../components/DolphinLoader";
 import { useToast } from "../components/ui/ToastContext";
 import { useProject } from "../context/projectContextValue";
 import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
@@ -68,7 +68,6 @@ function StudioPage() {
   const [preview, setPreview] = useState(null);         // the "watch it big" pop-up: { ref } for a clip, or { path | file, title }
   const [draft, setDraft] = useState("");               // the chat box text
   const [sending, setSending] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [chatFocus, setChatFocus] = useState(null);
   const focusPrompt = useCallback((jobId) => {
     setChatFocus(previous => ({ jobId, visit: (previous?.visit || 0) + 1 }));
@@ -158,8 +157,8 @@ function StudioPage() {
 
 
   const graph = useMemo(
-    () => (session ? buildGraph(session, groups, { ...actions, showHistory }) : { nodes: [], edges: [] }),
-    [session, groups, actions, showHistory]
+    () => (session ? buildGraph(session, groups, actions) : { nodes: [], edges: [] }),
+    [session, groups, actions]
   );
 
   // ---------- Chat: your prompts + what happened to each ----------
@@ -267,13 +266,10 @@ function StudioPage() {
   }
 
   // ---------- Go to Editor ----------
-  // The Editor loads the picked clips from the backend itself (they're saved as editor_clips)
+  // The Editor loads the picked clips from the backend itself (they're saved as editor_clips). With two or more
+  // picked, it joins them (e.g. clip 1 + clip 3) into one edit and opens that. A waterfall covers the change.
   function goToEditor() {
-    leafNavigate(`/projects/${projectId}/editor`, { style: "falls" });   // a waterfall covers the change
-  }
-  // Multi-clip editing: the Editor joins the picked clips (e.g. clip 1 + clip 3) into one edit and opens it
-  function combineAndEdit() {
-    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", state: { combine: true } });
+    leafNavigate(`/projects/${projectId}/editor`, { style: "falls", state: editorClips.length >= 2 ? { combine: true } : undefined });
   }
 
   // ---------- What to show ----------
@@ -298,7 +294,7 @@ function StudioPage() {
                 action={{ label: "Retry", onClick: refresh }} />
             </div>
           ) : (
-            <Spinner size={48} label="Opening Studio Island" />
+            <DolphinLoader label="Opening Studio Island" />
           )}
         </div>
       </div>
@@ -338,9 +334,7 @@ function StudioPage() {
 
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
   let note;
-  if (references.length > 1) note = `${plural(references.length, "picked clip")} will combine their qualities in each new result, connected to all selected parents.`;
-  else if (references.length) note = `${plural(references.length, "picked clip")} will guide this prompt: new clips branch from them and keep the originals.`;
-  else if (!session.source_job) note = pendingFile ? `“${pendingFile.name}” uploads when you send your first prompt.` : "Choose audio or video on the canvas, then describe the clips you want.";
+  if (!references.length && !session.source_job) note = pendingFile ? `“${pendingFile.name}” uploads when you send your first prompt.` : "Choose audio or video on the canvas, then describe the clips you want.";
   if (uploadProgress !== null) {
     note = (
       <span className="studio-upload">
@@ -355,23 +349,15 @@ function StudioPage() {
       {topNav}
       <SessionBar sessions={studio.sessions} activeId={session.id}
         onSwitch={switchSession} onCreate={createSession} onRename={renameSession}>
-        {clipTotal > 0 && <span>{editorClips.length} of {plural(clipTotal, "clip")} picked</span>}
-        <button type="button" className="btn btn-small" aria-pressed={showHistory}
-          onClick={() => setShowHistory(value => !value)}
-          title="Earlier attempts stay saved. Picked clips and source references always remain visible.">
-          {showHistory ? 'Show latest attempts' : 'Show earlier attempts'}
-        </button>
-        <button type="button" className={`btn btn-small ${editorClips.length ? "btn-primary" : "disabled"}`}
-          disabled={!editorClips.length}
-          title={editorClips.length ? undefined : "Pick at least one clip first"} onClick={goToEditor}>
+        {clipTotal > 0 && (
+          <span className="session-bar-count"><b>{editorClips.length}</b> of {plural(clipTotal, "clip")} picked</span>
+        )}
+        <button type="button" className="btn btn-small btn-primary session-bar-go" disabled={!editorClips.length}
+          title={!editorClips.length ? "Pick at least one clip first"
+            : editorClips.length >= 2 ? `Joins your ${editorClips.length} picked clips into one video and opens it` : undefined}
+          onClick={goToEditor}>
           Go to Editor →
         </button>
-        {editorClips.length >= 2 && (
-          <button type="button" className="btn btn-small btn-primary" onClick={combineAndEdit}
-            title={`Join the ${editorClips.length} picked clips into one video and open it in the Editor`}>
-            Combine {editorClips.length} clips & edit →
-          </button>
-        )}
       </SessionBar>
 
       <div className="studio-body">

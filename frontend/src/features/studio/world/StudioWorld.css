@@ -169,3 +169,9 @@
 }
 /* the "Pick clip" switch stays, smaller, so you can still pick from far away */
 .studio-world.is-far .studio-clip-select { font-size: 11px; padding: 4px 8px; }
+
+/* Zoomed far out: the upload box keeps everything inside its smaller card */
+.studio-world.is-far .studio-drop { padding: 6px; gap: 3px; border-width: 2px; }
+.studio-world.is-far .studio-drop-icon { width: 36px; height: 28px; font-size: 14px; }
+.studio-world.is-far .studio-drop-title { font-size: 13px; }
+.studio-world.is-far .studio-drop .btn { margin-top: 2px; padding: 4px 10px; font-size: 12px; }
