@@ -35,8 +35,10 @@ htmlcov/
 .test-tmp/
 cascade-*.log
 
-# Blender backup files
+# Blender: the .py scripts in frontend/blender are the source; they rebuild these (and the .glb models in public/models)
+*.blend
 *.blend1
+frontend/blender/previews/
 
 # AI Editor beats: the style reference clip is local only, never committed
 backend/editor/ai_edit/beats/reference/*.mov
