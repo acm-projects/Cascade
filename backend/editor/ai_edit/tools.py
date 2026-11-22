@@ -11,7 +11,3 @@ def ffmpeg():
     from ..render import export_binary
     return export_binary(True)  # the build with drawtext/libass
 
-
-def demucs():
-    python = folder()/'Tools'/'demucs-venv'/'bin'/'python'
-    return str(python) if python.is_file() else None

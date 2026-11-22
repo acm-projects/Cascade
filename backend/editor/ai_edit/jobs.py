@@ -114,7 +114,7 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
         with RENDER_SLOT, media(jid, clip) as source:
             progress(.02, 'Getting the clip ready…')
             prep_dir = folder/'prep'
-            prep = preparation.prepare(source, info.get('cues', []), prep_dir, progress, separate=False, speech_optional=True)
+            prep = preparation.prepare(source, info.get('cues', []), prep_dir, progress, speech_optional=True)
             windows = _windows(state)
             speechless = not prep['words']   # nobody speaks: a visual edit planned from the frames and the motion
             current = project.load(folder/state.ai_edit.version) if state.ai_edit else None

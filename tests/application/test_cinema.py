@@ -246,8 +246,8 @@ class VisualEdits(unittest.TestCase):
             subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=30:d=24',
                             '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', str(tmp/'clip.mp4')], check=True)
             with self.assertRaises(ValueError):   # the older engines still need speech
-                preparation.prepare(tmp/'clip.mp4', [], tmp/'strict', lambda a, s: None, separate=False)
-            prep = preparation.prepare(tmp/'clip.mp4', [], tmp/'prep', lambda a, s: None, separate=False, speech_optional=True)
+                preparation.prepare(tmp/'clip.mp4', [], tmp/'strict', lambda a, s: None)
+            prep = preparation.prepare(tmp/'clip.mp4', [], tmp/'prep', lambda a, s: None, speech_optional=True)
             self.assertEqual(prep['words'], [])
             self.assertEqual(len(prep['motion']), 24)
             plan, who = planner.plan_visual('edit this clip', tmp/'prep', prep, [[0, 24]], [])

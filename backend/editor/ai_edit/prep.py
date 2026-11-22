@@ -1,9 +1,8 @@
-"""Everything measured from the clip once and reused by every revision: the isolated voice, word
-times, shot boundaries and labelled contact sheets for Claude to watch."""
+"""Everything measured from the clip once and reused by every revision: the clip's audio, word
+times (Deepgram), shot boundaries and labelled contact sheets for OpenAI to watch."""
 import json
 import math
 import re
-import shutil
 import subprocess
 import wave
 from pathlib import Path
@@ -21,26 +20,6 @@ def probe(path):
     video = next((s for s in data['streams'] if s['codec_type'] == 'video'), None)
     return {'duration': float(data['format']['duration']), 'width': video and video['width'], 'height': video and video['height'],
             'has_audio': any(s['codec_type'] == 'audio' for s in data['streams'])}
-
-
-def _voice(source, folder):
-    """The dialogue alone, so composed music never clashes with a score already in the clip. Falls back to the mix."""
-    mix = folder/'mix.wav'
-    subprocess.run([tools.ffmpeg(), '-nostdin', '-v', 'error', '-y', '-i', str(source), '-vn', '-ac', '2', '-ar', '44100', str(mix)], check=True, timeout=600, **RUN)
-    python = tools.demucs()
-    if not python: return mix, False
-    import platform
-    stem = folder/'sep'/'htdemucs'/'mix'/'vocals.wav'
-    run = None
-    if platform.system() == 'Darwin' and platform.machine() == 'arm64':  # Apple GPU only exists on Apple silicon Macs
-        run = subprocess.run([python, '-m', 'demucs', '--two-stems=vocals', '-d', 'mps', '-o', str(folder/'sep'), str(mix)], timeout=1800, cwd=folder, **RUN)
-    if run is None or run.returncode or not stem.is_file():
-        run = subprocess.run([python, '-m', 'demucs', '--two-stems=vocals', '-d', 'cpu', '-o', str(folder/'sep'), str(mix)], timeout=3600, cwd=folder, **RUN)
-    if not stem.is_file(): return mix, False
-    final = folder/'voice.wav'
-    shutil.move(stem, final)
-    shutil.rmtree(folder/'sep', ignore_errors=True)
-    return final, True
 
 
 def _energy(path, folder):
@@ -119,9 +98,8 @@ def _sheets(source, duration, folder):
     return every
 
 
-def prepare(source, cues, folder, progress, separate=True, speech_optional=False):
-    """Returns the measurements; cached in `folder` for the life of the clip. `separate=False` skips
-    voice separation (the Cinema engine edits the clip's own sound and does not need it).
+def prepare(source, cues, folder, progress, speech_optional=False):
+    """Returns the measurements; cached in `folder` for the life of the clip. Words come from Deepgram.
     `speech_optional=True` (the Cinema engine) accepts a clip with no speech or no sound: `words` is then
     empty and `motion` says how much moves in each second, for a visual edit."""
     folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
@@ -130,20 +108,16 @@ def prepare(source, cues, folder, progress, separate=True, speech_optional=False
     stamp = [stat.st_size, stat.st_mtime_ns]
     if done.is_file():
         saved = json.loads(done.read_text())
-        if saved.get('stamp') == stamp and (saved.get('separated', True) or not separate): return saved
+        if saved.get('stamp') == stamp: return saved
     media = probe(source)
     if not media['width']: raise ValueError('This clip has no video.')
     if not media['has_audio'] and not speech_optional: raise ValueError('This clip has no sound, and this edit is built around what is said.')
     db = None
     if not media['has_audio']:
         words = []
-    elif separate:
-        progress(.06, 'Separating the voices from any music in the clip…')
-        voice, isolated = _voice(source, folder)
     else:
         voice = folder/'mix.wav'
         subprocess.run([tools.ffmpeg(), '-nostdin', '-v', 'error', '-y', '-i', str(source), '-vn', '-ac', '2', '-ar', '44100', str(voice)], check=True, timeout=600, **RUN)
-        isolated = False
     if media['has_audio']:
         progress(.2, 'Transcribing every word…')
         mono, x, db = _energy(voice, folder)
@@ -155,8 +129,7 @@ def prepare(source, cues, folder, progress, separate=True, speech_optional=False
     cuts = _cuts(source)
     every = _sheets(source, media['duration'], folder)
     if db is not None: np.save(folder/'energy.npy', db.astype('float32'))
-    saved = {**media, 'stamp': stamp, 'voice': Path(voice).name if media['has_audio'] else None, 'isolated': media['has_audio'] and isolated,
-             'separated': separate, 'words': [{**w, 'i': i} for i, w in enumerate(words)],
+    saved = {**media, 'stamp': stamp, 'voice': Path(voice).name if media['has_audio'] else None, 'words': [{**w, 'i': i} for i, w in enumerate(words)],
              'cuts': cuts, 'sheet_every': every, 'sheets': sorted(p.name for p in folder.glob('sheet*.jpg')),
              'motion': motion(source) if not words else []}
     done.write_text(json.dumps(saved))

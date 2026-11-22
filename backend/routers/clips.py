@@ -267,7 +267,7 @@ def upload_video(
             source_name = source_owner.get('source_name', source_name)
         storage_service.validate_clip_storage()
         # Old saved editor requests may name the retired engines; keep their source context
-        # but run selection through main's configured agent, never restore Ollama/Whisper.
+        # but run selection through main's configured agent, never restore Ollama or local transcription.
         if engine in ('openai','qwen'):
             engine='agent'
         if engine not in ('agent','speech','visual'):
