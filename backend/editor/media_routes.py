@@ -1,13 +1,10 @@
 """Editor media routes; extracted without changing media behavior."""
 import json
 import subprocess
-import shutil
 from functools import lru_cache
-import tempfile
 from pathlib import Path
 from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, Response
-from starlette.background import BackgroundTask
 from .storage import media, selected
 from .render import export_binary
 from .runtime import jobs_dir
@@ -48,12 +45,15 @@ def style_progress(pid: str, jid: str, index: int, request: Request):
 
 
 def get_media(pid: str, jid: str, index: int, request: Request):
+    """The clip, streamed: the browser asks for byte ranges as it plays or seeks, so a long video is never
+    loaded (or copied) whole."""
     clip = selected(pid, jid, index, request.state.user_id)
-    # Copy cloud-backed temporary media before returning a streaming response.
-    with media(jid, clip) as source:
-        temp = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
-        import shutil
-        with temp:
-            with source.open('rb') as stream:
-                shutil.copyfileobj(stream, temp)
-    return FileResponse(temp.name, media_type='audio/mpeg' if clip.get('media_kind') == 'audio' or clip.get('clip_url', '').endswith('.mp3') else 'video/mp4', background=BackgroundTask(Path(temp.name).unlink))
+    name = Path(clip.get('clip_url', '')).name
+    kind = 'audio/mpeg' if clip.get('media_kind') == 'audio' or name.endswith('.mp3') else 'video/mp4'
+    local = jobs_dir() / jid / name
+    if name and local.is_file():
+        return FileResponse(local, media_type=kind)
+    if clip.get('clip_s3_key') and clip.get('s3_bucket'):
+        from backend.core.storage import stream_s3
+        return stream_s3(clip['s3_bucket'], clip['clip_s3_key'], kind, request.headers.get('range'))
+    raise HTTPException(404, 'Clip media is missing.')

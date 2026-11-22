@@ -19,9 +19,9 @@ export const EditVideo = forwardRef(function EditVideo({ projectId, clip, state,
   const time = useMemo(() => timelineClock(state), [state]);
   const snapshot = JSON.stringify(state);
   useEffect(() => {
-    let active = true, url;
-    api.getMedia(clipMediaPath(projectId, clip)).then(blob => { url = URL.createObjectURL(blob); if (active) setSource(url); }).catch(e => active && setProblem(e.message));
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+    let active = true;
+    api.mediaUrl(clipMediaPath(projectId, clip)).then(link => active && setSource(link)).catch(e => active && setProblem(e.message));
+    return () => { active = false; };
   }, [api, projectId, clip]);
   useEffect(() => {
     let active = true, url;

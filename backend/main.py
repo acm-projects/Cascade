@@ -10,6 +10,7 @@ from backend.core import auth, jobs
 from backend.core.config import FRONTEND_DIR
 from backend.routers import clips, pages, projects, settings, features, generations
 from backend.routers.editor_setup import include_editor
+from backend.core.media_links import media_link
 from backend.services.clip_backup import resume_pending
 
 app = FastAPI()
@@ -44,6 +45,7 @@ app.include_router(projects.router)
 app.include_router(settings.router)
 app.include_router(features.router)
 include_editor(app)
+app.add_api_route('/api/media-link', media_link, methods=['GET'])
 app.include_router(generations.router)
 app.include_router(studio.router)
 app.mount('/studio-assets', StaticFiles(directory=FRONTEND_DIR / 'studio', check_dir=False), name='studio-assets')

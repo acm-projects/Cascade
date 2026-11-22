@@ -9,9 +9,8 @@ function AudioPreview({ path }) {
   const [url, setUrl] = useState(null);
   const [error, setError] = useState('');
   async function load() {
-    try { setUrl(URL.createObjectURL(await api.getMedia(path))); } catch (e) { setError(e.message); }
+    try { setUrl(await api.mediaUrl(path)); } catch (e) { setError(e.message); }
   }
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
   return url ? <audio controls preload="metadata" src={url} aria-label="Track audio preview" /> : <><button type="button" className="editor-choice" onClick={load}>Preview audio</button>{error && <p role="alert">{error}</p>}</>;
 }
 

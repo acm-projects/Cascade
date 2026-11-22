@@ -239,3 +239,38 @@ def upload_source_media(folder, job_id, owner):
         client.upload_file(str(original), bucket, original_key, ExtraArgs={'ContentType':'application/octet-stream'})
         result['original_source_s3_key'] = original_key
     return result
+
+
+def stream_s3(bucket, key, media_type, byte_range=None):
+    """Stream an S3 object to the browser in 1 MB pieces, honouring a Range header so video can seek
+    without downloading the whole file."""
+    from botocore.exceptions import BotoCoreError, ClientError
+    from fastapi.responses import StreamingResponse
+    parameters = {"Bucket": bucket, "Key": key}
+    if byte_range:
+        if not re.fullmatch(r"bytes=(?:[0-9]+-[0-9]*|-[0-9]+)", byte_range):
+            raise HTTPException(416, "Invalid byte range.")
+        parameters["Range"] = byte_range
+    try:
+        result = s3_client().get_object(**parameters)
+    except ClientError as error:
+        code = error.response.get("Error", {}).get("Code")
+        if code == "InvalidRange":
+            raise HTTPException(416, "Requested range unavailable.") from error
+        if code in ("NoSuchKey", "404"):
+            raise HTTPException(404, "Clip not found.") from error
+        raise HTTPException(503, "Could not retrieve clip.") from error
+    except BotoCoreError as error:
+        raise HTTPException(503, "Could not retrieve clip.") from error
+    body = result["Body"]
+
+    def chunks():
+        try:
+            yield from body.iter_chunks(chunk_size=1024 * 1024)
+        finally:
+            body.close()
+
+    headers = {"Content-Length": str(result["ContentLength"]), "Accept-Ranges": "bytes", "Cache-Control": "no-store"}
+    if result.get("ContentRange"):
+        headers["Content-Range"] = result["ContentRange"]
+    return StreamingResponse(chunks(), media_type=media_type, headers=headers, status_code=206 if byte_range else 200)

@@ -92,9 +92,9 @@ export function studioUpload(token, projectId, sessionId, { video, prompt, clipC
 }
 
 /**
- * GET a protected video file (a clip's clip_url like "/clips/<job>/clip_1.mp4", or
- * "/api/projects/<id>/source/<job>" for the original). Videos can't send the sign-in token on
- * their own, so we download them with it and play the downloaded copy.
+ * GET a protected media file whole (a clip's clip_url like "/clips/<job>/clip_1.mp4", or
+ * "/api/projects/<id>/source/<job>" for the original). Only for code that needs the bytes
+ * (filmstrip frames, audio waveforms); to play a video use mediaUrl, which streams.
  * @returns {Promise<Blob>}
  */
 export function getMedia(token, path) {
@@ -102,4 +102,18 @@ export function getMedia(token, path) {
     return Promise.reject(new Error("Invalid media address."));
   }
   return apiFetch(path, { token });
+}
+
+/**
+ * A link to play a protected video or audio file in a <video>/<audio> tag. Those tags can't send the
+ * sign-in token, so the backend signs a short-lived link for this one file; the browser then streams it
+ * in pieces (and can seek) instead of downloading the whole file into memory first.
+ * @returns {Promise<string>}
+ */
+export async function mediaUrl(token, path) {
+  if (!path.startsWith("/clips/") && !path.startsWith("/api/projects/")) {
+    throw new Error("Invalid media address.");
+  }
+  const { url } = await apiFetch(`/api/media-link?path=${encodeURIComponent(path)}`, { token });
+  return url;
 }

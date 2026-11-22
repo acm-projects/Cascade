@@ -22,12 +22,14 @@ function MediaPreview({ item, clip, onClose }) {
   useEffect(() => {
     let active = true;
     let objectUrl = null;
-    const load = file ? Promise.resolve(file) : api.getMedia(path);
+    // A file picked on this computer plays from memory; a saved video streams from a signed link.
+    const load = file
+      ? Promise.resolve((objectUrl = URL.createObjectURL(file)))
+      : api.mediaUrl(path);
     load
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
-        const audio = blob.type.startsWith("audio/") || /\.(mp3|wav|m4a|flac)$/i.test(file?.name || "");
-        if (active) setLoaded({ key, url: objectUrl, audio });
+      .then((url) => {
+        const audio = (file?.type || "").startsWith("audio/") || /\.(mp3|wav|m4a|flac)$/i.test(file?.name || path || "");
+        if (active) setLoaded({ key, url, audio });
       })
       .catch((err) => active && setError({ key, message: err.message }));
     return () => {

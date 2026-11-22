@@ -22,6 +22,7 @@ PROTECTED_EXACT_PATHS = (
     "/api/my-clips",
     "/api/session",
     "/api/settings",
+    "/api/media-link",
 )
 
 
@@ -346,7 +347,17 @@ async def authenticate_request(
                 status_code=403,
             )
 
-        if is_dev_auth_request(request):
+        media_user = None
+        if request.method in ("GET", "HEAD") and request.query_params.get("media_token"):
+            # A signed media link (backend/core/media_links.py) stands in for the sign-in header on one path.
+            from .media_links import user_for
+            media_user = user_for(request.query_params["media_token"], request.url.path)
+            if not media_user:
+                return JSONResponse({"detail": "This media link has expired. Reload the page."}, status_code=401)
+
+        if media_user:
+            request.state.user_id = media_user
+        elif is_dev_auth_request(request):
             request.state.user_id = DEV_USER_ID
             request.state.dev_auth = True
         else:

@@ -38,6 +38,8 @@ class EditorRouteTests(unittest.TestCase):
         additions += [[prefix+'/publish/linkedin', ['GET']], [prefix+'/publish/linkedin', ['POST']],
                       ['/api/projects/{pid}/social/linkedin', ['GET']], ['/api/projects/{pid}/social/linkedin/connect', ['POST']],
                       ['/api/social/linkedin/callback', ['GET']]]
+        # Signed links so <video> tags can stream protected media (backend/core/media_links.py).
+        additions.append(['/api/media-link', ['GET']])
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
 
     def test_editor_modules_remain_small(self):

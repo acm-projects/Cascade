@@ -80,20 +80,13 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const [fileShape, setFileShape] = useState(null); // an AI edit's own width / height, once its file has loaded
   const framingPlan = useFramingPlan(projectId, clip, state, info);
 
-  // Download the clip with the sign-in token (videos can't send it themselves)
+  // A signed link to stream the clip (videos can't send the sign-in token themselves)
   useEffect(() => {
     let active = true;
-    let objectUrl = null;
-    api.getMedia(clipMediaPath(projectId, clip))
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
-        if (active) setUrl(objectUrl);
-      })
+    api.mediaUrl(clipMediaPath(projectId, clip))
+      .then((link) => active && setUrl(link))
       .catch((err) => active && setError(err.message));
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    return () => { active = false; };
   }, [api, projectId, clip]);
 
   // Measure the space we have, so the frame can be as big as fits (and captions scale with it)

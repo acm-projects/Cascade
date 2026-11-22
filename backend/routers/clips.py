@@ -9,9 +9,8 @@ import shutil
 import time
 import traceback
 
-from botocore.exceptions import ClientError, BotoCoreError
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from backend.services import projects_store, features as feature_workers
 from backend.agent.website import requirements_error, select_with_agent
@@ -531,94 +530,7 @@ def get_clip(
         )
 
     if storage and storage.get(key_field):
-        parameters = {
-            "Bucket": storage["s3_bucket"],
-            "Key": storage[key_field],
-        }
-
-        byte_range = request.headers.get(
-            "range"
-        )
-
-        if byte_range:
-            if not re.fullmatch(
-                r"bytes=(?:[0-9]+-[0-9]*|-[0-9]+)",
-                byte_range,
-            ):
-                raise HTTPException(
-                    416,
-                    "Invalid byte range.",
-                )
-
-            parameters["Range"] = byte_range
-
-        try:
-            result = storage_service.s3_client().get_object(
-                **parameters
-            )
-
-        except ClientError as error:
-            code = error.response.get(
-                "Error",
-                {},
-            ).get("Code")
-
-            if code == "InvalidRange":
-                raise HTTPException(
-                    416,
-                    "Requested range unavailable.",
-                ) from error
-
-            if code in ("NoSuchKey", "404"):
-                raise HTTPException(
-                    404,
-                    "Clip not found.",
-                ) from error
-
-            raise HTTPException(
-                503,
-                "Could not retrieve clip.",
-            ) from error
-
-        except BotoCoreError as error:
-            raise HTTPException(
-                503,
-                "Could not retrieve clip.",
-            ) from error
-
-        body = result["Body"]
-
-        def chunks():
-            try:
-                yield from body.iter_chunks(
-                    chunk_size=1024 * 1024
-                )
-
-            finally:
-                body.close()
-
-        headers = {
-            "Content-Length": str(
-                result["ContentLength"]
-            ),
-
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-store",
-        }
-
-        if result.get("ContentRange"):
-            headers["Content-Range"] = (
-                result["ContentRange"]
-            )
-
-        return StreamingResponse(
-            chunks(),
-            media_type=media_type,
-            headers=headers,
-            status_code=(
-                206 if byte_range else 200
-            ),
-        )
+        return storage_service.stream_s3(storage["s3_bucket"], storage[key_field], media_type, request.headers.get("range"))
 
     path = folder / filename
 
