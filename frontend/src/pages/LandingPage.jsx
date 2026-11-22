@@ -22,7 +22,7 @@ function LandingPage() {
       <main className="landing-copy">
         <h1 className="landing-title">CASCADE</h1>
         <p className="landing-headline">Turn one video into a week of content.</p>
-        <p className="landing-sub">AI finds the best moments, edits them for you, and writes captions, all in one place.</p>
+        <p className="landing-sub">Drop in one video. Watch the clips cascade out.</p>
         <Link to="/projects" className="landing-start" onClick={diveToProjects}>
           <span className="landing-start-top">Get Started <Icon name="arrowRight" /></span>
         </Link>

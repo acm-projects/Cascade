@@ -159,7 +159,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
       return;
     }
     const video = videoRef.current;
-    if (video.paused) video.play().catch(e => setRenderError(e.message));
+    if (video.paused) video.play().catch(() => {});   // play() is refused when a pause interrupts it; nothing to show
     else video.pause();
   }
 

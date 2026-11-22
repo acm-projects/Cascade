@@ -419,7 +419,7 @@
   }
 }
 
-/* ---------- The frog's tip, in the empty corner under the sidebar (TrendsTip in ProjectsPage.jsx) ---------- */
+/* ---------- Cassie the seahorse, floating under the sidebar (SeahorseBuddy in ProjectsPage.jsx) ---------- */
 .projects-tip {
   display: flex;
   flex-direction: column;
@@ -428,46 +428,7 @@
   margin-top: auto;   /* sits at the bottom of the sidebar */
   padding-bottom: calc(18 * var(--u));
 }
-.projects-tip-bubble {
-  position: relative;
-  margin: 0;
-  padding: 12px 30px 12px 14px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, var(--surface-light), var(--surface));
-  box-shadow: 0 4px 0 var(--surface-edge), 0 10px 18px rgba(10, 40, 70, 0.3);
-  color: var(--surface-ink);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.45;
-}
-.projects-tip-bubble b { font-weight: 800; }
-/* the bubble's tail, pointing down at the frog */
-.projects-tip-bubble::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -9px;
-  width: 18px;
-  height: 18px;
-  background: var(--surface);
-  transform: translateX(-50%) rotate(45deg);
-  border-radius: 0 0 4px 0;
-}
-.projects-tip-close {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  padding: 2px 6px;
-  border: 0;
-  background: transparent;
-  color: var(--surface-ink);
-  font-size: 18px;
-  line-height: 1;
-  opacity: 0.6;
-  cursor: pointer;
-}
-.projects-tip-close:hover { opacity: 1; }
-.projects-tip-frog { margin-top: 6px; }
+.projects-tip-seahorse { margin-bottom: 10px; }
 
 /* short windows: no room for the tip without crowding the buttons */
 @media (max-height: 720px), (max-width: 900px) {

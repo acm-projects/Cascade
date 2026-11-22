@@ -70,7 +70,7 @@ function CaptionsTab({ state, info, change, patch, recordUndo, player, view, onV
       </div>
       </div>
       {info.burned_in && (
-        <p className="editor-control-note">This clip already has captions burned in, so ours start off. Turn them on to add more.</p>
+        <p className="editor-control-note">This clip already has captions burned in. Turn ours on only if you want to add more.</p>
       )}
 
 

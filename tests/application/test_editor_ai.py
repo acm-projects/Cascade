@@ -17,7 +17,7 @@ class EditorAITests(unittest.TestCase):
             {'type':'caption_color','color':'#ffff00'}]}, 1, 1)
 
     def test_editor_uses_openai_even_with_stale_claude_settings(self):
-        env={'LLM_PROVIDER':'anthropic','CASCADE_EDITOR_PROVIDER':'anthropic', 'OPENAI_API_KEY':'test'}
+        env={'LLM_PROVIDER':'anthropic','OPENAI_API_KEY':'test'}
         with patch.dict(os.environ,env), patch.object(structured,'make_client',return_value=object()) as client, \
                 patch.object(structured,'_openai',return_value=self.result()) as call:
             proposal=ai.request_edit({'request':'make captions yellow'})
@@ -27,7 +27,7 @@ class EditorAITests(unittest.TestCase):
             self.assertIn('make captions yellow',call.call_args.args[2])
 
     def test_override_is_per_call_and_does_not_change_global_provider(self):
-        with patch.dict(os.environ,{'LLM_PROVIDER':'anthropic','CASCADE_EDITOR_PROVIDER':'anthropic'}), patch.object(
+        with patch.dict(os.environ,{'LLM_PROVIDER':'anthropic'}), patch.object(
             structured,'make_client',return_value=object()) as client, patch.object(
             structured,'_anthropic',return_value=self.result()), patch.object(structured,'_openai',return_value=self.result()):
             ai.request_edit({})
@@ -39,17 +39,17 @@ class EditorAITests(unittest.TestCase):
     def test_missing_keys_and_invalid_provider_fail_without_leaking_details(self):
         for provider in ('anthropic','openai','invalid'):
             with self.subTest(provider=provider), patch.dict(os.environ,{
-                'CASCADE_EDITOR_PROVIDER':provider,'ANTHROPIC_API_KEY':'','OPENAI_API_KEY':''}):
+                'LLM_PROVIDER':provider,'ANTHROPIC_API_KEY':'','OPENAI_API_KEY':''}):
                 with self.assertRaises(HTTPException) as error:
                     ai.request_edit({})
                 self.assertEqual(error.exception.status_code,503)
-        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(openai_edit,'structured_json',side_effect=LLMConfigError('private')):
+        with patch.object(openai_edit,'structured_json',side_effect=LLMConfigError('private')):
             with self.assertRaises(HTTPException) as error:ai.request_edit({})
             self.assertNotIn('private',error.exception.detail)
 
     def test_invalid_output_never_becomes_an_edit(self):
         for data in ({'message':'ok','actions':[{'type':'shell'}]}, {'message':'ok','actions':'broken'}, {}):
-            with self.subTest(data=data), patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(openai_edit,'structured_json',return_value=StructuredResult(data,0,0)):
+            with self.subTest(data=data), patch.object(openai_edit,'structured_json',return_value=StructuredResult(data,0,0)):
                 with self.assertRaises(HTTPException) as error:ai.request_edit({})
                 self.assertEqual(error.exception.status_code,502)
                 self.assertIn('unchanged',error.exception.detail)

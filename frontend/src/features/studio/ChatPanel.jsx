@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./ChatPanel.css";
 import leafCream from "../../assets/icons/leaf-cream.svg";
-import Mascot from "../../components/Mascot";
+import Seahorse from "../../components/Seahorse";
 import { MAX_CLIPS, requestedClipCount } from './clipCount';
 
 const MIN_CLIPS = 1;
@@ -64,9 +64,9 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
   return (
     <section className="chat-panel wood-panel" aria-label="AI assistant chat">
       <header className="chat-panel-header">
-        <span className="chat-panel-avatar"><Mascot variant="head" size={44} /></span>
+        <span className="chat-panel-avatar"><Seahorse variant="head" size={40} /></span>
         <div>
-          <h2>BufoBot</h2>
+          <h2>Cassie</h2>
           <p>Tell me what to find and how many clips you want.</p>
         </div>
       </header>

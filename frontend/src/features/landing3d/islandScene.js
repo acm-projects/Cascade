@@ -623,30 +623,6 @@ function buildBirds(root) {
   };
 }
 
-function buildClouds(scene, random) {
-  const whiteMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 1, transparent: true, opacity: 0.92 });
-  const clouds = [[14, 9.5, -8, 0.8, 0.12], [-8, 11, -11, 1, 0.08]].map(([x, y, z, size, speed]) => {
-    const group = new THREE.Group();
-    for (let i = 0; i < 6; i += 1) {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry((0.62 + random() * 0.6) * size, 14, 10), whiteMaterial);
-      puff.position.set((i - 2.5) * 0.76 * size, random() * 0.32 * size, (random() - 0.5) * 0.9 * size);
-      puff.scale.y = 0.68;
-      group.add(puff);
-    }
-    group.position.set(x, y, z);
-    scene.add(group);
-    return { group, speed, startX: x, startZ: z };
-  });
-  return (time) => {
-    for (const cloud of clouds) {
-      // Drift across the screen and wrap around, far enough out that the jump can't be seen
-      const travel = ((time * cloud.speed * 2 + 22) % 44) - 22;
-      cloud.group.position.x = cloud.startX + travel * 0.7;
-      cloud.group.position.z = cloud.startZ - travel * 0.7;
-    }
-  };
-}
-
 // ---------- Small details: grass, stones, moss, a campfire, a dock, and little animals ----------
 
 // Many copies of one small shape, drawn in one go. items: [{ x, y, z, rx, ry, rz, sx, sy, sz, color }]
@@ -919,7 +895,6 @@ export function createIslandScene(canvas, { still = false, framing = "hero" } = 
     buildCrystals(root, random),
     buildVines(root, random),
     buildBirds(root),
-    buildClouds(scene, random),
     buildSea(root, random, renderer.getPixelRatio()),
     buildCampfire(root),
     buildBoat(root),

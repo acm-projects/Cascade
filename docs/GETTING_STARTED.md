@@ -146,5 +146,5 @@ cd frontend && npm run lint && npm test && npm run build
 - **`401 Please sign in first`.** The proxy works and the backend wants a signed-in user. Sign in, or set `CASCADE_DEV_AUTH=1` in your local `.env` and restart the backend. Credential-free loopback requests then use `dev-user`; existing credentials are still checked. `/api/auth-config` reports `dev_auth` for frontend support. Never enable this in production.
 - **"Face model is missing" in the Editor's Fill mode.** Run `.venv/bin/python scripts/setup_reframe.py` (step 4).
 - **`You are sending unauthenticated requests to the HF Hub` or `Redirects are currently not supported in MacOs`.** Harmless startup warnings; ignore them.
-- **"Editing AI is not configured" in the Editor chat.** The Editor chat uses the `LLM_PROVIDER` key (or `CASCADE_EDITOR_PROVIDER` if you set it), and that key is missing or still the placeholder. Restart the backend after editing `.env`.
+- **"Editing AI is not configured" in the Editor chat.** The Editor chat uses `OPENAI_API_KEY`, and that key is missing or still the placeholder. Restart the backend after editing `.env`.
 - **The React app breaks after `git pull`.** Run `npm install` in `frontend/` (packages may have changed), then `npm run dev` again.

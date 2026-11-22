@@ -60,7 +60,8 @@ def get_draft(pid: str, jid: str, index: int, request: Request):
             info['warning'] += ' Outdated saved edits were reset.'
             draft = None
     if draft is None:
-        draft = Draft(state=Edit(start=0, end=info['duration'], captions=Captions(enabled=not info['burned_in'])))
+        # Captions are opt-in: a new clip starts with them off, and "Show captions" turns them on
+        draft = Draft(state=Edit(start=0, end=info['duration'], captions=Captions(enabled=False)))
     from .storyboard import pending
     board = pending(pid, jid, index, request.state.user_id)  # still waiting for notes or "render" after a reload
     from .ai_edit.jobs import job_status, root

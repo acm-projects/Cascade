@@ -63,7 +63,7 @@ class ReelRenderTests(unittest.TestCase):
         actions=[Action(type='high_energy_reel')]
         # This exercises the retained legacy renderer; FableCut has separate
         # sequence integration tests and real-media verification.
-        with patch.dict(os.environ,{'CASCADE_EDITOR_PROVIDER':'openai'}), patch.object(ai,'request_edit',return_value=Proposal(message='Plan',actions=actions)):
+        with patch.object(ai,'request_edit',return_value=Proposal(message='Plan',actions=actions)):
             response=self.client.post(self.url+'/chat',headers=self.headers,json={'state':self.get(),'message':'Apply a polished energetic style with a strong opening, beat-synced edits, bold animated captions, selective punch-in zooms, relevant B-roll, and music that stays beneath the dialogue.'})
         self.assertEqual(response.status_code,200,response.text);data=response.json();state=data['state']
         self.assertTrue(state['speed']);self.assertTrue(state['timeline']);self.assertTrue(state['reel']['beats'])
