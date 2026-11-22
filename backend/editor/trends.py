@@ -245,7 +245,7 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
     goal=body.goal.strip() or 'Help me improve this clip’s editing.'
     topic=derive_search(clip,info,goal,body.topic)
     if len(topic)<3:raise HTTPException(422,'Enter a topic with at least three characters.')
-    from backend.trends.claude_route import model as selected_model
+    from backend.cascade_llm import selected_model
     model=selected_model();root=folder(pid,jid,index,user);edit_version=version(body.state)
     added=reference_ids(body.references)
     key=hashlib.sha256(f'{REVISION}|{model}|{edit_version}|{topic.casefold()}|{goal.casefold()}|{",".join(added)}'.encode()).hexdigest()
@@ -266,7 +266,7 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
 
 def tutorial(video_id,work):
     from backend.trends import pipeline
-    from backend.trends.claude_route import structured_json
+    from backend.cascade_llm import structured_json
     path=stage('download',pipeline.download_video,video_id,work,reference=video_id)
     audio=stage('audio_extract',pipeline.extract_audio,path,work,reference=video_id)
     transcript=stage('transcription',pipeline.transcribe,audio,reference=video_id)
@@ -276,9 +276,9 @@ def tutorial(video_id,work):
     return {'techniques':data['techniques'][:8]}
 
 def collect(pid,jid,index,user,state,record,progress):
-    from backend.trends import claude_route,pipeline,youtube_trends
+    from backend.trends import pipeline,youtube_trends
     from backend.trends.router import _compare_tags
-    from backend.trends.claude_route import structured_json
+    from backend.cascade_llm import structured_json
     from .render import export
     request=SimpleNamespace(state=SimpleNamespace(user_id=user))
     clip=selected(pid,jid,index,user);info=details(jid,clip)
@@ -290,7 +290,7 @@ def collect(pid,jid,index,user,state,record,progress):
             _,mapped,clock=mapped_state(state,info)
             transcript=' '.join(c['text'] for c in mapped['cues'])
             speech=speech_evidence(info)
-            if not transcript and info.get('has_audio') and not claude_route.active():
+            if not transcript and info.get('has_audio'):
                 # Missing saved captions are not evidence of silence. Analyze actual
                 # edited audio for research, without overwriting the user's VTT/draft.
                 try:
@@ -433,7 +433,7 @@ def run(pid,jid,index,user,state,record,root):
 
 def research_for_chat(pid,jid,index,user,state,topic='',goal=''):
     # Chat can run the same worker synchronously, while UI calls it in the background.
-    from backend.trends.claude_route import model as selected_model
+    from backend.cascade_llm import selected_model
     model=selected_model()
     with LOCK:
         root=folder(pid,jid,index,user)

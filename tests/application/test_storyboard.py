@@ -1,4 +1,4 @@
-"""Storyboard-first AI Editor chat, offline: Claude Code, Ollama and the renderer are never called."""
+"""Storyboard-first AI Editor chat, offline: OpenAI, Ollama and the renderer are never called."""
 import os
 import tempfile
 import unittest
@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from backend.editor import claude_code, storyboard, openai_edit
+from backend.editor import storyboard, openai_edit
 from backend.editor.models import Edit
 from backend.editor.storyboard_models import SavedStoryboard, Storyboard
 
@@ -94,21 +94,6 @@ class StoryboardTests(unittest.TestCase):
         self.assertTrue(storyboard.CANCEL.search('discard'))
         text = storyboard.describe(board(planner='Claude (your Claude subscription)'))
         self.assertIn('3 beats below, 1 cut. Planned by Claude', text)
-
-    def test_claude_code_never_sees_an_api_key(self):
-        with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'sk-ant-secret', 'ANTHROPIC_AUTH_TOKEN': 't', 'PATH': '/bin'}):
-            env = claude_code.subscription_env()
-        self.assertNotIn('ANTHROPIC_API_KEY', env); self.assertNotIn('ANTHROPIC_AUTH_TOKEN', env)
-        self.assertEqual(env['PATH'], '/bin')
-
-    def test_claude_code_requires_a_subscription_sign_in(self):
-        with tempfile.TemporaryDirectory() as folder:
-            fake = Path(folder)/'claude'; fake.write_text('#!/bin/sh\necho \'{"loggedIn": true, "authMethod": "api_key"}\'\n'); fake.chmod(0o755)
-            with patch.dict(os.environ, {'CASCADE_CLAUDE_BIN': str(fake), 'CASCADE_EDITOR_CLAUDE': ''}):
-                self.assertEqual(claude_code.signed_in(), '')
-                with self.assertRaises(HTTPException) as raised:
-                    claude_code.ask('system', 'prompt')
-        self.assertIn('not signed in with a Claude subscription', raised.exception.detail)
 
 
 if __name__ == '__main__':

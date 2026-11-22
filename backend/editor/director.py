@@ -1,20 +1,14 @@
 """AI Director: watch the clip, find real reference edits, choose the right kind of edit.
 
-1. Analysis: the free Gemini tier watches a small proxy of the clip (video + audio) with its
-   transcript; if the free quota is used up, the local Ollama vision model reads sampled frames;
-   if neither is available, transcript keywords decide.
+1. Analysis: OpenAI (API key) watches sampled frames of the clip with its transcript.
 2. Inspiration: key-less YouTube search for that kind of edit (inspiration.py), with measured
    cut pacing and reference frames.
-3. Plan: one more free request picks the style using both; defaults per genre otherwise.
-No paid provider is ever called.
+3. Plan: one more OpenAI request picks the style using both.
 """
 import base64
 import json
 import logging
 import re
-import subprocess
-import tempfile
-from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -52,34 +46,8 @@ Return ONE JSON object: {"style", "look": bw|sepia|warm|teal_orange|natural|vivi
 Times are seconds from the clip start.'''
 
 
-def _proxy(source, start, end, folder):
-    path = Path(folder)/'proxy.mp4'
-    subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-ss', f'{start:.3f}', '-i', str(source), '-t', f'{end-start:.3f}',
-                    '-vf', 'scale=-2:360,fps=4', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '32', '-c:a', 'aac', '-b:a', '32k', '-ac', '1',
-                    str(path)], check=True, capture_output=True, timeout=180)
-    return path
-
-
 def _transcript(info, state):
     return [{'at': round(c['start']-state.start, 2), 'text': c['text']} for c in info.get('cues', []) if state.start <= c['start'] < state.end][:120]
-
-
-def _gemini(system, parts):
-    from . import gemini_planner
-    if not gemini_planner.configured(): raise HTTPException(503, 'Gemini free tier is not configured.')
-    return gemini_planner.generate_json(system, parts, None, max_output_tokens=4096)
-
-
-def _local(system, context, frames):
-    """Free local fallback (Ollama vision model on a contact sheet of sampled frames)."""
-    import httpx
-    from .local_ai import contact_sheet, runtime
-    url, model = runtime()
-    with httpx.Client(timeout=httpx.Timeout(240, connect=5), trust_env=False) as client:
-        response = client.post(url+'/api/chat', json={'model': model, 'stream': False, 'format': 'json', 'options': {'temperature': .2, 'num_ctx': 16384},
-                               'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': json.dumps(context), 'images': contact_sheet(frames)}]})
-    response.raise_for_status()
-    return json.loads(response.json()['message']['content'])
 
 
 def _keywords(info, state, title):

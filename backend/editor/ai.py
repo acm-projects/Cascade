@@ -1,7 +1,6 @@
 """Editor ai; extracted without changing media behavior."""
 import json
 import logging
-import os
 from fastapi import HTTPException
 from backend.cascade_llm import structured_json, LLMConfigError
 from .models import Proposal
@@ -58,13 +57,6 @@ LOCAL_ANALYSIS = ('ollama', 'local', 'openchatcut')  # frames/beats measured on 
 def editor_provider():
     """OpenAI for Editor features; shared LLM_PROVIDER and other features are untouched."""
     return 'openai'
-
-
-def claude_plan():
-    """The user's Claude plan when it does the planning: no provider chosen and the CLI signed in, else ''."""
-    if os.getenv('CASCADE_EDITOR_PROVIDER', '').strip(): return ''
-    from . import claude_code
-    return claude_code.signed_in()
 
 
 def request_edit(payload):

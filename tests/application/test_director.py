@@ -1,4 +1,4 @@
-"""AI Director routing and recipes, offline: no Gemini, YouTube, Ollama or Pexels calls."""
+"""AI Director routing and recipes, offline: no OpenAI, YouTube, Ollama or Pexels calls."""
 import unittest
 from unittest.mock import patch
 

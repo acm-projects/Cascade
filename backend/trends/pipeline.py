@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 import yt_dlp
-from . import claude_route
 from .diagnostics import stage,ydl_options
 
 from backend.cascade_llm import OPENAI, make_client, selected_model, selected_provider, structured_json
@@ -201,8 +200,6 @@ def extract_audio(video_path: Path, dest_dir: Path) -> Path | None:
 def transcribe(audio_path: Path | None) -> str:
     if audio_path is None:
         return ""
-    if claude_route.active():  # references are saved in a folder named after their YouTube id
-        return claude_route.captions(audio_path.parent.name)
     segments = transcribe_media(audio_path)  # Deepgram
     return " ".join(segment["text"] for segment in segments).strip()
 
@@ -232,11 +229,6 @@ def extract_tags(frame_paths: list[Path], transcript: str) -> dict[str, Any]:
         "Extract structured tags describing its style and content.\n\n"
         f"Transcript:\n{transcript or '(no speech detected)'}"
     )
-
-    if claude_route.active():
-        tags = claude_route.tags(frame_paths, prompt_text, TAG_SCHEMA)
-        cache_path.write_text(json.dumps(tags))
-        return tags
 
     provider = selected_provider()
     model = selected_model()

@@ -100,7 +100,7 @@ from unittest.mock import patch
 
 from backend.editor.ai_edit.cinema import engine, planner, project, revise
 
-NO_AI = {'CASCADE_EDITOR_CLAUDE': 'off', 'CASCADE_EDIT_PLANNER': 'rules', 'CASCADE_EDIT_PLANNER_CMD': ''}
+NO_AI = {'CASCADE_EDIT_PLANNER': 'rules'}
 STORY = ('What is the most dangerous animal in the Amazon? The jaguars are the pit bulls of the big cats. '
          'They crush the skull of a caiman. But in the forest they are peaceful. He walked right by me.')
 

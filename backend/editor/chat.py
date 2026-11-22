@@ -91,17 +91,6 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
             measured_assets.append(asset)
         assets=measured_assets
     frames = footage_frames(jid,clip,body.state,info,hints) if info.get('has_video', True) and proposal is None else []
-    # Rich sequence editing uses the installed open-source compositor. Shared
-    # non-editor providers and ordinary manual-edit chat tools remain unchanged.
-    # The sequence planner needs Gemini; with a Claude plan doing the planning, requests stay on the path below.
-    if ai.editor_provider() in ai.LOCAL_ANALYSIS and proposal is None and not ai.claude_plan():
-        from .sequence_ai import direct_revision, edit as sequence_edit
-        occ=ai.editor_provider()=='openchatcut'
-        montage=r'sequence|montage|pacing|transition|ramp|shot|cut.*beat'+(r'|zoom|shake|slow.?mo|grade|look|cinematic|title|hook|faster|slower|energy|music' if occ else '')
-        new_sequence=occ and info.get('has_video',True) and re.search(r'reel|tiktok|shorts?\b|montage|hype|high.?energy|beat|cinematic|trailer|edit (this|it)|make (this|it)',body.message,re.I)
-        if is_reel_request(body.message) or new_sequence or (body.state.fablecut and (
-            direct_revision(body.state,body.message) is not None or re.search(montage,body.message,re.I))):
-            return sequence_edit(body.state,body.message,body.chat,info,hints,frames,audio_store)
     proposal = proposal or ai.request_edit({'visual_frames': frames,'broll_results': results, 'audio_assets': assets,
         'selected_broll_segment':body.selected_segment, 'media_kind': info.get('media_kind', 'video'),
         'style_request': 'high-energy-v1' if is_reel_request(body.message) else None,
@@ -125,12 +114,6 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
         'transcript_cues': len(info['cues']),
         'limitation': 'Sparse sampled frames and transcript context; not continuous video comprehension or word-level forced alignment.',
     }
-    if ai.editor_provider() == 'openchatcut':
-        from . import gemini_planner
-        analysis.update(provider='Gemini API free tier', model=gemini_planner.last_model(), quota={k: gemini_planner.usage()[k] for k in ('used','limit','resets')})
-    elif ai.editor_provider() in ('ollama','local'):
-        from .local_ai import runtime
-        analysis['model'] = runtime()[1]
 
     if state.reframe.enabled and not state.reframe.analysis_id:
         try:

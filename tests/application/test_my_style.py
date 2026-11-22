@@ -1,4 +1,4 @@
-"""Styles learned from the user's reference reels for the AI Editor chat, offline (no Gemini, Ollama, yt-dlp or HyperFrames calls)."""
+"""Styles learned from the user's reference reels for the AI Editor chat, offline (no OpenAI, Ollama, yt-dlp or HyperFrames calls)."""
 import subprocess
 import tempfile
 import unittest

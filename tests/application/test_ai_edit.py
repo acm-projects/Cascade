@@ -144,20 +144,19 @@ class Routing(unittest.TestCase):
     state = Edit(start=0, end=10)
 
     def test_edit_requests_and_followups_route_here(self):
-        with patch('backend.editor.ai.claude_plan', return_value='pro'):
-            self.assertTrue(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
-            self.assertFalse(jobs.wants(body(self.state, 'make the captions yellow'), {'has_video': True}))
-            self.assertFalse(jobs.wants(body(self.state, 'edit this with a storyboard'), {'has_video': True}))
-            self.assertFalse(jobs.wants(body(self.state, 'edit this clip'), {'has_video': False}))
-            edited = self.state.model_copy(update={'ai_edit': AIEditRef(version='v001', duration=9)})
-            self.assertTrue(jobs.wants(body(edited, 'make the captions yellow'), {'has_video': True}))
+        self.assertTrue(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
+        self.assertFalse(jobs.wants(body(self.state, 'make the captions yellow'), {'has_video': True}))
+        self.assertFalse(jobs.wants(body(self.state, 'edit this with a storyboard'), {'has_video': True}))
+        self.assertFalse(jobs.wants(body(self.state, 'edit this clip'), {'has_video': False}))
+        edited = self.state.model_copy(update={'ai_edit': AIEditRef(version='v001', duration=9)})
+        self.assertTrue(jobs.wants(body(edited, 'make the captions yellow'), {'has_video': True}))
 
-    def test_legacy_engine_uses_openai_without_a_claude_plan(self):
-        with patch('backend.editor.ai.claude_plan', return_value=''), patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'legacy'}):
+    def test_legacy_engine_uses_openai(self):
+        with patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'legacy'}):
             self.assertTrue(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
 
-    def test_cinema_engine_edits_even_without_claude(self):
-        with patch('backend.editor.ai.claude_plan', return_value=''), patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'cinema'}):
+    def test_cinema_engine_edits(self):
+        with patch.dict('os.environ', {'CASCADE_EDIT_ENGINE': 'cinema'}):
             self.assertTrue(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
 
 
@@ -193,7 +192,7 @@ class Failure(unittest.TestCase):
         @contextmanager
         def media(*a):
             yield Path('clip.mp4')
-        env = {'CASCADE_EDIT_ENGINE': 'cinema', 'CASCADE_EDITOR_CLAUDE': 'off', 'CASCADE_EDIT_PLANNER': 'rules', 'CASCADE_EDIT_PLANNER_CMD': ''}
+        env = {'CASCADE_EDIT_ENGINE': 'cinema', 'CASCADE_EDIT_PLANNER': 'rules'}
         with TemporaryDirectory() as folder, patch.object(jobs, '_publish') as publish, patch('backend.editor.storage.media', media), \
                 patch.object(jobs.preparation, 'prepare', return_value=prep), patch.object(jobs.preparation, 'probe', return_value={'duration': 6.0}), \
                 patch.object(engine, 'make', fake_make), patch.dict('os.environ', env):

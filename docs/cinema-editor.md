@@ -50,22 +50,11 @@ Set these in `.env` and restart the backend. Nothing else changes.
 
 | Variable | Values | Meaning |
 |---|---|---|
-| `CASCADE_EDIT_PLANNER` | `auto` (default) | Claude Code CLI if signed in, else a custom command if set, else the rule-based director |
-| | `claude` | Only the Claude Code CLI |
-| | `command` | Only the program in `CASCADE_EDIT_PLANNER_CMD` |
-| | `rules` | No AI at all |
-| `CASCADE_EDIT_MODEL` | unset (default) | The Claude CLI's own default model for your subscription |
-| | `opus`, `sonnet`, or a full model id | Passed to the CLI as `--model` |
-| `CASCADE_EDIT_PLANNER_CMD` | a shell command | Reads `{"system", "prompt"}` JSON on stdin, prints a plan as JSON. Use it for a local model (Ollama) or any other tool |
-| `CASCADE_EDITOR_CLAUDE` | `off` | Never call Claude (the tests use this) |
+| `CASCADE_EDIT_PLANNER` | `openai` (default) | OpenAI plans every edit, using `OPENAI_API_KEY` |
+| | `rules` | No AI at all: the rule-based director |
 | `CASCADE_EDIT_ENGINE` | `cinema` (default), `legacy` | `legacy` brings back the older HyperFrames looks |
 
-Examples: to pin planning to Opus, `CASCADE_EDIT_MODEL=opus`. To use whatever the subscription offers,
-leave it unset. To add a different provider, write a function `(system, prompt, images) -> dict` in
-`planner.py` and add it to `BACKENDS`.
-
-The Claude planner runs through `claude -p` signed in with a Claude subscription. API keys are stripped
-from its environment, so planning is never billed per request.
+The editor only calls AI through API keys. There is no Claude Code CLI or Gemini path.
 
 ## What works with no AI model
 
