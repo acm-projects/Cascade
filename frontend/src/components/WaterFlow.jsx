@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { getSeaLife } from "./seaLife";
-import { createCreatures } from "./seaCreatures";
 import { seaDepthTarget } from "./seaDepth";
 import "./WaterFlow.css";
 
@@ -160,12 +159,18 @@ function WaterFlow({ within = false, deep = false }) {
 
     const water = createWater(waterCanvas);
     if (!water) waterCanvas.remove();   // the plain blue background shows through instead
+    // The 3D animals need Three.js, so it loads only here (not in the main bundle); they swim in once it arrives.
     let creatures = null;
-    try {
-      creatures = createCreatures(creatureCanvas);
-    } catch {
-      creatureCanvas.remove();   // no WebGL: just the water (or the plain blue) and the particles
-    }
+    let closed = false;
+    import("./seaCreatures").then(({ createCreatures }) => {
+      if (closed) return;
+      try {
+        creatures = createCreatures(creatureCanvas);
+        resize();
+      } catch {
+        creatureCanvas.remove();   // no WebGL: just the water (or the plain blue) and the particles
+      }
+    }).catch(() => creatureCanvas.remove());
     const life = getSeaLife(within ? "within" : "page", lifeCanvas);
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -238,6 +243,7 @@ function WaterFlow({ within = false, deep = false }) {
     document.addEventListener("visibilitychange", visibility);
     frame = requestAnimationFrame(draw);
     return () => {
+      closed = true;
       cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("resize", resize);

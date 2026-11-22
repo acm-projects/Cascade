@@ -1,11 +1,13 @@
 """Local measured onset/tempo analysis. Quiet/arrhythmic tracks do not get fake grids."""
+import hashlib
 from functools import lru_cache
 from pathlib import Path
 import subprocess
 import numpy as np
 
-@lru_cache(maxsize=64)
-def _analyze(path, size, modified):
+_RESULTS={}   # content hash -> analysis, so a file is measured once wherever it was downloaded to
+
+def _measure(path):
     raw=subprocess.run(['ffmpeg','-nostdin','-v','error','-i',path,'-t','120','-ac','1','-ar','22050','-f','f32le','-'],capture_output=True,check=True,timeout=30).stdout
     samples=np.frombuffer(raw,dtype='<f4')
     if len(samples)<22050 or float(np.sqrt(np.mean(samples**2)))<.001:
@@ -37,9 +39,20 @@ def _analyze(path, size, modified):
         if novelty[peak]>.08:peaks.append(round(peak/rate+window/(2*22050),4))
     return {'beats':sorted(set(peaks)),'bpm':round(60/period,2),'confidence':round(confidence,3),'method':'spectral-flux/onset autocorrelation'}
 
+@lru_cache(maxsize=256)
+def _content(path, size, modified):
+    digest=hashlib.blake2b(digest_size=16)
+    with open(path,'rb') as f:
+        for block in iter(lambda:f.read(1<<20),b''):digest.update(block)
+    return digest.hexdigest()
+
 def analyze(path):
     p=Path(path);stat=p.stat()
-    return _analyze(str(p),stat.st_size,stat.st_mtime_ns)
+    key=_content(str(p),stat.st_size,stat.st_mtime_ns)
+    if key not in _RESULTS:
+        _RESULTS[key]=_measure(str(p))
+        while len(_RESULTS)>64:_RESULTS.pop(next(iter(_RESULTS)))
+    return _RESULTS[key]
 
 def loop_beats(analysis, asset_duration, output_duration, offset=0):
     if not analysis['beats']:return []

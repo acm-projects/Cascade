@@ -31,8 +31,9 @@ def warm_models():
 
 def start_model_warmup():
     auth.warn_dev_auth()
-    # CASCADE_WARM_MODELS=0 skips it (the models hold roughly 700 MB of RAM once loaded).
-    if os.getenv("CASCADE_WARM_MODELS", "1") != "0":
+    # Off by default: the models (and PyTorch) hold about 400 MB of RAM, and they load on the first upload or
+    # search anyway (about 5 s). CASCADE_WARM_MODELS=1 loads them at startup instead.
+    if os.getenv("CASCADE_WARM_MODELS", "0") == "1":
         threading.Thread(target=warm_models, name="model-warmup", daemon=True).start()
 
 

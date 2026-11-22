@@ -133,7 +133,7 @@ cd frontend && npm run lint && npm test && npm run build
 | `SOCIAL_TOKEN_ENCRYPTION_KEY` | For YouTube publishing | Encrypts saved channel tokens | Generate: `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `SOCIAL_DATABASE_PATH` | No | Where publishing data is saved | Keep the default |
 | `CASCADE_DEV_AUTH` | No (local only) | `1` = run without Clerk as `dev-user` on your own machine | Never in production |
-| `CASCADE_WARM_MODELS` | No | `0` skips loading the search models at start (saves ~700 MB RAM, first search is slower) | Optional |
+| `CASCADE_WARM_MODELS` | No | `1` loads the search models at start (uses ~400 MB more RAM while idle; otherwise the first upload loads them, about 5 s) | Optional |
 | `CASCADE_JOB_TIMEOUT`, `CASCADE_FFMPEG_TIMEOUT`, `CASCADE_FFMPEG` | No | Tuning; defaults are fine | See comments in `.env.example` |
 
 ## Troubleshooting
