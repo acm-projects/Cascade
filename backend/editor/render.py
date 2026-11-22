@@ -1,11 +1,9 @@
 """Editor render; extracted without changing media behavior."""
 import os
-import re
 import subprocess
 import shutil
 import zipfile
 from contextlib import contextmanager
-from functools import lru_cache
 import tempfile
 from pathlib import Path
 from fastapi import HTTPException, Request
@@ -14,26 +12,15 @@ from starlette.background import BackgroundTask
 from backend import reframe as reframelib
 from .models import BatchExport, ExportInput
 from .composition import composition_filter, composition_geometry, effects_filter, resolution_filter
-from .validation import details, trimmed_cues, validate_edit, validate_media_edit
+from .validation import details, trimmed_cues, validate_media_edit
 from .captions import make_ass, raster_filters
 from .storage import media, selected, stock_store
 from .reframe import begin_analysis, read_analysis
 
-@lru_cache(maxsize=2)
 def export_binary(needs_captions):
-    binary = os.getenv('CASCADE_EDITOR_FFMPEG') or shutil.which('ffmpeg') or 'ffmpeg'
-    if not needs_captions:
-        return binary
-    # Homebrew's minimal build omits libass; prefer an already-installed full build.
-    candidates = [binary, str(Path(binary).parent.parent / 'opt/ffmpeg-full/bin/ffmpeg')]
-    for candidate in candidates:
-        try:
-            filters = subprocess.run([candidate, '-hide_banner', '-filters'], capture_output=True, text=True, timeout=15, check=True).stdout
-            if re.search(r'\bass\s+V->V', filters):
-                return candidate
-        except (OSError, subprocess.SubprocessError):
-            continue
-    raise HTTPException(503, 'Caption export requires FFmpeg with libass. Set CASCADE_EDITOR_FFMPEG to a compatible binary on the server.')
+    """FFmpeg for the Editor; with captions it must have libass (see backend/video_tools.py, CASCADE_FFMPEG)."""
+    from backend.video_tools import ffmpeg, subtitle_ffmpeg
+    return subtitle_ffmpeg() if needs_captions else ffmpeg()
 
 
 @contextmanager

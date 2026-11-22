@@ -34,7 +34,7 @@ The visible Play/Pause button sits beneath the main preview, shares playback wit
 
 ## Export and AI
 
-Browser-initiated edited downloads send the exact locally rendered transparent caption PNGs and their trimmed intervals. The backend validates PNG format, dimensions, payload size and intervals against the clip's real cues, then composites them over the trimmed video. This preserves browser caption layout and font rendering in export. H.264/yuv420p encoding is lossy, including chroma subsampling near caption edges. Clients without raster previews can still use the existing ASS export fallback, which requires FFmpeg with libass. An installed Homebrew `ffmpeg-full` is detected where available; `CASCADE_EDITOR_FFMPEG` can specify a compatible binary. Export status is indeterminate while encoding; there are no simulated percentages. Edited downloads render on demand; the existing Exports page continues downloading originals.
+Browser-initiated edited downloads send the exact locally rendered transparent caption PNGs and their trimmed intervals. The backend validates PNG format, dimensions, payload size and intervals against the clip's real cues, then composites them over the trimmed video. This preserves browser caption layout and font rendering in export. H.264/yuv420p encoding is lossy, including chroma subsampling near caption edges. Clients without raster previews can still use the existing ASS export fallback, which requires FFmpeg with libass. An installed Homebrew `ffmpeg-full` is detected where available; `CASCADE_FFMPEG` can specify a compatible binary. Export status is indeterminate while encoding; there are no simulated percentages. Edited downloads render on demand; the existing Exports page continues downloading originals.
 
 Chat uses `backend/editor/ai.py` and the shared `cascade_llm` structured helper. `LLM_PROVIDER` selects Anthropic or OpenAI; optional `CASCADE_EDITOR_PROVIDER` overrides only editor chat, without mutating process-wide provider settings. Pydantic and media-boundary validation follow the structured response. Supported actions: remove initial trim seconds, keep initial trim seconds, reset trim, captions on/off, text color, bold, top/middle/bottom position and text for an identified caption segment. Multiple actions in one response form one undo transaction. No generated commands are executed. Provider calls are mocked in tests. Request format follows [official OpenAI documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
 
@@ -97,9 +97,7 @@ Follow Speaker now integrates with Fill to Frame, saved drafts, Chat, comparison
 
 `backend/main.py` includes `backend/editor/routes.py` as an APIRouter. The editor
 models, action validation, caption rendering, composition, media, drafts, tracking,
-and exports each live in their own module under `backend/editor/`. The old
-`backend/editor_backend.py` is a two-line compatibility re-export, not a second
-implementation. Request-time service imports keep app startup free of circular
+and exports each live in their own module under `backend/editor/`. Request-time service imports keep app startup free of circular
 imports and retain isolated job-directory overrides in tests.
 
 `tests/fixtures/editor_routes_before.json` records the route contract before extraction.

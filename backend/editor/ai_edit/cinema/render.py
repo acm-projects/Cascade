@@ -172,14 +172,6 @@ def _zoom(frame, z, cx=None, cy=None):
     return cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
 
 
-def _blur(frame, k=61):
-    import cv2
-    h, w = frame.shape[:2]
-    small = cv2.resize(frame, (max(8, w//6), max(8, h//6)), interpolation=cv2.INTER_AREA)
-    small = cv2.GaussianBlur(small, (0, 0), k/12)
-    return cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
-
-
 def _ease(x):
     x = min(1, max(0, x))
     return 1-(1-x)**3

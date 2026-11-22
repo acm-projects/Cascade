@@ -127,7 +127,6 @@ cd frontend && npm run lint && npm test && npm run build
 | `CASCADE_METADATA_STORE` | No (default `auto`) | `local` keeps metadata on disk for offline development | Set `local` if you have no `DATABASE_URL` |
 | `CASCADE_STORAGE` | No (default `auto`) | Where clips are stored: `local`, `s3`, `auto` | Use `local` for development |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`, `S3_BUCKET_NAME` | Only for S3 storage | Clip storage in S3 | Team AWS account |
-| `FRONTEND_ORIGIN` | No | CORS origin (default port 8000) | Keep the default |
 | `YOUTUBE_API_KEY` | For Trends | Reads YouTube trending data | Google Cloud Console → Credentials |
 | `PEXELS_API_KEY` | For B-roll | Stock footage search in the Editor | pexels.com/api |
 | `GOOGLE_YOUTUBE_CLIENT_ID`, `GOOGLE_YOUTUBE_CLIENT_SECRET`, `GOOGLE_YOUTUBE_REDIRECT_URI` | For YouTube publishing | Connect a channel and upload | Google Cloud Console → OAuth client |
@@ -135,7 +134,7 @@ cd frontend && npm run lint && npm test && npm run build
 | `SOCIAL_DATABASE_PATH` | No | Where publishing data is saved | Keep the default |
 | `CASCADE_DEV_AUTH` | No (local only) | `1` = run without Clerk as `dev-user` on your own machine | Never in production |
 | `CASCADE_WARM_MODELS` | No | `0` skips loading the search models at start (saves ~700 MB RAM, first search is slower) | Optional |
-| `CASCADE_JOB_TIMEOUT`, `CASCADE_FFMPEG_TIMEOUT`, `CASCADE_EDITOR_PROVIDER`, `CASCADE_EDITOR_FFMPEG`, `OPENAI_SCENE_MODEL` | No | Tuning; defaults are fine | See comments in `.env.example` |
+| `CASCADE_JOB_TIMEOUT`, `CASCADE_FFMPEG_TIMEOUT`, `CASCADE_FFMPEG` | No | Tuning; defaults are fine | See comments in `.env.example` |
 
 ## Troubleshooting
 

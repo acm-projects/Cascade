@@ -140,7 +140,7 @@ No environment file was read for display or rewritten. Existing AI provider
 configuration is reused; `PEXELS_API_KEY` is needed for real automatic stock
 search. Music/SFX catalog and local uploads need no external audio provider or key.
 FFmpeg/ffprobe and FFmpeg libass support are required for audio/rendered captions;
-existing `CASCADE_EDITOR_FFMPEG` can select the compatible binary.
+`CASCADE_FFMPEG` can select the compatible binary.
 The local environment loader reported an existing parse warning at `.env` line 9;
 that file was left untouched. Check that line privately if configuration is missing.
 

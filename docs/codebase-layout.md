@@ -29,8 +29,7 @@ pipelines. `clips/render_subtitles.py` implements caption-style generation;
 `settings/preferences.py` supplies defaults still used by the current service.
 
 Shared backend modules cover media, FFmpeg, B-roll, social publishing, scheduling,
-tracking, and reframing. Public import facades such as `editor_backend.py` remain
-for callers while their implementation lives in feature packages.
+tracking, and reframing.
 
 ## Supporting files
 

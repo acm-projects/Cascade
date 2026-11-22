@@ -1,8 +1,7 @@
 """Editor chat; extracted without changing media behavior."""
 from fastapi import HTTPException, Request
 from .models import ChatInput
-from .validation import details, validate_edit, validate_media_edit
-from .actions import apply_actions
+from .validation import details, validate_media_edit
 from .storage import selected, stock_store
 from .reframe import begin_analysis
 from . import ai
@@ -43,7 +42,7 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     style_request=parse_request(body.message) if info.get('has_video',True) and not body.research_id else None
     from .style_requests import wants_director
     director_request=not style_request and info.get('has_video',True) and not body.research_id and wants_director(body.message)
-    wants_trends=not style_request and not director_request and ai.editor_provider() not in ai.LOCAL_ANALYSIS and bool(re.search(r'flashy|crazy|tiktok|trend[- ]informed',body.message,re.I) and re.search(r'make|edit|apply|create',body.message,re.I))
+    wants_trends=not style_request and not director_request and bool(re.search(r'flashy|crazy|tiktok|trend[- ]informed',body.message,re.I) and re.search(r'make|edit|apply|create',body.message,re.I))
     research_report=[]
     if body.research_id or wants_trends:
         from . import trends
@@ -78,18 +77,6 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
         from .director import chat_proposal
         proposal,research_report=chat_proposal(jid,clip,body,info,hints,request.state.user_id)
     assets=audio_store.library()
-    if ai.editor_provider() in ai.LOCAL_ANALYSIS and proposal is None:
-        from .beats import analyze
-        measured_assets=[]
-        for asset in assets:
-            if asset['kind']=='music':
-                try:
-                    measured=analyze(audio_store.media(asset['id']))
-                    asset={**asset,'measured_bpm':measured['bpm'],'beat_confidence':measured['confidence']}
-                except (OSError, subprocess.SubprocessError):
-                    asset={**asset,'measured_bpm':None,'beat_confidence':0}
-            measured_assets.append(asset)
-        assets=measured_assets
     frames = footage_frames(jid,clip,body.state,info,hints) if info.get('has_video', True) and proposal is None else []
     proposal = proposal or ai.request_edit({'visual_frames': frames,'broll_results': results, 'audio_assets': assets,
         'selected_broll_segment':body.selected_segment, 'media_kind': info.get('media_kind', 'video'),
@@ -97,7 +84,7 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
         'hook_candidates':hook_candidates(info['cues'],body.state.start,body.state.end),
         'visual_timing_hints': hints, 'clip': public_clip(clip), 'duration': info['duration'], 'state': body.state.model_dump(),
         'transcript': info['cues'][:300], 'history': [m.model_dump() for m in body.chat[-20:]], 'request': body.message})
-    if not style_request and not director_request and ai.editor_provider() not in ai.LOCAL_ANALYSIS and is_reel_request(body.message) and not any(a.type=='high_energy_reel' for a in proposal.actions):
+    if not style_request and not director_request and is_reel_request(body.message) and not any(a.type=='high_energy_reel' for a in proposal.actions):
         from .models import Action,Proposal
         query=next((a.query for a in proposal.actions if a.type in ('broll_auto','broll_search') and a.query),None)
         proposal=proposal.model_copy(update={'actions':[Action(type='high_energy_reel',query=query)]})

@@ -22,13 +22,6 @@ def run_command(command):
     return result.stdout
 
 
-def inspect_video(video_path):
-    # Compatibility name: callers may now provide either an audio or video source.
-    from backend.media import probe_media
-    info = probe_media(video_path)
-    return info['duration'], info['has_audio']
-
-
 def caption_time(seconds):
     milliseconds = max(
         0,

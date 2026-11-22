@@ -70,11 +70,6 @@ class Sprite:
         self.pad, self.ascent = pad, ascent
         self.width = width if width is not None else self.w  # the text's own width, without padding
 
-    def blurred(self, radius):
-        if radius < .5: return self
-        img = Image.fromarray(self.rgba).filter(ImageFilter.GaussianBlur(radius))
-        return Sprite(np.asarray(img), self.ax, self.ay, self.pad, self.ascent, self.width)
-
     def baseline(self):
         """The same sprite anchored at the left end of its baseline."""
         return Sprite(self.rgba, self.pad/self.w, (self.pad+self.ascent)/self.h, self.pad, self.ascent, self.width)

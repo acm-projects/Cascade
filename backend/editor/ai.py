@@ -51,7 +51,6 @@ CLOUD_INSTRUCTIONS = (
 )
 
 
-LOCAL_ANALYSIS = ('ollama', 'local', 'openchatcut')  # frames/beats measured on this machine
 
 
 def editor_provider():

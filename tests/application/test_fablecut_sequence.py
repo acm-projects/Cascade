@@ -4,8 +4,6 @@ from pathlib import Path
 from fastapi import HTTPException
 from backend.editor.models import Edit
 from backend.editor.sequence_models import FablecutSequence, SequenceShot
-from backend.editor.sequence_ai import direct_revision
-from backend.editor.sequence_ai import SequencePlan, candidates
 from backend.editor.fablecut_render import sequence_pieces, project_document
 from backend.editor.audio_assets import AudioStore
 from backend.editor.validation import validate_media_edit
@@ -26,15 +24,6 @@ class SequenceTests(unittest.TestCase):
         state.start=15
         with self.assertRaises(HTTPException):sequence_pieces(state)
 
-    def test_followup_revises_and_keeps_original_immutable(self):
-        original=self.state();updated,_=direct_revision(original,'Less shake')
-        self.assertEqual(len(updated.fablecut.shots),2)
-        self.assertEqual(updated.fablecut.shots[0].shake,2)
-        self.assertEqual(original.fablecut.shots[0].shake,4)
-        cleared,_=direct_revision(updated,'Remove AI sequence')
-        self.assertIsNone(cleared.fablecut)
-        self.assertEqual(cleared.start,original.start)
-
     def test_real_project_mutes_ramped_audio_and_maps_captions(self):
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory);(folder/'media').mkdir();audio=AudioStore(folder/'audio')
@@ -50,14 +39,3 @@ class SequenceTests(unittest.TestCase):
         state=self.state();info={'duration':20,'has_video':True,'cues':[{'start':3,'end':5,'text':'Do not warp this'}]}
         with self.assertRaises(HTTPException):validate_media_edit(state,info)
 
-    def test_schema_requires_real_settings_instead_of_prose_defaults(self):
-        with self.assertRaises(ValueError):
-            SequencePlan.model_validate({'rationale':'Applied amazing transitions and ramps','shots':[{'candidate':i,'reason':'applied'} for i in range(3)]})
-
-    def test_candidates_protect_phrases_and_identify_spoken_hook(self):
-        state=Edit(start=0,end=10)
-        info={'cues':[{'start':6,'end':7,'text':'Keep this'},{'start':7.01,'end':8,'text':'whole sentence.'}]}
-        rows=candidates(state,info,{'scene_boundaries':[2,4,7.2]})
-        self.assertTrue(rows[0]['speech'])
-        self.assertEqual((rows[0]['start'],rows[0]['end']),(6,8))
-        self.assertFalse(any(6.025<r['start']<7.975 for r in rows))

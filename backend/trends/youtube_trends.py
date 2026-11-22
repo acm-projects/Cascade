@@ -12,21 +12,6 @@ from googleapiclient.discovery import build
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
 
 
-def _velocity(item: dict[str, Any]) -> float:
-    """Rough proxy for "trending": views per hour since publish."""
-    stats = item.get("statistics", {})
-    snippet = item.get("snippet", {})
-
-    view_count = int(stats.get("viewCount", 0))
-    published_at = snippet.get("publishedAt")
-    if not published_at:
-        return 0.0
-
-    published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
-    hours = max((datetime.now(timezone.utc) - published).total_seconds() / 3600, 1.0)
-    return view_count / hours
-
-
 SHORT_SECONDS = 180  # YouTube Shorts are vertical clips of up to three minutes
 MAX_CHECKED = 24     # at most this many candidates are looked up per search
 

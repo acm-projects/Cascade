@@ -50,15 +50,6 @@ def _transcript(info, state):
     return [{'at': round(c['start']-state.start, 2), 'text': c['text']} for c in info.get('cues', []) if state.start <= c['start'] < state.end][:120]
 
 
-def _keywords(info, state, title):
-    from .style_text import keyword
-    text = ' '.join(c['text'] for c in info.get('cues', []) if state.start <= c['start'] < state.end)+' '+title
-    war = re.search(r'\b(war|ww ?(2|ii)|soldier|troops|army|navy|marine|camp|battle|veteran|194\d|nazi|d-day)\b', text, re.I)
-    return Analysis(genre='documentary_history' if war else 'podcast_interview' if len(info.get('cues', [])) > 3 else 'other',
-                    summary=title, search_query=(title+' edit')[:80], emphasis=[{'text': w, 'at': c['start']-state.start} for c in info.get('cues', [])
-                    if state.start <= c['start'] < state.end for w in [keyword(c['text'])] if w][:5])
-
-
 def analyze(source, state, info, frames, title):
     transcript = _transcript(info, state)
     context = {'clip_title': title, 'duration': round(state.end-state.start, 2), 'transcript': transcript}

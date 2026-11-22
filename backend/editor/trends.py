@@ -114,14 +114,6 @@ def measured(path):
         return measure_video(path)
     except Exception:return {}
 
-def infer_topic(clip,info):
-    text=' '.join(c['text'] for c in info['cues'][:8])
-    title=clip.get('title','')
-    if re.search(r'\bteddy\b|\bbear\b|comedy|funny',title+' '+text,re.I):return 'comedy reaction editing'
-    words=re.findall(r"[\w'-]+",title+' '+text)
-    stop={'the','and','this','that','with','have','your','from','just','what','there','they'}
-    return ' '.join(dict.fromkeys(w for w in words if len(w)>3 and w.lower() not in stop))[:120] or 'talking head storytelling'
-
 # What the person picks in the Topic menu -> real YouTube Shorts searches for that kind of video.
 CATEGORIES={
     'podcast / interview':['podcast clip','podcast interview moment','podcast highlights'],

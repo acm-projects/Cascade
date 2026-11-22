@@ -12,7 +12,7 @@ python3 -m uvicorn app1:app --reload --host 127.0.0.1 --port 8000
 
 The existing `load_dotenv(..., override=True)` in `app1.py` loads the key. Only the backend reads it, and only Pexels API calls receive the Authorization header. The browser requests authenticated Cascade endpoints; media-host requests carry no provider credentials. Do not print `.env`, enable HTTP header dumps, or put keys in URLs.
 
-Chat still requires the existing server-side OpenAI configuration. Its model selection remains `OPENAI_EDITOR_MODEL` → `OPENAI_SCENE_MODEL` → `gpt-5.4-mini`.
+Chat still requires the existing server-side OpenAI configuration. Its model is set in `backend/cascade_llm/clients.py`.
 
 ## Complete example
 
@@ -30,7 +30,7 @@ All numeric controls and timeline timestamps use the full generated clip’s sec
 ## Implementation and limits
 
 - `backend/broll.py`: validated Pexels API mapping, clip-scoped registry, 24-hour search cache, bounded media download and FFprobe validation.
-- `backend/editor_backend.py`: owner-checked search/thumbnail/media routes, draft validation, structured chat actions, FFmpeg composition.
+- `backend/editor/`: owner-checked search/thumbnail/media routes, draft validation, structured chat actions, FFmpeg composition.
 - `frontend/legacy/web/editor_broll.js`: results, attribution, preview, numeric edits, selected-segment context, synchronized muted overlay.
 - `frontend/legacy/web/editor_state.js`, `frontend/legacy/web/editor_timeline.js`: persisted segments, undo/redo, dedicated selectable stock track.
 

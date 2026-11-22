@@ -93,13 +93,6 @@ class Edit:
     order: list = field(default_factory=list)       # kept word indices in play order
     timeline: list = field(default_factory=list)    # (word index, start, end) for every word as it plays (a hook plays twice)
 
-    def to_out(self, src):
-        """Edit time of a source second (None when that moment was cut)."""
-        for p in self.pieces:
-            if p.a-.001 <= src <= p.b+.001: return p.out+src-p.a
-        return None
-
-
 def _floor(db):
     return float(np.percentile(db, 8)) if len(db) else -60.
 

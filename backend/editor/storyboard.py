@@ -69,19 +69,6 @@ def _frames(source, lines, state, limit=12):
     return frames
 
 
-def _fallback(lines, request):
-    from .style_text import keyword
-    used, beats = [], []
-    for i, line in enumerate(lines):
-        word = keyword(line['text'], used) if i % 3 == 0 else ''
-        if word: used.append(word)
-        beats.append({'n': line['n'], 'emphasis': word.lower(), 'zoom': 'punch' if i % 3 == 1 else 'none'})
-    moody = bool(re.search(r'mood|dark|cinematic|sad|serious', request, re.I))
-    return Storyboard(reply='Planned from the transcript only (no AI planner was available).', title='Clean cut', beats=beats,
-                      look='bw' if moody else 'natural', music='Quiet reflection' if moody else 'Reel pulse',
-                      hook=lines[0]['text'][:40] if lines else '')
-
-
 def _plan(prompt, frames, lines, request):
     from . import openai_edit
     result = openai_edit.ask(SYSTEM, prompt, openai_edit.strict_schema(Storyboard), frames, name='editor_storyboard')

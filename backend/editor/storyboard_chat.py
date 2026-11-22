@@ -1,5 +1,4 @@
 """AI Editor chat turns for storyboard-first editing (see storyboard.py)."""
-import os
 import re
 
 from fastapi import HTTPException
@@ -18,8 +17,7 @@ def wants(body, info, user, pid, jid, index):
     if board: return board
     from .style_profile import chat_links
     from .style_requests import wants_director
-    # With no provider chosen, Reel requests are storyboards too (their other path needs Gemini).
-    reel = not os.getenv('CASCADE_EDITOR_PROVIDER', '').strip() and not body.state.fablecut and REEL.search(body.message)
+    reel = not body.state.fablecut and REEL.search(body.message)   # Reel requests are storyboards too
     return True if wants_director(body.message) or chat_links(body.message) or reel else None
 
 

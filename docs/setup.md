@@ -28,10 +28,8 @@ Clip generation preserves main’s agent pipeline: `DEEPGRAM_API_KEY` supplies t
 
 Editor chat uses the same `backend/cascade_llm` structured-output layer as generation,
 and follows `LLM_PROVIDER=anthropic|openai`. Only the selected provider's key is required.
-Optional `CASCADE_EDITOR_PROVIDER=anthropic|openai` overrides chat's provider per call,
-without changing generation or concurrent requests. Model choices stay in
-`backend/cascade_llm/clients.py`; the old `OPENAI_EDITOR_MODEL` override is no longer
-used by editor chat. Missing credentials return 503; malformed AI responses return
+The AI Editor chat always uses OpenAI (`OPENAI_API_KEY`). Model choices stay in
+`backend/cascade_llm/clients.py`; there are no model settings in `.env`. Missing credentials return 503; malformed AI responses return
 502 without applying edits. Proposal validation and allowed actions are unchanged.
 The older scene helper remains for compatibility, not as the website's generation
 engine. Historical `openai`/`qwen` generation requests use the current agent. Direct
@@ -40,7 +38,7 @@ handling. Research also needs `YOUTUBE_API_KEY`.
 
 Generation groups, requested counts (1–12), source reuse, parent-context expansion, retries and deletion remain owner-scoped. The agent retains its default four-clip behavior, with per-request limits for other counts. No duplicate clips are created to fill unavailable results. Pexels B-roll is available in the editor through its B-roll tab and validated chat actions; it does not change the generation pipeline.
 
-`CASCADE_FFMPEG` and `CASCADE_EDITOR_FFMPEG` can select compatible FFmpeg binaries. Editor downloads render locally on demand using saved trim, composition and captions. The editor preview performs ordinary edits locally without generating an MP4. Keep both `backend/clips/render_subtitles.py` and `backend/video_tools.py`: they provide distinct active caption/export capabilities.
+`CASCADE_FFMPEG` selects the FFmpeg binary everywhere (captions need libass). Editor downloads render locally on demand using saved trim, composition and captions. The editor preview performs ordinary edits locally without generating an MP4. Keep both `backend/clips/render_subtitles.py` and `backend/video_tools.py`: they provide distinct active caption/export capabilities.
 
 ## Checks
 

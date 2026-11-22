@@ -126,10 +126,6 @@ def metadata_exists(path):
     return metadata_store().exists(path)
 
 
-def metadata_paths(pattern):
-    return metadata_store().paths(pattern)
-
-
 def metadata_documents(pattern, user_id=None):
     return metadata_store().documents(pattern, user_id)
 

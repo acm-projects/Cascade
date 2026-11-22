@@ -8,13 +8,6 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = PROJECT_DIR / "frontend" / "legacy" / "web"
 
 load_dotenv(PROJECT_DIR / ".env", override=True)
-# Accept existing local names without rewriting the user's secrets file.
-if not os.getenv('CLERK_SECRET_KEY') and os.getenv('CLERK_KEY', '').startswith('sk_'):
-    os.environ['CLERK_SECRET_KEY'] = os.environ['CLERK_KEY']
-if not os.getenv('CLERK_PUBLISHABLE_KEY') and os.getenv('CLERK_KEY', '').startswith('pk_'):
-    os.environ['CLERK_PUBLISHABLE_KEY'] = os.environ['CLERK_KEY']
-if not os.getenv('AWS_ACCESS_KEY_ID') and os.getenv('AWS_ACCESS_KEY'):
-    os.environ['AWS_ACCESS_KEY_ID'] = os.environ['AWS_ACCESS_KEY']
 
 JOBS_DIR = PROJECT_DIR / "video_jobs"
 JOBS_DIR.mkdir(exist_ok=True)
