@@ -30,20 +30,22 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 104px;
-  height: 58px;
+  width: 140px;
+  height: 78px;
   offset-path: path("M 70 170 Q 180 -40 290 170");
   offset-rotate: auto;
   animation: dolphin-loader-leap var(--leap-time) cubic-bezier(0.42, 0, 0.58, 1) infinite;
   animation-delay: calc(var(--leap) * var(--leap-time) / -3);
 }
 
+/* the 3D dolphin: 16 Blender frames of its tail beat side by side in one strip, played in a loop */
 .dolphin-loader-dolphin {
   display: block;
-  width: 104px;
-  height: 58px;
-  filter: drop-shadow(0 0 8px rgba(190, 240, 255, 0.55));
-  user-select: none;
+  width: 140px;
+  height: 78px;
+  background: url("/loader/dolphin.webp") 0 0 / 2240px 78px no-repeat;
+  filter: drop-shadow(0 0 8px rgba(190, 240, 255, 0.5));
+  animation: dolphin-loader-swim 0.55s steps(16) infinite;
 }
 
 /* its shadow on the water, sliding from where it jumped to where it dives, smallest at the top of the leap */
@@ -119,6 +121,10 @@
   100% { offset-distance: 100%; opacity: 0; }
 }
 
+@keyframes dolphin-loader-swim {
+  to { background-position: -2240px 0; }
+}
+
 @keyframes dolphin-loader-shadow {
   0% { translate: 0 0; scale: 1; opacity: 0.9; }
   50% { translate: 110px 0; scale: 0.55; opacity: 0.45; }
@@ -139,6 +145,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dolphin-loader-leap { animation: none; offset-distance: 50%; }
+  .dolphin-loader-dolphin { animation: none; }
   .dolphin-loader-group:not(:first-child), .dolphin-loader-ripple, .dolphin-loader-splash i { display: none; }
   .dolphin-loader-shadow { animation: none; translate: 110px 0; scale: 0.55; }
 }

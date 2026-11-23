@@ -3,8 +3,9 @@ import "./DolphinLoader.css";
 // The loading screen: dolphins leaping out of the page's own pixel sea, one after another. Each one breaks the
 // surface in a blocky pixel ripple, arcs over the water with its shadow sliding beneath it, and dives back in with
 // a burst of square droplets. There is no box: it all happens on the water the page already shows.
-// The dolphin is a Blender render (frontend/blender/dolphin.py -> public/loader/dolphin.webp, about 5 KB); the
-// ripples, splashes and leaps are CSS, so nothing heavy downloads just to say "loading".
+// The dolphin is 3D, made and animated in Blender (frontend/blender/dolphin.py): a strip of 16 rendered frames of
+// its tail beat (public/loader/dolphin.webp, about 55 KB) that plays while CSS flies it along the leap, with the
+// ripples and splashes. So it looks fully 3D without downloading a 3D engine just to say "loading".
 //   <DolphinLoader label="Opening Studio Island" />
 //   label - what's loading; read out by screen readers and shown under the dolphins
 const LEAPS = [0, 1, 2];   // three dolphins, staggered so one is always in the air
@@ -35,7 +36,7 @@ function DolphinLoader({ label = "Loading" }) {
             <Ripple className="is-in" leap={n} />
             <span className="dolphin-loader-shadow" />
             <span className="dolphin-loader-leap">
-              <img className="dolphin-loader-dolphin" src="/loader/dolphin.webp" alt="" width="104" height="58" draggable="false" />
+              <span className="dolphin-loader-dolphin" />
             </span>
             <span className="dolphin-loader-splash"><i /><i /><i /><i /><i /><i /></span>
           </span>

@@ -16,7 +16,6 @@ import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import Modal from "../components/ui/Modal";
 import Spinner from "../components/ui/Spinner";
-import DolphinLoader from "../components/DolphinLoader";
 import { useToast } from "../components/ui/ToastContext";
 
 // icon: simple line drawings (24 x 24, drawn in the text color), the same style as the landing page icons
@@ -170,7 +169,7 @@ function ProjectsPage() {
     if (loading) {
       return (
         <div className="projects-state">
-          <DolphinLoader label="Loading your projects" />
+          <Spinner size={48} label="Loading your projects" />
         </div>
       );
     }
