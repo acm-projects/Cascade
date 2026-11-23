@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+from backend.core import job_queue
 from pathlib import Path
 from unittest.mock import patch
 
@@ -95,7 +96,7 @@ class IntegrationTests(unittest.TestCase):
         with patch.object(core_storage, 'resolve_storage_folder', return_value={'folder': 'users', 'source': 'test'}), patch.object(core_jobs.worker, 'submit') as submit:
             result = self.client.post('/upload', headers=self.headers, data={'project_id': self.project['id'], 'search': 'waterfalls'}, files={'video': ('source.mp4', b'example-source', 'video/mp4')})
         self.assertEqual(result.status_code, 202)
-        self.assertIs(submit.call_args.args[0], clip_routes.process_upload)
+        self.assertEqual(submit.call_args.args[1]['task'], 'generate')
         return result.json()['job_id']
 
     def test_agent_upload_checks_keys_and_dispatches(self):
@@ -116,7 +117,7 @@ class IntegrationTests(unittest.TestCase):
 
             response = self.client.post('/upload', headers=self.headers, data=data, files=files())
             self.assertEqual(response.status_code, 202)
-            self.assertIs(submit.call_args.args[0], clip_routes.process_upload)
+            self.assertEqual(submit.call_args.args[1]['task'], 'generate')
 
 
     def test_upload_project_association_history_and_source(self):
@@ -273,7 +274,7 @@ class IntegrationTests(unittest.TestCase):
                 response = self.client.post(project_url + '/caption-styles', headers=self.headers,
                                             json={'job_id': job_id, 'clip_index': 0})
                 self.assertEqual(response.status_code, 202)
-                self.assertEqual(submit.call_args.args[2], folder / 'clip_1.mp4')
+                self.assertEqual(job_queue._decode(submit.call_args.args[1]['args'][0]), folder / 'clip_1.mp4')
 
     def test_local_playback_with_existing_cloud_metadata(self):
         job_id = self.upload()
@@ -317,7 +318,7 @@ class IntegrationTests(unittest.TestCase):
         with patch.object(core_jobs.worker, 'submit') as submit:
             response = self.client.post(prefix + '/research', headers=self.headers, json=body)
             self.assertEqual(response.status_code, 202)
-            self.assertIs(submit.call_args.args[0], feature_workers.research)
+            self.assertEqual(submit.call_args.args[1]['task'], 'research')
             self.assertEqual(self.client.post(prefix + '/research', headers=self.other, json=body).status_code, 404)
         self.assertEqual(self.client.post('/upload', headers=self.other, data={'project_id': self.project['id'], 'search': 'waterfalls'}, files={'video': ('a.mp4', b'video')}).status_code, 404)
 
@@ -347,8 +348,8 @@ class IntegrationTests(unittest.TestCase):
             response = self.client.post(url, headers=self.headers, data=data, files={'video': ('research.mp4', b'research-source', 'video/mp4')})
             self.assertEqual(response.status_code, 202)
             job_id = response.json()['job_id']
-            self.assertIs(submit.call_args.args[0], feature_workers.research)
-            self.assertEqual(submit.call_args.args[2].read_bytes(), b'research-source')
+            self.assertEqual(submit.call_args.args[1]['task'], 'research')
+            self.assertEqual(job_queue._decode(submit.call_args.args[1]['args'][0]).read_bytes(), b'research-source')
             submit.reset_mock()
             self.assertEqual(self.client.post(url, headers=self.other, data=data, files={'video': ('research.mp4', b'video')}).status_code, 404)
             self.assertEqual(self.client.post(url, headers=self.headers, data=data, files={'video': ('research.txt', b'video')}).status_code, 400)
@@ -369,7 +370,7 @@ class IntegrationTests(unittest.TestCase):
         with patch.object(core_jobs.worker, 'submit') as submit:
             response = self.client.post(url, headers=self.headers, json={'job_id': caption_job, 'topic': 'waterfalls'})
             self.assertEqual(response.status_code, 202)
-            self.assertEqual(submit.call_args.args[2], core_jobs.JOBS_DIR / original / 'source.video')
+            self.assertEqual(job_queue._decode(submit.call_args.args[1]['args'][0]), core_jobs.JOBS_DIR / original / 'source.video')
             self.assertEqual(self.client.post(url, headers=self.other, json={'job_id': caption_job, 'topic': 'waterfalls'}).status_code, 404)
         owner['parent_job'] = caption_job
         core_jobs.save_json(folder / 'owner.json', owner)

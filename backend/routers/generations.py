@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.core import jobs as job_service, storage as storage_service
 from backend.routers import clips as clip_routes
-from backend.services import projects_store, features as feature_workers
+from backend.services import projects_store
 
 router = APIRouter(prefix="/api")
 
@@ -144,9 +144,10 @@ def retry(project_id: str, job_id: str, body: RetryInput, request: Request):
         with job_service.jobs_lock:
             job_service.jobs[job_id] = {'state':'queued', 'message':'Retry queued...', 'clips':[]}
         job_service.save_json(folder/'progress.json', dict(job_service.jobs[job_id]))
-        worker = clip_routes.process_upload if engine=='agent' else feature_workers.process_search
+        from backend.core import job_queue
         try:
-            job_service.worker.submit(worker, job_id, work_source, owner['prompt'], owner.get('mode','both') if engine=='agent' else engine, owner.get('clip_length',30))
+            job_queue.submit('generate' if engine=='agent' else 'search', job_id, work_source, owner['prompt'],
+                             owner.get('mode','both') if engine=='agent' else engine, owner.get('clip_length',30))
         except Exception:
             projects_store.fail_feature(job_id, 'Could not queue the retry. Try again.')
             raise HTTPException(503, 'Could not queue the retry. Try again.')

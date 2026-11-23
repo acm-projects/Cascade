@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from backend.core import job_queue
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -144,7 +145,8 @@ class GenerationGroupsTests(unittest.TestCase):
 
     def test_history_is_saved_before_queue_and_missing_configuration_fails_early(self):
         seen=[]
-        def queued(function,jid,source,*args):
+        def queued(run,record):
+            jid=record['job_id']
             owner=json.loads((self.root/jid/'owner.json').read_text())
             seen.append(owner)
             self.assertEqual(owner['history_id'],jid)
@@ -173,8 +175,9 @@ class GenerationGroupsTests(unittest.TestCase):
         result=self.client.post(url,headers=self.headers,json={'request_id':'retry-1'})
         self.assertEqual(result.status_code,202,result.text)
         self.assertEqual(result.json()['job_id'],child)
-        self.assertEqual(self.worker.call_args.args[1],child)
-        self.assertEqual(self.worker.call_args.args[2],self.root/child/'source.video')
+        record=self.worker.call_args.args[1]   # what the durable queue saved for this job (backend/core/job_queue.py)
+        self.assertEqual(record['job_id'],child)
+        self.assertEqual(job_queue._decode(record['args'][0]),self.root/child/'source.video')
         self.assertEqual(len(self.worker.call_args_list),calls+1)
         self.assertEqual(len(self.groups()),2)
         owner=json.loads((self.root/child/'owner.json').read_text())

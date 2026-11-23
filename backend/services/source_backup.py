@@ -1,6 +1,7 @@
 """Source durability off the generation critical path; no analysis/provider calls."""
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import threading
 
 from backend.core import jobs, storage
 from backend.services import projects_store
@@ -50,3 +51,22 @@ def schedule(folder, job_id, owner):
             current['source_backup_state'] = 'failed'
             store.write(path, current)
         return None
+
+
+def resume_pending():
+    """Startup: retry source backups that failed or that a restart cut off, while the local source is still here."""
+    if storage.uses_local_storage():
+        return
+    def recover():
+        try:
+            for path, owner in jobs.metadata_documents('*/owner.json'):
+                if owner.get('source_backup_state') in ('pending', 'failed') and not owner.get('source_s3_key') \
+                        and (path.parent/'source.video').is_file():
+                    owner = {**owner, 'source_backup_state': None}
+                    try:
+                        schedule(path.parent, path.parent.name, owner)
+                    except Exception:
+                        logging.getLogger(__name__).warning('Could not resume source backup for job %s.', path.parent.name)
+        except Exception:
+            logging.getLogger(__name__).warning('Could not scan pending source backups.')
+    threading.Thread(target=recover, name='source-backup-recovery', daemon=True).start()

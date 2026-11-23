@@ -5,8 +5,8 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
-from backend.core import jobs as job_service, storage as storage_service
-from backend.services import projects_store, features as feature_workers
+from backend.core import job_queue, jobs as job_service, storage as storage_service
+from backend.services import projects_store
 
 router = APIRouter(prefix="/api")
 
@@ -23,7 +23,7 @@ def caption_styles(project_id: str, body: projects_store.ClipInput, request: Req
     if not source.is_file():
         raise HTTPException(409, 'Local clip is unavailable for rendering. Original download remains available.')
     job_id, folder = projects_store.new_feature_job(owner, 'caption-styles', body.job_id)
-    job_service.worker.submit(feature_workers.render_styles, job_id, source, clip)
+    job_queue.submit('caption_styles', job_id, source, clip)
     return {'job_id': job_id}
 
 
@@ -34,7 +34,7 @@ def start_research(project_id: str, body: ResearchInput, request: Request):
     if not body.topic.strip():
         raise HTTPException(400, 'Enter a topic.')
     job_id, folder = projects_store.new_feature_job(owner, 'research', body.job_id)
-    job_service.worker.submit(feature_workers.research, job_id, source, body.topic.strip())
+    job_queue.submit('research', job_id, source, body.topic.strip())
     return {'job_id': job_id}
 
 
@@ -65,7 +65,7 @@ def research_upload(project_id: str, request: Request, video: UploadFile = File(
         raise
     finally:
         video.file.close()
-    job_service.worker.submit(feature_workers.research, job_id, source, topic)
+    job_queue.submit('research', job_id, source, topic)
     return {'job_id': job_id}
 
 

@@ -69,7 +69,9 @@ if __name__=='__main__':
   core_jobs.save_json(keep/'owner.json',{'user_id':user,'project_id':'f'*32,'source_job':keep_id,'source_name':'other.mp4','prompt':'Other project history','created_at':2,'requested_clip_count':1,'engine':'visual'})
   render(keep_id,keep/'source.video','Other project history','visual',30)
   pool=ThreadPoolExecutor(max_workers=2)
-  def queued(function,*args):
+  def queued(run,record):   # the durable queue's record (backend/core/job_queue.py)
+   from backend.core import job_queue
+   args=[record['job_id'],*[job_queue._decode(a) for a in record['args']]]
    def work():
     time.sleep(.65)
     core_jobs.update_job(args[0],state='processing',message='Fixture selection; real media cutting...')

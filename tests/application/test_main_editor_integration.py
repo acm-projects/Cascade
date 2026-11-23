@@ -32,7 +32,7 @@ class MainEditorIntegrationTests(unittest.TestCase):
                 response=client.post('/upload',headers=headers,data={'project_id':pid,'search':'Useful explanations','clip_count':5},
                                      files={'video':('source.mp4',source.read_bytes(),'video/mp4')})
                 self.assertEqual(response.status_code,202,response.text)
-                jid=response.json()['job_id'];self.assertIs(submit.call_args.args[0],clip_routes.process_upload)
+                jid=response.json()['job_id'];self.assertEqual(submit.call_args.args[1]['task'],'generate')
                 def agent(path,duration,prompt,target,progress,stage,requested_count=4):
                     self.assertEqual(requested_count,5)
                     progress('Mocked agent selection; real parallel media renders')

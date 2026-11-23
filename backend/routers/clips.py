@@ -12,7 +12,7 @@ import traceback
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from backend.services import projects_store, features as feature_workers
+from backend.services import projects_store
 from backend.agent.website import requirements_error, select_with_agent
 from backend.core import config, jobs as job_service, media as media_service, storage as storage_service
 from backend.pipeline_timing import StageTimer
@@ -409,8 +409,9 @@ def upload_video(
             with job_service.jobs_lock:
                 job_service.jobs[job_id].update(
                     submission_seconds=round(time.monotonic() - submission_started, 3), queued_at=time.time())
-            job_service.worker.submit(process_upload if engine=='agent' else feature_workers.process_search,
-                          job_id, video_path, search, mode if engine=='agent' else engine, clip_length)
+            from backend.core import job_queue
+            job_queue.submit('generate' if engine=='agent' else 'search',
+                             job_id, video_path, search, mode if engine=='agent' else engine, clip_length)
         except Exception:
             projects_store.fail_feature(job_id, 'Could not queue generation. Retry this request.')
         return {"job_id": job_id}

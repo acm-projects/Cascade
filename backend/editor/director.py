@@ -105,6 +105,12 @@ def chat_proposal(jid, clip, body, info, hints, user=None):
     from .runtime import jobs_dir
     from .storage import media
     source_video = jobs_dir()/jid/'source.video'
+    if not source_video.is_file():   # only the S3 copy is left: bring it back (B-roll from your own footage needs it)
+        try:
+            from backend.services.projects_store import local_source
+            source_video = local_source(jid)
+        except Exception:
+            pass
     if source_video.is_file():
         info['source_path'] = str(source_video)
     if clip.get('start') is not None and clip.get('end') is not None:

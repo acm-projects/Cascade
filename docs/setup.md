@@ -45,3 +45,15 @@ Generation groups, requested counts (1–12), source reuse, parent-context expan
 See the root README for offline tests and `editor.md` for isolated Chrome playback/export checks. `tests/manual/` contains explicit opt-in smoke scripts; `live_openai_smoke.py` can incur provider charges and is not an automated regression check. Browser fixtures use temporary storage and mocked identity/providers, while playback and media encoding are real. Live authentication, cloud delivery and paid generation require separately configured integration checks.
 
 Pexels stock footage uses the server-only `PEXELS_API_KEY` from the root `.env`. Restart the API after changing it. See [B-roll setup and workflow](broll.md).
+
+## Jobs and source videos across restarts
+
+Generation, search, caption-style and research jobs go through a small durable queue (`backend/core/job_queue.py`):
+each job is saved to `video_jobs/queue/<job_id>.json` until it finishes, and on startup every job a restart left
+waiting or half done runs again ("Resuming after a server restart…"). Jobs still run one at a time on this server;
+no extra service is needed.
+
+With S3 storage, every uploaded source video is backed up to S3 after upload (`backend/services/source_backup.py`),
+and backups that failed or were cut off are retried on startup. When a source is missing on this server (a new
+server, or a cleaned-up disk), `projects_store.local_source` downloads it back from S3 before it is used.
+

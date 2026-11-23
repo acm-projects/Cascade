@@ -11,6 +11,8 @@ from backend.core.config import FRONTEND_DIR
 from backend.routers import clips, pages, projects, settings, features, generations
 from backend.routers.editor_setup import include_editor
 from backend.core.media_links import media_link
+from backend.core import job_queue
+from backend.services import source_backup
 from backend.services.clip_backup import resume_pending
 
 app = FastAPI()
@@ -40,7 +42,9 @@ def start_model_warmup():
 
 app.on_event("startup")(start_model_warmup)
 app.on_event("startup")(jobs.initialize_metadata)
+app.on_event("startup")(job_queue.resume)   # generation jobs a restart cut off run again
 app.on_event("startup")(resume_pending)
+app.on_event("startup")(source_backup.resume_pending)   # retry source backups a restart cut off
 app.include_router(projects.router)
 app.include_router(settings.router)
 app.include_router(features.router)

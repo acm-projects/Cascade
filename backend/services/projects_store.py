@@ -82,6 +82,28 @@ def selected_clip(project_id, body, user_id):
     return owner, clips[body.clip_index]
 
 
+def local_source(job_id, owner=None):
+    """The job's source.video on this server, downloaded back from S3 first when only the cloud copy is left
+    (a new server, or a cleaned-up disk). Returns the path, which may still not exist when there is no backup."""
+    source = job_service.JOBS_DIR / job_id / 'source.video'
+    if source.is_file():
+        return source
+    if owner is None:
+        owner_path = source.parent / 'owner.json'
+        owner = job_service.load_json(owner_path) if job_service.metadata_exists(owner_path) else {}
+    if owner.get('source_s3_key'):
+        temporary = source.with_name(uuid4().hex+'.download')
+        try:
+            source.parent.mkdir(parents=True, exist_ok=True)
+            storage_service.s3_client().download_file(owner['source_s3_bucket'], owner['source_s3_key'], str(temporary))
+            temporary.replace(source)
+        except Exception:
+            raise HTTPException(503, 'Could not retrieve the original media from storage. Retry shortly.') from None
+        finally:
+            temporary.unlink(missing_ok=True)
+    return source
+
+
 def original_source(project_id, job_id, user_id):
     visited = set()
     while job_id and job_id not in visited:
@@ -94,17 +116,7 @@ def original_source(project_id, job_id, user_id):
         if root and root != job_id:
             job_id = root
             continue
-        source = job_service.JOBS_DIR / job_id / 'source.video'
-        if not source.is_file() and owner.get('source_s3_key'):
-            temporary = source.with_name(uuid4().hex+'.download')
-            try:
-                source.parent.mkdir(parents=True, exist_ok=True)
-                storage_service.s3_client().download_file(owner['source_s3_bucket'], owner['source_s3_key'], str(temporary))
-                temporary.replace(source)
-            except Exception:
-                raise HTTPException(503, 'Could not retrieve the original media from storage. Retry shortly.') from None
-            finally:
-                temporary.unlink(missing_ok=True)
+        source = local_source(job_id, owner)
         if source.is_file():
             return source
         job_id = owner.get('parent_job')
