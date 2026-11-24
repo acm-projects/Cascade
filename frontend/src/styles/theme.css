@@ -73,8 +73,14 @@
      To restyle all of them at once, change these lines. */
   --wood-cream: linear-gradient(180deg, var(--surface-light), var(--surface));
   --wood-green: linear-gradient(180deg, #84dc4f, #4cb83e 60%, #3fa836);
-  --panel-bg: var(--color-cream-card) var(--wood-cream) center / cover;
-  --panel-border: 0 solid transparent;
+  /* Panels are glass bubbles, like the New Project pop-up: a bright white rim, a glossy highlight along the top,
+     a faint pink-to-aqua shimmer at the edges (Sai picked this look, 2026-11-23).
+     The old cream block was: var(--color-cream-card) var(--wood-cream) center / cover, with no border. */
+  --panel-bg:
+    radial-gradient(120% 90% at 0% 100%, rgba(255, 180, 228, 0.18), transparent 55%),
+    radial-gradient(120% 90% at 100% 0%, rgba(140, 236, 255, 0.24), transparent 55%),
+    linear-gradient(170deg, rgba(255, 255, 255, 0.97), rgba(232, 246, 253, 0.92));
+  --panel-border: 1.5px solid rgba(255, 255, 255, 0.95);
   --panel-radius: calc(26 * var(--u));
 
   /* Isometric look: no outlines. A block is a cream face with a thick edge of cream and soil underneath. */
@@ -82,11 +88,12 @@
     0 max(3px, calc(6 * var(--u))) 0 var(--surface-edge),
     0 max(6px, calc(13 * var(--u))) 0 var(--surface-base),
     0 max(12px, calc(26 * var(--u))) calc(26 * var(--u)) rgba(10, 50, 60, 0.32);
-  /* The same block, thinner: for panels that sit close together */
+  /* Panels (glass bubbles): a glossy inner highlight and a soft shadow, no thick edge.
+     The old block edge was: 0 5px 0 var(--surface-edge), 0 10px 0 var(--surface-base), 0 18px 18px rgba(10, 50, 60, 0.3) */
   --panel-edge:
-    0 5px 0 var(--surface-edge),
-    0 10px 0 var(--surface-base),
-    0 18px 18px rgba(10, 50, 60, 0.3);
+    inset 0 2px 1px rgba(255, 255, 255, 1),
+    inset 0 -10px 22px rgba(150, 215, 245, 0.3),
+    0 12px 30px rgba(4, 30, 60, 0.3);
   --sea-deep: #1f9fd6;
   --sea-shallow: #63e6df;
 
@@ -187,7 +194,7 @@ body {
   border: var(--panel-border);
   border-radius: var(--panel-radius);
   background: var(--panel-bg);
-  box-shadow: var(--block-edge);
+  box-shadow: var(--panel-edge);   /* glass bubble, like the other panels */
 }
 
 /* Work pages (AI Studio, Editor, Export): a light pixel sea, with no 3D running behind the work.
