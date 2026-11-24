@@ -67,7 +67,7 @@
   background: transparent;
   color: #fff8e4;
   font-family: var(--font-display);
-  font-size: calc(24 * var(--u));
+  font-size: calc(28 * var(--u));   /* a little bigger (was 24) */
   text-shadow: 0 calc(2 * var(--u)) 0 var(--bar-edge);
   text-decoration: none;
   cursor: pointer;
