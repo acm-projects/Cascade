@@ -13,32 +13,7 @@
   height: 100%;
 }
 
-/* She glows in the dark: a soft aqua halo that breathes with her glowing fins and spots */
-.seahorse-full {
-  position: relative;
-}
-.seahorse-full::before {
-  content: "";
-  position: absolute;
-  inset: 12% 8%;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(120, 245, 255, 0.45), rgba(255, 150, 230, 0.18) 55%, transparent 75%);
-  filter: blur(14px);
-  animation: seahorse-halo 3.6s ease-in-out infinite;
-}
-.seahorse-full .seahorse-holder {
-  position: relative;
-}
+/* A little glow: a faint aqua light around her edges, plus a soft shadow under her so she sits in the scene */
 .seahorse-full .seahorse-canvas {
-  filter: drop-shadow(0 0 6px rgba(140, 248, 255, 0.75)) drop-shadow(0 10px 14px rgba(5, 35, 70, 0.3));
-}
-.seahorse-head img {
-  filter: drop-shadow(0 0 4px rgba(140, 248, 255, 0.8));
-}
-@keyframes seahorse-halo {
-  0%, 100% { opacity: 0.55; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1.06); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .seahorse-full::before { animation: none; opacity: 0.8; }
+  filter: drop-shadow(0 0 5px rgba(150, 245, 255, 0.4)) drop-shadow(0 10px 14px rgba(5, 35, 70, 0.3));
 }
