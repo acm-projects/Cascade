@@ -198,6 +198,7 @@
   grid-area: timeline;
   min-width: 0;
   padding: 10px 6px;
+  background: #dcf1d0;   /* light leaf green, so the timeline stands apart from the cream boxes above */
 }
 
 .es-warning {

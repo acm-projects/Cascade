@@ -1,11 +1,12 @@
+import { useEffect, useRef, useState } from "react";
 import "./DolphinLoader.css";
 
-// The loading screen: dolphins leaping out of the page's own pixel sea, one after another. Each one breaks the
-// surface in a blocky pixel ripple, arcs over the water with its shadow sliding beneath it, and dives back in with
-// a burst of square droplets. There is no box: it all happens on the water the page already shows.
-// The dolphin is 3D, made and animated in Blender (frontend/blender/dolphin.py): a strip of 16 rendered frames of
-// its tail beat (public/loader/dolphin.webp, about 55 KB) that plays while CSS flies it along the leap, with the
-// ripples and splashes. So it looks fully 3D without downloading a 3D engine just to say "loading".
+// The loading screen: blocky 3D dolphins leaping out of the page's own pixel sea, one after another
+// (dolphinLoaderScene.js). Each one bursts out of the surface in a ring of pixel ripples, arcs over the water with
+// its shadow sliding beneath it, and dives back in with a splash of square droplets. There is no box: it all
+// happens on the water the page already shows.
+// The 3D code downloads on its own. Until it's ready, or if the device can't draw 3D, the older flat version shows
+// instead (FlatDolphins below: Blender-rendered frames from frontend/blender/dolphin.py, flown along the leap by CSS).
 //   <DolphinLoader label="Opening Studio Island" />
 //   label - what's loading; read out by screen readers and shown under the dolphins
 const LEAPS = [0, 1, 2];   // three dolphins, staggered so one is always in the air
@@ -26,22 +27,58 @@ function Ripple({ className, leap }) {
   );
 }
 
-function DolphinLoader({ label = "Loading" }) {
+// The older flat version: picture frames of a dolphin, flown along the leap by CSS
+function FlatDolphins() {
   return (
-    <div className="dolphin-loader" role="status" aria-label={label}>
-      <div className="dolphin-loader-water" aria-hidden="true">
-        {LEAPS.map((n) => (
-          <span key={n} className="dolphin-loader-group" style={{ "--leap": n }}>
-            <Ripple className="is-out" leap={n} />
-            <Ripple className="is-in" leap={n} />
-            <span className="dolphin-loader-shadow" />
-            <span className="dolphin-loader-leap">
-              <span className="dolphin-loader-dolphin" />
-            </span>
-            <span className="dolphin-loader-splash"><i /><i /><i /><i /><i /><i /></span>
+    <div className="dolphin-loader-water" aria-hidden="true">
+      {LEAPS.map((n) => (
+        <span key={n} className="dolphin-loader-group" style={{ "--leap": n }}>
+          <Ripple className="is-out" leap={n} />
+          <Ripple className="is-in" leap={n} />
+          <span className="dolphin-loader-shadow" />
+          <span className="dolphin-loader-leap">
+            <span className="dolphin-loader-dolphin" />
           </span>
-        ))}
-      </div>
+          <span className="dolphin-loader-splash"><i /><i /><i /><i /><i /><i /></span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DolphinLoader({ label = "Loading" }) {
+  const holderRef = useRef(null);
+  const [mode, setMode] = useState("flat");   // "flat" until the 3D is running, then "3d"
+
+  useEffect(() => {
+    let stop = null;
+    let cancelled = false;
+    const holder = holderRef.current;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    import("./dolphinLoaderScene").then(({ createDolphinLoaderScene }) => {
+      if (cancelled || !holder) return;
+      try {
+        // a new canvas each time: once a canvas's 3D is shut down, it can't be started again
+        const canvas = document.createElement("canvas");
+        canvas.className = "dolphin-loader-canvas";
+        holder.append(canvas);
+        stop = createDolphinLoaderScene(canvas, { still });
+        setMode("3d");
+      } catch {
+        holder.replaceChildren();   // no 3D here: keep the flat dolphins
+      }
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      stop?.();
+      holder?.replaceChildren();
+    };
+  }, []);
+
+  return (
+    <div className={`dolphin-loader is-${mode}`} role="status" aria-label={label}>
+      <div ref={holderRef} className="dolphin-loader-3d" aria-hidden="true" />
+      {mode === "flat" && <FlatDolphins />}
       <p className="dolphin-loader-label">{label}…</p>
     </div>
   );
