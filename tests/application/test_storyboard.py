@@ -82,12 +82,6 @@ class StoryboardTests(unittest.TestCase):
             self.assertIn('OpenAI',saved.planner)
             self.assertEqual(storyboard.pending('p', 'j', 0, 'u').id, saved.id)
 
-    def test_only_reel_requests_become_storyboards(self):
-        from backend.editor.storyboard_chat import REEL
-        self.assertTrue(REEL.search('Make this a high-energy Reel') and REEL.search('cut this for YouTube Shorts'))
-        for message in ('Add short B-roll shots', 'make the captions yellow', 'shorten the intro'):
-            self.assertIsNone(REEL.search(message), message)
-
     def test_chat_routing_render_cancel_and_notes(self):
         self.assertTrue(storyboard.RENDER.search('render') and storyboard.RENDER.search('Looks good!'))
         self.assertFalse(storyboard.RENDER.search('render beat 3 bigger'))

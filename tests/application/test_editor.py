@@ -19,6 +19,7 @@ from backend.core import jobs as core_jobs
 from backend.core import media as core_media
 from backend.core import auth
 from backend import editor
+from tests.application.chat_routes import route
 
 
 class EditorTests(unittest.TestCase):
@@ -162,7 +163,7 @@ class EditorTests(unittest.TestCase):
     def test_detailed_caption_chat_action_keeps_effects_and_history(self):
         state=editor.Edit(start=0,end=3,effects=editor.Effects(contrast=1.2))
         style=state.captions.model_copy(update={'font':'Georgia','size':60,'opacity':.5})
-        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
+        with route('changes'),patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Style',actions=[editor.Action(type='caption_settings',settings=style)])):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'message':'Make the text larger with Georgia and a background','state':state.model_dump()})
         self.assertEqual(result.status_code,200)
         self.assertEqual(result.json()['state']['captions']['size'],60)
@@ -217,17 +218,17 @@ class EditorTests(unittest.TestCase):
     def test_chat_validated_transaction_provider_failure_and_no_key(self):
         state=self.get()['draft']['state']
         proposal=editor.Proposal(message='Trimmed one second and made captions yellow.', actions=[editor.Action(type='trim_first',seconds=1),editor.Action(type='caption_color',color='#ffff00')])
-        with patch.object(editor.ai,'request_edit',return_value=proposal) as ai:
+        with route('changes'),patch.object(editor.ai,'request_edit',return_value=proposal) as ai:
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'trim and yellow','chat':[]})
             self.assertEqual(result.status_code,200,result.text)
             self.assertEqual(result.json()['state']['start'],1)
             self.assertEqual(result.json()['state']['captions']['color'],'#ffff00')
             self.assertEqual(ai.call_args.args[0]['transcript'][0]['start'],.5)
-        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
+        with route('changes'),patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='Bad',actions=[editor.Action(type='trim_first',seconds=99)])):
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'bad'}).status_code,422)
-        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':''}):
+        with patch.dict(os.environ,{'OPENAI_API_KEY':'','ANTHROPIC_API_KEY':''}):   # no key: the router already says so
             self.assertEqual(self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'}).status_code,503)
-        with patch.object(openai_edit,'structured_json',side_effect=RuntimeError('private info')):
+        with route('changes'),patch.object(openai_edit,'structured_json',side_effect=RuntimeError('private info')):
             result=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'hello'})
             self.assertEqual(result.status_code,502)
             self.assertNotIn('private info',result.text)

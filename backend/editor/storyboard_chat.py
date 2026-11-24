@@ -1,5 +1,4 @@
 """AI Editor chat turns for storyboard-first editing (see storyboard.py)."""
-import re
 
 from fastapi import HTTPException
 
@@ -7,18 +6,13 @@ from . import storyboard
 from .models import Edit
 from .validation import validate_media_edit
 
-REEL = re.compile(r'\b(reels?|tiktok|shorts|montage|hype|high[- ]energy)\b', re.I)
 
 
-def wants(body, info, user, pid, jid, index):
-    """The pending storyboard (or True for a new one) when this turn belongs to the storyboard flow, else None."""
+def pending(body, info, user, pid, jid, index):
+    """The storyboard waiting for approval, if any: then this turn belongs to it (render, cancel or a note).
+    Whether a new message starts a storyboard is chat_router's call."""
     if body.research_id or not info.get('has_video', True): return None
-    board = storyboard.pending(pid, jid, index, user)
-    if board: return board
-    from .style_profile import chat_links
-    from .style_requests import wants_director
-    reel = not body.state.fablecut and REEL.search(body.message)   # Reel requests are storyboards too
-    return True if wants_director(body.message) or chat_links(body.message) or reel else None
+    return storyboard.pending(pid, jid, index, user)
 
 
 def _reply(state, message, report, board=None, planner=''):

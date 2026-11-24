@@ -8,7 +8,6 @@ from .advanced_models import TimelineSpan,SpeedRamp,Motion,AudioSegment,Transiti
 from .retiming import Clock,phrases
 from .beats import analyze,loop_beats
 
-def is_reel_request(text):return bool(re.search(r'high[ -]energy.{0,35}reel|reel.{0,35}high[ -]energy',text,re.I))
 
 def hook_candidates(cues,start,end):
     options=[]

@@ -9,6 +9,7 @@ from backend.editor import trends
 from backend.editor.models import Edit
 from backend.trends.router import _compare_tags
 from tests.application import test_high_energy_reel as fixtures
+from tests.application.chat_routes import use_route
 
 def findings():
     return {'summary':'Keep the dialogue clear; emphasize the reaction with a restrained zoom and bold captions.',
@@ -31,6 +32,7 @@ class ClipTrendsTests(unittest.TestCase):
     def tearDownClass(cls):fixtures.ReelRenderTests.tearDownClass()
     def setUp(self):
         self.fx=fixtures.ReelRenderTests();self.fx.setUp()
+        use_route(self, 'trends')
         self.client=self.fx.client;self.url=self.fx.url;self.headers=self.fx.headers
         self.state=self.fx.get();self.base=self.url+'/trends'
     def tearDown(self):self.fx.tearDown()

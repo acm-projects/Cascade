@@ -17,6 +17,7 @@ from PIL import Image
 from backend import broll, editor
 from backend.services import projects_store
 from tests.application import test_editor as editor_fixture
+from tests.application.chat_routes import route, use_route
 
 
 def provider_video(ident=12):
@@ -97,7 +98,7 @@ class BrollEditorTests(unittest.TestCase):
         return broll.Segment(id='e'*32,asset=asset,start=.5,duration=1,offset=1,**kw)
 
     def chat(self,state,actions,**extra):
-        with patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='model text',actions=actions)) as ai:
+        with route('changes'),patch.object(editor.ai,'request_edit',return_value=editor.Proposal(message='model text',actions=actions)) as ai:
             response=self.client.post(self.url+'/chat',headers=self.headers,json={'state':state,'message':'explicit fixture edit',**extra})
             return response,ai
 

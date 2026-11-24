@@ -6,6 +6,7 @@ from backend.editor.advanced_models import StyleEvent, StyleOptions
 from backend.editor.models import Edit
 from backend.editor.style_requests import parse_request, proposal_for
 from backend.editor.stylize import apply_events, plan_preset
+from tests.application.chat_routes import route, use_route
 
 
 class StyleRequestTests(unittest.TestCase):
@@ -64,6 +65,7 @@ class StyleChatRenderTests(unittest.TestCase):
 
     def setUp(self):
         self.fx = self.fixture(); self.fx.setUp()
+        use_route(self, 'style')
 
     def tearDown(self): self.fx.tearDown()
 

@@ -19,6 +19,7 @@ from backend.editor import ai
 from backend.editor.audio_assets import store
 from backend.editor.storage import stock_store
 from backend import broll
+from tests.application.chat_routes import route, use_route
 
 class AdvancedEditingTests(unittest.TestCase):
     @classmethod
@@ -27,6 +28,7 @@ class AdvancedEditingTests(unittest.TestCase):
     def tearDownClass(cls): editor_fixture.EditorTests.tearDownClass()
     def setUp(self):
         self.fx=editor_fixture.EditorTests();self.fx.setUp()
+        use_route(self, 'changes')
         self.client=self.fx.client;self.url=self.fx.url;self.headers=self.fx.headers
         self.audio=store(self.fx.pid,self.fx.jid,0,'editor-user')
         self.assets=self.audio.library()

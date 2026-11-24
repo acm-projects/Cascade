@@ -17,6 +17,7 @@ from backend.editor.beats import analyze
 from backend.editor.audio_assets import AudioStore
 from backend.editor import ai
 from tests.application import test_editor as editor_fixture
+from tests.application.chat_routes import route, use_route
 
 class ReelClockTests(unittest.TestCase):
     def test_shared_clock_exact_inverse_and_speech_guard(self):
@@ -51,6 +52,7 @@ class ReelRenderTests(unittest.TestCase):
     def tearDownClass(cls):editor_fixture.EditorTests.tearDownClass()
     def setUp(self):
         self.fx=editor_fixture.EditorTests();self.fx.setUp();self.client=self.fx.client;self.url=self.fx.url;self.headers=self.fx.headers
+        use_route(self, 'changes')
         from backend.core import jobs
         self.jobs=jobs
         source=jobs.JOBS_DIR/self.fx.jid/'clip_1.mp4'

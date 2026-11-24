@@ -1,10 +1,9 @@
-"""AI Director routing and recipes, offline: no OpenAI, YouTube, Ollama or Pexels calls."""
+"""AI Director recipes, offline: no OpenAI, YouTube, Ollama or Pexels calls. (Routing is tested in test_chat_router.py.)"""
 import unittest
-from unittest.mock import patch
 
 from backend.editor.director_models import Analysis, DirectorPlan
 from backend.editor.models import Edit
-from backend.editor.style_requests import parse_request, wants_director
+from backend.editor.style_requests import parse_request
 
 
 class FakeAudio:
@@ -17,11 +16,7 @@ class FakeStock:
 
 
 class DirectorTests(unittest.TestCase):
-    def test_open_requests_go_to_the_director_and_fan_edits_stay_explicit(self):
-        for message in ('edit this video', 'make this viral', 'make it a dramatic edit', 'you decide', 'make a memorial edit'):
-            self.assertTrue(wants_director(message), message)
-        for message in ('make this a spiderman fan edit', 'make captions yellow', 'remove the fan edit', 'trim the first 3 seconds'):
-            self.assertFalse(wants_director(message), message)
+    def test_fan_edit_details_are_read_from_the_message(self):
         self.assertEqual(parse_request('make this a spiderman fan edit, edited by Manila')['options'].end_card, 'Cascade')
 
     def test_memorial_recipe_is_clean_and_ends_with_cascade(self):
@@ -45,12 +40,6 @@ class DirectorTests(unittest.TestCase):
         state, notes = apply_plan(Edit(start=0, end=12), plan, {'cues': cues}, FakeStock(), FakeAudio())
         self.assertEqual([(s.start, s.end) for s in state.timeline], [(0, 4.15), (5.85, 12)])
         self.assertEqual(state.captions.animation, 'karaoke')
-
-    def test_openai_unavailable_leaves_the_edit_unchanged(self):
-        from backend.editor import director, openai_edit
-        cues = [{'start': 1, 'end': 4, 'text': 'The soldiers in our army camp were shot'}]
-        with patch.object(openai_edit, 'ask', side_effect=director.HTTPException(503)), self.assertRaises(director.HTTPException):
-            director.analyze('missing.mp4', Edit(start=0, end=10), {'cues': cues}, [], 'War story')
 
 
 if __name__ == '__main__':

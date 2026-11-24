@@ -16,19 +16,6 @@ def body(state, message):
     return SimpleNamespace(state=state, chat=[], message=message, research_id=None)
 
 
-class Routing(unittest.TestCase):
-    state = Edit(start=0, end=10)
-
-    def test_edit_requests_and_followups_route_here(self):
-        self.assertTrue(jobs.wants(body(self.state, 'edit this clip'), {'has_video': True}))
-        self.assertFalse(jobs.wants(body(self.state, 'make the captions yellow'), {'has_video': True}))
-        self.assertFalse(jobs.wants(body(self.state, 'edit this with a storyboard'), {'has_video': True}))
-        self.assertFalse(jobs.wants(body(self.state, 'edit this clip'), {'has_video': False}))
-        edited = self.state.model_copy(update={'ai_edit': AIEditRef(version='v001', duration=9)})
-        self.assertTrue(jobs.wants(body(edited, 'make the captions yellow'), {'has_video': True}))
-
-
-
 class OldDrafts(unittest.TestCase):
     def test_a_draft_saved_with_an_old_beat_plan_still_opens(self):
         state = Edit.model_validate({'start': 0, 'end': 10, 'ai_plan': {'version': 'v001', 'plan_id': '0'*32}})

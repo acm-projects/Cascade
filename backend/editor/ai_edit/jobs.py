@@ -19,7 +19,6 @@ LOG = logging.getLogger(__name__)
 RUNNING = {}
 GUARD = threading.Lock()
 RENDER_SLOT = threading.BoundedSemaphore(1)  # one heavy edit at a time; others show as queued
-EDIT_REQUEST = re.compile(r'\b(edit|recut|re-cut)\s+(this|it|the|my)\b|\bmake\s+(this|it)\s+(into\s+)?(a|an)\b|\b(reels?|tiktok|shorts)\b|\bcut\s+(this|it)\s+(down|into)\b|\b(trailer|montage)\b', re.I)
 GO_BACK = re.compile(r'^\s*(undo( (your|the) last (ai )?(edit|change))?|go back|previous version|revert( that)?)\b[\s.!]*$', re.I)
 
 
@@ -58,12 +57,6 @@ def rendered_path(pid, jid, index, user, version):
     path = root(pid, jid, index, user)/version/'edited.mp4'
     if not path.is_file(): raise HTTPException(409, 'This edited version is no longer on this machine. Ask the AI Editor to edit the clip again.')
     return path
-
-
-def wants(body, info):
-    """Whether this chat turn belongs to the finished-edit workflow."""
-    if body.research_id or not info.get('has_video', True) or re.search(r'storyboard', body.message, re.I): return False
-    return bool(body.state.ai_edit) or bool(EDIT_REQUEST.search(body.message))
 
 
 def _reply(state, message, job=None):

@@ -1,4 +1,4 @@
-"""Editor chat; extracted without changing media behavior."""
+"""Editor chat: one message in, an updated edit (or a started AI edit / storyboard) out. chat_router picks the path."""
 from fastapi import HTTPException, Request
 from .models import ChatInput
 from .validation import details, validate_media_edit
@@ -22,35 +22,29 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     from .execution import execute
     audio_store = store(pid,jid,index,request.state.user_id)
     audio_store.verify(body.state)
-    # "Edit this clip" and every follow-up on a finished edit: Claude directs a full edit in the background.
-    from .ai_edit import jobs as ai_edit_jobs
-    if ai_edit_jobs.wants(body,info):
+    # Which path handles this message: the AI chooses (chat_router), except where the app's state decides it.
+    from . import chat_router, storyboard_chat
+    pending=storyboard_chat.pending(body,info,request.state.user_id,pid,jid,index)
+    route=chat_router.fixed(body,info,pending) or chat_router.choose(body,{**info,'clip_title':clip.get('title','')})
+    if route=='finished_edit':   # a whole new edit, or any follow-up on a finished one
+        from .ai_edit import jobs as ai_edit_jobs
         return ai_edit_jobs.turn(pid,jid,index,request.state.user_id,clip,body,info,stock,audio_store)
-    # Open edit requests and notes on a pending storyboard: plan beats first, render on "render".
-    from . import storyboard_chat
-    pending=storyboard_chat.wants(body,info,request.state.user_id,pid,jid,index)
-    if pending:
-        return storyboard_chat.turn(pid,jid,index,request.state.user_id,clip,body,info,stock,audio_store,pending)
+    if route=='storyboard':   # plan shot by shot first; render on "render"
+        return storyboard_chat.turn(pid,jid,index,request.state.user_id,clip,body,info,stock,audio_store,pending or True)
     from .context import scene_hints, footage_frames
     hints=scene_hints(jid,clip) if info.get('has_video') else {}
-    from .reel import is_reel_request,hook_candidates
+    from .reel import hook_candidates
     info={**info,**hints,'clip_title':clip.get('title','')}
-    if is_reel_request(body.message) and not info.get('has_video',True):
-        raise HTTPException(422,'High-energy Reels require video footage. This audio-only clip supports transcript, audio and trim edits.')
-    # Fan-edit style requests are routed deterministically: free, no model quota, no guessing.
-    from .style_requests import parse_request, proposal_for
-    style_request=parse_request(body.message) if info.get('has_video',True) and not body.research_id else None
-    from .style_requests import wants_director
-    director_request=not style_request and info.get('has_video',True) and not body.research_id and wants_director(body.message)
-    wants_trends=not style_request and not director_request and bool(re.search(r'flashy|crazy|tiktok|trend[- ]informed',body.message,re.I) and re.search(r'make|edit|apply|create',body.message,re.I))
+    intensity='flashy' if re.search(r'flashy|crazy',body.message,re.I) else 'high-energy'
     research_report=[]
-    if body.research_id or wants_trends:
+    proposal=None
+    if route=='trends':
         from . import trends
         if body.research_id:
-            return trends.apply_result(pid,jid,index,trends.ApplyInput(state=body.state,research_id=body.research_id,suggestion=body.suggestion,suggestions=body.suggestions,intensity='flashy' if re.search(r'flashy|crazy',body.message,re.I) else 'high-energy'),request)
+            return trends.apply_result(pid,jid,index,trends.ApplyInput(state=body.state,research_id=body.research_id,suggestion=body.suggestion,suggestions=body.suggestions,intensity=intensity),request)
         record=trends.research_for_chat(pid,jid,index,request.state.user_id,body.state,goal=body.message)
         if record['status']=='done':
-            result=trends.apply_result(pid,jid,index,trends.ApplyInput(state=body.state,research_id=record['id'],intensity='flashy' if re.search(r'flashy|crazy',body.message,re.I) else 'high-energy'),request)
+            result=trends.apply_result(pid,jid,index,trends.ApplyInput(state=body.state,research_id=record['id'],intensity=intensity),request)
             result['message']='YouTube research informed this supported High-Energy style. This is not verified TikTok trend data.\n'+result['message']
             unsupported=[name for pattern,name in [(r'freeze','freeze-frames'),(r'reverse','reverse playback'),(r'mask|rotoscop','subject masks'),(r'glow|3d','glow/3D compositing'),(r'optical.flow','optical-flow ramps')] if re.search(pattern,body.message,re.I)]
             result['unsupported']=unsupported
@@ -61,9 +55,9 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
         # Missing external research must not block the working local style.
         from .models import Action,Proposal
         proposal=Proposal(message='Supported local style; external research unavailable.',actions=[Action(type='high_energy_reel')])
-    else:
-        proposal=None
-    if style_request:
+    if route=='style':   # fan-edit effects: the details (which effects, colours, words) are read from the message
+        from .style_requests import parse_request, proposal_for
+        style_request=parse_request(body.message,force=True)
         proposal=proposal_for(style_request)
         if style_request['type']=='preset':
             from .beats import analyze
@@ -72,22 +66,13 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
                 with media(jid,clip) as source: info['style_beats']=analyze(source)['beats']
             except (OSError,subprocess.SubprocessError,HTTPException,ValueError,KeyError):
                 info['style_beats']=[]
-    if director_request:
-        # AI Director: watches the clip, studies real reference edits, picks the edit (free tiers/local only).
-        from .director import chat_proposal
-        proposal,research_report=chat_proposal(jid,clip,body,info,hints,request.state.user_id)
     assets=audio_store.library()
     frames = footage_frames(jid,clip,body.state,info,hints) if info.get('has_video', True) and proposal is None else []
     proposal = proposal or ai.request_edit({'visual_frames': frames,'broll_results': results, 'audio_assets': assets,
         'selected_broll_segment':body.selected_segment, 'media_kind': info.get('media_kind', 'video'),
-        'style_request': 'high-energy-v1' if is_reel_request(body.message) else None,
         'hook_candidates':hook_candidates(info['cues'],body.state.start,body.state.end),
         'visual_timing_hints': hints, 'clip': public_clip(clip), 'duration': info['duration'], 'state': body.state.model_dump(),
         'transcript': info['cues'][:300], 'history': [m.model_dump() for m in body.chat[-20:]], 'request': body.message})
-    if not style_request and not director_request and is_reel_request(body.message) and not any(a.type=='high_energy_reel' for a in proposal.actions):
-        from .models import Action,Proposal
-        query=next((a.query for a in proposal.actions if a.type in ('broll_auto','broll_search') and a.query),None)
-        proposal=proposal.model_copy(update={'actions':[Action(type='high_energy_reel',query=query)]})
     info['editor_moments'] = [{**observation.model_dump(),'at':frames[observation.frame_index]['at']} for observation in proposal.observations if observation.frame_index<len(frames) and body.state.start <= frames[observation.frame_index]['at'] < body.state.end]
     state, reports, search_result, unsupported = execute(body, proposal, info, stock, audio_store)
     reports=research_report+reports
