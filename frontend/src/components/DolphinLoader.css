@@ -9,7 +9,23 @@
   color: #fff;
 }
 
-/* the stretch of water the dolphins use: 360 x 200, the surface line near the bottom */
+/* The 3D dolphins (dolphinLoaderScene.js): a see-through canvas over the page's sea. It takes no room until the
+   3D is running, while the flat version below shows instead. */
+.dolphin-loader-3d { display: none; }
+.dolphin-loader.is-3d .dolphin-loader-3d {
+  display: block;
+  width: 520px;
+  height: 280px;
+  max-width: 92vw;
+}
+.dolphin-loader-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The flat version (FlatDolphins in DolphinLoader.jsx), shown until the 3D is ready or if it can't run.
+   The stretch of water the dolphins use: 360 x 200, the surface line near the bottom */
 .dolphin-loader-water {
   position: relative;
   width: 360px;
