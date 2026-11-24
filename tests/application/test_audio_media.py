@@ -105,6 +105,27 @@ class AudioMediaTests(unittest.TestCase):
         export=self.client.post(url+'/export',headers=self.headers,json=info['draft']['state'])
         self.assertEqual(export.status_code,200);self.assertEqual(export.headers['content-type'],'video/mp4')
 
+    def test_editor_preview_is_kept_on_the_server_and_streamed(self):
+        from backend.editor import preview_routes
+        jid,clip=self.generate(self.video)
+        url=f'/api/projects/{self.pid}/editor/{jid}/0'
+        state=self.client.get(url,headers=self.headers).json()['draft']['state']
+        made=self.client.post(url+'/preview',headers=self.headers,json={**state,'preview':True,'resolution':'540p'})
+        self.assertEqual(made.status_code,200,made.text)
+        path=made.json()['path'];self.assertTrue(path.startswith(url+'/preview/'))
+        whole=self.client.get(path,headers=self.headers)
+        self.assertEqual(whole.headers['content-type'],'video/mp4');self.assertGreater(len(whole.content),100)
+        part=self.client.get(path,headers={**self.headers,'Range':'bytes=0-99'})   # the browser streams in pieces
+        self.assertEqual(part.status_code,206);self.assertEqual(len(part.content),100)
+        link=self.client.get('/api/media-link',params={'path':path},headers=self.headers).json()['url']
+        self.assertEqual(self.client.get(link).status_code,200)   # a <video> tag plays it without the sign-in header
+        self.assertEqual(self.client.get(path,headers={'Authorization':'Bearer other'}).status_code,404)
+        self.assertEqual(self.client.get(url+'/preview/..%2Fsource.video',headers=self.headers).status_code,404)
+        for _ in range(preview_routes.KEEP):
+            self.client.post(url+'/preview',headers=self.headers,json={**state,'preview':True,'resolution':'540p'})
+        self.assertEqual(len(list((self.root/jid/'previews'/'0').glob('*.mp4'))),preview_routes.KEEP)
+        self.assertEqual(self.client.get(path,headers=self.headers).status_code,404)   # the oldest was pruned
+
     def test_mixed_audio_video_batch_keeps_each_format(self):
         entries=[]
         for source in [self.audio,self.video]:

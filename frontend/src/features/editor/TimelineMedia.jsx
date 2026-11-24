@@ -79,12 +79,9 @@ export function StockThumbnail({ projectId, clip, asset }) {
   const jobId = clip?.job_id, index = clip?.clip_index;
   useEffect(() => {
     if (!projectId || !jobId || !asset?.id) return;
-    let active = true, objectUrl;
-    api.getBrollMedia(projectId, jobId, index, asset.id, 'thumbnail').then(blob => {
-      if (!active) return;
-      objectUrl = URL.createObjectURL(blob); setUrl(objectUrl);
-    }).catch(() => {});
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    let active = true;
+    api.brollMediaUrl(projectId, jobId, index, asset.id, 'thumbnail').then(link => { if (active) setUrl(link); }).catch(() => {});
+    return () => { active = false; };
   }, [api, projectId, jobId, index, asset?.id]);
   return url ? <img src={url} alt="" draggable="false" /> : null;
 }

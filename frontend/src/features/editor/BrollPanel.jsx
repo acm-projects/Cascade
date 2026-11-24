@@ -8,13 +8,12 @@ function useStockUrl(api, projectId, clip, id, kind, enabled = true) {
   const [result, setResult] = useState({ url: null, error: "" });
   useEffect(() => {
     if (!enabled || !id) return;
-    let active = true, url;
-    api.getBrollMedia(projectId, clip.job_id, clip.clip_index, id, kind).then(blob => {
-      if (!active) return;
-      url = URL.createObjectURL(blob);
-      setResult({ url, error: "" });
-    }).catch(error => { if (active) setResult({ url: null, error: error.message }); });
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+    let active = true;
+    // a streaming link: the hover preview starts playing at once instead of downloading the whole stock video
+    api.brollMediaUrl(projectId, clip.job_id, clip.clip_index, id, kind)
+      .then(url => { if (active) setResult({ url, error: "" }); })
+      .catch(error => { if (active) setResult({ url: null, error: error.message }); });
+    return () => { active = false; };
   }, [api, projectId, clip.job_id, clip.clip_index, id, kind, enabled]);
   return result;
 }

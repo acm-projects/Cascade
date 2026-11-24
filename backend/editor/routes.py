@@ -5,6 +5,7 @@ from .drafts import editor_index, get_draft, save_draft, save_clip
 from .reframe import start_reframe, reframe_status, subjects_at, reframe_plan
 from .render import export_selected, export
 from .media_routes import get_thumbnail, get_media, style_progress
+from .preview_routes import render_preview, get_preview
 from .chat import chat
 from .ai import ai_status
 from .audio_assets import list_assets, upload_asset, asset_media
@@ -49,3 +50,5 @@ router.add_api_route('/{jid}/{index}/style-progress', style_progress, methods=['
 router.add_api_route('/{jid}/{index}/chat', chat, methods=['POST'])
 router.add_api_route('/export-selected', export_selected, methods=['POST'])
 router.add_api_route('/{jid}/{index}/export', export, methods=['POST'])
+router.add_api_route('/{jid}/{index}/preview', render_preview, methods=['POST'])
+router.add_api_route('/{jid}/{index}/preview/{name}', get_preview, methods=['GET'])

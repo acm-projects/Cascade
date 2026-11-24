@@ -24,11 +24,12 @@ export const EditVideo = forwardRef(function EditVideo({ projectId, clip, state,
     return () => { active = false; };
   }, [api, projectId, clip]);
   useEffect(() => {
-    let active = true, url;
-    api.exportClip(projectId, clip.job_id, clip.clip_index, JSON.parse(snapshot))
-      .then(blob => { url = URL.createObjectURL(blob); if (active) setRendered(url); })
+    let active = true;
+    api.previewClip(projectId, clip.job_id, clip.clip_index, JSON.parse(snapshot))   // the export render, streamed
+      .then(({ path }) => api.mediaUrl(path))
+      .then(link => { if (active) setRendered(link); })
       .catch(() => {}); // the source keeps playing; the note below says so
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+    return () => { active = false; };
   }, [api, projectId, clip.job_id, clip.clip_index, snapshot]);
   useImperativeHandle(ref, () => ({
     seek(t, play = false) { // t = seconds in the edited video

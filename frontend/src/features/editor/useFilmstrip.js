@@ -28,9 +28,9 @@ function waitFor(video, eventName) {
   });
 }
 
-// Play the clip in a hidden <video>, jump to each time and draw that frame into a small picture
-async function grabFrames(blob, duration, strip) {
-  const url = URL.createObjectURL(blob);
+// Stream the clip in a hidden <video>, jump to each time and draw that frame into a small picture.
+// The video asks the server only for the parts it needs for each jump, so a long clip isn't downloaded whole.
+async function grabFrames(url, duration, strip) {
   const video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;
@@ -55,7 +55,6 @@ async function grabFrames(blob, duration, strip) {
   } finally {
     video.removeAttribute("src");
     video.load();
-    URL.revokeObjectURL(url);
   }
 }
 
@@ -72,8 +71,8 @@ export default function useFilmstrip(projectId, clip, duration, enabled = true) 
       strip = { frames: [], aspect: 0, listeners: new Set() };
       strips.set(key, strip);
       const started = strip;
-      api.getMedia(clipMediaPath(projectId, clip))
-        .then((blob) => grabFrames(blob, duration, started))
+      api.mediaUrl(clipMediaPath(projectId, clip))
+        .then((url) => grabFrames(url, duration, started))
         .catch(() => {
           // Keep any frames we got. With none, forget it so the next visit tries again; the track shows its lines.
           if (!started.frames.length) strips.delete(key);

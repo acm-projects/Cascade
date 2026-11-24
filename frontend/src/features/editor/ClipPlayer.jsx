@@ -60,14 +60,16 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   }, [api, projectId, clip.job_id, clip.clip_index, rendering, styled]);
   useEffect(() => {
     if (!advanced) return;
-    let active = true, objectUrl;
+    let active = true;
+    // The server renders and keeps the preview; the video then streams it, so it starts playing as soon as the
+    // first part arrives instead of after the whole file has downloaded.
     const timer = setTimeout(() => {
-      api.exportClip(projectId, clip.job_id, clip.clip_index, { ...JSON.parse(snapshot), preview: true, resolution: '540p' }).then(blob => {
-        if (!active) return;
-        objectUrl = URL.createObjectURL(blob); setRender({ key: renderKey, url: objectUrl });
-      }).catch(e => { if (active) setRender({ key: renderKey, error: e.message }); });
+      api.previewClip(projectId, clip.job_id, clip.clip_index, { ...JSON.parse(snapshot), preview: true, resolution: '540p' })
+        .then(({ path }) => api.mediaUrl(path))
+        .then(link => { if (active) setRender({ key: renderKey, url: link }); })
+        .catch(e => { if (active) setRender({ key: renderKey, error: e.message }); });
     }, 900);
-    return () => { active = false; clearTimeout(timer); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    return () => { active = false; clearTimeout(timer); };
   }, [api, projectId, clip.job_id, clip.clip_index, snapshot, advanced, renderKey]);
   const [error, setError] = useState(null);
   const [time, setTime] = useState(state.start);

@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
+import { mediaUrl } from "./studio";
 
-// Editor + export: backend/editor_backend.py
+// Editor + export: backend/editor/routes.py
 // A clip is named by the generation job it came from (jobId) and its position in that job (index, from 0).
 //
 // An "edit" (the draft state) looks like:
@@ -114,6 +115,16 @@ export function exportClip(token, projectId, jobId, index, edit) {
 }
 
 /**
+ * POST .../editor/{jobId}/{index}/preview   body: Edit (the same as export)
+ * Renders the edit like export, but keeps the file on the server so it can be streamed:
+ * pass the returned path to mediaUrl() and play that, instead of downloading the whole file first.
+ * @returns {Promise<{ path: string, media_type: string }>}
+ */
+export function previewClip(token, projectId, jobId, index, edit) {
+  return apiFetch(`${clipPath(projectId, jobId, index)}/preview`, { token, method: "POST", body: edit });
+}
+
+/**
  * POST /api/projects/{projectId}/editor/export-selected
  * body: { clips: [{ job_id, clip_index, edit: Edit }] }   (1-100 clips, no duplicates)
  * @returns {Promise<Blob>} a .zip with one MP4 per clip
@@ -174,7 +185,12 @@ export function searchBroll(token, projectId, jobId, index, query, page = 1) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/broll/search?${new URLSearchParams({ query, page })}`, { token });
 }
 
-export function getBrollMedia(token, projectId, jobId, index, assetId, kind = "media") {
+/**
+ * A streaming link for a stock result's video or thumbnail (see mediaUrl): the browser plays or shows it
+ * straight from the server instead of downloading it whole first.
+ * @returns {Promise<string>}
+ */
+export function brollMediaUrl(token, projectId, jobId, index, assetId, kind = "media") {
   const suffix = kind === "thumbnail" ? "thumbnail" : "media";
-  return apiFetch(`${clipPath(projectId, jobId, index)}/broll/${encodeURIComponent(assetId)}/${suffix}`, { token });
+  return mediaUrl(token, `${clipPath(projectId, jobId, index)}/broll/${encodeURIComponent(assetId)}/${suffix}`);
 }

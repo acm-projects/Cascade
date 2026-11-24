@@ -40,6 +40,8 @@ class EditorRouteTests(unittest.TestCase):
                       ['/api/social/linkedin/callback', ['GET']]]
         # Signed links so <video> tags can stream protected media (backend/core/media_links.py).
         additions.append(['/api/media-link', ['GET']])
+        # Editor previews kept on the server and streamed instead of downloaded whole (preview_routes.py).
+        additions += [[prefix+'/preview', ['POST']], [prefix+'/preview/{name}', ['GET']]]
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
 
     def test_editor_modules_remain_small(self):
