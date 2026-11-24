@@ -1,0 +1,42 @@
+/* The dolphin page change (DolphinCurtain.jsx): the same pixel sea as the work pages (theme.css .leaf-page),
+   covering the whole screen, with the dolphins leaping in the middle. Fades in, holds, fades out. */
+.dolphin-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;          /* above the pages; also stops clicks while it runs */
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(160deg, #3fc2dc, var(--sea-deep) 55%, #1a8fc8);
+  opacity: 0;
+}
+
+/* the sea's white pixel dashes, drifting slowly */
+.dolphin-curtain::before {
+  content: "";
+  position: absolute;
+  inset: 0 -640px 0 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' shape-rendering='crispEdges' fill='%23f3fffd' fill-opacity='.55'%3E%3Crect x='30' y='30' width='25' height='5'/%3E%3Crect x='250' y='45' width='15' height='5'/%3E%3Crect x='470' y='15' width='30' height='5'/%3E%3Crect x='120' y='105' width='20' height='5'/%3E%3Crect x='380' y='120' width='25' height='5'/%3E%3Crect x='590' y='95' width='15' height='5'/%3E%3Crect x='60' y='190' width='15' height='5'/%3E%3Crect x='300' y='205' width='30' height='5'/%3E%3Crect x='520' y='180' width='20' height='5'/%3E%3Crect x='165' y='270' width='25' height='5'/%3E%3Crect x='430' y='285' width='15' height='5'/%3E%3Crect x='610' y='260' width='20' height='5'/%3E%3Crect x='20' y='345' width='30' height='5'/%3E%3Crect x='240' y='360' width='20' height='5'/%3E%3Crect x='490' y='375' width='25' height='5'/%3E%3C/svg%3E") 0 0 repeat;
+  animation: sea-pixels 80s steps(320) infinite;   /* sea-pixels: theme.css */
+  pointer-events: none;
+}
+
+.dolphin-curtain > * { position: relative; }
+
+.dolphin-curtain.is-cover { animation: dolphin-curtain-in 350ms ease-out forwards; }
+.dolphin-curtain.is-hold { opacity: 1; }
+.dolphin-curtain.is-reveal { animation: dolphin-curtain-out 450ms ease-in forwards; }
+
+@keyframes dolphin-curtain-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dolphin-curtain-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dolphin-curtain::before { animation: none; }
+}
