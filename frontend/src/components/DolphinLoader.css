@@ -14,8 +14,8 @@
 .dolphin-loader-3d { display: none; }
 .dolphin-loader.is-3d .dolphin-loader-3d {
   display: block;
-  width: 520px;
-  height: 280px;
+  width: 620px;
+  height: 330px;
   max-width: 92vw;
 }
 .dolphin-loader-canvas {

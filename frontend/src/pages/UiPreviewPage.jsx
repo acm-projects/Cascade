@@ -70,6 +70,11 @@ function UiPreviewPage() {
         </section>
 
         <section className="ui-preview-card ui-preview-sea">
+          <h2>Loading screen, with flips</h2>
+          <DolphinLoader label="Opening Studio Island" flips />
+        </section>
+
+        <section className="ui-preview-card ui-preview-sea">
           <h2>Cassie the seahorse</h2>
           <div className="ui-preview-row">
             <Seahorse size={150} />
