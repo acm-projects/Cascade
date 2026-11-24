@@ -4,6 +4,7 @@ POST .../{jid}/{index}/preview renders the edit exactly as POST .../export does,
 and answers with its address. The browser then plays that address through a signed media link
 (GET /api/media-link), asking for byte ranges as it plays, so playback starts once the first part arrives
 instead of after the whole file has downloaded. Only the newest KEEP renders per clip are kept.
+The answer also lists anything the render had to leave out (`notes`, e.g. a motion card), for the Editor to show.
 """
 import re
 import shutil
@@ -13,6 +14,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse
 
+from . import notices
 from .models import ExportInput
 from .render import export
 from .runtime import jobs_dir
@@ -33,8 +35,9 @@ def _prune(folder):
 
 
 def render_preview(pid: str, jid: str, index: int, body: ExportInput, request: Request):
-    """Render the edit and keep it: {"path": where to stream it from, "media_type"}."""
-    response = export(pid, jid, index, body, request)
+    """Render the edit and keep it: {"path": where to stream it from, "media_type", "notes": what was left out}."""
+    with notices.collect() as notes:
+        response = export(pid, jid, index, body, request)
     try:
         source = Path(response.path)
         folder = _folder(jid, index)
@@ -47,7 +50,7 @@ def render_preview(pid: str, jid: str, index: int, body: ExportInput, request: R
         if response.background:
             response.background.func(*response.background.args, **response.background.kwargs)
     _prune(folder)
-    return {'path': f'/api/projects/{pid}/editor/{jid}/{index}/preview/{name}', 'media_type': response.media_type}
+    return {'path': f'/api/projects/{pid}/editor/{jid}/{index}/preview/{name}', 'media_type': response.media_type, 'notes': notes}
 
 
 def get_preview(pid: str, jid: str, index: int, name: str, request: Request):

@@ -8,6 +8,11 @@ Copy `.env.example` to `.env` only for a new setup. Never overwrite an existing 
 uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+Install the motion-card tools once with `npm --prefix tools/hyperframes ci` (Node 22 or newer). It installs
+HyperFrames and GSAP at pinned versions and downloads the headless Chrome HyperFrames renders with, so the first
+motion card in an edit doesn't wait for downloads. Without it, motion cards fall back to `npx` (slow the first time)
+and, when that fails too, are left out with a note under the Editor's preview.
+
 In a second terminal, run `npm --prefix frontend ci` once and then
 `npm --prefix frontend run dev`. Open http://127.0.0.1:5173 for the current React
 app. Port 8000 provides the API and retained legacy website. `backend.main:app`

@@ -13,7 +13,8 @@ React in `frontend/`, backed by one FastAPI application in `backend/`.
 Install Python dependencies with `python -m pip install -r requirements.txt` and
 install FFmpeg/FFprobe separately. If no `.env` exists, copy `.env.example`;
 keep an existing configuration. Install React dependencies with
-`npm --prefix frontend ci`.
+`npm --prefix frontend ci`, and the motion-card tools (HyperFrames, GSAP and the
+Chrome they render with) with `npm --prefix tools/hyperframes ci`.
 
 From the repository root, start the backend:
 

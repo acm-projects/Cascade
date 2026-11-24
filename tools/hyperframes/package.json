@@ -1,0 +1,12 @@
+{
+  "name": "cascade-motion-cards",
+  "private": true,
+  "description": "Motion cards (backend/editor/motion_cards.py): HyperFrames renders them, GSAP animates them. Install once with: npm --prefix tools/hyperframes ci",
+  "dependencies": {
+    "gsap": "3.15.0",
+    "hyperframes": "0.9.9"
+  },
+  "scripts": {
+    "postinstall": "hyperframes browser ensure"
+  }
+}

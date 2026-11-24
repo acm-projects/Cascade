@@ -118,7 +118,8 @@ export function exportClip(token, projectId, jobId, index, edit) {
  * POST .../editor/{jobId}/{index}/preview   body: Edit (the same as export)
  * Renders the edit like export, but keeps the file on the server so it can be streamed:
  * pass the returned path to mediaUrl() and play that, instead of downloading the whole file first.
- * @returns {Promise<{ path: string, media_type: string }>}
+ * notes: things the render had to leave out, to tell the user (e.g. a motion card that couldn't be drawn).
+ * @returns {Promise<{ path: string, media_type: string, notes: string[] }>}
  */
 export function previewClip(token, projectId, jobId, index, edit) {
   return apiFetch(`${clipPath(projectId, jobId, index)}/preview`, { token, method: "POST", body: edit });

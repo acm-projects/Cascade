@@ -28,7 +28,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const [url, setUrl] = useState(null);
-  const [render, setRender] = useState(null); // { key, url } or { key, error } for the last finished server render
+  const [render, setRender] = useState(null); // { key, url, notes } or { key, error } for the last finished server render
   const [retry, setRetry] = useState(0);
   const [view, setView] = useState("edited");
   const [cutout, setCutout] = useState(null);
@@ -44,6 +44,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const current = render?.key === renderKey ? render : null;
   const rendered = current?.url ?? null;
   const renderError = current?.error ?? '';
+  const renderNotes = current?.notes ?? [];   // parts the render had to leave out (a motion card), said under the video
   const rendering = advanced && !current;
   const showEdited = view === "edited" && !!rendered;
   // Until the server's render of this exact edit arrives, the shape is shown instantly by cropping the video itself
@@ -65,8 +66,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
     // first part arrives instead of after the whole file has downloaded.
     const timer = setTimeout(() => {
       api.previewClip(projectId, clip.job_id, clip.clip_index, { ...JSON.parse(snapshot), preview: true, resolution: '540p' })
-        .then(({ path }) => api.mediaUrl(path))
-        .then(link => { if (active) setRender({ key: renderKey, url: link }); })
+        .then(async ({ path, notes }) => ({ link: await api.mediaUrl(path), notes: notes ?? [] }))
+        .then(({ link, notes }) => { if (active) setRender({ key: renderKey, url: link, notes }); })
         .catch(e => { if (active) setRender({ key: renderKey, error: e.message }); });
     }, 900);
     return () => { active = false; clearTimeout(timer); };
@@ -271,7 +272,7 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
           />}
         </div>
       </div>
-      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? (state.ai_edit ? `AI edit ${state.ai_edit.version} · this exact file is what Export saves` : 'Rendered preview · same audio/effects as MP4 export') : 'Edited preview unavailable.'}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
+      {advanced && <div className="editor-control-note" role="status">{view === 'original' ? 'Original source · no edits' : rendering ? (cutout ? `Fan-edit effects: cutting out the subject ${cutout.done}/${cutout.total} frames (first time only)… Original source shown until ready.` : styled ? 'Rendering fan-edit effects… Original source shown until ready.' : 'Rendering edited preview… Original source shown until ready.') : rendered ? (state.ai_edit ? `AI edit ${state.ai_edit.version} · this exact file is what Export saves` : 'Rendered preview · same audio/effects as MP4 export') : 'Edited preview unavailable.'}{view !== 'original' && renderNotes.map(note => <span key={note} className="editor-render-note" role="alert"> {note}</span>)}{renderError && <><span role="alert"> {renderError}</span><button className="editor-choice" onClick={() => setRetry(n => n + 1)}>Retry preview</button></>}</div>}
       <div className="clip-player-bar">
         <button type="button" className="btn btn-small" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
           <Icon name={playing ? "pause" : "play"} />

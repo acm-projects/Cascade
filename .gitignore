@@ -52,3 +52,6 @@ remotion/build/
 # Music Library: songs and their measurements stay local
 music_library/*
 !music_library/README.md
+
+# Motion-card tools (npm --prefix tools/hyperframes ci)
+tools/hyperframes/node_modules/

@@ -18,6 +18,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+from . import notices
 from .advanced_models import StyleEvent, StyleInfo, StyleOptions
 from .style_effects import MATTE_KINDS, PALETTES, apply_events  # noqa: F401 (re-exported)
 from .style_text import apply_text, plan_text
@@ -104,17 +105,26 @@ def stylized(source, state, cache_root):
     digest = hashlib.sha256(json.dumps({'style': state.stylize.model_dump(), 'source': [source.name, st.st_size, st.st_mtime_ns],
                                         'code': _code_version()}, sort_keys=True).encode()).hexdigest()[:32]
     target = cache_root/f'{digest}.mp4'
-    if not target.is_file():
-        staged = cache_root/f'{digest}.partial.mp4'
-        try:
+    if target.is_file():
+        yield target
+        return
+    staged = cache_root/f'{digest}.partial.mp4'
+    try:
+        with notices.collect() as notes:
             render(source, staged, state.stylize, cache_root/'mattes')
-            staged.replace(target)
-        except (OSError, subprocess.SubprocessError, ValueError, StopIteration) as exc:
-            LOG.warning('stylize render failed: %s', exc)
+    except (OSError, subprocess.SubprocessError, ValueError, StopIteration) as exc:
+        LOG.warning('stylize render failed: %s', exc)
+        staged.unlink(missing_ok=True)
+        raise HTTPException(503, 'Stylized effects render failed; your saved edit is unchanged.') from None
+    if notes:   # something was left out (a motion card): use this render once, so the next one tries again
+        try:
+            yield staged
+        finally:
             staged.unlink(missing_ok=True)
-            raise HTTPException(503, 'Stylized effects render failed; your saved edit is unchanged.') from None
-        for old in sorted(cache_root.glob('*.mp4'), key=lambda p: p.stat().st_mtime)[:-6]:
-            old.unlink(missing_ok=True)  # keep the most recent renders only
+        return
+    staged.replace(target)
+    for old in sorted(cache_root.glob('*.mp4'), key=lambda p: p.stat().st_mtime)[:-6]:
+        old.unlink(missing_ok=True)  # keep the most recent renders only
     yield target
 
 

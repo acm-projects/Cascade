@@ -1,9 +1,14 @@
 """Kinetic hook/quote cards rendered with HyperFrames (open-source HTML-to-video by HeyGen).
 
 Each `motion_card` StyleEvent becomes a transparent PNG sequence at the clip's own size and 30 fps,
-cached by content, and is alpha-composited over the footage by stylize.render. HyperFrames runs
-through `CASCADE_HYPERFRAMES`, an installed `hyperframes` binary, or `npx hyperframes@0.9.9`.
-If it is unavailable the card is skipped and the rest of the edit still renders.
+cached by content, and is alpha-composited over the footage by stylize.render.
+
+HyperFrames and GSAP are installed once at setup (`npm --prefix tools/hyperframes ci`, which also fetches the
+headless Chrome it renders with), so the first card doesn't wait for downloads. GSAP is copied next to each card
+page instead of loading from a CDN. HyperFrames runs through `CASCADE_HYPERFRAMES`, that setup install, an installed
+`hyperframes` binary, or, as a last resort, `npx hyperframes@0.9.9` (downloads it on first use).
+If it is unavailable or fails, the card is skipped, the rest of the edit still renders, and the Editor says so
+(notices.add).
 """
 import hashlib
 import html
@@ -13,13 +18,18 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from . import notices
+
 LOG = logging.getLogger(__name__)
 VERSION = '0.9.9'
+TOOLS = Path(__file__).resolve().parents[2]/'tools'/'hyperframes'/'node_modules'   # npm --prefix tools/hyperframes ci
+GSAP = TOOLS/'gsap'/'dist'/'gsap.min.js'
+GSAP_CDN = 'https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js'   # only when the setup install is missing
 FONTS = {'impact': "Impact,'Arial Black',sans-serif", 'poster': "'Arial Black',Impact,sans-serif", 'grunge': "Impact,sans-serif",
          'typewriter': "'Courier New',monospace", 'script': "Georgia,'Times New Roman',serif"}
 PAGE = '''<!doctype html>
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width={w}, height={h}" />
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<script src="{gsap}"></script>
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{width:{w}px;height:{h}px;overflow:hidden;background:transparent}}
@@ -44,6 +54,8 @@ window.__timelines["main"]=tl;tl.seek(0);
 def command():
     custom = os.environ.get('CASCADE_HYPERFRAMES')
     if custom: return [custom]
+    local = TOOLS/'.bin'/'hyperframes'
+    if local.is_file(): return [str(local)]
     found = shutil.which('hyperframes')
     if found: return [found]
     npx = shutil.which('npx')
@@ -57,7 +69,7 @@ def page(text, w, h, duration, accent, font):
     if not payoff: lead, payoff = '', lead
     longest = max(len(lead), len(payoff), 4)
     size = int(min(w*1.55/longest, h*(.11 if h > w else .17)))
-    return PAGE.format(w=w, h=h, d=f'{duration:.3f}', font=FONTS.get(font, FONTS['impact']), italic='font-style:italic;' if font == 'script' else '',
+    return PAGE.format(gsap='gsap.min.js' if GSAP.is_file() else GSAP_CDN, w=w, h=h, d=f'{duration:.3f}', font=FONTS.get(font, FONTS['impact']), italic='font-style:italic;' if font == 'script' else '',
                        size=size, shadow=max(2, size//14), blur=max(8, size//4), accent=accent, bar=max(4, h//96), gap=max(8, h//44),
                        barw=int(w*.6), fade=f'{max(.2, duration-.2):.3f}', lead=html.escape(lead), payoff=html.escape(payoff))
 
@@ -69,17 +81,23 @@ def frames(event, w, h, accent, cache):
     folder = Path(cache)/'cards'/key
     done = sorted(folder.glob('out/*.png'))
     if done: return done
+    title = f'The title card "{event.text.strip()[:40]}"'
     cmd = command()
     if not cmd:
-        LOG.warning('HyperFrames is not installed (npm i -g hyperframes); motion card skipped')
+        LOG.warning('HyperFrames is not installed (npm --prefix tools/hyperframes ci); motion card skipped')
+        notices.add(f"{title} was left out: the motion-card tool isn't installed on the server.")
         return []
     shutil.rmtree(folder, ignore_errors=True); folder.mkdir(parents=True)
     (folder/'index.html').write_text(markup)
-    try:
+    if GSAP.is_file():
+        shutil.copyfile(GSAP, folder/'gsap.min.js')
+    try:   # run inside the card folder (so it never reads the project's .env), with HyperFrames telemetry off
         subprocess.run([*cmd, 'render', str(folder), '--format', 'png-sequence', '-o', str(folder/'out'), '--fps', '30', '--quiet'],
-                       capture_output=True, text=True, timeout=300, check=True)
+                       capture_output=True, text=True, timeout=300, check=True, cwd=folder,
+                       env={**os.environ, 'HYPERFRAMES_NO_TELEMETRY': '1', 'DO_NOT_TRACK': '1'})
     except (OSError, subprocess.SubprocessError) as exc:
         LOG.warning('HyperFrames render failed; motion card skipped: %s', str(getattr(exc, 'stderr', '') or exc)[-300:])
+        notices.add(f"{title} was left out: it couldn't be drawn this time. Make any edit to try again.")
         shutil.rmtree(folder, ignore_errors=True)
         return []
     return sorted(folder.glob('out/*.png'))
