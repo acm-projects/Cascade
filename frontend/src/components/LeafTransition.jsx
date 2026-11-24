@@ -2,15 +2,16 @@ import { useCallback, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./LeafTransition.css";
 import { LeafTransitionContext, PAGE_READY } from "../context/leafTransitionValue";
-import WaterfallCurtain from "./WaterfallCurtain";
+import DolphinCurtain from "./DolphinCurtain";
 
 // Page changes that feel like a camera moving through the world (like an isometric camera gliding across a model):
 //   "dive" (Landing -> Projects): the words fade, the camera glides and zooms down into the splash where the last
 //          waterfall meets the sea, the view sinks into deep blue, then on Projects the camera keeps sinking to the sea floor.
 //   "push" (Projects -> AI Studio): the cards fade, the underwater camera pushes forward into the beam of light,
 //          and AI Studio appears out of the water.
-//   "falls" (between AI Studio, the Editor and Export): a waterfall pours down over the screen, the next page
-//          loads behind it, and the water falls away once that page says it's ready (see WaterfallCurtain.jsx).
+//   "falls" (between AI Studio, the Editor and Export): the pixel sea fades in over the screen with the 3D dolphins
+//          leaping, the next page loads behind it, and the sea fades away once that page says it's ready
+//          (see DolphinCurtain.jsx; it used to be a pixel waterfall, hence the name "falls").
 //   "rise" (Projects -> How it works): the underwater camera swims up to the bright surface, then on How it works
 //          the camera comes down onto the pond from above.
 // The 3D scenes do the camera part when they hear a "cascade:camera" event. This file fades the page out,
@@ -21,7 +22,7 @@ const MOVES = {
   rise: { camera: 1000, washFrom: 600, hold: 100, reveal: 800, color: "rise" },
 };
 const MAX_WAIT_MS = 4000;   // never keep someone waiting on the next page longer than this
-const FALLS = { cover: 650, reveal: 750, least: 250, most: 8000 };   // the waterfall: pour in, at least / at most hold, fall away
+const FALLS = { cover: 350, reveal: 450, least: 600, most: 8000 };   // the dolphins: fade in, at least / at most hold, fade out
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,7 +73,7 @@ function LeafTransition({ children }) {
 
     running.current = true;
 
-    // The waterfall: pour in, switch pages behind it, wait for the new page to be ready, then fall away
+    // The dolphins: fade in, switch pages behind them, wait for the new page to be ready, then fade away
     if (chosen === "falls") {
       setStyle("falls");
       setLabel(to.endsWith("/editor") ? "Opening the Editor" : to.endsWith("/export") ? "Getting your export ready" : "Back to Studio Island");
@@ -116,7 +117,7 @@ function LeafTransition({ children }) {
   return (
     <LeafTransitionContext.Provider value={leafNavigate}>
       {children(shownLocation)}
-      {phase !== "idle" && style === "falls" && <WaterfallCurtain phase={phase} label={label} />}
+      {phase !== "idle" && style === "falls" && <DolphinCurtain phase={phase} label={label} />}
       {phase !== "idle" && style !== "falls" && (
         <div
           className={`camera-transition camera-transition-${move.color} camera-transition-${phase}`}

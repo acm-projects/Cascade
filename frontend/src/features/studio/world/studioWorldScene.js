@@ -147,11 +147,18 @@ export function createStudioWorld(canvas, { still = false, onFrame = () => {}, i
   function buildLand(box, heightAt, keepClear, groupFor) {
     const center = box.getCenter(new THREE.Vector3());
     const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5).addScalar(1.5);
-    const wobble = (x, z) => Math.sin(x * 1.3 + z * 0.7) * 0.45 + Math.cos(z * 1.7 - x * 0.5) * 0.4;
+    // The island's outline: a rounded blob (a "superellipse", between a circle and a square) that still reaches past
+    // every corner of the box the clips sit in, with a slow wobble around it so the coast looks natural, not drawn.
+    const ROUND = 2.6;                              // 2 = an oval; higher = squarer. 2.6 is round but still roomy
+    const reach = 2 ** (1 / ROUND);                 // how much wider than the box it must be to cover its corners
+    const radiusX = half.x * reach + 0.6;
+    const radiusZ = half.z * reach + 0.6;
+    const wobble = (angle) => Math.sin(angle * 3 + 0.8) * 0.05 + Math.sin(angle * 5 + 2.1) * 0.035 + Math.cos(angle * 2 - 0.4) * 0.04;
     const isLand = (x, z) => {
-      const outX = Math.max(Math.abs(x - center.x) - half.x, 0);
-      const outZ = Math.max(Math.abs(z - center.z) - half.z, 0);
-      return Math.hypot(outX, outZ) <= 1.6 + wobble(x, z) * 0.7;
+      const dx = (x - center.x) / radiusX;
+      const dz = (z - center.z) / radiusZ;
+      const size = (Math.abs(dx) ** ROUND + Math.abs(dz) ** ROUND) ** (1 / ROUND);
+      return size <= 1 + wobble(Math.atan2(dz, dx));
     };
     const tiles = [];
     for (let x = Math.floor(center.x - half.x - 3); x <= Math.ceil(center.x + half.x + 3); x += 1) {

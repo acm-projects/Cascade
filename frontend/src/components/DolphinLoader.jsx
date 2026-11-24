@@ -9,6 +9,7 @@ import "./DolphinLoader.css";
 // instead (FlatDolphins below: Blender-rendered frames from frontend/blender/dolphin.py, flown along the leap by CSS).
 //   <DolphinLoader label="Opening Studio Island" />
 //   label - what's loading; read out by screen readers and shown under the dolphins
+//   flips - true: some of the dolphins do a somersault in the air (a separate version to compare; see /dev/ui)
 const LEAPS = [0, 1, 2];   // three dolphins, staggered so one is always in the air
 
 // A pixel ripple: the outline of a flat ellipse on a coarse grid, so it looks like the sea's own pixel dashes
@@ -46,7 +47,7 @@ function FlatDolphins() {
   );
 }
 
-function DolphinLoader({ label = "Loading" }) {
+function DolphinLoader({ label = "Loading", flips = false }) {
   const holderRef = useRef(null);
   const [mode, setMode] = useState("flat");   // "flat" until the 3D is running, then "3d"
 
@@ -62,7 +63,7 @@ function DolphinLoader({ label = "Loading" }) {
         const canvas = document.createElement("canvas");
         canvas.className = "dolphin-loader-canvas";
         holder.append(canvas);
-        stop = createDolphinLoaderScene(canvas, { still });
+        stop = createDolphinLoaderScene(canvas, { still, flips });
         setMode("3d");
       } catch {
         holder.replaceChildren();   // no 3D here: keep the flat dolphins
@@ -73,7 +74,7 @@ function DolphinLoader({ label = "Loading" }) {
       stop?.();
       holder?.replaceChildren();
     };
-  }, []);
+  }, [flips]);
 
   return (
     <div className={`dolphin-loader is-${mode}`} role="status" aria-label={label}>

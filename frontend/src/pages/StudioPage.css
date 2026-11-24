@@ -263,3 +263,13 @@
   /* the "Drag to turn" hint sits just right of the chat instead of under it */
   .studio-island-page .studio-world-hint { left: calc(20px + 320px + 24px); }
 }
+
+/* Glass bubble panels, like the New Project pop-up (theme.css --panel-bg): the chat panel and the session bar */
+.studio .chat-panel,
+.studio .session-bar {
+  border: var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: var(--panel-edge);
+}
+.studio .chat-panel { border-radius: 24px; }
+.studio .session-bar { border-radius: 20px; }
