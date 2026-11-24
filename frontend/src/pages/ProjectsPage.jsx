@@ -11,7 +11,7 @@ import IsoWorld from "../features/landing3d/IsoWorld";
 import ProjectCard from "../components/ProjectCard";
 import NewProjectModal from "../components/NewProjectModal";
 import UserAvatar from "../components/UserAvatar";
-import Seahorse from "../components/Seahorse";
+import Cassie from "../components/Cassie";
 import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import Modal from "../components/ui/Modal";
@@ -313,11 +313,21 @@ function ProjectsPage() {
 
 export default ProjectsPage;
 
-// In the empty corner under the sidebar: Cassie the seahorse, just floating there.
+// In the empty space under the sidebar: Cassie (the frog; see components/Cassie.jsx), with a small tip about the
+// Trends analysis above her. The tip only shows when there's room for it (ProjectsPage.css), and the × hides it
+// until the page is opened again. Cassie stays either way.
 function SeahorseBuddy() {
+  const [tipHidden, setTipHidden] = useState(false);
   return (
-    <div className="projects-tip" aria-hidden="true">
-      <Seahorse className="projects-tip-seahorse" size={150} />
+    <div className="projects-tip">
+      {!tipHidden && (
+        <p className="projects-tip-bubble" role="note">
+          <button type="button" className="projects-tip-close" onClick={() => setTipHidden(true)} aria-label="Hide this tip">×</button>
+          <b>Psst!</b> Try the new <b>Trends analysis</b>. Open a project and press <b>Trends</b> in the Editor
+          to see how your clip compares with what's trending right now.
+        </p>
+      )}
+      <Cassie className="projects-tip-seahorse" size={195} />
     </div>
   );
 }

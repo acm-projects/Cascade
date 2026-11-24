@@ -2,15 +2,26 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 // Small 3D views of the frog mascot, with a see-through background.
-// The frog is made in Blender: frontend/blender/frog.py builds it and exports public/models/frog.glb,
-// with an "Idle" clip (breathing, a puffing throat, blinks) and a "Leap" clip (the "How it works" page uses it too).
+// The frog is Cassie: the cute original frog with a little kit (CASSIE_KIT below), made in Blender by
+// frontend/blender/frog_director.py, with an "Idle" clip (breathing, blinks, and the kit's own motion: the
+// clapperboard snapping, or the camera's red light blinking) and a "Leap" clip (a hop, not used).
+// The "How it works" pond keeps its own frog (blender/frog.py, public/models/frog.glb).
 // (The earlier capybara mascot is still in frontend/blender/capybara.py and public/models/capybara.glb.)
 //
-// createMascotScene(canvas, { still }) - the whole frog idling at about 30 frames a second, with a little
-//   hop on the spot every few seconds. Returns a function that stops it and frees its memory.
+// createMascotScene(canvas, { still }) - the whole frog idling at about 30 frames a second (no hopping: Sai's call;
+//   the "Leap" clip is still in the model if it's ever wanted). Returns a function that stops it and frees its memory.
 // mascotHeadPicture(size) - draws the frog's face once and resolves to a picture (a data URL),
 //   for small badges. No 3D keeps running afterwards.
-const MODEL_URL = "/models/frog.glb";
+//
+// Which kit Cassie has (both are built by blender/frog_director.py, and both stay ready):
+//   "director" - a little clapperboard and megaphone at her feet (public/models/frog_director.glb)
+//   "camera"   - a little camera on a tripod beside her (public/models/frog_camera.glb)
+const CASSIE_KIT = "camera";
+const MODEL_URL = `/models/frog_${CASSIE_KIT}.glb`;
+// The camera kit is wider (the tripod stands beside her), so its view is pulled back and moved over a little
+const FULL_VIEW = CASSIE_KIT === "camera"
+  ? { from: [0.6, 1.45, 3.4], at: [0.32, 0.45, 0] }
+  : { from: [0.35, 1.4, 3.0], at: [0, 0.4, 0] };
 
 // Download the model once; every view makes its own copy of it
 let modelPromise = null;
@@ -49,7 +60,7 @@ function setUp(canvas, width, height) {
   return { renderer, scene };
 }
 
-// Put a copy of the Blender frog in the scene, with its idle loop playing and the hop ready
+// Put a copy of the Blender frog in the scene, with its idle loop playing
 function addMascot(scene, gltf) {
   const frog = gltf.scene.clone(true);
   frog.traverse((object) => {
@@ -63,9 +74,7 @@ function addMascot(scene, gltf) {
   const mixer = new THREE.AnimationMixer(frog);
   const clip = (name) => gltf.animations.find((item) => item.name === name);
   mixer.clipAction(clip("Idle")).play();
-  const hop = mixer.clipAction(clip("Leap"));
-  hop.setLoop(THREE.LoopOnce, 1);
-  return { mixer, hop };
+  return { mixer };
 }
 
 function freeAll(scene, renderer) {
@@ -85,29 +94,22 @@ export function createMascotScene(canvas, { still = false } = {}) {
   const { renderer, scene } = setUp(canvas, width, height);
   // From the front, a little above
   const camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 50);
-  camera.position.set(0.35, 1.4, 3.0);
-  camera.lookAt(0, 0.4, 0);
+  camera.position.set(...FULL_VIEW.from);
+  camera.lookAt(...FULL_VIEW.at);
 
   let stopped = false;
   let mixer = null;
-  let hop = null;
-  let nextHop = 4;
   let frame = 0;
   let timer = 0;
   const clock = new THREE.Clock();
   function loop() {
     mixer.update(clock.getDelta());
-    // Every 6 to 10 seconds, a little hop on the spot
-    if (clock.elapsedTime > nextHop) {
-      hop.reset().play();
-      nextHop = clock.elapsedTime + 6 + Math.random() * 4;
-    }
     renderer.render(scene, camera);
     timer = setTimeout(() => { frame = requestAnimationFrame(loop); }, 1000 / 30 - 4);
   }
   loadModel().then((gltf) => {
     if (stopped) return;
-    ({ mixer, hop } = addMascot(scene, gltf));
+    ({ mixer } = addMascot(scene, gltf));
     if (still) {
       mixer.update(0);
       renderer.render(scene, camera);
