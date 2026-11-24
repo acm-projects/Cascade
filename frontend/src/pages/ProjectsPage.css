@@ -434,3 +434,91 @@
 @media (max-height: 720px), (max-width: 900px) {
   .projects-tip { display: none; }
 }
+
+/* ---------- Glass bubbles: the same look as the New Project pop-up (NewProjectModal.css) ----------
+   The project cards and the New Project card are soft glass bubbles over the sea: a bright
+   white rim, a glossy highlight along the top, a faint pink-to-aqua shimmer at the edges. (No frosted blur behind them: the browser blurs a square patch
+   a bit bigger than each rounded box, which showed as a gray box around the corners.)
+   The sidebar buttons are glass bubbles too (below). */
+.projects .project-card,
+.projects .project-card-new {
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  background:
+    radial-gradient(120% 90% at 0% 100%, rgba(255, 180, 228, 0.22), transparent 55%),
+    radial-gradient(120% 90% at 100% 0%, rgba(140, 236, 255, 0.3), transparent 55%),
+    linear-gradient(170deg, rgba(255, 255, 255, 0.97), rgba(232, 246, 253, 0.9));
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 1),
+    inset 0 -8px 18px rgba(150, 215, 245, 0.35),
+    0 10px 26px rgba(4, 30, 60, 0.3);
+}
+.projects .project-card,
+.projects .project-card-new { border-radius: calc(30 * var(--u)); }
+.projects .project-card-open { border-radius: calc(30 * var(--u)); }
+.projects .project-card::before { display: none; }   /* no teal strip across the top */
+.projects .project-card-open { padding-top: calc(24 * var(--u)); }
+.projects .project-card-thumb { border-radius: calc(18 * var(--u)); }
+
+.projects .project-card:hover,
+.projects .project-card-new:hover {
+  translate: 0 -3px;
+  filter: none;
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 1),
+    inset 0 -8px 18px rgba(150, 215, 245, 0.35),
+    0 0 0 3px rgba(120, 220, 255, 0.45),
+    0 16px 34px rgba(4, 30, 60, 0.34);
+}
+
+/* the New Project card: mint glass with a dashed rim, like the pop-up's drop area when a video is in it */
+.projects .project-card-new {
+  border: 2px dashed rgba(90, 200, 140, 0.9);
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(160, 255, 230, 0.45), transparent 60%),
+    linear-gradient(170deg, rgba(235, 255, 244, 0.95), rgba(185, 238, 210, 0.72));
+}
+
+
+/* Sidebar buttons as glass bubbles, the same size they look as chunky blocks: the blocks are 72 tall plus an 8 tall
+   bottom edge, so the bubbles are 80 tall, with the gap 8 smaller so the space between them looks the same.
+   The open one is mint green glass, like the chosen way to start in the New Project pop-up. */
+.projects-sidebar { gap: calc(16 * var(--u)); }
+.projects-filter,
+.projects-filter:hover,
+.projects-filter:active {
+  height: calc(80 * var(--u));
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-radius: calc(24 * var(--u));
+  background:
+    radial-gradient(120% 90% at 0% 100%, rgba(255, 180, 228, 0.22), transparent 55%),
+    radial-gradient(120% 90% at 100% 0%, rgba(140, 236, 255, 0.3), transparent 55%),
+    linear-gradient(170deg, rgba(255, 255, 255, 0.97), rgba(232, 246, 253, 0.9));
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 1),
+    inset 0 -6px 14px rgba(150, 215, 245, 0.35),
+    0 6px 16px rgba(20, 70, 110, 0.22);
+  filter: none;
+  translate: 0 0;
+}
+.projects-filter:hover {
+  translate: 0 -2px;
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 1),
+    inset 0 -6px 14px rgba(150, 215, 245, 0.35),
+    0 0 0 3px rgba(120, 220, 255, 0.45),
+    0 8px 20px rgba(20, 70, 110, 0.26);
+}
+.projects-filter.active,
+.projects-filter.active:hover {
+  translate: 0 0;
+  border-color: rgba(255, 255, 255, 1);
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(160, 255, 230, 0.55), transparent 60%),
+    linear-gradient(170deg, rgba(220, 255, 236, 0.98), rgba(150, 230, 190, 0.78));
+  color: var(--surface-ink);
+  box-shadow:
+    inset 0 2px 1px #fff,
+    inset 0 -8px 16px rgba(60, 170, 110, 0.25),
+    0 0 0 3px rgba(90, 200, 140, 0.45),
+    0 8px 22px rgba(30, 120, 80, 0.3);
+}
