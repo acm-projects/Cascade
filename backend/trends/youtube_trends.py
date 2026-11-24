@@ -83,15 +83,15 @@ def says_something(title):
     return len(re.findall(r"[A-Za-z']{2,}", re.sub(r"#\w+", " ", title or ""))) >= 2
 
 
-def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Search YouTube for a topic and return its most-viewed recent English Shorts.
+def get_trending_videos(topic: str, limit: int = 5, days: int = 14) -> list[dict[str, Any]]:
+    """Search YouTube for a topic and return its most-viewed English Shorts from the last `days` days.
 
     Returns a list of dicts: {video_id, title, channel, url, view_count, published_at}
     """
     key = os.environ.get('YOUTUBE_API_KEY') or YOUTUBE_API_KEY
     if not key:
         logging.getLogger('cascade.trends').warning('YOUTUBE_API_KEY absent; using real public YouTube search with verified upload dates.')
-        return public_search(topic,limit)
+        return public_search(topic,limit,days)
 
     youtube = build("youtube", "v3", developerKey=key, cache_discovery=False)
 
@@ -106,7 +106,7 @@ def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
             videoDuration="short",
             order="viewCount",
             maxResults=50,
-            publishedAfter=_recent_iso(days=14),
+            publishedAfter=_recent_iso(days=days),
         )
         .execute()
     )
@@ -157,9 +157,9 @@ def get_trending_videos(topic: str, limit: int = 5) -> list[dict[str, Any]]:
         )
     return results
 
-def public_search(topic,limit=5):
+def public_search(topic,limit=5,days=14):
     """Real no-key discovery using the existing yt-dlp dependency, never invented refs.
-    Looks for English YouTube Shorts (short vertical clips) from the last 14 days, checks every
+    Looks for English YouTube Shorts (short vertical clips) from the last `days` days, checks every
     candidate's real metadata (including the spoken language) at the same time, and ranks by total views."""
     import re
     import yt_dlp
@@ -168,9 +168,10 @@ def public_search(topic,limit=5):
     from .diagnostics import StageError,stage,ydl_options
     options={**ydl_options(),'skip_download':True,'noplaylist':True,'socket_timeout':15,'retries':1,
              'http_headers':{**ydl_options().get('http_headers',{}),'Accept-Language':'en-US,en;q=0.9'}}
-    # sp: sorted by view count, uploaded this month, videos only, under 4 minutes (the 14-day cutoff is applied below)
+    # sp: sorted by view count, uploaded this month (or this year for a longer window), videos only, under 4 minutes;
+    # the exact day cutoff is applied below
     # hl/gl: ask for the English, US version of the results (each video's language is checked again below)
-    url='https://www.youtube.com/results?'+urlencode({'search_query':topic+' #shorts','sp':'CAMSBggEEAEYAQ==','hl':'en','gl':'US'})
+    url='https://www.youtube.com/results?'+urlencode({'search_query':topic+' #shorts','sp':'CAMSBggEEAEYAQ==' if days<=31 else 'CAMSBggFEAEYAQ==','hl':'en','gl':'US'})
     with yt_dlp.YoutubeDL({**options,'extract_flat':True,'playlistend':30}) as y:
         listing=stage('discovery',y.extract_info,url,download=False)
     entries=list(listing.get('entries') or [])
@@ -187,7 +188,7 @@ def public_search(topic,limit=5):
     candidates=[e for e in entries if e and re.fullmatch(r'[A-Za-z0-9_-]{11}',e.get('id',''))
                 and not (isinstance(e.get('duration'),(int,float)) and e['duration']>SHORT_SECONDS)
                 and not (e['id'] in seen or seen.add(e['id']))]
-    cutoff=datetime.fromisoformat(_recent_iso(14).replace('Z','+00:00'))
+    cutoff=datetime.fromisoformat(_recent_iso(days).replace('Z','+00:00'))
     log=logging.getLogger('cascade.trends')
 
     def check(entry):

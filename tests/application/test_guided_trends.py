@@ -67,7 +67,7 @@ class GuidedTrendsTests(fixtures.ClipTrendsTests):
         user=load_json(jobs_dir()/jid/'owner.json')['user_id']
         video={'video_id':'abcdefghijk','title':'Editing example','url':'https://www.youtube.com/watch?v=abcdefghijk','channel':'Test','published_at':'2026-10-29T00:00:00Z'}
         for failed in [False,True]:
-            with self.subTest(failed=failed),patch.object(youtube_trends,'get_trending_videos',side_effect=lambda query,limit:[video] if 'tutorial' not in query else []), \
+            with self.subTest(failed=failed),patch.object(youtube_trends,'get_trending_videos',side_effect=lambda query,limit,days=14:[video] if 'tutorial' not in query else []), \
                  patch.object(pipeline,'extract_tags',return_value={'pacing':'fast'}),patch.object(pipeline,'analyze_youtube_video',return_value={'tags':{'pacing':'fast'}}), \
                  patch.object(pipeline,'transcribe',side_effect=RuntimeError('Transcription service unavailable') if failed else None,return_value='A spoken reaction was recognized.') as transcribe, \
                  patch.object(cascade_llm,'structured_json',return_value=SimpleNamespace(data=fixtures.findings())) as synthesis:

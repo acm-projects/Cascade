@@ -11,7 +11,7 @@ class DiagnosticsTests(unittest.TestCase):
     def test_missing_data_key_uses_real_public_discovery_adapter(self):
         with patch.dict(os.environ,{'YOUTUBE_API_KEY':''}),patch.object(youtube_trends,'YOUTUBE_API_KEY',None),patch.object(youtube_trends,'public_search',return_value=[{'video_id':'abcdefghijk'}]) as public:
             result=youtube_trends.get_trending_videos('dialogue editing',limit=2)
-        self.assertEqual(result,[{'video_id':'abcdefghijk'}]);public.assert_called_once_with('dialogue editing',2)
+        self.assertEqual(result,[{'video_id':'abcdefghijk'}]);public.assert_called_once_with('dialogue editing',2,14)
     def test_secrets_and_query_urls_never_reach_diagnostics(self):
         with patch.dict(os.environ,{'YOUTUBE_API_KEY':'fake-private-key-value'}):
             text=safe_text('request https://service.test/search?key=fake-private-key-value Token fake-private-key-value')

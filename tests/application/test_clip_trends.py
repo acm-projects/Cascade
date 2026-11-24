@@ -95,9 +95,13 @@ class ClipTrendsTests(unittest.TestCase):
         from backend.editor import render
         s=Edit(**self.state);s.start=.2;s.end=9.5
         video={'video_id':'abcdefghijk','title':'Mock recent funny skit example','url':'https://www.youtube.com/watch?v=abcdefghijk','channel':'Fixture','published_at':'2026-10-29T00:00:00Z','view_count':100}
-        def search(query,limit):return [video]
+        searched=[]
+        def search(query,limit,days):searched.append((query,days));return [video,{**video,'video_id':'zzzzzzzzzzz','title':'Unrelated car video'}]
         record={'topic':'talking head'}
-        with patch.object(youtube_trends,'get_trending_videos',side_effect=search),patch.object(pipeline,'extract_tags',return_value={'pacing':'fast'}), \
+        plan={'video_kind':'comedy skit','subject':'a funny skit','queries':['funny skit','comedy skit friends']}
+        picked=lambda plan,found:[{**found[0],'selected_reason':'Also a short comedy skit between friends.'}]
+        with patch.object(trends,'search_plan',return_value=plan),patch.object(trends,'screen',side_effect=picked) as screened, \
+             patch.object(youtube_trends,'get_trending_videos',side_effect=search),patch.object(pipeline,'extract_tags',return_value={'pacing':'fast'}), \
              patch.object(pipeline,'analyze_youtube_video',return_value={'tags':{'pacing':'fast'}}), \
              patch.object(cascade_llm,'structured_json',return_value=SimpleNamespace(data=findings())),patch.object(render,'export',wraps=render.export) as exporter:
             # Read identifiers from the actual route fixture.
@@ -111,6 +115,12 @@ class ClipTrendsTests(unittest.TestCase):
         self.assertTrue(result['coverage'].startswith('YouTube only'))
         self.assertEqual(len(result['references']),1)
         self.assertEqual(result['references'][0]['kind'],'example')
+        # The AI's searches cover the past year; only the videos it judged the same kind are kept, with its reason.
+        self.assertEqual(searched,[('funny skit',365),('comedy skit friends',365)])
+        self.assertEqual([v['video_id'] for v in screened.call_args.args[1]],['abcdefghijk','zzzzzzzzzzz'])
+        self.assertEqual(result['references'][0]['selected_reason'],'Also a short comedy skit between friends.')
+        self.assertEqual(result['video_kind'],'comedy skit');self.assertEqual(result['search_topic'],'a funny skit')
+        self.assertEqual(result['measured_comparison'][0]['video'],'your edit')
     def test_reference_links_are_accepted_checked_and_analyzed_first(self):
         """A pasted YouTube link is sent with Analyze, rejected when it isn't YouTube, and compared as the user's own reference."""
         def inline(fn,*args):fn(*args)
@@ -144,8 +154,9 @@ class ClipTrendsTests(unittest.TestCase):
                 {'video_id':'b','title':'Funny skit with my roommate','view_count':200_000},
                 {'video_id':'c','title':'Teddy bear comedy skit','view_count':50_000},
                 {'video_id':'d','title':'Best funny skit of the year','view_count':3_000_000}]
-        kept=[v for v in videos if trends.match_tier(v,subject,kind)]
-        kept.sort(key=lambda v:(-trends.match_tier(v,subject,kind),-v['view_count']))
+        from backend.editor.trends_search import match_tier
+        kept=[v for v in videos if match_tier(v,subject,kind)]
+        kept.sort(key=lambda v:(-match_tier(v,subject,kind),-v['view_count']))
         self.assertEqual([v['video_id'] for v in kept],['c','d','b'])
     def test_comparison_counts_majority_not_lexical_max(self):
         r=_compare_tags({'tone':'other'},[{'tone':'funny'},{'tone':'funny'},{'tone':'serious'}])

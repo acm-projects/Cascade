@@ -82,6 +82,11 @@ def match_tier(video,subject,kind):
     """2 = about this clip's subject AND this type of video, 1 = one of the two, 0 = unrelated."""
     return bool(relevance(video,subject))+bool(relevance(video,kind))
 
+def keyword_matches(found,keywords,kind):
+    """Fallback when the AI can't screen references: videos sharing a word with the clip's subject or type, most viewed first."""
+    found=[v for v in found if match_tier(v,keywords,kind)]
+    return sorted(found,key=lambda v:(-match_tier(v,keywords,kind),-int(v.get('view_count') or 0)))[:3]
+
 def derive_search(clip,info,goal='',override='',tags=None):
     instruction=bool(re.search(r'tell me|improve (?:this|my)|based on trends|make this|help me|research this',override,re.I))
     topic='' if instruction else override.strip()

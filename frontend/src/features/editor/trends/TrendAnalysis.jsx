@@ -1,4 +1,4 @@
-// Trend Analysis: compare your edit with relevant trending videos, see what they share,
+// Trend Analysis: compare your edit with popular videos of the same kind (picked by the AI), see what they share,
 // where your edit differs, and preview specific changes. Opens as a window over the Editor (and Export).
 //
 // Honesty rules this page follows:
@@ -46,6 +46,7 @@ function whyNone(failures = []) {
   if (codes.has('youtube_bot_challenge')) return 'YouTube asked this computer to prove it isn’t a bot, so videos couldn’t be downloaded.';
   if (codes.has('rate_limited') || codes.has('quota_or_credit_exhausted')) return 'YouTube or the AI service is limiting requests right now.';
   if (codes.has('no_recent_results')) return 'Nothing recent matched this topic.';
+  if (codes.has('no_matching_results')) return 'None of the popular videos found were the same kind of video as yours.';
   if (codes.size) return 'The videos found couldn’t be downloaded or analyzed.';
   return '';
 }
@@ -276,12 +277,12 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
           <ol>{top.map(sug => <li key={sug.index}><b>{sug.title}</b><span>{sug.benefit || sug.shortText}</span></li>)}</ol></div>}
       </Reveal>
 
-      <Step number={1} title="What’s trending right now" id="ta-trend-title">
-        {examples.length ? `I looked at currently trending videos on “${result.search_topic || analysis.topic}” and ranked them by how fast they’re gaining views. Tap one to compare it with your edit.` : 'I couldn’t use any trending videos this time, so the rest is based on your edit alone.'}
+      <Step number={1} title="Popular videos like yours" id="ta-trend-title">
+        {examples.length ? `I searched YouTube for popular Shorts from the past year that are the same kind of video as yours${result.video_kind ? ` (${result.video_kind})` : ''}, and kept only the close matches. Tap one to compare it with your edit.` : 'I couldn’t find popular videos like yours this time, so the rest is based on your edit alone.'}
       </Step>
       <Reveal scrollRef={scrollRef} className="ta-section" aria-labelledby="ta-trend-title">
         {examples.length > 0 ? <Viral references={examples} active={Math.min(active, examples.length - 1)} colors={REF_COLORS} onPick={i => { setStartAt(null); setActive(i); }} />
-          : <p className="ta-unavailable">{whyNone(result.failures) || 'No recent videos matched.'} Try another type of video, add a reference link above, or press Analyze again in a few minutes.</p>}
+          : <p className="ta-unavailable">{whyNone(result.failures) || 'No popular videos like yours were found.'} Type what kind of video it is, add a reference link above, or press Analyze again in a few minutes.</p>}
         <p className="ta-muted ta-small">“Views per hour” is a ranking proxy for what’s trending, not a measure of quality. All numbers are as YouTube reports them.</p>
       </Reveal>
 
@@ -305,7 +306,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
 
 
       <Step number={3} title="How your edit compares" id="ta-compare-step">
-        Your edit sits next to the top trending video. The charts show cuts, pacing and sound for both.
+        Your edit sits next to the closest popular video. The charts show cuts, pacing and sound for both.
       </Step>
       {/* 2. Video comparison workspace */}
       <Reveal scrollRef={scrollRef} className="ta-section ta-workspace" aria-labelledby="ta-compare-title">
@@ -435,7 +436,7 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
         <div className="ta-hero-copy">
           <small className="ta-eyebrow ta-eyebrow-light">Trends · {clip.title || 'This clip'}</small>
           <h1 id="ta-title">What’s working right now. <span>Make your edit better.</span></h1>
-          <p className="ta-lede">Cascade looks at currently trending videos on your topic, finds what the most viral ones have in common, compares them with your edit, and suggests specific changes.</p>
+          <p className="ta-lede">Cascade finds popular videos from the past year that are the same kind of video as yours, measures them the same way as your edit, and suggests specific changes.</p>
         <form className="ta-controls" onSubmit={e => { e.preventDefault(); analyze(); }}>
           <label className="ta-field"><span>Edited video</span>
             <select value={`${clip.job_id}:${clip.clip_index}`} onChange={e => onSelectClip?.(clips.find(x => `${x.job_id}:${x.clip_index}` === e.target.value))} disabled={!onSelectClip || clips.length < 2}>
@@ -468,8 +469,8 @@ export default function TrendAnalysis({ projectId, clip, state, info, flush, cha
         <Guide big live tone={problem && !running ? 'warn' : 'info'}>
           {running ? <>I’m on it. {record?.message || 'Starting…'}</>
             : problem ? <>That didn’t work, but your clip is safe. {problem}</>
-            : finished ? <>All done! I found {examples.length ? `${examples.length} trending video${examples.length === 1 ? '' : 's'}` : 'no trending videos this time'} and compared them with your edit. Scroll down, I’ll walk you through it.</>
-            : <>Hi, I’m your Cascade guide! Pick the type of video and press Analyze. I’ll look at what’s trending, find what the most viral videos share, and show you how to improve your edit.</>}
+            : finished ? <>All done! I found {examples.length ? `${examples.length} popular video${examples.length === 1 ? '' : 's'} like yours` : 'no popular videos like yours this time'} and compared them with your edit. Scroll down, I’ll walk you through it.</>
+            : <>Hi, I’m your Cascade guide! Pick the type of video and press Analyze. I’ll find popular videos like yours, compare them with your edit, and show you how to improve it.</>}
         </Guide>
       </header>
       <main className="ta-main">{status}{body}</main>
