@@ -75,6 +75,8 @@ def upload_clip(pid: str, request: Request, video: UploadFile = File(...)):
                 'explanation': 'Your own upload', 'media_kind': 'video', 'has_video': True,
                 'clip_url': f'/clips/{job_id}/clip_1.mp4', 'captions_url': f'/clips/{job_id}/clip_1.vtt'}
         job_service.save_json(folder / 'results.json', {'clips': [clip], 'requested_clip_count': 1})
+        from backend.services import project_thumbnails
+        project_thumbnails.save(job_id, [clip])
     except BaseException:
         shutil.rmtree(folder, ignore_errors=True)
         raise

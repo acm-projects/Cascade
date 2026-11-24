@@ -191,6 +191,10 @@ def process_upload(
             **metadata,
         )
 
+        if clips:
+            from backend.services import project_thumbnails
+            project_thumbnails.save(job_id, clips)   # the Projects page card picture
+
         if cloud_backup and clips:
             # Playback and selection are already available. Cloud failures must
             # not turn a successfully generated batch into a generation error.

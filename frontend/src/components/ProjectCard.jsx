@@ -3,18 +3,19 @@ import "./ProjectCard.css";
 import logo from "../assets/icons/cascade-logo.svg";
 import { isTrashed } from "../utils/projectViews";
 import { timeAgo } from "../utils/time";
-import useProjectThumbnail from "../hooks/useProjectThumbnail";
 import Icon from "./ui/Icon";
 
 // One project in the Projects grid (Figma: 382 x 292 wooden card).
-//   project  - from the backend: { id, name, created_at, updated_at?, clip_count? }
+//   project  - from the backend: { id, name, created_at, updated_at?, clip_count?, thumbnail_url? }
+//              thumbnail_url is a small saved picture of the newest clip; the browser caches it
 //   onOpen   - called when you click the card or "Open"
 //   onUpdate - persists favorite, archive and trash actions
 // The card holds two separate buttons (open + menu), because a button can't go inside another button.
 function ProjectCard({ project, onOpen, onUpdate, busy = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const thumbnail = useProjectThumbnail(project);
+  const [brokenThumbnail, setBrokenThumbnail] = useState(null);   // the address that failed to load, if any
+  const thumbnail = project.thumbnail_url !== brokenThumbnail ? project.thumbnail_url : null;
 
   // Close the menu when you click anywhere else or press Esc
   useEffect(() => {
@@ -42,7 +43,7 @@ function ProjectCard({ project, onOpen, onUpdate, busy = false }) {
       <button type="button" className="project-card-open" onClick={() => onOpen(project)} disabled={trashed || busy}>
         <div className="project-card-thumb">
           {thumbnail ? (
-            <img src={thumbnail} alt="" />
+            <img src={thumbnail} alt="" loading="lazy" decoding="async" onError={() => setBrokenThumbnail(thumbnail)} />
           ) : (
             <img src={logo} alt="" className="project-card-leaf" />
           )}

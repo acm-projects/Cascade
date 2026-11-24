@@ -397,10 +397,10 @@ async def authenticate_request(
 
     response = await call_next(request)
 
-    if protected:
-        response.headers[
-            "Cache-Control"
-        ] = "no-store"
+    # Signed-in answers are never cached, except a file a route marks "private" on purpose (only this
+    # browser may keep it), like the Projects page thumbnails whose address changes when the picture does.
+    if protected and not response.headers.get("Cache-Control", "").startswith("private"):
+        response.headers["Cache-Control"] = "no-store"
 
     return response
 

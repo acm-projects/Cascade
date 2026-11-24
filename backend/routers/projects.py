@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 from backend.core import jobs as job_service
-from backend.services import projects_store
+from backend.services import project_thumbnails, projects_store
 
 router = APIRouter(prefix="/api")
 
@@ -44,6 +44,8 @@ def list_projects(request: Request, q: str = ''):
     items = [data for path, data in job_service.metadata_documents(
         directory.relative_to(job_service.JOBS_DIR).as_posix() + '/*.json', request.state.user_id)]
     items = [projects_store.project_defaults(p) for p in items if q.strip().casefold() in p['name'].casefold()]
+    project_thumbnails.backfill(items, request.state.user_id)   # older projects get their picture for next time
+    items = [project_thumbnails.with_link(p, request.state.user_id) for p in items]
     return {'projects': sorted(items, key=lambda p: p['updated_at'], reverse=True)}
 
 
@@ -78,7 +80,7 @@ def rename_project(project_id: str, body: ProjectUpdate, request: Request):
         updated = job_service.metadata_store().update_project(
             projects_store.project_dir(request.state.user_id) / (project_id + '.json'),
             request.state.user_id, changes)
-        return projects_store.project_defaults(updated)
+        return project_thumbnails.with_link(projects_store.project_defaults(updated), request.state.user_id)
 
 
 @router.get('/projects/{project_id}')
@@ -86,6 +88,12 @@ def get_project(project_id: str, request: Request):
     with projects_store.lock:
         project = projects_store.require_project(project_id, request.state.user_id)
         return {**project, 'jobs': projects_store.project_jobs(project_id, request.state.user_id)}
+
+
+@router.get('/projects/{project_id}/thumbnail/{name}')
+def project_thumbnail(project_id: str, name: str, request: Request):
+    """The card picture on the Projects page (a small WebP, cached by the browser)."""
+    return project_thumbnails.serve(project_id, name, request.state.user_id)
 
 
 @router.get('/projects/{project_id}/source/{job_id}')

@@ -126,6 +126,32 @@ class AudioMediaTests(unittest.TestCase):
         self.assertEqual(len(list((self.root/jid/'previews'/'0').glob('*.mp4'))),preview_routes.KEEP)
         self.assertEqual(self.client.get(path,headers=self.headers).status_code,404)   # the oldest was pruned
 
+    def test_project_card_picture_is_saved_once_and_cached(self):
+        from PIL import Image
+        from backend.services import project_thumbnails, projects_store
+        jid,_=self.generate(self.video)
+        listed=lambda: next(p for p in self.client.get('/api/projects',headers=self.headers).json()['projects'] if p['id']==self.pid)
+        project=listed()
+        self.assertTrue(project['thumbnail_key'].startswith(jid+'/thumbnail-'))
+        link=project['thumbnail_url'];self.assertEqual(listed()['thumbnail_url'],link)   # same address, so the browser reuses it
+        picture=self.client.get(link)   # an <img> tag: no sign-in header, just the link
+        self.assertEqual(picture.status_code,200);self.assertEqual(picture.headers['content-type'],'image/webp')
+        self.assertIn('max-age',picture.headers['cache-control'])
+        self.assertEqual(Image.open(io.BytesIO(picture.content)).size,(160,120))
+        path=link.split('?')[0]
+        self.assertEqual(self.client.get(path,headers={'Authorization':'Bearer other'}).status_code,404)
+        self.assertEqual(self.client.get(path.rsplit('/',1)[0]+'/thumbnail-0.webp',headers=self.headers).status_code,404)
+        self.assertEqual(self.client.get(link.replace(self.pid,'f'*32)).status_code,401)   # the link is for this one picture
+        # A project from before thumbnails were saved gets one the first time the list is opened.
+        project_file=projects_store.project_dir('audio-user')/(self.pid+'.json')
+        data=json.loads(project_file.read_text());(self.root/data['thumbnail_key']).unlink()
+        data['thumbnail_key']=None;project_file.write_text(json.dumps(data))
+        with patch.object(project_thumbnails.threading,'Thread',side_effect=lambda target,**k: MagicMock(start=target)):
+            self.assertIsNone(listed()['thumbnail_url'])
+        self.assertTrue(listed()['thumbnail_url'])
+        project_thumbnails.save(jid)   # a newer picture replaces the old one on disk
+        self.assertEqual(len(list((self.root/jid).glob('thumbnail-*.webp'))),1)
+
     def test_mixed_audio_video_batch_keeps_each_format(self):
         entries=[]
         for source in [self.audio,self.video]:

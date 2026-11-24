@@ -1,6 +1,7 @@
 -r backend/requirements.txt
 PyJWT[crypto]
 boto3
+Pillow   # Projects page thumbnails are saved as WebP (backend/services/project_thumbnails.py)
 
 # Neon metadata persistence from MLK
 psycopg2-binary

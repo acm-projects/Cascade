@@ -42,6 +42,8 @@ class EditorRouteTests(unittest.TestCase):
         additions.append(['/api/media-link', ['GET']])
         # Editor previews kept on the server and streamed instead of downloaded whole (preview_routes.py).
         additions += [[prefix+'/preview', ['POST']], [prefix+'/preview/{name}', ['GET']]]
+        # Saved Projects page card pictures (backend/services/project_thumbnails.py).
+        additions.append(['/api/projects/{project_id}/thumbnail/{name}', ['GET']])
         self.assertEqual(sorted(route_contract(app1.app)), sorted(before + additions))
 
     def test_editor_modules_remain_small(self):
