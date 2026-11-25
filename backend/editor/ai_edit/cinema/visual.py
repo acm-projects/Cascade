@@ -22,6 +22,8 @@ LOG = logging.getLogger(__name__)
 MESSAGE = settings.get('pacing.message_seconds', 3.4)
 ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.)}
 SHORTEST = .5   # seconds on screen
+LOOP = .75      # the closing return to the opening shot, for a seamless loop
+TYPE_SECONDS = .9   # how long the typed title takes to spell out
 
 
 class VisualShot(BaseModel):
@@ -36,6 +38,7 @@ class VisualShot(BaseModel):
     text_style: Literal['slam', 'perspective'] = 'perspective'
     tone: Tone | None = None
     voice: bool = False   # a talking moment: its own sound up front, the music dipped under it, its words captioned
+    flash: bool = False   # a 0.1-0.3 s glimpse in a burst of very fast cuts (not snapped to the beat)
 
 
 class VisualPlan(BaseModel):
@@ -43,9 +46,10 @@ class VisualPlan(BaseModel):
     kind: Literal['visual'] = 'visual'
     reply: str = Field(default='', max_length=1500)
     title: str = Field(default='', max_length=60)
+    title_style: Literal['small', 'typed'] = 'small'   # 'typed': a big place name typed out letter by letter over the opening shot
     shots: list[VisualShot] = Field(min_length=1, max_length=40)
     mood: Literal['awakening', 'wonder', 'tension', 'warm'] = 'awakening'
-    grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm'] = 'cinema'
+    grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm', 'natural'] = 'cinema'
     sound: Literal['both', 'score', 'original'] = 'both'   # music over the clip's own sound, music only, or only the clip's sound
     song: str = Field(default='', max_length=40)          # a Music Library song id; '' = Cascade's composed score
     song_section: int = Field(default=0, ge=0, le=5)       # which of that song's candidate sections plays
@@ -53,6 +57,8 @@ class VisualPlan(BaseModel):
     intro: Literal['none', 'black'] = 'none'               # 'black': open on black while the music builds, first shot on the beat
     settings: Settings = Field(default_factory=Settings)
     end_line: str = Field(default='', max_length=90)
+    loop: bool = False      # end on a short return to the opening shot and title, so the reel plays as a seamless loop
+    seconds: float = Field(default=0, ge=0, le=60)   # the edit's length when the user asked for one; 0 = the house length
 
     @model_validator(mode='after')
     def _tidy(self):
@@ -74,7 +80,8 @@ def check(plan, duration, windows=None, cuts=()):
             if s.end-.35 < c < s.end and c-s.start >= .3: s.end = c
     for k, s in enumerate(plan.shots):
         if s.end > duration+.05: raise ValueError(f'shots[{k}]: ends at {s.end:.1f} s but the clip is {duration:.1f} s long')
-        if s.end-s.start < .3: raise ValueError(f'shots[{k}]: needs end at least 0.3 s after start')
+        if s.end-s.start < (.08 if s.flash else .3):
+            raise ValueError(f'shots[{k}]: needs end at least {.08 if s.flash else .3} s after start')
         if windows and not any(s.start >= a-.05 and s.end <= b+.05 for a, b in windows):
             raise ValueError(f'shots[{k}]: {s.start:.1f}-{s.end:.1f} s is outside the usable ranges {windows}')
     for s in plan.shots: s.end = min(s.end, duration)
@@ -95,7 +102,10 @@ def interleave(plan, budget=20000):
     with the fewest same-moment neighbours is used."""
     shots = list(plan.shots)
     if len(shots) < 3: return plan
-    first, last, middle = shots[0], shots[-1], shots[1:-1]
+    head = max([0]+[k for k, x in enumerate(shots[:-1]) if x.flash])   # the opening and its burst of glimpses stay put
+    fixed, last, middle = shots[:head+1], shots[-1], shots[head+1:-1]
+    if not middle: return plan
+    first = fixed[-1]
     best = {'order': None, 'bad': len(shots)}
     steps = [0]
 
@@ -113,7 +123,7 @@ def interleave(plan, budget=20000):
             if best['bad'] == 0: return
 
     search([first], list(middle), 0)
-    if best['order'] is not None: plan.shots = best['order']+[last]
+    if best['order'] is not None: plan.shots = fixed[:-1]+best['order']+[last]
     return plan
 
 
@@ -125,7 +135,9 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
     """Make the edit play in at most `seconds` (a black intro of `lead` seconds included): later shots go, the last
     one is trimmed. Every cut lands on `grid` (edit times, e.g. a song's beats and half-beats) or on the half-beat
     grid of `beat`."""
-    budget = seconds-lead
+    budget = seconds-lead-(LOOP if plan.loop else 0)
+    for s in plan.shots:   # a burst glimpse lasts 0.1-0.3 s whatever was planned
+        if s.flash: s.end = s.start+min(.3, max(.1, s.end-s.start))*s.speed
     shots, used = [], 0.
     for s in plan.shots:
         on_screen = (s.end-s.start)/s.speed
@@ -140,6 +152,8 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
         points = sorted(g for g in grid if lead+.3 <= g <= seconds+1e-6)
         t, snapped = lead, []
         for s in shots:
+            if s.flash:   # burst glimpses keep their own length; the beat grid picks up again after them
+                snapped.append(s); t += (s.end-s.start)/s.speed; continue
             target = t+(s.end-s.start)/s.speed
             options = [g for g in points if g-t >= .33]
             if not options: break
@@ -147,7 +161,7 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
             later = [g for g in options if g >= target-.04] if s.voice else []
             end = min(later) if later else min(options, key=lambda g: abs(g-target))
             snapped.append(s.model_copy(update={'end': s.start+(end-t)*s.speed})); t = end
-        shots = _on_the_beat(snapped, points, lead) if snapped else shots
+        shots = _on_the_beat(snapped, points, lead, hold_first=plan.title_style == 'typed') if snapped else shots
     plan.shots = shots
     return length(plan)+lead
 
@@ -155,13 +169,13 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
 LONGEST = 1.8   # seconds a music edit holds one shot before cutting again on the beat
 
 
-def _on_the_beat(shots, points, lead):
+def _on_the_beat(shots, points, lead, hold_first=False):
     """Long holds become jump cuts on the beat: the same moment carries on, the framing punches in and out,
     so the picture moves with the music (effects and words stay on the first piece)."""
     out, t = [], lead
-    for s in shots:
+    for n, s in enumerate(shots):
         end = t+(s.end-s.start)/s.speed
-        if end-t <= LONGEST+.05:
+        if end-t <= LONGEST+.05 or (n == 0 and hold_first):   # a typed title holds its opening shot
             out.append(s); t = end; continue
         cuts, last = [], t
         for g in points:
@@ -298,7 +312,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
 
     # --- 1. the shots, back to back
     progress(.05, 'Lining up the best moments…')
-    timing = song_timing(plan, settings.get('output.target_seconds', 15) or 15)
+    timing = song_timing(plan, plan.seconds or settings.get('output.target_seconds', 15) or 15)
     lead = timing[3] if timing else 0.
     shots, overlays, events, t = [], [], [], lead
     voiced = []   # (edit from, edit to, source from) of every talking shot
@@ -327,6 +341,18 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
                 overlays.append(Overlay(t, min(t+dur, t+1.6), 'perspective', {'text': word, 'tone': tone}))
                 events.append((t, 'moment', tone))
         t += dur
+    if plan.title and plan.title_style == 'typed':   # the place name, typed out over the opening shot
+        opening = shots[1 if lead else 0]
+        overlays.append(Overlay(opening.t0, max(opening.t1, opening.t0+1.2), 'typed',
+                                {'text': plan.title.upper(), 'from': opening.t0+.05, 'to': opening.t0+.05+TYPE_SECONDS}))
+    if plan.loop and plan.shots:   # back to the opening shot (and the start of the title) so the reel loops
+        first = plan.shots[0]
+        shots.append(Shot(t, t+LOOP, 'aroll', str(source), first.start, cx=shots[1 if lead else 0].cx,
+                          zoom0=ZOOMS[first.zoom][0], zoom1=ZOOMS[first.zoom][0]+.01, grade=plan.grade))
+        if plan.title and plan.title_style == 'typed':
+            word = plan.title.upper()
+            overlays.append(Overlay(t, t+LOOP, 'typed', {'text': word, 'from': t, 'to': t+TYPE_SECONDS*len(word), 'fixed': min(2, len(word))}))
+        t += LOOP
     main_end = t
     if plan.end_line:   # the closing message over a held, softened last moment
         last = shots[-1]
@@ -337,7 +363,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         overlays.append(Overlay(t+.15, t+MESSAGE, 'message', {'words': [(w, t+.35+k*step, None) for k, w in enumerate(parts)]}))
         events.append((t+.3, 'boom', 'calm'))
         main_end = t+MESSAGE
-    if plan.title:
+    if plan.title and plan.title_style != 'typed':
         overlays.append(Overlay(.15, min(2.2, main_end), 'title', {'text': plan.title}))
     if timing and plan.lyrics != 'off':   # the song's words, but never over someone talking
         overlays += [o for o in lyric_lines(timing[0], timing[1], main_end, plan.lyrics)

@@ -56,6 +56,25 @@ class MontageTests(unittest.TestCase):
         p = visual.interleave(plan([{'start': 0, 'end': 1}, {'start': 1, 'end': 2}, {'start': 2, 'end': 3}]))
         self.assertEqual([s.start for s in p.shots], [0, 1, 2])
 
+    def test_trip_reel_burst_keeps_its_glimpses_short_and_off_the_beat_grid(self):
+        shots = [{'start': 0, 'end': 2}] + [{'start': 4 + k, 'end': 4.6 + k, 'flash': True} for k in range(5)] + \
+                [{'start': 12, 'end': 13}, {'start': 16, 'end': 17}, {'start': 20, 'end': 23}]
+        p = plan(shots, loop=True, title='YOSEMITE', title_style='typed', grade='natural')
+        visual.interleave(p)
+        self.assertTrue(all(s.flash for s in p.shots[1:6]))           # the burst stays right after the opening
+        visual.fit(p, 15, grid=[k * .64 for k in range(40)])
+        burst = [s for s in p.shots if s.flash]
+        self.assertTrue(all(.1 <= s.end - s.start <= .3 + 1e-6 for s in burst))
+        self.assertEqual((p.shots[0].start, p.shots[1].flash), (0, True))   # the titled opening holds as one shot
+        self.assertLessEqual(visual.length(p) + visual.LOOP, 15.01)    # room is kept for the loop ending
+
+    def test_requested_length_is_read_from_the_editor_request(self):
+        from backend.editor.ai_edit.cinema.planner import requested_seconds
+        self.assertEqual(requested_seconds('make a 15 second insta edit'), 15)
+        self.assertEqual(requested_seconds('around 10 to 15 seconds'), 15)
+        self.assertEqual(requested_seconds('exactly like my reference'), 0)
+        self.assertEqual(requested_seconds('a 3 second edit'), 6)
+
     def test_montage_requests_and_the_speech_list(self):
         self.assertTrue(wants_montage('make an insta edit of our hike like my references'))
         self.assertFalse(wants_montage('Edit this video'))

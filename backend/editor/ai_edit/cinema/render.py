@@ -386,6 +386,8 @@ class Composer:
             elif o.kind == 'flash':
                 k = 1-abs((t-(o.t0+o.t1)/2)/((o.t1-o.t0)/2))
                 frame[:] = np.clip(frame.astype(np.int16)+int(110*max(0, k)), 0, 255).astype(np.uint8)
+            elif o.kind == 'typed':   # a big place name typed out letter by letter (the trip-reel opener)
+                self._typed(frame, t, o)
             elif o.kind == 'title':
                 text = o.data['text']
                 sp = self._sprite(('title', text, W), lambda: look.text_sprite(text.upper(), look.TIGHT(34*u, 700), fill=(236, 240, 236), tracking=int(10*u), shadow=.7))
@@ -419,6 +421,21 @@ class Composer:
             frame = accents.apply(frame, self.accent_previous[key], o.data['kind'], phase)
         self.accent_previous = {k: v for k, v in self.accent_previous.items() if t < k[1]}
         return frame
+
+    TYPED_COLOUR = (244, 231, 198)   # warm cream
+
+    def _typed(self, frame, t, o):
+        W, H, u = look.W, look.H, look.unit()
+        text = o.data['text']
+        span = max(.01, o.data['to']-o.data['from'])
+        shown = o.data.get('fixed') or max(min(2, len(text)), int(round(len(text)*min(1., max(0., (t-o.data['from'])/span)))))
+        part = text[:shown]
+        f = look.fit_heavy(text, W*.82, int(min(H*.16, W*.24)))
+        whole = self._sprite(('typed-w', text, W), lambda: look.text_sprite(text, f, fill=self.TYPED_COLOUR, shadow=.45, tracking=int(f.size*.01)))
+        sp = self._sprite(('typed', part, W), lambda: look.text_sprite(part, f, fill=self.TYPED_COLOUR, shadow=.45, tracking=int(f.size*.01)))
+        # left-aligned with where the whole word will sit, so the letters grow to the right as they are typed
+        x = W/2-whole.w/2+sp.w/2
+        look.paste(frame, sp, x, H*(.36 if H > W else .42))
 
     LYRIC_COLOURS = {'bold': (246, 244, 238), 'serif': (246, 244, 238), 'glitch': (236, 40, 44), 'typewriter': (245, 205, 70),
                      'caption': (250, 248, 242)}

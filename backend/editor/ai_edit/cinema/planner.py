@@ -44,6 +44,7 @@ def output(plan, words, new=True):
     ratio = settings.get('output.ratio', '9:16')
     if ratio and (new or plan.settings.ratio is None): plan.settings.ratio = ratio
     target = settings.get('output.target_seconds', 15)
+    if isinstance(plan, visual.VisualPlan) and plan.seconds: target = plan.seconds   # the length the user asked for
     if target and isinstance(plan, visual.VisualPlan):
         from . import score
         message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
@@ -141,8 +142,20 @@ def _watch(prompt, prep_dir, prep, windows, tries=2):
     raise Unavailable('OpenAI did not return a usable edit plan. Try the request again.')
 
 
+def requested_seconds(request):
+    """The edit length the user asked for ("a 15 second edit", "10-15 seconds", "27s"), or 0. Clamped to 6-60 s."""
+    found = re.findall(r'(\d+(?:\.\d+)?)\s*(?:-|–|to)?\s*(\d+(?:\.\d+)?)?\s*-?\s*(?:sec(?:ond)?s?|s)\b', request or '')
+    if not found: return 0
+    low, high = found[-1]
+    return float(min(60, max(6, float(high or low))))
+
+
 def plan_visual(request, prep_dir, prep, windows, history):
-    """A new edit of a clip with no speech: OpenAI watches the contact sheets and the motion and picks the moments."""
+    """A new music edit: OpenAI watches the contact sheets and the motion (and reads any speech) and picks the moments."""
     if choice() == 'rules': return output(visual.auto(prep, windows), []), 'rules'
-    prompt = f"Request: {request}\n\nEarlier chat:\n{json.dumps(history[-8:])}\n\n{_footage(prep, windows)}"
-    return output(_watch(prompt, prep_dir, prep, windows), []), label('openai')
+    seconds = requested_seconds(request)
+    length = f"Length: {seconds:g} s, as asked." if seconds else ''
+    prompt = f"Request: {request}\n{length}\n\nEarlier chat:\n{json.dumps(history[-8:])}\n\n{_footage(prep, windows)}"
+    plan = _watch(prompt, prep_dir, prep, windows)
+    if seconds: plan.seconds = seconds
+    return output(plan, []), label('openai')
