@@ -75,6 +75,29 @@ class MontageTests(unittest.TestCase):
         self.assertEqual(requested_seconds('exactly like my reference'), 0)
         self.assertEqual(requested_seconds('a 3 second edit'), 6)
 
+    def test_talking_shots_keep_whole_sentences(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('hey', 0.2), ('guys', .6), ('this', 1.0), ('is', 1.4), ('cascade', 1.8),
+                                                            ('reconnect', 2.3), ('with', 2.7), ('nature', 3.1), ('later', 9.0)]]
+        p = visual.whole_phrases(plan([{'start': 0.5, 'end': 1.5, 'voice': True}, {'start': 9.5, 'end': 10.5}]), words)
+        self.assertLessEqual(p.shots[0].start, 0.2)
+        self.assertGreaterEqual(p.shots[0].end, 3.4)
+        self.assertEqual((p.shots[1].start, p.shots[1].end), (9.5, 10.5))   # music shots are left alone
+
+    def test_a_long_edit_loses_middle_music_shots_not_its_talking_or_ending(self):
+        p = plan([{'start': 0, 'end': 6, 'voice': True}, {'start': 10, 'end': 12}, {'start': 14, 'end': 16},
+                  {'start': 18, 'end': 20}, {'start': 30, 'end': 35, 'voice': True}])
+        visual.fit(p, 14)
+        self.assertEqual(p.shots[0].start, 0)
+        self.assertEqual(p.shots[-1].start, 30)
+        self.assertTrue(p.shots[-1].voice)
+        self.assertLessEqual(visual.length(p), 14.01)
+
+    def test_horizontal_requests(self):
+        from backend.editor.ai_edit.cinema.planner import requested_ratio
+        self.assertEqual(requested_ratio('make a horizontal edit'), '16:9')
+        self.assertEqual(requested_ratio('vertical reel please'), '9:16')
+        self.assertEqual(requested_ratio('make an edit'), '')
+
     def test_montage_requests_and_the_speech_list(self):
         self.assertTrue(wants_montage('make an insta edit of our hike like my references'))
         self.assertFalse(wants_montage('Edit this video'))

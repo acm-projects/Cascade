@@ -313,3 +313,24 @@ def test_mood_and_trip_prompts_use_the_footage_not_only_the_transcript():
     assert website.transcript_first_request("find where he talks about taxes")
     assert "recordings joined" in website.footage_note([{"name": "a", "start": 0, "end": 5}, {"name": "b", "start": 5, "end": 9}], False)
     assert "short moments" in website.footage_note(None, True)
+
+
+def test_moments_the_request_names_are_kept_whatever_their_spacing():
+    box = make_box(target_clips=2)
+    box.call("add_candidate", {"start_time": 10, "end_time": 15, "reason": "generic great view", "score": .95})
+    box.call("add_candidate", {"start_time": 16, "end_time": 21, "reason": "we introduce ourselves", "score": .6, "asked_for": True})
+    box.call("add_candidate", {"start_time": 22, "end_time": 27, "reason": "team chant with hands", "score": .5, "asked_for": True})
+    box.call("rank_candidates", {"ranking": [{"id": 0}, {"id": 1}, {"id": 2}]})
+    assert [c["reason"] for c in box.final_selection()] == ["we introduce ourselves", "team chant with hands"]
+
+
+def test_a_clip_running_into_the_next_recording_is_trimmed_not_rejected():
+    box = make_box(parts=[{"name": "a.mp4", "start": 0, "end": 40}, {"name": "b.mp4", "start": 40, "end": 100}])
+    blocks, err = box.call("add_candidate", {"start_time": 39, "end_time": 47, "reason": "names round", "score": .8})
+    assert not err and "trimmed" in str(blocks)
+    assert 40 <= box.candidates[0]["start"] and box.candidates[0]["end"] == 47
+
+
+def test_speech_search_prefers_lines_that_say_the_query_words():
+    from backend.agent.index import _word_overlap
+    assert _word_overlap("cascade on three", "Set. Cascade on three.") > _word_overlap("cascade on three", "We're team Cascade, and we're on our daily walk.")

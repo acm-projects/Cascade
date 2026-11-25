@@ -25,6 +25,10 @@ MATCH THE STYLE TO THE CONTENT (the house styles, from trending edits)
 - Dark / dramatic / lyric edit: grade red or bw, effects invert and glitch on the beat, lyrics "glitch" or "bold", text that echoes a key word of the lyrics.
 - Travel / nature / chill: grade forest or warm, smooth push and pull zooms, effects leak or ripple, lyrics off or "serif".
 
+THE REQUEST'S STORY COMES FIRST: when the request gives an order or names moments ("start with us introducing what we're doing, then goofing around, then waving, end on team Cascade"), play them in exactly that order and use those moments (find them in the Speech list and the contact sheets); the style rules below only shape the cuts around them. A named talking moment plays in full (whole sentences), even when it is long.
+
+TITLE STYLES: "typed" (a place name typed out letter by letter over the opening, the trip-reel opener) or "corners" (the lyric-video opener: the title's words pop in white in the top corners one after another and its LAST word lands huge and red behind the people; use it for a title like "HIKE WITH CASCADE" or when the request asks for the song video's text style). The opening shot holds for the whole title; with "corners", make the opening a shot with people facing the camera (their intro works well).
+
 TRIP REEL: FRIENDS, HIKES, TRIPS AND MEMORIES (the owner's reference edit; follow it exactly when the request is about a trip, a hike, friends, memories, nostalgia, a montage or "like my reference")
 The reference: a group trip reel. Music only, natural colour, a big place name typed over the opening, a burst of glimpses, then cuts on the beat through the day, the biggest view near the end, and a return to the opening so it loops. Build it in this order:
 1. OPENING (1.8-2.2 s): the widest shot of the whole group together at a view or the start of the trail. "title": the place or trip name from the request in capitals (e.g. "YOSEMITE"); if the request names no place, a short word it supports ("HIKE", "OUTSIDE", "FRIENDS"); never invent a place. "title_style": "typed".
@@ -44,6 +48,7 @@ HOW TO CUT (the trip reel's own rules above win where they differ)
 - Prefer high-motion seconds for the build and the peak; use calmer seconds to open or close.
 - Never start or end a shot across a camera cut: keep each shot inside one camera shot.
 - Each source moment plays once, unless it is a deliberate slow-motion replay of the peak.
+- Never use seconds that look washed out, foggy, blurred or blown out by sun glare in the contact sheets; pick a clean second of the same moment, or another moment.
 - Never put two shots back to back whose source seconds are within 2.5 s of each other: that plays as one long, slow hold, not a cut. Jump between different parts of the clip (when the clip is several clips joined, a different one each time) and come back later for another piece of a moment.
 - "speed": 1 normally; 0.4-0.6 for the peak (slow motion), at most two slow shots; 1.5-2 to compress a slow action. Talking shots are always 1.
 - "zoom": push for build, punch for impact, pull to reveal, none for most shots.

@@ -45,6 +45,9 @@ def output(plan, words, new=True):
     if ratio and (new or plan.settings.ratio is None): plan.settings.ratio = ratio
     target = settings.get('output.target_seconds', 15)
     if isinstance(plan, visual.VisualPlan) and plan.seconds: target = plan.seconds   # the length the user asked for
+    if isinstance(plan, visual.VisualPlan) and new and target:
+        talking = sum(s.end-s.start for s in plan.shots if s.voice)
+        if talking: target = min(40, max(target, talking+8))   # room for the quick cuts around the talking
     if target and isinstance(plan, visual.VisualPlan):
         from . import score
         message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
@@ -157,5 +160,16 @@ def plan_visual(request, prep_dir, prep, windows, history):
     length = f"Length: {seconds:g} s, as asked." if seconds else ''
     prompt = f"Request: {request}\n{length}\n\nEarlier chat:\n{json.dumps(history[-8:])}\n\n{_footage(prep, windows)}"
     plan = _watch(prompt, prep_dir, prep, windows)
+    visual.whole_phrases(plan, [{**w, 'e': min(w['e'], prep['duration'])} for w in prep.get('words') or []], cuts=prep.get('cuts') or [])
     if seconds: plan.seconds = seconds
-    return output(plan, []), label('openai')
+    plan = output(plan, [])
+    ratio = requested_ratio(request)
+    if ratio: plan.settings.ratio = ratio
+    return plan, label('openai')
+
+
+def requested_ratio(request):
+    """'16:9' for a horizontal / landscape / YouTube edit, '9:16' for a vertical one, '' when the request does not say."""
+    if re.search(r'\b(horizontal(ly)?|landscape|16 ?: ?9|widescreen|youtube video)\b', request or '', re.I): return '16:9'
+    if re.search(r'\b(vertical(ly)?|portrait|9 ?: ?16)\b', request or '', re.I): return '9:16'
+    return ''

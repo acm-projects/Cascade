@@ -33,6 +33,7 @@ WEBSITE_MAX_CLIP_FACTOR = 1.5
 # "Short moments" (a 5 s target): 2-7.5 s clips, the single best beat each, for fast music montages
 SHORT_TARGET_SECONDS = 6
 SHORT_MIN_CLIP_SECONDS = 2.0
+SHORT_MAX_CLIP_SECONDS = 10.0   # a talking moment (an introduction) keeps its whole sentence
 MAX_EXPLANATION_CHARS = 700
 
 
@@ -53,13 +54,21 @@ def footage_note(parts, short):
     """Context for the agent about how the footage was made and what a short-moment request wants."""
     note = ''
     if parts:
-        listed = '; '.join(f"{n + 1}. {p['start']:.1f}-{p['end']:.1f}s" for n, p in enumerate(parts))
+        mmss = lambda x: f"{int(x // 60)}:{int(x % 60):02d}"   # as a phone shows it (15:40.5 -> 15:40)
+        listed = '; '.join(f"recording {n + 1} ({mmss(p['end'] - p['start'])} long) = {p['start']:.1f}-{p['end']:.1f}s"
+                           for n, p in enumerate(parts))
         note += (f"\n\n(Footage: {len(parts)} separate recordings joined end to end, in time order: {listed}. "
-                 'Look through all of them and spread the picks across different recordings. A clip must stay inside one recording.)')
+                 'Look through all of them and spread the picks across different recordings. A clip must stay inside one recording. '
+                 'People name a recording by its length or its order: "5:28 in the 15:40 clip" or "8-9 seconds into the 0:12 clip" '
+                 'means that recording\'s start plus that time (e.g. a recording at 148.2-1088.7s, 5:28 in = 148.2 + 328 = 476.2s). '
+                 'For every time the request gives, read the transcript and inspect frames around that exact second (people misremember '
+                 'by a minute or so: if the described moment is not there, look nearby and in the other recordings for it) and add it '
+                 'with asked_for: true.)')
     if short:
         note += ('\n\n(These are short moments for a fast music edit, like an Instagram reel of friends: each clip is the single best beat - '
                  'a laugh, a reaction, a funny line said in full, friends together, a striking view. Start right before it and cut right after; '
-                 'no setup. Mix moments where someone says something funny with purely visual ones.)')
+                 'no setup. Visual moments are 2-6 s; a talking moment (an introduction, a chant) keeps its whole sentence, up to 10 s. '
+                 'Mix moments where someone says something with purely visual ones.)')
     return note
 
 
@@ -120,7 +129,7 @@ def select_with_agent(
     duration, target = float(duration), float(target)
     short = target <= SHORT_TARGET_SECONDS
     min_len = min(SHORT_MIN_CLIP_SECONDS if short else WEBSITE_MIN_CLIP_SECONDS, duration)
-    max_len = min(MAX_CLIP_SECONDS, max(min_len, target * WEBSITE_MAX_CLIP_FACTOR))
+    max_len = min(MAX_CLIP_SECONDS, max(min_len, SHORT_MAX_CLIP_SECONDS if short else target * WEBSITE_MAX_CLIP_FACTOR))
 
     stage("Transcript and search index")
     # Frames and the temporary MP3 live in a scratch folder, never in the job's folder; the index

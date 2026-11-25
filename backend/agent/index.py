@@ -10,6 +10,8 @@ them once per process) so importing this module stays cheap.
 
 from __future__ import annotations
 
+import re
+
 import hashlib
 import json
 import os
@@ -96,6 +98,9 @@ class VideoIndex:
             if len(self.transcript) == 0:
                 return []
             scores = self.segment_embeddings @ self.encode_text_query(query)
+            # exact words count too: a line that says the query's words ("cascade on three") outranks lines that
+            # only share its meaning, which matters when a phrase is said many times in slightly different ways
+            scores = scores + 0.35 * np.array([_word_overlap(query, seg["text"]) for seg in self.transcript], dtype=np.float32)
             order = np.argsort(-scores)[:top_k]
             hits = []
             for i in order:
@@ -140,6 +145,26 @@ class VideoIndex:
 
     def segments_between(self, start: float, end: float) -> list[dict[str, Any]]:
         return [seg for seg in self.transcript if seg["end"] > start and seg["start"] < end]
+
+
+_STOP = {'a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'on', 'at', 'is', 'it', 'we', 'our', 'us', 'i', 'you', 'with',
+         'when', 'where', 'that', 'this', 'for', 'about', 'are', 'be', 'say', 'says', 'said', 'someone', 'moment'}
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9']+", text.lower())
+
+
+def _word_overlap(query: str, text: str) -> float:
+    """0-1: how much of the query's wording a transcript line contains (whole phrases count most)."""
+    q, t = _words(query), _words(text)
+    if not q or not t: return 0.
+    said = ' '.join(t)
+    pairs = [' '.join(q[i:i + 2]) for i in range(len(q) - 1)]
+    phrase = sum(p in said for p in pairs) / len(pairs) if pairs else 0.
+    content = [w for w in q if w not in _STOP]
+    words = sum(w in t for w in content) / len(content) if content else 0.
+    return .6 * phrase + .4 * words
 
 
 def transcript_cache_paths(key: str, tag: str) -> tuple[Path, Path]:

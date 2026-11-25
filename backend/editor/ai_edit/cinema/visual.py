@@ -24,6 +24,7 @@ ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': 
 SHORTEST = .5   # seconds on screen
 LOOP = .75      # the closing return to the opening shot, for a seamless loop
 TYPE_SECONDS = .9   # how long the typed title takes to spell out
+TITLE_SECONDS = 3.6   # how long a "corners" title stays up
 
 
 class VisualShot(BaseModel):
@@ -46,7 +47,9 @@ class VisualPlan(BaseModel):
     kind: Literal['visual'] = 'visual'
     reply: str = Field(default='', max_length=1500)
     title: str = Field(default='', max_length=60)
-    title_style: Literal['small', 'typed'] = 'small'   # 'typed': a big place name typed out letter by letter over the opening shot
+    # 'typed': a big place name typed out letter by letter over the opening shot; 'corners': the title's words pop in
+    # white in the top corners one after another and its last word lands huge and red behind the people (a lyric-video opener)
+    title_style: Literal['small', 'typed', 'corners'] = 'small'
     shots: list[VisualShot] = Field(min_length=1, max_length=40)
     mood: Literal['awakening', 'wonder', 'tension', 'warm'] = 'awakening'
     grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm', 'natural'] = 'cinema'
@@ -127,6 +130,28 @@ def interleave(plan, budget=20000):
     return plan
 
 
+def whole_phrases(plan, words, gap=.6, most=6., cuts=()):
+    """Talking shots start and end on sentence edges: a shot that would cut into speech grows to the edges of the
+    phrase it touches (words closer than `gap` s run on), at most `most` s each way, and never across a camera cut
+    (a clip made of several clips: the next clip is another moment)."""
+    if not words: return plan
+    for s in plan.shots:
+        if not s.voice: continue
+        inside = [w for w in words if w['e'] > s.start and w['s'] < s.end]
+        if not inside: continue
+        first, last = words.index(inside[0]), words.index(inside[-1])
+        while first > 0 and words[first]['s']-words[first-1]['e'] < gap and s.start-words[first-1]['s'] < most: first -= 1
+        while last+1 < len(words) and words[last+1]['s']-words[last]['e'] < gap and words[last+1]['e']-s.end < most: last += 1
+        start, end = min(s.start, max(0., words[first]['s']-.12)), max(s.end, words[last]['e']+.25)
+        before = [c for c in cuts if start < c <= s.start+.05]
+        after = [c for c in cuts if s.end-.05 <= c < end]
+        s.start = max(before) if before else start
+        s.end = min(after) if after else end
+        inner = [c for c in cuts if s.start+.5 < c < s.end-.05]   # the planned shot itself ran over a cut
+        if inner and s.end-inner[0] < (inner[0]-s.start): s.end = inner[0]
+    return plan
+
+
 def length(plan):
     return sum((s.end-s.start)/s.speed for s in plan.shots)
 
@@ -138,6 +163,16 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
     budget = seconds-lead-(LOOP if plan.loop else 0)
     for s in plan.shots:   # a burst glimpse lasts 0.1-0.3 s whatever was planned
         if s.flash: s.end = s.start+min(.3, max(.1, s.end-s.start))*s.speed
+    # too long: music shots from the middle go first (latest first); talking shots, the opening and the ending stay
+    on = lambda x: (x.end-x.start)/x.speed
+    while sum(map(on, plan.shots)) > budget+1e-6:
+        middle = [k for k, x in enumerate(plan.shots) if 0 < k < len(plan.shots)-1 and not x.voice]
+        if not middle or sum(on(plan.shots[k]) for k in middle) <= SHORTEST: break
+        k = middle[-1]
+        over = sum(map(on, plan.shots))-budget
+        if on(plan.shots[k])-over >= SHORTEST:   # trimming this shot is enough
+            x = plan.shots[k]; plan.shots[k] = x.model_copy(update={'end': x.end-over*x.speed}); break
+        plan.shots.pop(k)
     shots, used = [], 0.
     for s in plan.shots:
         on_screen = (s.end-s.start)/s.speed
@@ -161,7 +196,7 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
             later = [g for g in options if g >= target-.04] if s.voice else []
             end = min(later) if later else min(options, key=lambda g: abs(g-target))
             snapped.append(s.model_copy(update={'end': s.start+(end-t)*s.speed})); t = end
-        shots = _on_the_beat(snapped, points, lead, hold_first=plan.title_style == 'typed') if snapped else shots
+        shots = _on_the_beat(snapped, points, lead, hold_first=plan.title_style in ('typed', 'corners')) if snapped else shots
     plan.shots = shots
     return length(plan)+lead
 
@@ -199,6 +234,9 @@ def song_timing(plan, seconds):
     options = music.sections(song, seconds)
     start = options[min(plan.song_section, len(options)-1)]
     beats = [b-start for b in song.get('beats', []) if start <= b <= start+seconds+2]
+    if len(beats) > 2 and beats[-1] < seconds+2:   # the song is shorter than the edit (it loops): keep the beat going
+        period = float(np.median(np.diff(beats)))
+        while beats[-1] < seconds+2: beats.append(beats[-1]+period)
     grid = sorted(set(beats+[(a+b)/2 for a, b in zip(beats, beats[1:])]))
     lead = 0.
     if plan.intro == 'black':
@@ -345,6 +383,16 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         opening = shots[1 if lead else 0]
         overlays.append(Overlay(opening.t0, max(opening.t1, opening.t0+1.2), 'typed',
                                 {'text': plan.title.upper(), 'from': opening.t0+.05, 'to': opening.t0+.05+TYPE_SECONDS}))
+    if plan.title and plan.title_style == 'corners':   # white words in the corners, then the last word huge and red behind us
+        opening = shots[1 if lead else 0]
+        title_words = plan.title.upper().split()   # (not `words`: that is the clip's transcript, used for captions)
+        step = .45
+        title_end = min(opening.t1, opening.t0+TITLE_SECONDS)   # up for about 3.5 s, like the reference's lyric title
+        for k, w in enumerate(title_words[:-1]):
+            overlays.append(Overlay(opening.t0+k*step, title_end, 'corner', {'text': w, 'side': 'left' if k % 2 == 0 else 'right', 'row': k//2}))
+        at = opening.t0+max(0, len(title_words)-1)*step
+        overlays.append(Overlay(at, max(title_end, at+1.4), 'behind', {'text': title_words[-1], 'tone': 'danger', 'y': look.H*.42}))
+        events.append((at, 'moment', 'danger'))
     if plan.loop and plan.shots:   # back to the opening shot (and the start of the title) so the reel loops
         first = plan.shots[0]
         shots.append(Shot(t, t+LOOP, 'aroll', str(source), first.start, cx=shots[1 if lead else 0].cx,
@@ -380,6 +428,10 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     if timing:   # the song's chosen section, with a short fade in and a longer fade out
         from . import music as library
         music = library.samples(timing[0]['file'], score.SR, timing[1], main_end+.1)
+        want = int((main_end+.1)*score.SR)
+        if 0 < len(music) < want:   # a short song loops to cover the edit
+            whole = library.samples(timing[0]['file'], score.SR, 0.)
+            music = np.concatenate([music]+[whole]*(1+(want-len(music))//max(1, len(whole))))[:want]
         n = len(music)
         if n:
             music[:int(.08*score.SR)] *= np.linspace(0, 1, min(n, int(.08*score.SR)), dtype=np.float32)[:, None]
@@ -396,7 +448,10 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         # talking shots lead; the song dips under them (score.mix ducks music wherever the voice track speaks) and
         # comes back up between them; the rest of the clip's own sound stays as a quiet bed inside the music
         voice, bed = _split(natural, voiced, score.SR)
-        music = music+bed*.35*float(np.sqrt((music**2).mean())/(np.sqrt((bed**2).mean())+1e-9) if bed.any() else 0)
+        n = min(len(music), len(bed))
+        if n and bed[:n].any():
+            music = music.copy()
+            music[:n] += bed[:n]*.35*float(np.sqrt((music[:n]**2).mean())/(np.sqrt((bed[:n]**2).mean())+1e-9))
         under = settings.get('mix.montage_music_under_voice_db', -9.)+options.music_db
     lufs, peak = score.mix(voice, music, fx, 0, wav, ffmpeg, music_under=under,
                            stamp=score.stamp_audio(stamp.DURATION) if options.stamp else None, stamp_at=main_end)
@@ -404,7 +459,16 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
 
     # --- 3. picture
     progress(.25, 'Composing the picture…')
-    composer = render.Composer(shots, overlays, None, main_end, None, ffmpeg, lambda a, s: progress(.25+.7*a, s))
+    matter = None
+    if any(o.kind == 'behind' for o in overlays):   # the big word sits behind the people
+        try:
+            from .matte import Matter
+            matter = Matter()
+        except Exception:
+            LOG.warning('person cut-outs unavailable; the big word goes in front', exc_info=True)
+            for o in overlays:
+                if o.kind == 'behind': o.kind = 'soft'
+    composer = render.Composer(shots, overlays, None, main_end, matter, ffmpeg, lambda a, s: progress(.25+.7*a, s))
     def all_frames():
         yield from composer.frames()
         last = composer.last if composer.last is not None else np.zeros((H, W, 3), np.uint8)

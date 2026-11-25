@@ -45,6 +45,8 @@ Tools:
 - add_candidate: add a clip ({MIN_CLIP_SECONDS:g}-{MAX_CLIP_SECONDS:g}s) to your pool - the clip is cut out of the video and shown on its own, so it must stand alone. Start and end at natural sentence boundaries, with a little setup before the payoff. Give a specific reason and an honest 0-1 score. Its result shows how your candidates are spread across the video - fill any empty regions.
 - rank_candidates: finish by ranking your candidates, best first.
 
+When the request NAMES particular moments or a story ("us introducing ourselves and saying what we're doing", "when we say team X with our hands", "waving at the camera", "the moment we reach the top"), each named moment is a required pick. Find those FIRST, and search for EACH named moment BOTH ways in the same turn: in speech mode for what would be said (an introduction like "hey guys, this is ..." or "hi, I'm ...", a chant like "<name> on three" / "one two three <name>", a line naming what they are doing), and in visual mode for what it looks like (people waving at the camera; hands stacked together in a circle, seen from above; arms raised together; a group hug). A chant or a gesture is usually said in very few words, so the visual hit is often the one that finds it; read the transcript around every hit. Inspect the top visual hit for every named moment, even when it is at the very start or end of the footage. Add confirmed candidates several at a time in one turn (one add_candidate call per moment, all in the same turn) so you have turns left to fill every pick. Verify each with inspect_clip, add it with asked_for: true (the best take if there are several), then fill the remaining picks with the best other moments. A talking moment keeps the whole sentence.
+
 Be efficient: call several tools in the same turn (e.g. multiple searches at once, inspecting or adding several candidates at once). Do not spend turns narrating. If your searches are returning weak or irrelevant results, say so honestly in the scores instead of inventing a justification."""
 
 def pacing_note(turn: int, limit: int = MAX_ITERATIONS) -> str:
@@ -79,7 +81,10 @@ def run_agent(
     emit = progress or (lambda msg: None)
 
     target_clips=getattr(toolbox,"target_clips",TARGET_SUGGESTIONS)
-    iteration_limit = min(32, max(MAX_ITERATIONS, target_clips + 4))
+    # bigger requests and footage joined from several recordings get about two turns per clip (find and verify, then
+    # add), so a request naming many moments does not run out of turns
+    roomy = target_clips > TARGET_SUGGESTIONS or bool(getattr(toolbox, 'parts', None))
+    iteration_limit = min(32, max(MAX_ITERATIONS, (2 * target_clips + 6) if roomy else target_clips + 4))
     system=SYSTEM_PROMPT
     system = system.replace(f'you have {MAX_ITERATIONS} turns', f'you have {iteration_limit} turns')
     system += ('\nThe requested clip count is the generation target. Keep searching for distinct suitable '

@@ -388,6 +388,13 @@ class Composer:
                 frame[:] = np.clip(frame.astype(np.int16)+int(110*max(0, k)), 0, 255).astype(np.uint8)
             elif o.kind == 'typed':   # a big place name typed out letter by letter (the trip-reel opener)
                 self._typed(frame, t, o)
+            elif o.kind == 'corner':   # a lyric-video word popping in, white, in a top corner
+                text = o.data['text']
+                size = int(min(H*.12, W*.11))
+                sp = self._sprite(('corner', text, W), lambda: look.text_sprite(text, look.HEAVY(size), fill=(250, 250, 248), shadow=.5, tracking=int(size*.02)))
+                k = _ease((t-o.t0)/.12)
+                x = W*.06+sp.w/2 if o.data['side'] == 'left' else W*.94-sp.w/2
+                look.paste(frame, sp, x, H*.13+o.data.get('row', 0)*size*1.05, alpha=k, scale=1.12-.12*k)
             elif o.kind == 'title':
                 text = o.data['text']
                 sp = self._sprite(('title', text, W), lambda: look.text_sprite(text.upper(), look.TIGHT(34*u, 700), fill=(236, 240, 236), tracking=int(10*u), shadow=.7))

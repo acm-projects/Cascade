@@ -119,6 +119,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "title": {"type": "string", "description": "a short headline for the clip, under 80 characters"},
                 "reason": {"type": "string"},
                 "score": {"type": "number", "minimum": 0, "maximum": 1},
+                "asked_for": {"type": "boolean", "description": (
+                    "true when this is one of the specific moments the request names (e.g. 'us introducing "
+                    "ourselves', 'when we say team X with our hands', 'waving at the camera'). Asked-for moments "
+                    "are always kept, whatever their spacing.")},
             },
             "required": ["start_time", "end_time", "title", "reason", "score"],
         },
@@ -349,6 +353,10 @@ class ToolBox:
         hits = self.index.search(query, mode=mode, top_k=top_k)
         if not hits:
             return _text("No results (the video may have no transcript)."), False
+        if mode == "visual":   # what is said over each visual hit, so a gesture and its words are seen together
+            for hit in hits:
+                said = self.index.transcript_between(hit["start"], hit["end"]) if hasattr(self.index, "transcript_between") else ""
+                if said: hit["said"] = said[:160]
         return _text(json.dumps(hits)), False
 
     def _inspect_clip(self, start_time: float, end_time: float, num_frames: int):
@@ -377,7 +385,8 @@ class ToolBox:
         blocks.append({"type": "text", "text": f"Transcript {start:.1f}s-{end:.1f}s: {spoken}"})
         return blocks, False
 
-    def _add_candidate(self, start_time: float, end_time: float, reason: str, score: float, title: str = "", reference_matches: list | None = None):
+    def _add_candidate(self, start_time: float, end_time: float, reason: str, score: float, title: str = "", reference_matches: list | None = None,
+                       asked_for: bool = False):
         start, end = float(start_time), float(end_time)
         length = end - start
         if not all(math.isfinite(v) for v in (start, end, float(score))):
@@ -395,11 +404,15 @@ class ToolBox:
                 or not isinstance(match.get('explanation'), str) or not match['explanation'].strip()
                 for i, match in enumerate(matches))):
                 return _text('Explain how this candidate combines EVERY selected reference. Provide reference_matches in reference order, with reference (1-based) and a concrete explanation for each. Search for another moment if it only matches one reference.'), True
+        trimmed = ''
         if self.parts and not any(a - .05 <= start and end <= b + .05 for _, a, b in self.parts):
-            edge = next((b for _, a, b in self.parts if start < b < end), None)
-            return _text(f'That clip runs from one recording into the next (a recording ends at {edge:.1f}s). '
-                         'Keep each clip inside one recording.' if edge is not None else
-                         'Keep each clip inside one recording.'), True
+            # runs into the next recording: keep the part inside the recording that holds most of it
+            a, b = max(((max(start, a), min(end, b)) for _, a, b in self.parts), key=lambda ab: ab[1] - ab[0])
+            if b - a < self.min_clip_seconds:
+                return _text(f'That clip runs from one recording into the next (at {b:.1f}s) and too little is left on '
+                             'either side. Keep each clip inside one recording.'), True
+            trimmed = f' (trimmed to {a:.1f}-{b:.1f}s so it stays inside one recording)'
+            start, end, length = a + .05 if a > start else a, b - .05 if b < end else b, (b - a)
         for left, right in self.exclude_windows:
             if min(end, right) - max(start, left) > MAX_OVERLAP_RATIO * min(length, right - left):
                 self.excluded_candidates += 1
@@ -422,9 +435,10 @@ class ToolBox:
         if len(self.references) > 1:
             candidate['reference_matches'] = [{'reference': m['reference'], 'explanation': m['explanation'].strip()[:500]}
                                                for m in reference_matches]
+        if asked_for is True: candidate['asked_for'] = True
         self.candidates.append(candidate)
         return _text(
-            f"Added candidate #{candidate['id']} ({candidate['start']}s-{candidate['end']}s). "
+            f"Added candidate #{candidate['id']} ({candidate['start']}s-{candidate['end']}s){trimmed}. "
             f"{len(self.candidates)} candidates so far. {self._coverage_text()}"
         ), False
 
@@ -481,12 +495,24 @@ class ToolBox:
             return (by_id[cid]["start"] + by_id[cid]["end"]) / 2
 
         base_gap = self.index.duration / (2 * self.target_clips)
+        # moments the request names come first and are never dropped for spacing (only for overlapping)
+        asked = [cid for cid in order if by_id[cid].get('asked_for')]
+        kept: list[int] = []
+        for cid in asked:
+            if len(kept) < self.target_clips and all(
+                    min(by_id[cid]['end'], by_id[o]['end']) - max(by_id[cid]['start'], by_id[o]['start'])
+                    <= MAX_OVERLAP_RATIO * min(by_id[cid]['end'] - by_id[cid]['start'], by_id[o]['end'] - by_id[o]['start'])
+                    for o in kept):
+                kept.append(cid)
+        order = kept + [cid for cid in order if cid not in kept]
         chosen: list[int] = []
         strict_count = 0
         for step, factor in enumerate((0.0,) if intent == 'specific' else SPACING_RELAX_STEPS):
             gap = base_gap * factor
-            chosen = []
-            for cid in order:
+            chosen = list(kept)
+            for cid in order[len(kept):]:
+                if len(chosen) >= self.target_clips:
+                    break
                 if all(abs(mid(cid) - mid(other)) >= gap and
                        min(by_id[cid]['end'], by_id[other]['end']) - max(by_id[cid]['start'], by_id[other]['start'])
                        <= MAX_OVERLAP_RATIO * min(by_id[cid]['end'] - by_id[cid]['start'], by_id[other]['end'] - by_id[other]['start'])
