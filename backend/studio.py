@@ -423,10 +423,12 @@ def joined_upload(pid, sid, request, videos, request_id):
 @router.post('/sessions/{sid}/upload', status_code=202)
 def upload(pid: str, sid: str, request: Request, video: list[UploadFile] = File(...),
            prompt: str = Form(..., max_length=2000), clip_count: int = Form(4, ge=1, le=50),
-           clip_length: Literal[5, 15, 30, 60] = Form(30),
+           clip_length: int = Form(30),   # form fields arrive as text; GenerateInput checks it is 5, 15, 30 or 60
            request_id: str = Form(..., pattern=r'^[a-zA-Z0-9_-]{1,80}$')):
     videos = video
     try:
+        if clip_length not in (5, 15, 30, 60):
+            raise HTTPException(422, 'Choose a clip length of 5, 15, 30 or 60 seconds.')
         body = GenerateInput(prompt=prompt, clip_count=clip_count, clip_length=clip_length, request_id=request_id)
         if len(videos) == 1:
             return submit(pid, sid, body, request, videos[0])

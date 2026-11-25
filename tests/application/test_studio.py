@@ -185,6 +185,21 @@ class StudioTests(unittest.TestCase):
             files=[('video', ('one.mp4', first, 'video/mp4')), ('video', ('two.mov', second, 'video/quicktime'))])
         self.assertEqual(again.json()['job_id'], jid)  # a retried request never starts a second job
 
+    def test_short_clip_length_is_accepted_from_the_upload_form(self):
+        pid = self.client.post('/api/projects', headers=self.headers, json={'name': 'Short'}).json()['id']
+        url = '/api/projects/' + pid + '/studio'
+        sid = self.client.get(url, headers=self.headers).json()['sessions'][0]['id']
+        response = self.client.post(url + '/sessions/' + sid + '/upload', headers=self.headers,
+            data={'prompt': 'Find 4 short clips', 'clip_length': '5', 'request_id': 'short-form'},
+            files={'video': ('source.mp4', b'synthetic-source', 'video/mp4')})
+        self.assertEqual(response.status_code, 202, response.text)
+        owner = core_jobs.load_json(core_jobs.JOBS_DIR / response.json()['job_id'] / 'owner.json')
+        self.assertEqual(owner['clip_length'], 5)
+        bad = self.client.post(url + '/sessions/' + sid + '/upload', headers=self.headers,
+            data={'prompt': 'Find clips', 'clip_length': '7', 'request_id': 'bad-length'},
+            files={'video': ('source.mp4', b'synthetic-source', 'video/mp4')})
+        self.assertEqual(bad.status_code, 422)
+
     def test_too_many_files_are_rejected_before_any_job(self):
         files = [('video', (f'part{i}.mp4', b'x', 'video/mp4')) for i in range(11)]
         pid = self.client.post('/api/projects', headers=self.headers, json={'name': 'Lots'}).json()['id']
