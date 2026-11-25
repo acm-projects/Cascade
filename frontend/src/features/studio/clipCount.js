@@ -15,3 +15,20 @@ export function requestedClipCount(prompt, fallback) {
   }
   return count;
 }
+
+// How long each clip should be, read from the prompt like the count is. The backend finds clips around one of
+// four targets: 5 (short moments, about 2-7 s, for fast music edits), 15, 30 or 60 seconds.
+//   "4 funny clips, about 5 seconds each" -> 5   "quick moments" -> 5   "15 second clips" -> 15   nothing said -> 30
+// With several durations ("5 s clips for a 15 s edit"), the shortest is the clip length.
+const seconds = /(\d+(?:\.\d+)?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*-?\s*(?:sec(?:ond)?s?|s)\b/gi;
+export const CLIP_LENGTHS = [5, 15, 30, 60];
+
+export function requestedClipLength(prompt, fallback = 30) {
+  const values = [...prompt.matchAll(seconds)].map((m) => Number(m[2] ?? m[1])).filter((v) => v > 0);
+  if (values.length) {
+    const want = Math.min(...values);
+    return want <= 8 ? 5 : want <= 20 ? 15 : want <= 40 ? 30 : 60;
+  }
+  if (/\b(short|quick|brief|snappy|tiny)\b/i.test(prompt)) return 5;
+  return fallback;
+}

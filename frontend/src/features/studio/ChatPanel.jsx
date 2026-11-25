@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import "./ChatPanel.css";
 import leafCream from "../../assets/icons/leaf-cream.svg";
 import Cassie from "../../components/Cassie";
-import { requestedClipCount } from './clipCount';
+import { requestedClipCount, requestedClipLength } from './clipCount';
 
 const DEFAULT_CLIPS = 4;   // when the prompt doesn't say how many
 
 // The AI Studio chat column: messages on top (they scroll), prompt box pinned at the bottom.
 //   messages         - [{ id?, role: "user" | "assistant", text }]
-//   onSend(text, n)  - called with the prompt and how many clips to find (1-50). If it returns
+//   onSend(text, n, seconds) - called with the prompt, how many clips to find (1-50) and how long each should be
+//                      (5 = short moments, 15, 30 or 60; read from the prompt like the count). If it returns
 //                      (or resolves to) false, the prompt stays in the box so it isn't lost.
 //   disabled         - true while waiting for an answer
 //   text, onTextChange - optional: let the page fill the box (e.g. "Reuse prompt")
@@ -46,7 +47,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
     try { count = requestedClipCount(prompt, DEFAULT_CLIPS); }   // "Find 10 funny clips" asks for 10
     catch (error) { setCountError(error.message); return; }
     setCountError('');
-    const sent = await onSend(prompt, count);
+    const sent = await onSend(prompt, count, requestedClipLength(prompt));   // "short clips", "5 second clips" -> 5
     if (sent !== false) setText("");
   }
 

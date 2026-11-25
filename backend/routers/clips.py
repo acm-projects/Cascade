@@ -83,6 +83,7 @@ def process_upload(
             **({'requested_count':requested_count} if requested_count!=4 else {}),
             **({'exclude_windows': owner['exclude_windows']} if owner.get('exclude_windows') else {}),
             **({'references': owner['parent_clips']} if len(owner.get('parent_clips', [])) > 1 else {}),
+            **({'parts': owner['source_parts']} if owner.get('source_parts') else {}),
             **({'request_prompt': original_search} if parent_context else {}))
         if not direct_edit:
             selected = followup_windows(selected, parent_context, original_search, duration, target, requested_count)
@@ -297,7 +298,7 @@ def upload_video(
                 "Invalid search mode.",
             )
 
-        if clip_length not in (15, 30, 60):
+        if clip_length not in (5, 15, 30, 60):
             raise HTTPException(
                 400,
                 "Invalid clip length.",
@@ -363,6 +364,9 @@ def upload_video(
                     "studio_revision_of": studio_context.get('revision_of') if studio_context else None,
                     "studio_revision_targets": studio_context.get('revision_targets', []) if studio_context else [],
                     "request_id": studio_context['request_id'] if studio_context else None,
+                    # a source joined from several files: where each one sits, so clips never span two files
+                    "source_parts": ((studio_context or {}).get('source_parts')
+                                     or (source_owner.get('source_parts') if source_job else None)),
 
                     "user_folder": (
                         storage_information["folder"]

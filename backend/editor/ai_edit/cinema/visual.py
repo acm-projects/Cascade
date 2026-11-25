@@ -1,4 +1,6 @@
-"""Visual edits: Cinema for clips where nobody speaks (sport, travel, b-roll, pets, music-only footage).
+"""Visual edits: Cinema music edits. For clips where nobody speaks (sport, travel, b-roll, pets, music-only footage),
+and for montages that mix music with a few talking moments (a group of friends on a trip): a shot marked "voice"
+plays at normal speed with its own sound up front, the song dips under it and its words appear as captions.
 
 The planner watches the contact sheets and the per-second motion and returns a VisualPlan: which moments of
 the source to play, in what order, at what speed, with which zooms, effects and words. Everything is
@@ -33,6 +35,7 @@ class VisualShot(BaseModel):
     text: str = Field(default='', max_length=16)       # one big word over the start of this shot
     text_style: Literal['slam', 'perspective'] = 'perspective'
     tone: Tone | None = None
+    voice: bool = False   # a talking moment: its own sound up front, the music dipped under it, its words captioned
 
 
 class VisualPlan(BaseModel):
@@ -54,7 +57,11 @@ class VisualPlan(BaseModel):
     @model_validator(mode='after')
     def _tidy(self):
         self.end_line = self.end_line.strip().rstrip('.')
-        self.settings.captions = False   # nothing is said, so there is nothing to caption
+        for s in self.shots:
+            if s.voice: s.speed = 1.   # speech plays at its own speed
+        # captions are drawn for the talking shots only (speech_captions); the dialogue caption track stays off
+        self.settings.captions = False
+        if any(s.voice for s in self.shots) and self.sound == 'score': self.sound = 'both'
         return self
 
 
@@ -99,7 +106,9 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
             target = t+(s.end-s.start)/s.speed
             options = [g for g in points if g-t >= .33]
             if not options: break
-            end = min(options, key=lambda g: abs(g-target))
+            # a talking shot ends on the first beat after its words, never before (a word cut off sounds broken)
+            later = [g for g in options if g >= target-.04] if s.voice else []
+            end = min(later) if later else min(options, key=lambda g: abs(g-target))
             snapped.append(s.model_copy(update={'end': s.start+(end-t)*s.speed})); t = end
         shots = _on_the_beat(snapped, points, lead) if snapped else shots
     plan.shots = shots
@@ -199,8 +208,44 @@ def _natural(samples, sr, shots, total):
     return out
 
 
-def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', lines=1080, faces=True):
-    """Render a VisualPlan over `source` to `out` (mp4). No AI model is called."""
+def _split(natural, voiced, sr):
+    """The clip's own sound split into the talking shots (with short fades) and everything else."""
+    mask = np.zeros(len(natural), np.float32)
+    ramp = int(.06*sr)
+    for a, b, _ in voiced:
+        i, j = int(a*sr), min(len(mask), int(b*sr))
+        if j <= i: continue
+        mask[i:j] = 1
+        k = min(ramp, (j-i)//2)
+        if k: mask[i:i+k] = np.linspace(0, 1, k); mask[j-k:j] = np.linspace(1, 0, k)
+    return natural*mask[:, None], natural*(1-mask)[:, None]
+
+
+def speech_captions(words, voiced, most=4):
+    """The words said in the talking shots, as short caption lines that build word by word as they are said."""
+    timed = []
+    for a, b, src in voiced:
+        for w in words:
+            if src-.02 <= w['s'] and w['e'] <= src+(b-a)+.08:
+                timed.append((w['w'].strip(), a+w['s']-src, a+min(w['e'], src+(b-a))-src))
+    lines, run = [], []
+    for item in sorted(timed, key=lambda x: x[1]):
+        if run and (item[1]-run[-1][2] > .45 or len(run) >= most or run[-1][0].endswith(('.', ',', '?', '!'))):
+            lines.append(run); run = []
+        run.append(item)
+    if run: lines.append(run)
+    out = []
+    for n, line in enumerate(lines):
+        t0 = line[0][1]-.05
+        t1 = min(line[-1][2]+.35, (lines[n+1][0][1]-.06) if n+1 < len(lines) else line[-1][2]+.35)
+        if t1-t0 > .15:
+            out.append(Overlay(t0, t1, 'lyric', {'style': 'caption', 'words': [(w.strip(',.'), at) for w, at, _ in line]}))
+    return out
+
+
+def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', lines=1080, faces=True, words=None):
+    """Render a VisualPlan over `source` to `out` (mp4). No AI model is called. `words` (the clip's transcript,
+    source seconds) caption the talking shots."""
     from .engine import _audio
     clock, timings = time.time(), {}
     def lap(name):
@@ -219,6 +264,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     timing = song_timing(plan, settings.get('output.target_seconds', 15) or 15)
     lead = timing[3] if timing else 0.
     shots, overlays, events, t = [], [], [], lead
+    voiced = []   # (edit from, edit to, source from) of every talking shot
     if lead:   # the opening black: the music plays, the picture waits for the beat
         first = plan.shots[0]
         shots.append(Shot(0, lead, 'aroll', str(source), first.start, cx=first.focus_x, grade=plan.grade))
@@ -230,6 +276,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         face = render.find_face(source, v.start+(v.end-v.start)/2, ffmpeg) if faces and W < H else None
         if face: cx = face[0]
         shots.append(Shot(t, t+dur, 'aroll', str(source), v.start, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1, grade=plan.grade))
+        if v.voice: voiced.append((t, t+dur, v.start))
         tone = v.tone or look.tone_of(v.text, None) or 'calm'
         if v.effect and n:
             overlays.append(Overlay(t, t+.32, 'accent', {'kind': v.effect}))
@@ -255,8 +302,11 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         main_end = t+MESSAGE
     if plan.title:
         overlays.append(Overlay(.15, min(2.2, main_end), 'title', {'text': plan.title}))
-    if timing and plan.lyrics != 'off':
-        overlays += lyric_lines(timing[0], timing[1], main_end, plan.lyrics)
+    if timing and plan.lyrics != 'off':   # the song's words, but never over someone talking
+        overlays += [o for o in lyric_lines(timing[0], timing[1], main_end, plan.lyrics)
+                     if not any(o.t0 < b and a < o.t1 for a, b, _ in voiced)]
+    if voiced:   # what is said in the talking shots, captioned as it is said
+        overlays += speech_captions(words or [], voiced)
     lap('shots')
 
     # --- 2. sound: the score, the clip's own sound, or both
@@ -278,7 +328,14 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     fx = score.sound_design(total, events)
     wav = out.with_suffix('.mix.wav')
     under = (10. if timing else 2.)+options.music_db if plan.sound == 'both' else settings.get('mix.music_under_voice_db', -17.)+options.music_db
-    lufs, peak = score.mix(natural, music, fx, 0, wav, ffmpeg, music_under=under,
+    voice = natural
+    if voiced and plan.sound != 'score' and len(samples):
+        # talking shots lead; the song dips under them (score.mix ducks music wherever the voice track speaks) and
+        # comes back up between them; the rest of the clip's own sound stays as a quiet bed inside the music
+        voice, bed = _split(natural, voiced, score.SR)
+        music = music+bed*.35*float(np.sqrt((music**2).mean())/(np.sqrt((bed**2).mean())+1e-9) if bed.any() else 0)
+        under = settings.get('mix.montage_music_under_voice_db', -9.)+options.music_db
+    lufs, peak = score.mix(voice, music, fx, 0, wav, ffmpeg, music_under=under,
                            stamp=score.stamp_audio(stamp.DURATION) if options.stamp else None, stamp_at=main_end)
     lap('sound')
 

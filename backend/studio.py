@@ -57,6 +57,8 @@ class GenerateInput(BaseModel):
     operation: Literal['generate', 'branch', 'revise'] | None = None
     prompt: str = Field(min_length=1, max_length=2000)
     clip_count: int = Field(default=4, strict=True, ge=1, le=50)
+    # target seconds per clip: 5 = short moments (about 2-7 s) for fast montage edits
+    clip_length: Literal[5, 15, 30, 60] = 30
     references: list[ClipRef] = Field(default_factory=list, max_length=12)
     request_id: str = Field(pattern=r'^[a-zA-Z0-9_-]{1,80}$')
 
@@ -204,7 +206,17 @@ def prepare_upload(pid, user, raw):
     return {'revision_of': None, 'revision_targets': [],
             'exclude_windows': exclude_windows,
             'session_id': session['id'], 'source_job': session['source_job'], 'references': refs,
-            'request_id': body.request_id}
+            'request_id': body.request_id, 'source_parts': _parts(data.get('source_parts'))}
+
+
+def _parts(raw):
+    """Where each original file sits in a joined source: [{'name', 'start', 'end'}], checked (it is server-written)."""
+    if not isinstance(raw, list) or not 1 < len(raw) <= 10:
+        return None
+    try:
+        return [{'name': str(p['name'])[:200], 'start': float(p['start']), 'end': float(p['end'])} for p in raw]
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def record_submission(pid, user, job_id, context, prompt):
@@ -335,7 +347,7 @@ def editor_selection(pid: str, body: SelectionInput, request: Request):
         return {'clips': entries}
 
 
-def submit(pid, sid, body, request, video=None):
+def submit(pid, sid, body, request, video=None, parts=None):
     from backend.routers import clips as clip_routes
     user = request.state.user_id
     with projects_store.lock:
@@ -348,7 +360,7 @@ def submit(pid, sid, body, request, video=None):
                 return {'job_id': message['job_id']}
         if not body.prompt.strip():
             raise HTTPException(400, 'Describe the clips you want.')
-        context = json.dumps({'session_id': sid, 'generation': body.model_dump()})
+        context = json.dumps({'session_id': sid, 'generation': body.model_dump(), **({'source_parts': parts} if parts else {})})
         if session['source_job']:
             if video is not None:
                 raise HTTPException(400, 'This session already has generated clips. Start a new session to upload a different source video.')
@@ -358,7 +370,7 @@ def submit(pid, sid, body, request, video=None):
             raise HTTPException(400, 'Upload a source video first.')
         try:
             return clip_routes.upload_video(request=request, video=video, search=body.prompt, mode='both',
-                clip_length=30, project_id=pid, engine='agent', clip_count=body.clip_count,
+                clip_length=body.clip_length, project_id=pid, engine='agent', clip_count=body.clip_count,
                 source_job=session['source_job'], parent_job=None, parent_clip_index=None, canvas_context=context)
         finally:
             video.file.close()
@@ -372,7 +384,8 @@ def generate(pid: str, sid: str, body: GenerateInput, request: Request):
 def joined_upload(pid, sid, request, videos, request_id):
     """Several files picked: join them end to end into one source, so one prompt searches all of the footage.
 
-    Returns an UploadFile for the joined file, or a finished response when this request already ran.
+    Returns (UploadFile for the joined file, where each original file sits in it), or a finished response when
+    this request already ran.
     The join can take minutes, so it runs outside the project lock.
     """
     from backend.media import MAX_JOINED_FILES, join_media, validate_filename
@@ -398,12 +411,11 @@ def joined_upload(pid, sid, request, videos, request_id):
             if path.stat().st_size == 0:
                 raise HTTPException(400, f'“{Path(video.filename).name}” is empty.')
             paths.append(path)
-        joined = join_media(paths, folder)
+        joined, parts = join_media(paths, folder, [Path(v.filename).name for v in videos])
         first = Path(videos[0].filename).stem[:80]
         name = f'{first} + {len(videos) - 1} more{joined.suffix}'
         # The open file keeps its data readable after the folder is removed (POSIX)
-        upload_file = UploadFile(joined.open('rb'), filename=name)
-        return upload_file
+        return UploadFile(joined.open('rb'), filename=name), parts
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 
@@ -411,16 +423,18 @@ def joined_upload(pid, sid, request, videos, request_id):
 @router.post('/sessions/{sid}/upload', status_code=202)
 def upload(pid: str, sid: str, request: Request, video: list[UploadFile] = File(...),
            prompt: str = Form(..., max_length=2000), clip_count: int = Form(4, ge=1, le=50),
+           clip_length: Literal[5, 15, 30, 60] = Form(30),
            request_id: str = Form(..., pattern=r'^[a-zA-Z0-9_-]{1,80}$')):
     videos = video
     try:
-        body = GenerateInput(prompt=prompt, clip_count=clip_count, request_id=request_id)
+        body = GenerateInput(prompt=prompt, clip_count=clip_count, clip_length=clip_length, request_id=request_id)
         if len(videos) == 1:
             return submit(pid, sid, body, request, videos[0])
         joined = joined_upload(pid, sid, request, videos, request_id)
-        if not isinstance(joined, UploadFile):
+        if isinstance(joined, dict):
             return joined
-        return submit(pid, sid, body, request, joined)
+        video, parts = joined
+        return submit(pid, sid, body, request, video, parts)
     finally:
         for item in videos:
             item.file.close()

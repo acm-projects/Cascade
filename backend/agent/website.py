@@ -30,6 +30,9 @@ logger = logging.getLogger("cascade_agent")
 # replaces, a clip may run from 8 seconds up to 1.5x that target, so a joke keeps its setup.
 WEBSITE_MIN_CLIP_SECONDS = 8.0
 WEBSITE_MAX_CLIP_FACTOR = 1.5
+# "Short moments" (a 5 s target): 2-7.5 s clips, the single best beat each, for fast music montages
+SHORT_TARGET_SECONDS = 6
+SHORT_MIN_CLIP_SECONDS = 2.0
 MAX_EXPLANATION_CHARS = 700
 
 
@@ -37,9 +40,27 @@ def transcript_first_request(prompt: str) -> bool:
     """Spoken/topic searches can avoid the full CLIP index; inspection still uses real frames."""
     if re.search(r'\b(visual|visually|fight|fighting|fall|falls|chase|explosion|dance|action|scene|footage)\b|on screen', prompt, re.I):
         return False
+    # moods and moments people see more than say: friends together, trips, views, memories
+    if re.search(r'\b(nostalgi\w*|memor(y|ies|able)|friends?(hip)?|vibes?|aesthetic|hik(e|es|ing)|trips?|travel\w*|adventures?|'
+                 r'scenery|views?|sunsets?|cinematic|montage|b-?roll|candid|wholesome|together)\b', prompt, re.I):
+        return False
     # Ordinary highlights/mood prompts should not pay for visual indexing unless
     # they explicitly ask for on-screen evidence.
     return not bool(re.search(r'\b(silent|gesture|gestures|camera|slap|punch|kick|running|jumping)\b', prompt, re.I))
+
+
+def footage_note(parts, short):
+    """Context for the agent about how the footage was made and what a short-moment request wants."""
+    note = ''
+    if parts:
+        listed = '; '.join(f"{n + 1}. {p['start']:.1f}-{p['end']:.1f}s" for n, p in enumerate(parts))
+        note += (f"\n\n(Footage: {len(parts)} separate recordings joined end to end, in time order: {listed}. "
+                 'Look through all of them and spread the picks across different recordings. A clip must stay inside one recording.)')
+    if short:
+        note += ('\n\n(These are short moments for a fast music edit, like an Instagram reel of friends: each clip is the single best beat - '
+                 'a laugh, a reaction, a funny line said in full, friends together, a striking view. Start right before it and cut right after; '
+                 'no setup. Mix moments where someone says something funny with purely visual ones.)')
+    return note
 
 
 class SelectionError(Exception):
@@ -87,6 +108,7 @@ def select_with_agent(
     exclude_windows: list | None = None,
     request_prompt: str | None = None,
     references: list | None = None,
+    parts: list | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Run the agent on a video. Returns (clips, transcript, metadata).
 
@@ -96,14 +118,17 @@ def select_with_agent(
     """
     video_path = Path(video_path)
     duration, target = float(duration), float(target)
-    min_len = min(WEBSITE_MIN_CLIP_SECONDS, duration)
+    short = target <= SHORT_TARGET_SECONDS
+    min_len = min(SHORT_MIN_CLIP_SECONDS if short else WEBSITE_MIN_CLIP_SECONDS, duration)
     max_len = min(MAX_CLIP_SECONDS, max(min_len, target * WEBSITE_MAX_CLIP_FACTOR))
 
     stage("Transcript and search index")
     # Frames and the temporary MP3 live in a scratch folder, never in the job's folder; the index
     # itself (embeddings, transcript) is cached by file hash for follow-up prompts.
     with tempfile.TemporaryDirectory(prefix="agent_index_") as scratch:
-        speech_first = transcript_first_request(request_prompt if request_prompt is not None else search)
+        # Short moments and footage joined from several recordings are found by what is seen as well as said
+        speech_first = (transcript_first_request(request_prompt if request_prompt is not None else search)
+                        and not short and not parts)
         batch_request = speech_first and requested_count <= MAX_BATCH_CLIPS
         index = build_index(video_path, Path(scratch), progress=progress,
                             **({'visual': False, 'embed_transcript': not batch_request} if speech_first else {}))
@@ -123,9 +148,9 @@ def select_with_agent(
         request_prompt if request_prompt is not None else search)
     toolbox = ToolBox(index, video_path, min_clip_seconds=min_len, max_clip_seconds=max_len,
                       target_clips=requested_count, intent=intent, exclude_windows=exclude_windows,
-                      references=references, require_count=True)
+                      references=references, require_count=True, parts=parts)
     result = (run_transcript_selection(toolbox, search, progress) if fast_batch else
-              run_agent(toolbox, search, progress=progress, target_seconds=target))
+              run_agent(toolbox, search + footage_note(parts, short), progress=progress, target_seconds=target))
 
     clips = []
     for pick in result["suggestions"]:

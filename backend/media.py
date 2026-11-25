@@ -77,53 +77,64 @@ def normalize_media(path, info=None):
 
 
 MAX_JOINED_FILES = 10
+MAX_JOINED_LONG, MAX_JOINED_SHORT = 1920, 1080   # joined footage is at most 1080p
 
 
-def join_media(paths, target_dir):
+def join_media(paths, target_dir, names=None):
     """Join several uploads end to end into one source file, in the order given.
 
-    All videos: scaled and padded to the first video's size, 30 fps, silent audio added where a file has none.
+    All videos: scaled and padded to the first video's shape (at most 1080p, so phone 4K footage stays quick to
+    search and edit), 30 fps, silent audio added where a file has none.
     All audio: joined into one MP3. A mix of video and audio-only files is rejected.
-    Returns the joined file's path (joined.mp4 or joined.mp3 inside target_dir).
+    Returns (joined file path, parts): parts is [{'name', 'start', 'end'}] in joined seconds, one per file, so clip
+    finding can keep every clip inside one original file.
     """
     infos = [probe_media(path) for path in paths]
     kinds = {info['has_video'] for info in infos}
     if len(kinds) > 1:
         raise HTTPException(400, 'Choose all video files or all audio files, not a mix.')
+    names = names or [Path(path).name for path in paths]
+    parts, at = [], 0.
+    for name, info in zip(names, infos):
+        parts.append({'name': name, 'start': round(at, 3), 'end': round(at + info['duration'], 3)})
+        at += info['duration']
     command = ['ffmpeg', '-nostdin', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe']
-    for path in paths:
-        command += ['-i', str(path)]
-    parts, extra = [], len(paths)
+    for path, info in zip(paths, infos):
+        # hardware decoding where the machine has it (4K HEVC from phones and drones decodes far faster)
+        command += (['-hwaccel', 'auto'] if info['has_video'] else []) + ['-i', str(path)]
+    filters, extra = [], len(paths)
     if infos[0]['has_video']:
-        width, height = (max(2, infos[0]['width'] // 2 * 2), max(2, infos[0]['height'] // 2 * 2))
+        w0, h0 = infos[0]['width'], infos[0]['height']
+        fit = min(1., MAX_JOINED_LONG / max(w0, h0), MAX_JOINED_SHORT / max(1, min(w0, h0)))
+        width, height = (max(2, int(w0 * fit) // 2 * 2), max(2, int(h0 * fit) // 2 * 2))
         for i, info in enumerate(infos):
-            parts.append(f"[{i}:{info['video_stream_index']}]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            filters.append(f"[{i}:{info['video_stream_index']}]scale={width}:{height}:force_original_aspect_ratio=decrease,"
                          f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v{i}]")
             if info['has_audio']:
-                parts.append(f'[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo[a{i}]')
+                filters.append(f'[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo[a{i}]')
             else:
                 # A video without sound still needs an audio part for the join: silence as long as the video
                 command += ['-f', 'lavfi', '-t', f"{info['duration']:.3f}", '-i', 'anullsrc=r=48000:cl=stereo']
-                parts.append(f'[{extra}:a]anull[a{i}]')
+                filters.append(f'[{extra}:a]anull[a{i}]')
                 extra += 1
         inputs = ''.join(f'[v{i}][a{i}]' for i in range(len(paths)))
-        parts.append(f'{inputs}concat=n={len(paths)}:v=1:a=1[v][a]')
+        filters.append(f'{inputs}concat=n={len(paths)}:v=1:a=1[v][a]')
         target = Path(target_dir) / 'joined.mp4'
-        command += ['-filter_complex', ';'.join(parts), '-map', '[v]', '-map', '[a]', '-c:v', 'libx264',
+        command += ['-filter_complex', ';'.join(filters), '-map', '[v]', '-map', '[a]', '-c:v', 'libx264',
                     '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart']
     else:
         for i in range(len(paths)):
-            parts.append(f'[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo[a{i}]')
-        parts.append(''.join(f'[a{i}]' for i in range(len(paths))) + f'concat=n={len(paths)}:v=0:a=1[a]')
+            filters.append(f'[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo[a{i}]')
+        filters.append(''.join(f'[a{i}]' for i in range(len(paths))) + f'concat=n={len(paths)}:v=0:a=1[a]')
         target = Path(target_dir) / 'joined.mp3'
-        command += ['-filter_complex', ';'.join(parts), '-map', '[a]', '-c:a', 'libmp3lame', '-b:a', '192k']
+        command += ['-filter_complex', ';'.join(filters), '-map', '[a]', '-c:a', 'libmp3lame', '-b:a', '192k']
     try:
-        subprocess.run(command + [str(target)], capture_output=True, check=True, timeout=3600)
+        subprocess.run(command + [str(target)], capture_output=True, check=True, timeout=4 * 3600)
     except FileNotFoundError:
         raise HTTPException(503, 'FFmpeg and ffprobe must be installed to process media.') from None
     except subprocess.SubprocessError:
         raise HTTPException(400, 'Those files could not be joined. Try re-exporting them or upload them one at a time.') from None
-    return target
+    return target, parts
 
 
 def content_type(filename):

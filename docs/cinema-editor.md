@@ -32,6 +32,21 @@ Follow-up in the same chat
   -> cinema/planner.py revise()        creative changes, starting from the saved plan (not from scratch)
 ```
 
+## Music montages with talking (friends, trips, memories)
+
+Ask for a montage, an Insta or trend edit, memories, nostalgia, a hike or a trip recap ("make an insta edit of our hike
+like my references") and the edit is a music edit (`visual.py`), even when people talk in the clip. The planner reads
+the timed phrases (`planner.speech`) and marks one to three shots `"voice": true`: those play at normal speed with
+their own sound up front, the song dips under them (`mix.montage_music_under_voice_db` in `style.json`) and their
+words are captioned as they are said (`visual.speech_captions`). Every other shot is a 0.5-1.6 s music shot cut on
+the song's beats; a talking shot always ends on the first beat after its last word. Direction for this style
+(the owner's friend-group hiking references) is in `prompts/visual.md` under "FRIENDS, TRIPS AND MEMORIES".
+
+For the best result, start in Studio: upload all the recordings at once (they are joined into one source, at most
+1080p, and clips never span two recordings) and ask for short clips ("find 4 short funny clips", or "5 second
+clips"), pick them, then Go to Editor. Songs come from the Music Library (`music_library/`); with an empty
+library Cascade composes a score.
+
 ## Where the editing intelligence is stored
 
 | File | What it holds |

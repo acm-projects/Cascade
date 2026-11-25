@@ -110,11 +110,15 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
             prep = preparation.prepare(source, info.get('cues', []), prep_dir, progress, speech_optional=True)
             windows = _windows(state)
             speechless = not prep['words']   # nobody speaks: a visual edit planned from the frames and the motion
+            # a music-led montage (friends, a trip, an Insta or trend edit): the same visual edit, with talking shots
+            montage = not speechless and planner.wants_montage(message)
+            if montage and not prep.get('motion'):
+                prep = {**prep, 'motion': preparation.motion(source)}
             current = project.load(folder/state.ai_edit.version) if state.ai_edit else None
             notes = []
             if current is None:
                 progress(.3, 'Watching the clip and planning the edit…')
-                plan, who = (planner.plan_visual if speechless else planner.plan_edit)(message, prep_dir, prep, windows, chat)
+                plan, who = (planner.plan_visual if speechless or montage else planner.plan_edit)(message, prep_dir, prep, windows, chat)
                 if who == 'rules' and planner.choice() != 'rules':
                     notes.append("No AI planner was available, so Cascade's built-in director made this cut. Configure OpenAI for a story-led edit.")
             else:
@@ -140,7 +144,8 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
             local = [tools.folder()/'B-roll', tools.folder()/'Raw Footage']
             find = broll.resolver(stock, local)
             if isinstance(plan, visual.VisualPlan):
-                report = visual.make(source, plan, out/'edited.part.mp4', lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio)
+                report = visual.make(source, plan, out/'edited.part.mp4', lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio,
+                                     words=prep['words'])
             else:
                 report = engine.make(source, prep['words'], plan, out/'edited.part.mp4', prep['cuts'], find,
                                      lambda a, s: progress(.36+a*.6, s), tools.ffmpeg(), ratio=ratio)

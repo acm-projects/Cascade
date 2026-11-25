@@ -1,6 +1,7 @@
 """OpenAI plans Cinema edits through Cascade's shared structured client. Rules are explicit/offline only."""
 import json
 import logging
+import re
 import os
 from pathlib import Path
 from fastapi import HTTPException
@@ -82,7 +83,31 @@ def _footage(prep, windows):
     motion = prep.get('motion') or []
     return (f"Clip: {prep['duration']:.1f} s. Usable source ranges: {windows}. Contact sheets: one cell every {every} s, 8 across and 6 down, "
             f"labelled with the source second. Camera cuts at seconds: {[round(c, 1) for c in prep.get('cuts', [])][:200]}.\n"
-            f"Motion per second (index = second): {motion[:600]}\n\n{songs()}")
+            f"Motion per second (index = second): {motion[:600]}\n\n{speech(prep.get('words') or [], windows)}{songs()}")
+
+
+def speech(words, windows):
+    """What is said, as timed phrases in source seconds, for edits that mix talking moments with music."""
+    inside = lambda w: not windows or any(a <= w['s'] and w['e'] <= b for a, b in windows)
+    lines, run = [], []
+    for w in (w for w in words if inside(w)):
+        if run and (w['s']-run[-1]['e'] > .6 or len(run) >= 18):
+            lines.append(run); run = []
+        run.append(w)
+    if run: lines.append(run)
+    if not lines: return 'Speech: none (nobody talks in this clip).\n\n'
+    said = '\n'.join(f"{r[0]['s']:.2f}-{r[-1]['e']:.2f}: {' '.join(w['w'] for w in r)}" for r in lines[:200])
+    return ('Speech (what is said, source seconds start-end; a talking shot must start at or before a phrase start and end at or '
+            f'after its end, so no word is cut):\n{said}\n\n')
+
+
+MONTAGE = re.compile(r'\b(montage|music (edit|video)|recap|vibes?|insta(gram)? edit|trend(ing|y)? edit|inspo|(my|the) references?|'
+                     r'memor(y|ies)|nostalgi\w*|friendship|hik(e|es|ing)|trip recap|vlog|aesthetic)\b', re.I)
+
+
+def wants_montage(request):
+    """A request for a music-led edit (a montage, an Insta or trend edit, a recap of a trip) rather than a talk edit."""
+    return bool(MONTAGE.search(request or ''))
 
 
 def songs():

@@ -201,7 +201,7 @@ function StudioPage() {
   }, [session, groups]);
 
   // ---------- Sending a prompt ----------
-  async function send(text, clipCount) {
+  async function send(text, clipCount, clipLength = 30) {
     if (!session.source_job && !pendingFiles.length) {
       toast.show("Choose audio or video on the canvas first.", "error");
       return false;
@@ -210,7 +210,7 @@ function StudioPage() {
       toast.show("Use up to 12 picked clips to guide a prompt. You can keep up to 100 for the Editor.", "error");
       return false;
     }
-    const signature = JSON.stringify({ sid: session.id, text, clipCount, references,
+    const signature = JSON.stringify({ sid: session.id, text, clipCount, clipLength, references,
       files: !session.source_job && pendingFiles.map((f) => [f.name, f.size, f.lastModified]) });
     if (submission.current?.signature !== signature) submission.current = { signature, id: crypto.randomUUID() };
 
@@ -218,14 +218,14 @@ function StudioPage() {
     try {
       if (session.source_job) {
         await api.studioGenerate(projectId, session.id, {
-          prompt: text, clip_count: clipCount, references,
+          prompt: text, clip_count: clipCount, clip_length: clipLength, references,
           operation: references.length ? "branch" : "generate",
           request_id: submission.current.id,
         });
       } else {
         setUploadProgress(0);
         await api.studioUpload(projectId, session.id, {
-          videos: pendingFiles, prompt: text, clipCount, requestId: submission.current.id, onProgress: setUploadProgress,
+          videos: pendingFiles, prompt: text, clipCount, clipLength, requestId: submission.current.id, onProgress: setUploadProgress,
         });
         setPendingFiles([]);
         if (location.state?.file || location.state?.files) navigate(location.pathname, { replace: true, state: null }); // a reload won't bring it back

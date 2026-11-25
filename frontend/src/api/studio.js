@@ -64,7 +64,7 @@ export function setEditorSelection(token, projectId, clips) {
 
 /**
  * POST .../studio/sessions/{sessionId}/generate - a prompt on a session that already has its video.
- * body: { prompt, clip_count: 1-12, references: [ClipRef] (checked clips, max 12),
+ * body: { prompt, clip_count: 1-12, clip_length: 5 | 15 | 30 | 60 (seconds per clip; 5 = short moments), references: [ClipRef] (checked clips, max 12),
  *         operation: "generate" | "revise" ("revise" = find more like the checked clips), request_id }
  * Sending the same request_id twice never starts a second (paid) job.
  * @returns {Promise<{ job_id: string }>} status 202
@@ -81,11 +81,12 @@ export function studioGenerate(token, projectId, sessionId, body) {
  * onProgress(percent) is called while the files upload.
  * @returns {Promise<{ job_id: string }>} status 202
  */
-export function studioUpload(token, projectId, sessionId, { videos, prompt, clipCount, requestId, onProgress }) {
+export function studioUpload(token, projectId, sessionId, { videos, prompt, clipCount, clipLength = 30, requestId, onProgress }) {
   const form = new FormData();
   for (const video of videos) form.append("video", video);
   form.append("prompt", prompt);
   form.append("clip_count", String(clipCount));
+  form.append("clip_length", String(clipLength));
   form.append("request_id", requestId);
   return apiUpload(`${studioPath(projectId)}/sessions/${encodeURIComponent(sessionId)}/upload`, {
     token, form, onProgress,

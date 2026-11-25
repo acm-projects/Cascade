@@ -19,6 +19,7 @@ from .chunks import OVERVIEW_TRANSCRIPT_CHARS, fmt_time, format_segment, format_
 from .index import VideoIndex
 
 MIN_CLIP_SECONDS = 5.0
+SHORTEST_CLIP_SECONDS = 1.5   # the floor for short-moment requests (fast montage edits)
 MAX_CLIP_SECONDS = 90.0  # a podcast bit often needs setup + payoff; 60s rejected good ones
 MAX_INSPECT_FRAMES = 6
 MAX_OVERLAP_RATIO = 0.5
@@ -186,6 +187,7 @@ class ToolBox:
         exclude_windows: list | None = None,
         references: list | None = None,
         require_count: bool = False,
+        parts: list | None = None,
     ):
         if isinstance(target_clips,bool) or not isinstance(target_clips,int) or not 1<=target_clips<=50:
             raise ValueError("Choose 1–50 clips.")
@@ -207,7 +209,10 @@ class ToolBox:
         self.video_path = video_path
         self.frame_grabber = frame_grabber
         # Per-run limits (the website lets users pick a target length), never beyond the global ones.
-        self.min_clip_seconds = max(MIN_CLIP_SECONDS, min_clip_seconds)
+        # Short-moment requests (montage edits) may go down to SHORTEST_CLIP_SECONDS.
+        self.min_clip_seconds = max(SHORTEST_CLIP_SECONDS, min_clip_seconds)
+        # A source joined from several files: [(name, start, end)]. A clip must stay inside one of them.
+        self.parts = [(str(p['name']), float(p['start']), float(p['end'])) for p in parts or []]
         self.max_clip_seconds = min(MAX_CLIP_SECONDS, max_clip_seconds)
         self.candidates: list[dict[str, Any]] = []
         self.ranking: list[dict[str, Any]] | None = None
@@ -390,6 +395,11 @@ class ToolBox:
                 or not isinstance(match.get('explanation'), str) or not match['explanation'].strip()
                 for i, match in enumerate(matches))):
                 return _text('Explain how this candidate combines EVERY selected reference. Provide reference_matches in reference order, with reference (1-based) and a concrete explanation for each. Search for another moment if it only matches one reference.'), True
+        if self.parts and not any(a - .05 <= start and end <= b + .05 for _, a, b in self.parts):
+            edge = next((b for _, a, b in self.parts if start < b < end), None)
+            return _text(f'That clip runs from one recording into the next (a recording ends at {edge:.1f}s). '
+                         'Keep each clip inside one recording.' if edge is not None else
+                         'Keep each clip inside one recording.'), True
         for left, right in self.exclude_windows:
             if min(end, right) - max(start, left) > MAX_OVERLAP_RATIO * min(length, right - left):
                 self.excluded_candidates += 1

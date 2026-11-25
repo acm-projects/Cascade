@@ -269,7 +269,8 @@ def test_per_job_limits_are_enforced_and_named_in_the_error():
 
 def test_limits_cannot_be_widened_beyond_the_global_ones():
     box = make_box(min_clip_seconds=1.0, max_clip_seconds=5000.0)
-    assert (box.min_clip_seconds, box.max_clip_seconds) == (5.0, MAX_CLIP_SECONDS)
+    from backend.agent.tools import SHORTEST_CLIP_SECONDS
+    assert (box.min_clip_seconds, box.max_clip_seconds) == (SHORTEST_CLIP_SECONDS, MAX_CLIP_SECONDS)
 
 
 def test_the_agent_is_told_this_runs_limits_only_when_they_differ():
@@ -289,3 +290,26 @@ def test_the_agent_is_told_this_runs_limits_only_when_they_differ():
     default = Client()
     agent_module.run_agent(make_box(), "funny", client=default)
     assert "must be between" not in default.calls[0]
+
+
+def test_clips_from_a_joined_source_stay_inside_one_recording():
+    box = make_box(parts=[{"name": "a.mp4", "start": 0, "end": 40}, {"name": "b.mp4", "start": 40, "end": 100}])
+    blocks, err = box.call("add_candidate", {"start_time": 36, "end_time": 44, "reason": "spans two", "score": .8})
+    assert err and "40.0" in str(blocks)
+    _, err = box.call("add_candidate", {"start_time": 41, "end_time": 46, "reason": "inside b", "score": .8})
+    assert not err and len(box.candidates) == 1
+
+
+def test_short_moment_requests_allow_clips_down_to_two_seconds():
+    box = make_box(min_clip_seconds=2.0, max_clip_seconds=7.5)
+    _, err = box.call("add_candidate", {"start_time": 10, "end_time": 12.5, "reason": "a laugh", "score": .9})
+    assert not err
+    _, err = box.call("add_candidate", {"start_time": 30, "end_time": 39, "reason": "too long", "score": .9})
+    assert err
+
+
+def test_mood_and_trip_prompts_use_the_footage_not_only_the_transcript():
+    assert not website.transcript_first_request("find the funniest nostalgic friendship hiking clips")
+    assert website.transcript_first_request("find where he talks about taxes")
+    assert "recordings joined" in website.footage_note([{"name": "a", "start": 0, "end": 5}, {"name": "b", "start": 5, "end": 9}], False)
+    assert "short moments" in website.footage_note(None, True)
