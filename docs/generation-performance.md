@@ -7,11 +7,11 @@ This path does not load embedding models or make a separate AI intent-classifica
 Larger batches retain the summarized tool-agent flow; visual requests keep their existing
 evidence checks. Batch descriptions must be supported by the transcript, not invented visuals.
 
-Selection input is capped at 72,000 transcript characters. Smaller transcripts remain
-complete. Larger transcripts use intact windows ranked against prompt/reference wording
-and balanced across the timeline, including opening and closing windows. Candidates may
-not cross omitted transcript material. This is a latency/recall tradeoff: a relevant moment
-can be missed by retrieval, so a live relevance benchmark is still required.
+Selection input is capped at 200,000 transcript characters (about 3 hours of speech).
+Smaller transcripts remain complete. Larger transcripts use intact windows ranked against
+prompt/reference wording and balanced across the timeline, including opening and closing
+windows. Candidates may not cross omitted transcript material, so a relevant moment in an
+omitted window can be missed. See "Selection quality check" below for how the cap was chosen.
 
 Single-reference, single-output requests such as `keep the first 8 seconds` or
 `keep the last 8 seconds` use cached source captions and direct timestamp edits, with
@@ -92,6 +92,40 @@ least two hours long. Keep the resulting benchmark JSON and generated clips priv
 the actual clips for relevance and natural boundaries; automated timestamp checks cannot
 establish semantic quality. Initial upload, transcription and encoding still take time;
 no instantaneous processing guarantee is implied.
+
+## Selection quality check
+
+`scripts/eval_selection.py` measures clip choice on saved transcripts (no video, no new
+transcription; a few cents of AI calls). It joins several transcripts into one long talk,
+hides ten moments spread through it (an AI writes a search for each from the passage
+alone) and checks whether the app's transcript selection returns them. Five general
+requests ("funny moments", "interesting highlights", ...) are scored 1–5 by a separate AI
+call for fitting the request and making sense on their own. Each run compares input limits.
+
+```sh
+python scripts/eval_selection.py backend/agent/.cache/transcript_A.json backend/agent/.cache/transcript_B.json --style plain
+python scripts/eval_selection.py ... --style indirect   # searches that avoid the passage's own words
+```
+
+Results on 24 Nov 2026 (three real podcast transcripts joined: 117 minutes, 131,661
+characters; `gpt-6-luna`). The old 72,000-character cap showed 55% of this talk; it
+turned out to be about 70 minutes of speech, not 1.5–2 hours.
+
+| | 72,000 characters | Whole transcript |
+|---|---|---|
+| Hidden moments found, searches naming the subject (2 runs) | 20/20, all as first pick | 20/20, all as first pick |
+| Hidden moments found, searches in other words | 8/10 | 8/10 |
+| General requests: fits the request (avg of 3 runs, 1–5) | 3.6 | 4.0 |
+| General requests: makes sense alone (avg of 3 runs, 1–5) | 3.2 | 3.4 |
+| Time per request (median, 1 run) | 5.8 s | 5.3 s |
+| Selection cost per request | ~$0.004 | ~$0.006 |
+
+Specific searches were rarely hurt by the cap, because windows are ranked by the search's
+own words; only one of 40 hidden moments was outside the text shown, and the whole
+transcript missed that one too. General requests did better with the whole transcript in
+every run, at the same speed, so the cap was raised to 200,000 characters. Scores vary by
+about 0.5 between identical runs, so compare several runs before trusting a small change.
+The judge reads words only: it cannot see visuals, delivery or edit quality.
 
 ## Research integration
 

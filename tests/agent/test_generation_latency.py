@@ -143,3 +143,28 @@ def test_similarity_multiple_outputs_and_missing_cache_never_become_local_edits(
     monkeypatch.setattr(index, 'file_sha256', lambda _: 'key')
     monkeypatch.setattr(index, 'transcript_cache_paths', lambda *a: (tmp_path/'missing', tmp_path/'unused'))
     assert followup_edit.select(Path('unused'), 'keep first 8 seconds', parent, 1, 100) is None
+
+
+def test_a_two_hour_talk_is_sent_whole():
+    # ~1,100 characters a minute, like real podcast transcripts; the old 72,000 cap held only ~70 minutes
+    transcript = [{'start': i * 10., 'end': i * 10. + 9, 'text': 'We talked about the trip and what happened next. ' * 3}
+                  for i in range(720)]
+    context, intervals = transcript_context.selection_context(transcript, 'funny moments')
+    assert intervals is None
+    assert context.count('\n') == 719
+
+
+def test_selection_eval_joins_transcripts_and_scores_hits(tmp_path):
+    import importlib.util, json
+    spec = importlib.util.spec_from_file_location('eval_selection', Path(__file__).parents[2] / 'scripts' / 'eval_selection.py')
+    ev = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ev)
+    first, second = tmp_path / 'a.json', tmp_path / 'b.json'
+    first.write_text(json.dumps([{'start': 0, 'end': 50, 'text': 'one'}]))
+    second.write_text(json.dumps({'segments': [{'start': 0, 'end': 30, 'text': 'two'}]}))
+    joined = ev.load([first, second])
+    assert [(s['start'], s['end']) for s in joined] == [(0, 50), (52, 82)]
+    needle = {'start': 100, 'end': 140}
+    assert ev.hit([{'start': 0, 'end': 30}, {'start': 130, 'end': 160}], needle) == 2
+    assert ev.hit([{'start': 137, 'end': 170}], needle) is None   # 3 seconds of overlap is not a hit
+    assert ev.shown(None, needle) and ev.shown([(90, 150)], needle) and not ev.shown([(120, 200)], needle)

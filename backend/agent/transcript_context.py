@@ -9,7 +9,11 @@ import re
 
 from .chunks import format_transcript
 
-MAX_CONTEXT_CHARS = 72_000
+# About 3 hours of speech (~1,000 characters a minute, ~50K tokens) is sent whole; longer talks use windows.
+# scripts/eval_selection.py on a real 2-hour talk: whole-transcript picks for general requests scored higher
+# than a 72,000-character view (which is only ~70 minutes) in every run, at the same speed and about one
+# cent a request. It stays well under the providers' long-prompt price tiers (100K / 272K tokens).
+MAX_CONTEXT_CHARS = 200_000
 STOP = set('the a an and or to of in on for with this that these clips clip find from video more like seconds'.split())
 
 
