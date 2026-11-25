@@ -20,6 +20,7 @@ import { edgeTypes } from "../features/studio/edges";
 import { buildGraph, displayClips, sameRef, sessionGroups } from "../features/studio/graph";
 
 const isRunning = (group) => ["queued", "processing"].includes(group.state);
+const MAX_FILES = 10; // the backend joins up to 10 files into one source
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // What the assistant "says" about a generation in the chat
@@ -62,8 +63,9 @@ function StudioPage() {
   const loaded = Boolean(studio || error);
   useEffect(() => { if (loaded) markPageReady(); }, [loaded]);
 
-  // Video picked (here, or in the New Project pop-up), uploads with the first prompt
-  const [pendingFile, setPendingFile] = useState(() => location.state?.file ?? null);
+  // Footage picked (here, or in the New Project pop-up), uploads with the first prompt.
+  // Several files are joined end to end into one source on the server, in this order.
+  const [pendingFiles, setPendingFiles] = useState(() => location.state?.files ?? (location.state?.file ? [location.state.file] : []));
   const [uploadProgress, setUploadProgress] = useState(null); // 0-100 while the video uploads
   const [preview, setPreview] = useState(null);         // the "watch it big" pop-up: { ref } for a clip, or { path | file, title }
   const [draft, setDraft] = useState("");               // the chat box text
@@ -94,18 +96,29 @@ function StudioPage() {
   const sourceName = session ? groups.find((g) => g.job_id === session.source_job)?.source_name : undefined;
 
   // ---------- What the canvas boxes can do ----------
-  const chooseFile = useCallback((file) => {
-    if (!file) return;
-    if (!isSupportedMedia(file)) {
-      toast.show("Choose MP4, MOV, WebM, MKV, MP3, WAV, M4A, or FLAC audio/video.", "error");
-      return;
-    }
+  const chooseFiles = useCallback((files) => {
+    const list = Array.from(files || []);
+    if (!list.length) return;
     if (session?.source_job) {
-      toast.show("This session already has a video. Start a new session for a different one.", "error");
+      toast.show("This session already has footage. Start a new session for different files.", "error");
       return;
     }
-    setPendingFile(file);
+    const supported = list.filter(isSupportedMedia);
+    if (supported.length < list.length) {
+      toast.show("Some files were skipped. Choose MP4, MOV, WebM, MKV, MP3, WAV, M4A, or FLAC audio/video.", "error");
+    }
+    if (!supported.length) return;
+    setPendingFiles((current) => {
+      const key = (f) => [f.name, f.size, f.lastModified].join("|");
+      const next = [...current, ...supported.filter((f) => !current.some((c) => key(c) === key(f)))];
+      if (next.length > MAX_FILES) toast.show(`Up to ${MAX_FILES} files can be joined. The extra ones were left out.`, "error");
+      return next.slice(0, MAX_FILES);
+    });
   }, [session, toast]);
+
+  const removeFile = useCallback((index) => {
+    setPendingFiles((current) => current.filter((_, i) => i !== index));
+  }, []);
 
   const toggleClip = useCallback((ref) => {
     const next = editorClips.some((item) => sameRef(item, ref))
@@ -122,12 +135,13 @@ function StudioPage() {
     });
   }, [editorClips, setStudio, api, projectId, toast, refresh]);
 
-  const previewSource = useCallback(() => {
-    if (pendingFile) setPreview({ file: pendingFile, title: pendingFile.name });
+  const previewSource = useCallback((index = 0) => {
+    const file = pendingFiles[index];
+    if (file) setPreview({ file, title: file.name });
     else if (session?.source_job) {
       setPreview({ path: `/api/projects/${projectId}/source/${session.source_job}`, title: sourceName || "Original video" });
     }
-  }, [pendingFile, session, projectId, sourceName]);
+  }, [pendingFiles, session, projectId, sourceName]);
 
   const previewClip = useCallback((_clip, ref) => setPreview({ ref }), []);
 
@@ -149,11 +163,11 @@ function StudioPage() {
   }
 
   const actions = useMemo(() => ({
-    editorClips, pendingFile, sourceName,
-    onChooseFile: chooseFile, onPreviewSource: previewSource, onToggle: toggleClip,
+    editorClips, pendingFiles, sourceName,
+    onChooseFiles: chooseFiles, onRemoveFile: removeFile, onPreviewSource: previewSource, onToggle: toggleClip,
     onPreview: previewClip, onStop: stop, onRetry: retry, onReuse: setDraft, highlighted,
     onFocusPrompt: focusPrompt,
-  }), [editorClips, pendingFile, sourceName, chooseFile, previewSource, toggleClip, previewClip, stop, retry, highlighted, focusPrompt]);
+  }), [editorClips, pendingFiles, sourceName, chooseFiles, removeFile, previewSource, toggleClip, previewClip, stop, retry, highlighted, focusPrompt]);
 
 
   const graph = useMemo(
@@ -188,7 +202,7 @@ function StudioPage() {
 
   // ---------- Sending a prompt ----------
   async function send(text, clipCount) {
-    if (!session.source_job && !pendingFile) {
+    if (!session.source_job && !pendingFiles.length) {
       toast.show("Choose audio or video on the canvas first.", "error");
       return false;
     }
@@ -197,7 +211,7 @@ function StudioPage() {
       return false;
     }
     const signature = JSON.stringify({ sid: session.id, text, clipCount, references,
-      file: pendingFile && [pendingFile.name, pendingFile.size, pendingFile.lastModified] });
+      files: !session.source_job && pendingFiles.map((f) => [f.name, f.size, f.lastModified]) });
     if (submission.current?.signature !== signature) submission.current = { signature, id: crypto.randomUUID() };
 
     setSending(true);
@@ -211,10 +225,10 @@ function StudioPage() {
       } else {
         setUploadProgress(0);
         await api.studioUpload(projectId, session.id, {
-          video: pendingFile, prompt: text, clipCount, requestId: submission.current.id, onProgress: setUploadProgress,
+          videos: pendingFiles, prompt: text, clipCount, requestId: submission.current.id, onProgress: setUploadProgress,
         });
-        setPendingFile(null);
-        if (location.state?.file) navigate(location.pathname, { replace: true, state: null }); // a reload won't bring it back
+        setPendingFiles([]);
+        if (location.state?.file || location.state?.files) navigate(location.pathname, { replace: true, state: null }); // a reload won't bring it back
       }
       submission.current = null;
       setChatFocus(null);
@@ -234,7 +248,7 @@ function StudioPage() {
   // ---------- Sessions ----------
   function switchSession(id) {
     setChatFocus(null); setLeftOut([]); setHighlighted(null);
-    setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
+    setPendingFiles([]); setDraft(""); setPreview(null); submission.current = null;
     navigate(`/projects/${projectId}/studio/${id}`);
     api.saveStudioState(projectId, id, {}).catch(() => {}); // remember it as the active one
   }
@@ -243,7 +257,7 @@ function StudioPage() {
     try {
       const created = await api.createStudioSession(projectId, name);
       setChatFocus(null); setLeftOut([]); setHighlighted(null);
-      setPendingFile(null); setDraft(""); setPreview(null); submission.current = null;
+      setPendingFiles([]); setDraft(""); setPreview(null); submission.current = null;
       await refresh();
       navigate(`/projects/${projectId}/studio/${created.id}`);
     } catch (err) {
@@ -334,11 +348,15 @@ function StudioPage() {
 
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
   let note;
-  if (!references.length && !session.source_job) note = pendingFile ? `“${pendingFile.name}” uploads when you send your first prompt.` : "Choose audio or video on the canvas, then describe the clips you want.";
+  if (!references.length && !session.source_job) {
+    note = pendingFiles.length > 1 ? `Your ${pendingFiles.length} files are joined into one and upload when you send your first prompt.`
+      : pendingFiles.length ? `“${pendingFiles[0].name}” uploads when you send your first prompt.`
+      : "Choose audio or video on the canvas, then describe the clips you want.";
+  }
   if (uploadProgress !== null) {
     note = (
       <span className="studio-upload">
-        Uploading your video… {uploadProgress}%
+        {uploadProgress === 100 && pendingFiles.length > 1 ? "Joining your files…" : `Uploading ${pendingFiles.length > 1 ? "your files" : "your video"}… ${uploadProgress}%`}
         <progress max={100} value={uploadProgress} aria-label="Upload progress" />
       </span>
     );
@@ -367,7 +385,7 @@ function StudioPage() {
 
         <div className="studio-canvas-frame">
           <StudioWorld nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-            onDropFile={chooseFile} onNodeDragStop={savePosition} insets={panelInsets} />
+            onDropFile={chooseFiles} onNodeDragStop={savePosition} insets={panelInsets} />
         </div>
       </div>
 

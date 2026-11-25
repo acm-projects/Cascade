@@ -4,6 +4,9 @@ Session state lives in the existing project record under cascade_app, not in
 browser storage or a second database. Generation jobs remain the media authority.
 """
 import json
+import shutil
+import tempfile
+from pathlib import Path
 from backend.core import jobs as job_service
 from backend.services import projects_store
 import time
@@ -366,14 +369,61 @@ def generate(pid: str, sid: str, body: GenerateInput, request: Request):
     return submit(pid, sid, body, request)
 
 
+def joined_upload(pid, sid, request, videos, request_id):
+    """Several files picked: join them end to end into one source, so one prompt searches all of the footage.
+
+    Returns an UploadFile for the joined file, or a finished response when this request already ran.
+    The join can take minutes, so it runs outside the project lock.
+    """
+    from backend.media import MAX_JOINED_FILES, join_media, validate_filename
+    if len(videos) > MAX_JOINED_FILES:
+        raise HTTPException(400, f'Choose up to {MAX_JOINED_FILES} files at once.')
+    for video in videos:
+        validate_filename(video.filename)
+    user = request.state.user_id
+    with projects_store.lock:
+        session = session_for(ensure(pid, user), sid)
+        done = next((m for m in session['messages'] if m['id'] == request_id and m.get('job_id')), None)
+        if done:
+            return {'job_id': done['job_id']}
+        if session['source_job']:
+            raise HTTPException(400, 'This session already has generated clips. Start a new session to upload a different source video.')
+    folder = Path(tempfile.mkdtemp(prefix='studio-join-'))
+    try:
+        paths = []
+        for i, video in enumerate(videos):
+            path = folder / f'part-{i}{Path(video.filename).suffix.lower()}'
+            with path.open('wb') as destination:
+                shutil.copyfileobj(video.file, destination, 1024 * 1024)
+            if path.stat().st_size == 0:
+                raise HTTPException(400, f'“{Path(video.filename).name}” is empty.')
+            paths.append(path)
+        joined = join_media(paths, folder)
+        first = Path(videos[0].filename).stem[:80]
+        name = f'{first} + {len(videos) - 1} more{joined.suffix}'
+        # The open file keeps its data readable after the folder is removed (POSIX)
+        upload_file = UploadFile(joined.open('rb'), filename=name)
+        return upload_file
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 @router.post('/sessions/{sid}/upload', status_code=202)
-def upload(pid: str, sid: str, request: Request, video: UploadFile = File(...),
+def upload(pid: str, sid: str, request: Request, video: list[UploadFile] = File(...),
            prompt: str = Form(..., max_length=2000), clip_count: int = Form(4, ge=1, le=50),
            request_id: str = Form(..., pattern=r'^[a-zA-Z0-9_-]{1,80}$')):
+    videos = video
     try:
-        return submit(pid, sid, GenerateInput(prompt=prompt, clip_count=clip_count, request_id=request_id), request, video)
+        body = GenerateInput(prompt=prompt, clip_count=clip_count, request_id=request_id)
+        if len(videos) == 1:
+            return submit(pid, sid, body, request, videos[0])
+        joined = joined_upload(pid, sid, request, videos, request_id)
+        if not isinstance(joined, UploadFile):
+            return joined
+        return submit(pid, sid, body, request, joined)
     finally:
-        video.file.close()
+        for item in videos:
+            item.file.close()
 
 
 @router.post('/sessions/{sid}/chat')

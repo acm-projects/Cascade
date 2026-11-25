@@ -12,7 +12,7 @@ import "./StudioWorld.css";
 // (graph.js buildGraph), but as a little jungle island. The cards are the canvas's own cards, floating
 // above their spot in the world and following it as you pan and zoom.
 // If the device can't draw 3D, the flat React Flow canvas (StudioCanvas) is shown instead.
-//   nodes, edges - from buildGraph   onDropFile(file) - a video was dropped on the world
+//   nodes, edges - from buildGraph   onDropFile(files) - files were dropped on the world
 //   insets() - optional: how much of each edge the page's panels cover, so the island is framed beside them
 //   (nodeTypes, edgeTypes, onNodeDragStop are passed through to the flat canvas fallback)
 
@@ -105,8 +105,8 @@ function StudioWorld({ nodes, edges, onDropFile, insets, ...flatProps }) {
 
   function handleDrop(event) {
     event.preventDefault();
-    const file = event.dataTransfer.files?.[0];
-    if (file) onDropFile?.(file);
+    const files = Array.from(event.dataTransfer.files || []);
+    if (files.length) onDropFile?.(files);
   }
 
   const keep = (id) => (element) => {

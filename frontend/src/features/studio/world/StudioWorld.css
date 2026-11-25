@@ -175,3 +175,7 @@
 .studio-world.is-far .studio-drop-icon { width: 36px; height: 28px; font-size: 14px; }
 .studio-world.is-far .studio-drop-title { font-size: 13px; }
 .studio-world.is-far .studio-drop .btn { margin-top: 2px; padding: 4px 10px; font-size: 12px; }
+.studio-world.is-far .studio-file-list { max-height: 96px; }
+.studio-world.is-far .studio-file-name { padding: 3px 6px; font-size: 11px; }
+.studio-world.is-far .studio-file-remove { width: 22px; height: 22px; }
+.studio-world.is-far .studio-file-picks .btn { padding: 4px 10px; font-size: 12px; }

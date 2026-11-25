@@ -2,6 +2,8 @@
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -151,6 +153,47 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(len(state['sessions']), 1)
         self.assertEqual(state['sessions'][0]['source_job'], response.json()['job_id'])
         self.assertEqual(state['sessions'][0]['job_ids'], [response.json()['job_id']])
+
+    @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'needs ffmpeg')
+    def test_several_files_are_joined_into_one_source(self):
+        from backend.media import probe_media
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder, True)
+        def make(name, seconds, size, sound=True):
+            command = ['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'color=c=blue:s={size}:d={seconds}']
+            if sound:
+                command += ['-f', 'lavfi', '-i', f'sine=d={seconds}', '-c:a', 'aac']
+            subprocess.run(command + ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-shortest', str(folder / name)], check=True)
+            return (folder / name).read_bytes()
+        first, second = make('one.mp4', 1, '320x240'), make('two.mov', 2, '640x360', sound=False)
+        pid = self.client.post('/api/projects', headers=self.headers, json={'name': 'Many'}).json()['id']
+        url = '/api/projects/' + pid + '/studio'
+        sid = self.client.get(url, headers=self.headers).json()['sessions'][0]['id']
+        response = self.client.post(url + '/sessions/' + sid + '/upload', headers=self.headers,
+            data={'prompt': 'Find funny moments', 'request_id': 'many-files'},
+            files=[('video', ('one.mp4', first, 'video/mp4')), ('video', ('two.mov', second, 'video/quicktime'))])
+        self.assertEqual(response.status_code, 202, response.text)
+        jid = response.json()['job_id']
+        info = probe_media(core_jobs.JOBS_DIR / jid / 'source.video')
+        self.assertAlmostEqual(info['duration'], 3, delta=.3)
+        self.assertEqual((info['width'], info['height']), (320, 240))
+        self.assertEqual(core_jobs.load_json(core_jobs.JOBS_DIR / jid / 'owner.json')['source_name'], 'one + 1 more.mp4')
+        state = self.client.get(url, headers=self.headers).json()
+        self.assertEqual(state['sessions'][0]['source_job'], jid)
+        again = self.client.post(url + '/sessions/' + sid + '/upload', headers=self.headers,
+            data={'prompt': 'Find funny moments', 'request_id': 'many-files'},
+            files=[('video', ('one.mp4', first, 'video/mp4')), ('video', ('two.mov', second, 'video/quicktime'))])
+        self.assertEqual(again.json()['job_id'], jid)  # a retried request never starts a second job
+
+    def test_too_many_files_are_rejected_before_any_job(self):
+        files = [('video', (f'part{i}.mp4', b'x', 'video/mp4')) for i in range(11)]
+        pid = self.client.post('/api/projects', headers=self.headers, json={'name': 'Lots'}).json()['id']
+        url = '/api/projects/' + pid + '/studio'
+        sid = self.client.get(url, headers=self.headers).json()['sessions'][0]['id']
+        response = self.client.post(url + '/sessions/' + sid + '/upload', headers=self.headers,
+            data={'prompt': 'Find moments', 'request_id': 'too-many'}, files=files)
+        self.assertEqual(response.status_code, 400)
+        core_jobs.worker.submit.assert_not_called()
 
     def test_new_session_accepts_different_source_and_preserves_previous_session(self):
         original = self.client.get(self.base, headers=self.headers).json()['sessions'][0]

@@ -9,7 +9,7 @@ import "./StudioCanvas.css";
 //   nodeTypes     - our own box designs (features/studio/nodes)
 //   edgeTypes     - our own line designs (features/studio/edges, e.g. the leafy vine)
 //   onNodeClick   - (event, node) => ... when a box is clicked
-//   onDropFile(f) - a file was dropped anywhere on the canvas
+//   onDropFile(files) - files were dropped anywhere on the canvas
 //   onNodeDragStop(event, node) - a box was dragged somewhere new (save node.position)
 //
 // Controls: scroll = pan, pinch or Ctrl/Cmd + scroll = zoom, hold Space + drag = pan (like Figma).
@@ -41,8 +41,8 @@ function StudioCanvas({ nodes, edges, nodeTypes, edgeTypes, onNodeClick, onDropF
 
   function handleDrop(event) {
     event.preventDefault();
-    const file = event.dataTransfer.files?.[0];
-    if (file) onDropFile?.(file);
+    const files = Array.from(event.dataTransfer.files || []);
+    if (files.length) onDropFile?.(files);
   }
 
   return (

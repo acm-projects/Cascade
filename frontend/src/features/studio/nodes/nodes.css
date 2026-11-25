@@ -154,6 +154,86 @@
   white-space: nowrap;
 }
 
+/* Picked files, before upload: a scrolling list with a remove button on each, then "Add more files" */
+.studio-file-picks {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-file-list {
+  align-self: stretch;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.studio-file-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-wood-dark) 14%, transparent);
+}
+
+.studio-file-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-file-name span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.studio-file-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.studio-file-remove:hover,
+.studio-file-remove:focus-visible {
+  opacity: 1;
+  background: color-mix(in srgb, var(--color-wood-dark) 25%, transparent);
+}
+
+.studio-file-picks .btn {
+  max-width: 100%;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 /* ---------- Prompt ("generation") ---------- */
 .studio-generation-node {
   width: 270px;

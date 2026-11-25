@@ -161,3 +161,57 @@
   border-color: rgba(90, 200, 140, 0.9);
   background: linear-gradient(170deg, rgba(225, 255, 238, 0.98), rgba(170, 235, 200, 0.7));
 }
+
+/* Several picked files: listed under the drop box, in the order they will be joined */
+.new-project-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 168px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.new-project-files li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+}
+
+.new-project-files li > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.new-project-file-size {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.new-project-file-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.new-project-file-remove:hover:not(:disabled),
+.new-project-file-remove:focus-visible {
+  background: rgba(70, 140, 190, 0.18);
+}

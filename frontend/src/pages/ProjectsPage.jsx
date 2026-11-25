@@ -112,16 +112,16 @@ function ProjectsPage() {
     setCreatingNew(true);
   }
 
-  // From the New Project pop-up: create the project, then open its AI Studio. A picked video goes along
-  // and uploads there with the first prompt.
+  // From the New Project pop-up: create the project, then open its AI Studio. The picked files go along
+  // and upload there with the first prompt (several are joined into one source).
   // "Edit my own clip": upload the video into the Editor first, then open the Editor.
   // If the upload fails, the project made on the first try is reused when you press the button again.
   const pendingOwnClip = useRef(null);
-  async function createProject(name, file, mode = "studio") {
+  async function createProject(name, files = [], mode = "studio") {
     if (mode === "editor") {
       const created = pendingOwnClip.current ?? await api.createProject(name);
       pendingOwnClip.current = created;
-      await api.uploadEditorClip(created.id, file);
+      await api.uploadEditorClip(created.id, files[0]);
       pendingOwnClip.current = null;
       openProject(created);
       leafNavigate(`/projects/${created.id}/editor`);
@@ -129,7 +129,7 @@ function ProjectsPage() {
     }
     const created = await api.createProject(name);
     openProject(created);
-    leafNavigate(`/projects/${created.id}/studio`, { state: file ? { file } : undefined, ready: import("./StudioPage") });
+    leafNavigate(`/projects/${created.id}/studio`, { state: files.length ? { files } : undefined, ready: import("./StudioPage") });
   }
 
   function handleOpen(project) {

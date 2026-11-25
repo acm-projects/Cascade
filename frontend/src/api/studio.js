@@ -76,13 +76,14 @@ export function studioGenerate(token, projectId, sessionId, body) {
 }
 
 /**
- * POST .../studio/sessions/{sessionId}/upload   (multipart form) - the FIRST prompt: uploads the video too.
- * onProgress(percent) is called while the video uploads.
+ * POST .../studio/sessions/{sessionId}/upload   (multipart form) - the FIRST prompt: uploads the footage too.
+ * videos: one or more files; several are joined end to end into one source on the server.
+ * onProgress(percent) is called while the files upload.
  * @returns {Promise<{ job_id: string }>} status 202
  */
-export function studioUpload(token, projectId, sessionId, { video, prompt, clipCount, requestId, onProgress }) {
+export function studioUpload(token, projectId, sessionId, { videos, prompt, clipCount, requestId, onProgress }) {
   const form = new FormData();
-  form.append("video", video);
+  for (const video of videos) form.append("video", video);
   form.append("prompt", prompt);
   form.append("clip_count", String(clipCount));
   form.append("request_id", requestId);
