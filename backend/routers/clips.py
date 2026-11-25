@@ -432,8 +432,11 @@ def get_job(
     )
 
     with job_service.jobs_lock:
-        if job_id in job_service.jobs:
-            return dict(job_service.jobs[job_id])
+        job = dict(job_service.jobs[job_id]) if job_id in job_service.jobs else None
+    if job is not None:
+        if job.get('state') == 'queued':
+            job['message'] = job_service.worker.waiting_message(job_id) or job.get('message')
+        return job
 
     results_path = (
         job_service.JOBS_DIR / job_id / "results.json"

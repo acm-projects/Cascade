@@ -96,14 +96,17 @@ def write_captions(
 
 
 def render_workers(clip_count):
-    """How many clips to encode at once: about half the cores (x264 already uses several per encode)."""
-    cores = os.cpu_count() or 1
+    """How many clips to encode at once: about half the cores (x264 already uses several per encode), shared
+    between the generation jobs running right now so two jobs don't each take the whole machine."""
+    from backend.core.jobs import worker
+    cores = (os.cpu_count() or 1) // max(1, worker.running_count())
     return max(1, min(clip_count, cores // 2))
 
 
 def encoder_threads(workers):
-    """Split the cores between the parallel encodes so they do not oversubscribe the CPU."""
-    return max(1, (os.cpu_count() or 1) // workers)
+    """Split this job's share of the cores between its parallel encodes so they do not oversubscribe the CPU."""
+    from backend.core.jobs import worker
+    return max(1, (os.cpu_count() or 1) // max(1, worker.running_count()) // workers)
 
 
 def render_clip(video_path, selection, output_path, threads):

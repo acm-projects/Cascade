@@ -15,7 +15,9 @@ from backend.cascade_llm import LLMConfigError
 from backend.cascade_stt import TranscriptionError
 from backend.core.config import JOBS_DIR
 
-worker = ThreadPoolExecutor(max_workers=1)
+from backend.core.job_slots import FairWorker, configured_slots
+
+worker = FairWorker(configured_slots())   # several jobs at once, one per person (job_slots.py)
 jobs = {}
 jobs_lock = Lock()
 _progress_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='progress-save')

@@ -62,8 +62,9 @@ The Studio chat exposes backup failure/retry and keeps polling while backup is p
 cloud upload task, and `cloud_backup_seconds` records the background batch. The legacy
 `Video rendering and storage` timer now covers local rendering/publication, not cloud
 upload completion. Do not compare that aggregate with older runs without accounting
-for the changed boundary. Different generation jobs still share a single generation
-worker; this change parallelizes clips/uploads without oversubscribing whole jobs.
+for the changed boundary. Up to `CASCADE_GENERATION_WORKERS` jobs (default 2, one per
+person) run at once; their encodes split the CPU cores between the running jobs, so
+parallel jobs do not oversubscribe the machine (see docs/setup.md).
 
 ## Offline mechanics check
 

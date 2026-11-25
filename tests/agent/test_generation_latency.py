@@ -168,3 +168,27 @@ def test_selection_eval_joins_transcripts_and_scores_hits(tmp_path):
     assert ev.hit([{'start': 0, 'end': 30}, {'start': 130, 'end': 160}], needle) == 2
     assert ev.hit([{'start': 137, 'end': 170}], needle) is None   # 3 seconds of overlap is not a hit
     assert ev.shown(None, needle) and ev.shown([(90, 150)], needle) and not ev.shown([(120, 200)], needle)
+
+
+def test_two_parallel_jobs_on_one_video_transcribe_it_once(monkeypatch, tmp_path):
+    import backend.video_search as package
+    import time
+    monkeypatch.setattr(package, 'router', SimpleNamespace(load_models=None), raising=False)
+    monkeypatch.setattr(index, 'CACHE_DIR', tmp_path)
+    monkeypatch.setattr(index, 'file_sha256', lambda _: 'same-video')
+    monkeypatch.setattr('backend.media.probe_media', lambda _: {'duration': 120, 'has_video': True})
+    calls = []
+    transcript = [{'start': 0, 'end': 20, 'text': 'A story.'}]
+    def slow_transcribe(*args, **kwargs):
+        calls.append(1)
+        time.sleep(.2)   # the second job arrives while the first is still transcribing
+        return transcript
+    monkeypatch.setattr(index, 'transcribe_media', slow_transcribe)
+    built = []
+    runs = [threading.Thread(target=lambda: built.append(index.build_index(Path('unused'), tmp_path, visual=False,
+                                                                          embed_transcript=False))) for _ in range(2)]
+    for run in runs: run.start()
+    for run in runs: run.join(5)
+    assert calls == [1]
+    assert [b.transcript for b in built] == [transcript, transcript]
+    assert not list(tmp_path.glob('*.tmp'))

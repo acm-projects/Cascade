@@ -134,6 +134,7 @@ cd frontend && npm run lint && npm test && npm run build
 | `SOCIAL_DATABASE_PATH` | No | Where publishing data is saved | Keep the default |
 | `CASCADE_DEV_AUTH` | No (local only) | `1` = run without Clerk as `dev-user` on your own machine | Never in production |
 | `CASCADE_WARM_MODELS` | No | `1` loads the search models at start (uses ~400 MB more RAM while idle; otherwise the first upload loads them, about 5 s) | Optional |
+| `CASCADE_GENERATION_WORKERS` | No | How many videos are processed at once (default 2); each person has one at a time | Raise only with spare RAM and CPU |
 | `CASCADE_JOB_TIMEOUT`, `CASCADE_FFMPEG_TIMEOUT`, `CASCADE_FFMPEG` | No | Tuning; defaults are fine | See comments in `.env.example` |
 
 ## Troubleshooting

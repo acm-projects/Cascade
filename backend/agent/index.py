@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
+import threading
 import time
+from contextlib import contextmanager
 from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass, field
@@ -32,6 +35,31 @@ MIN_FRAME_INTERVAL = 2.0
 MAX_FRAMES = 300
 FRAME_WIDTH = 448          # CLIP resizes to 224 anyway; smaller files seek/decode faster
 FRAME_WORKERS = 4
+
+
+_cache_locks: dict[str, threading.Lock] = {}
+_cache_locks_guard = threading.Lock()
+
+
+@contextmanager
+def cache_lock(name: str):
+    """One builder per cache file: generation jobs run in parallel (core/job_slots.py), and two jobs on the
+    same video must not both pay to transcribe it, or read a cache file while the other is writing it."""
+    with _cache_locks_guard:
+        lock = _cache_locks.setdefault(name, threading.Lock())
+    with lock:
+        yield
+
+
+def write_atomic(path: Path, write: Callable[[Any], None]) -> None:
+    """Write a cache file whole or not at all (`write` gets an open binary file)."""
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with temporary.open("wb") as handle:
+            write(handle)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def file_sha256(path: Path) -> str:
@@ -183,6 +211,10 @@ def build_index(
     def transcript_index(report):
         started = time.perf_counter()
         transcript_path, segemb_path = transcript_cache_paths(key, TRANSCRIPT_TAG)
+        with cache_lock(transcript_path.name):
+            return _transcript_index(report, started, transcript_path, segemb_path)
+
+    def _transcript_index(report, started, transcript_path, segemb_path):
         cost = 0.0
         if transcript_path.exists():
             report("Loaded transcript from cache")
@@ -191,7 +223,7 @@ def build_index(
             info = {}
             transcript = transcribe_media(video_path, work_dir, progress=report, info=info)
             cost = info.get("cost_usd", 0.0)
-            transcript_path.write_text(json.dumps(transcript))
+            write_atomic(transcript_path, lambda f: f.write(json.dumps(transcript).encode()))
         embeddings = np.zeros((0, 1), dtype=np.float32)
         if embed_transcript:
             vs.load_models("speech", report)
@@ -203,7 +235,7 @@ def build_index(
             else:
                 embeddings = np.zeros((0, 1), dtype=np.float32)
             if not segemb_path.exists():
-                np.save(segemb_path, embeddings)
+                write_atomic(segemb_path, lambda f: np.save(f, embeddings))
         timings['transcript_index_seconds'] = round(time.perf_counter() - started, 3)
         return transcript, embeddings, cost
 
@@ -211,6 +243,10 @@ def build_index(
         started = time.perf_counter()
         vs.load_models("visual", report)
         cache = CACHE_DIR / f"frames_{key}.npz"
+        with cache_lock(cache.name):
+            return _visual_index(report, started, cache)
+
+    def _visual_index(report, started, cache):
         if cache.exists():
             report("Loaded frame embeddings from cache")
             with np.load(cache) as data:
@@ -227,8 +263,8 @@ def build_index(
                 with Image.open(path) as image:
                     images.append(image.convert("RGB"))
             embeddings = vs.visual_model.encode(images, normalize_embeddings=True, batch_size=32)
-            np.savez(cache, frame_embeddings=embeddings, frame_times=np.array(times),
-                     interval=np.array(interval), duration=np.array(duration))
+            write_atomic(cache, lambda f: np.savez(f, frame_embeddings=embeddings, frame_times=np.array(times),
+                                                   interval=np.array(interval), duration=np.array(duration)))
             result = duration, interval, times, embeddings
         timings['visual_index_seconds'] = round(time.perf_counter() - started, 3)
         return result

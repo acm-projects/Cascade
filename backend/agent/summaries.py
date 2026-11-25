@@ -121,8 +121,15 @@ def ensure_summaries(
     if not is_long_transcript(index.transcript):
         return
 
-    chunks = index.chunks or build_chunks(index.transcript)
+    from .index import cache_lock
     cache = _cache_path(index.transcript)
+    with cache_lock(cache.name):   # a parallel job on the same video waits and reuses these summaries
+        _summarize(index, client, emit, cache)
+
+
+def _summarize(index, client, emit, cache):
+    from .index import write_atomic
+    chunks = index.chunks or build_chunks(index.transcript)
     if cache.exists():
         cached = json.loads(cache.read_text())
         index.chunk_summaries = cached["chunks"]
@@ -176,6 +183,6 @@ def ensure_summaries(
     index.summary_usage = {"input_tokens": in_tok, "output_tokens": out_tok,
                            "cost_usd": cost, "cost_known": cost_known, "cached": False}
     if not errors:  # never cache a partial result
-        cache.write_text(json.dumps({"chunks": ordered}))
+        write_atomic(cache, lambda f: f.write(json.dumps({"chunks": ordered}).encode()))
     else:
         emit(f"{len(errors)} chunk summaries failed; continuing without them")

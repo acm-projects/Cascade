@@ -55,8 +55,14 @@ Pexels stock footage uses the server-only `PEXELS_API_KEY` from the root `.env`.
 
 Generation, search, caption-style and research jobs go through a small durable queue (`backend/core/job_queue.py`):
 each job is saved to `video_jobs/queue/<job_id>.json` until it finishes, and on startup every job a restart left
-waiting or half done runs again ("Resuming after a server restart…"). Jobs still run one at a time on this server;
-no extra service is needed.
+waiting or half done runs again ("Resuming after a server restart…"). No extra service is needed.
+
+Up to `CASCADE_GENERATION_WORKERS` jobs run at once (default 2, at most 8), and each person has at most one
+running (`backend/core/job_slots.py`): while one person's long video processes, someone else's job starts instead
+of waiting behind it, and that person's next job waits its turn. The status line says what a job is waiting for
+("1 video ahead of yours", "Waiting for your other video to finish"). Parallel jobs split the CPU cores for
+encoding, and two jobs on the same video share one transcription (the second waits and reuses the cache).
+Each running job needs memory for its frames and encodes, so raise the number only on a machine with room.
 
 With S3 storage, every uploaded source video is backed up to S3 after upload (`backend/services/source_backup.py`),
 and backups that failed or were cut off are retried on startup. When a source is missing on this server (a new
