@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./ExportPage.css";
 import TopNav from "../components/TopNav";
 import { markPageReady, useLeafNavigate } from "../context/leafTransitionValue";
@@ -20,9 +20,11 @@ import ExportSettings from "../features/export/ExportSettings";
 import PostPanel from "../features/export/PostPanel";
 import YouTubePanel from "../features/export/YouTubePanel";
 import LinkedInPanel from "../features/export/LinkedInPanel";
+import AppPostPanel from "../features/export/AppPostPanel";
 import { isAudioClip } from "../utils/media";
 import TrendsModal from "../features/editor/TrendsModal";
 import { exportTree } from "../features/export/exportTree";
+import { loadPicks, pickedClips, savePicks } from "../features/export/exportPicks";
 import Icon from "../components/ui/Icon";
 
 // Export, laid out as four steps across the top (Select clips > Preview > Configure > Export) and three columns:
@@ -43,7 +45,11 @@ function ExportPage() {
   const leafNavigate = useLeafNavigate();
   const { projectId } = useParams();
   const api = useApi();
-  const [clips, setClips] = useState(null);
+  const location = useLocation();
+  const [allClips, setAllClips] = useState(null);
+  // The clips picked in the Editor ("Which clips do you want to export?"); null = show every clip
+  const [picks, setPicks] = useState(() => location.state?.picks ?? loadPicks(projectId));
+  const firstPicks = useRef(picks);   // which clips start ticked and on screen
   const [error, setError] = useState(null);
   const [projectName, setProjectName] = useState(null);
   const [currentKey, setCurrentKey] = useState(null);
@@ -63,16 +69,24 @@ function ExportPage() {
       .then(([index, project]) => {
         if (!active) return;
         const list = flattenClips(index);
-        setClips(list);
+        const shown = pickedClips(list, firstPicks.current);
+        setAllClips(list);
         setProjectName(project.name);
-        setCurrentKey(list[0] && clipKey(list[0]));
-        setInZip(list.map(clipKey));
+        setCurrentKey(shown[0] && clipKey(shown[0]));
+        setInZip(shown.map(clipKey));
       })
       .catch((err) => active && setError(err));
     return () => {
       active = false;
     };
   }, [api, projectId]);
+
+  const clips = useMemo(() => allClips && pickedClips(allClips, picks), [allClips, picks]);
+  const hiddenCount = allClips && clips ? allClips.length - clips.length : 0;
+  function showAllClips() {
+    savePicks(projectId, []);
+    setPicks(null);
+  }
 
   const current = clips?.find((clip) => clipKey(clip) === currentKey);
   // Nothing more to load (an error, or no clips): the waterfall can fall away. Otherwise ClipExport says when.
@@ -175,6 +189,14 @@ function ExportPage() {
                   onClick={() => setInZip(inZip.length === clips.length ? [] : clips.map(clipKey))}>
                   {inZip.length === clips.length ? "Clear all" : "Select all"}
                 </button>
+                {hiddenCount > 0 && (
+                  <p className="export-picked-note">
+                    Showing the {clips.length} {clips.length === 1 ? "clip" : "clips"} you picked in the Editor.{" "}
+                    <button type="button" className="export-link" onClick={showAllClips}>
+                      Show {hiddenCount} more {hiddenCount === 1 ? "clip" : "clips"}
+                    </button>
+                  </p>
+                )}
               </section>
 
               <section className="export-destinations" aria-labelledby="export-destination-title">
@@ -182,10 +204,10 @@ function ExportPage() {
                 <Destination value="download" chosen={destination} onChoose={(value) => { setDestination(value); setConfigured(true); }}
                   icon="download" title="Download file" text="Export a video to your device" />
                 <Destination value="youtube" chosen={destination} onChoose={(value) => { setDestination(value); setConfigured(true); }}
-                  icon="youtube" title="Publish online" text="Post to YouTube or LinkedIn" disabled={audioOnly} />
+                  icon="youtube" title="Publish online" text="Post to YouTube, LinkedIn, TikTok or Instagram" disabled={audioOnly} />
                 <p className="export-tip">
                   <Icon name="sparkles" />
-                  You can add a title, caption and hashtags when you publish to YouTube.
+                  You can add a title, caption and hashtags when you publish online.
                 </p>
               </section>
             </aside>
@@ -357,6 +379,10 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
             <section className="export-publish" aria-label="Publish">
               <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />
               <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />
+              {["tiktok", "instagram"].map((app) => (
+                <AppPostPanel key={app} app={app} clip={clip} clipNumber={clipNumber} post={post} state={state}
+                  downloads={downloads} flush={draft.flush} />
+              ))}
             </section>
           </>
         ) : (

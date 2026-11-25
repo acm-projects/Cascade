@@ -23,7 +23,8 @@ function stepPath(projectId, stepId, sessionId) {
 //   active         - "studio" | "editor" | "export": the step that's filled in
 //   canOpenEditor  - false = the Editor step is locked (Figma: "Not clickable until clips are selected")
 //   canOpenExport  - same for Export
-function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpenExport = false }) {
+//   onOpenExport   - optional: called instead of going straight to Export (the Editor asks which clips first)
+function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpenExport = false, onOpenExport }) {
   const params = useParams();
   const leafNavigate = useLeafNavigate();
   const id = projectId ?? params.projectId;
@@ -65,6 +66,7 @@ function TopNav({ projectTitle, projectId, active, canOpenEditor = false, canOpe
               onClick={(event) => {
                 if (step.id === active || !leafNavigate) return;
                 event.preventDefault();   // a waterfall covers the change while the next step loads
+                if (step.id === "export" && onOpenExport) { onOpenExport(); return; }
                 leafNavigate(stepPath(id, step.id, params.sessionId), { style: "falls" });
               }}>
               {content}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { downloadName, exportEdit, saveBlob } from './downloads.js';
+import { downloadName, exportEdit, postText, saveBlob } from './downloads.js';
 
 test('export overrides preserve saved edit and filename has safe characters', () => {
   const state = {start: 2, end: 9, captions: {enabled:true,color:'#fff'}, broll:[{id:'stock'}]};
@@ -24,4 +24,10 @@ test('Blob download clicks an attached link and revokes its URL after 30 seconds
   saveBlob(new Blob(['video']),'safe.mp4');
   assert.deepEqual(calls,['attach','click','remove','blob:download']);
   assert.equal(link.download,'safe.mp4');
+});
+
+test('the text to paste into TikTok or Instagram is the caption, then the hashtags', () => {
+  assert.equal(postText({ caption: ' Big news ', hashtags: ['#a', '#b'] }), 'Big news\n\n#a #b');
+  assert.equal(postText({ caption: '', hashtags: ['#a'] }), '#a');
+  assert.equal(postText(null), '');
 });

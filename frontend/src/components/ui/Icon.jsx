@@ -44,6 +44,8 @@ const PATHS = {
   sliders: <><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><path d="M15 5v4M9 15v4" /></>,
   youtube: <><rect x="2" y="5" width="20" height="14" rx="4" /><path d="M10 9v6l5-3Z" fill="currentColor" /></>,
   linkedin: <><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 10v7M8 7v.01M12 17v-7M12 13a3 3 0 0 1 6 0v4" /></>,
+  tiktok: <><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5" /><path d="M14 3c.4 2.6 2.2 4.4 5 4.6" /></>,
+  instagram: <><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><path d="M17.5 6.5v.01" /></>,
   tree: <><path d="M12 22v-6M12 3 6 11h3l-4 5h14l-4-5h3Z" /></>,
 };
 

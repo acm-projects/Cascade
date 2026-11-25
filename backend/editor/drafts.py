@@ -40,11 +40,27 @@ def editor_index(pid: str, request: Request, selected_only: bool = False):
             group['session_name'] = match['name']
             group['session_id'] = match['id']
         if selected_only:
-            group['clips'] = [c for c in group['clips'] if (c['job_id'], c['clip_index']) in allowed]
+            group['clips'] = [{**c, 'edited': edited(pid, c, request.state.user_id)} for c in group['clips']
+                              if (c['job_id'], c['clip_index']) in allowed]
     sessions = label_waves(sessions)
     sessions = [group for group in sessions if group['clips']]
     selection = chosen[0] if selected_only and chosen else project.get('editor_selection')
     return {'sessions': sessions, 'selection': selection}
+
+
+def edited(pid, clip, user):
+    """Has this clip been changed in the Editor (anything beyond the untouched starting edit)? For Export's picker."""
+    path = draft_path(pid, clip['job_id'], clip['clip_index'], user)
+    if not metadata_exists(path):
+        return False
+    try:
+        draft = Draft.model_validate(load_json(path))
+    except ValueError:
+        return False
+    duration = float(clip.get('end', 0)) - float(clip.get('start', 0))
+    state = draft.state.model_dump()
+    untouched = Edit(start=0, end=state['end'], captions=Captions(enabled=False)).model_dump()
+    return bool(draft.chat) or state != untouched or (duration > 0 and abs(state['end'] - duration) > 0.1)
 
 
 def get_draft(pid: str, jid: str, index: int, request: Request):

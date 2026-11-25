@@ -13,6 +13,8 @@ import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import UploadClipButton from "../features/editor/UploadClipButton";
 import CombineClips from "../features/editor/CombineClips";
 import ClipWorkspace from "../features/editor/ClipWorkspace";
+import ExportPicker from "../features/export/ExportPicker";
+import { savePicks } from "../features/export/exportPicks";
 import "./EditorPage.css";
 import "../features/editor/EditorRevamp.css";
 import "../features/editor/EditorSplit.css";
@@ -34,6 +36,7 @@ function EditorPage() {
   const registerFlush = useCallback(value => { flushCurrent.current = value; }, []);
   const [trendsFor, setTrendsFor] = useState(null); // reopen Trend Analysis after picking another clip from inside it
   const [combining, setCombining] = useState(false);
+  const [picking, setPicking] = useState(false);   // "Which clips do you want to export?" is open
   const autoCombine = useRef(Boolean(location.state?.combine)); // "Combine & edit" in AI Studio
   const toast = useToast();
 
@@ -97,6 +100,16 @@ function EditorPage() {
   const settled = Boolean(error || (clips && !hasClips));
   useEffect(() => { if (settled) markPageReady(); }, [settled]);
 
+  // Export: save the clip on screen, ask which clips to bring, then go with only those
+  async function openExportPicker() {
+    try { await flushCurrent.current?.(); setPicking(true); } catch (e) { toast.show(e.message, "error"); }
+  }
+  function goToExport(keys) {
+    savePicks(projectId, keys);
+    setPicking(false);
+    leafNavigate(`/projects/${projectId}/export`, { style: "falls", state: { picks: keys } });
+  }
+
   // Save the clip you're on, then open another one
   async function selectClip(clip, { trends = false } = {}) {
     try { await flushCurrent.current?.(); setTrendsFor(trends ? clipKey(clip) : null); setCurrentKey(clipKey(clip)); } catch (e) { toast.show(e.message, "error"); }
@@ -159,14 +172,15 @@ function EditorPage() {
 
   return (
     <div className={`editor leaf-page editor-${layout}`}>
-      <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} />
+      <TopNav projectTitle={projectName} active="editor" canOpenEditor canOpenExport={hasClips} onOpenExport={openExportPicker} />
       {body ? (
         <div className="editor-empty">{body}</div>
       ) : (
         <ClipWorkspace key={currentKey} projectId={projectId} clip={current} sidebar={sidebar} layout={layout} clipTabs={clipTabs}
           clips={clips} openTrends={trendsFor === currentKey} onSelectClipForTrends={clip => selectClip(clip, { trends: true })}
-          registerFlush={registerFlush} onExport={() => leafNavigate(`/projects/${projectId}/export`, { style: "falls" })} />
+          registerFlush={registerFlush} onExport={() => setPicking(true)} />
       )}
+      {picking && <ExportPicker projectId={projectId} currentKey={currentKey} onConfirm={goToExport} onClose={() => setPicking(false)} />}
     </div>
   );
 }

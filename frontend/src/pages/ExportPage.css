@@ -734,3 +734,12 @@
 .export-strip-card > b { font-size: 13px; }
 /* Original / Edited at the right end of the controls row, right under the video's right edge */
 .export-player .clip-player-bar .clip-player-version-controls { margin-left: auto; }
+
+/* "Showing the 3 clips you picked in the Editor. Show 5 more clips" */
+.export-picked-note {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--export-ink);
+}
+.export-picked-note .export-link { display: inline; }
