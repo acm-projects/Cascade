@@ -42,6 +42,7 @@ HOW TO CUT
 - Prefer high-motion seconds for the build and the peak; use calmer seconds to open or close.
 - Never start or end a shot across a camera cut: keep each shot inside one camera shot.
 - Each source moment plays once, unless it is a deliberate slow-motion replay of the peak.
+- Never put two shots back to back whose source seconds are within 2.5 s of each other: that plays as one long, slow hold, not a cut. Jump between different parts of the clip (when the clip is several clips joined, a different one each time) and come back later for another piece of a moment.
 - "speed": 1 normally; 0.4-0.6 for the peak (slow motion), at most two slow shots; 1.5-2 to compress a slow action. Talking shots are always 1.
 - "zoom": push for build, punch for impact, pull to reveal, none for most shots.
 - "focus_x": where the main subject is across the frame in that moment (0 left, 0.5 centre, 1 right), so the vertical crop keeps it in view.

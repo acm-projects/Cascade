@@ -42,6 +42,20 @@ class MontageTests(unittest.TestCase):
         self.assertAlmostEqual(float(voice[3500, 0]), 0.)
         self.assertTrue(np.allclose(voice + bed, natural))
 
+    def test_pieces_of_one_moment_never_play_back_to_back(self):
+        # the plan OpenAI returned for the real hiking montage: three pieces of the opening clip in a row
+        spans = [(0, 1.67), (2, 3.67), (4, 5.67), (7, 8.67), (8.5, 9.75), (10.1, 11.35), (12.1, 13.77), (14, 15.67), (18.1, 19.77), (20, 20.83)]
+        p = visual.interleave(plan([{'start': a, 'end': b} for a, b in spans]))
+        order = [(s.start, s.end) for s in p.shots]
+        self.assertEqual(sorted(order), sorted(spans))                  # every shot still plays once
+        self.assertEqual((order[0], order[-1]), (spans[0], spans[-1]))   # same opening and closing shot
+        together = sum(visual._near(a, b) for a, b in zip(p.shots, p.shots[1:]))
+        self.assertLessEqual(together, 1)
+
+    def test_a_clip_with_only_one_moment_keeps_its_order(self):
+        p = visual.interleave(plan([{'start': 0, 'end': 1}, {'start': 1, 'end': 2}, {'start': 2, 'end': 3}]))
+        self.assertEqual([s.start for s in p.shots], [0, 1, 2])
+
     def test_montage_requests_and_the_speech_list(self):
         self.assertTrue(wants_montage('make an insta edit of our hike like my references'))
         self.assertFalse(wants_montage('Edit this video'))

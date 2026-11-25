@@ -80,6 +80,43 @@ def check(plan, duration, windows=None, cuts=()):
     for s in plan.shots: s.end = min(s.end, duration)
 
 
+NEAR = 2.5   # seconds: two shots whose source moments are this close read as one long shot when played back to back
+
+
+def _near(a, b):
+    """True when shot b picks up where shot a left off (or overlaps it) in the source."""
+    return b.start < a.end+NEAR and a.start < b.end+NEAR
+
+
+def interleave(plan, budget=20000):
+    """Reorder so no two shots in a row come from the same moment of the source (that plays as one slow, long
+    hold, not a cut). The opening shot stays first and the closing shot last; between them, the order closest to
+    the plan with no neighbours from the same moment wins (a short search). When no such order exists, the one
+    with the fewest same-moment neighbours is used."""
+    shots = list(plan.shots)
+    if len(shots) < 3: return plan
+    first, last, middle = shots[0], shots[-1], shots[1:-1]
+    best = {'order': None, 'bad': len(shots)}
+    steps = [0]
+
+    def search(order, left, bad):
+        steps[0] += 1
+        if bad >= best['bad'] or steps[0] > budget: return
+        if not left:
+            bad += _near(order[-1], last)
+            if bad < best['bad']: best.update(order=list(order), bad=bad)
+            return
+        for s in sorted(left, key=lambda s: _near(order[-1], s)):   # planned order, clean neighbours first
+            left.remove(s); order.append(s)
+            search(order, left, bad+_near(order[-2], s))
+            order.pop(); left.append(s); left.sort(key=middle.index)
+            if best['bad'] == 0: return
+
+    search([first], list(middle), 0)
+    if best['order'] is not None: plan.shots = best['order']+[last]
+    return plan
+
+
 def length(plan):
     return sum((s.end-s.start)/s.speed for s in plan.shots)
 

@@ -48,6 +48,7 @@ def output(plan, words, new=True):
         from . import score
         message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
         timing = visual.song_timing(plan, target)
+        if new: visual.interleave(plan)   # a new edit never plays two pieces of one moment back to back
         if plan.song and not timing:   # an unknown song: Cascade's own score instead
             plan.song, plan.lyrics, plan.intro = '', 'off', 'none'
         if timing: visual.fit(plan, max(2., target-message), grid=timing[2], lead=timing[3])
