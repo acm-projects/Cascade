@@ -106,6 +106,10 @@ class MontageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'order'):
             visual.check(plan([{'start': 0, 'end': 4}, {'start': 5, 'end': 9}, {'start': 11, 'end': 12}], clip_order=[2, 3, 1]), 14, parts=parts)
 
+    def test_clips_in_a_collage_count_as_played(self):
+        parts = [{'title': 'a', 'from': 0, 'to': 5}, {'title': 'b', 'from': 5, 'to': 10}, {'title': 'c', 'from': 10, 'to': 15}]
+        visual.check(plan([{'start': 0, 'end': 2}, {'start': 5, 'end': 6.5, 'panels': [11]}], clip_order=[1, 2, 3]), 15, parts=parts)
+
     def test_stop_at_the_words_the_request_names(self):
         words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('break', 0.2), ('from', .6), ('presentation', 1.0), ('prep.', 1.4), ('I', 1.8), ('have', 2.2)]]
         p = visual.stop_at(plan([{'start': 0, 'end': 3, 'voice': True}]), words, 'keep the intro, and stop the intro at presentation prep. Then the wave')
@@ -155,6 +159,24 @@ class MontageTests(unittest.TestCase):
         self.assertEqual(requested_ratio('make a horizontal edit'), '16:9')
         self.assertEqual(requested_ratio('vertical reel please'), '9:16')
         self.assertEqual(requested_ratio('make an edit'), '')
+
+    @unittest.skipUnless(__import__('shutil').which('ffmpeg'), 'needs ffmpeg')
+    def test_collage_silhouette_and_outro_render(self):
+        import subprocess, tempfile
+        from pathlib import Path
+        folder = Path(tempfile.mkdtemp())
+        src = folder / 'src.mp4'
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=s=320x180:d=8:r=30', '-f', 'lavfi', '-i', 'sine=d=8',
+                        '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(src)], check=True)
+        p = plan([{'start': 0, 'end': 1.5}, {'start': 2, 'end': 3.5, 'panels': [4, 5.5, 6.5], 'silhouette': True},
+                  {'start': 6, 'end': 7.2, 'zoom': 'rise'}], outro='CASCADE', title_color='blue', sound='original')
+        p.settings.music = False
+        p.settings.stamp = False
+        out = folder / 'out.mp4'
+        report = visual.make(src, p, out, ffmpeg='ffmpeg', ratio='16:9', lines=180, faces=False)
+        self.assertTrue(out.is_file())
+        self.assertAlmostEqual(report['seconds'], 1.5 + 1.5 + 1.2 + visual.OUTRO, delta=.2)
+        self.assertFalse(list(folder.glob('collage-*.mp4')))   # temporary collage clips are removed
 
     def test_montage_requests_and_the_speech_list(self):
         self.assertTrue(wants_montage('make an insta edit of our hike like my references'))

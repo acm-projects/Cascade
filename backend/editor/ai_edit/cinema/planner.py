@@ -140,7 +140,7 @@ def _watch(prompt, prep_dir, prep, windows, tries=3):
     schema, last = openai_edit.strict_schema(visual.VisualPlan), ''
     for _ in range(tries):
         try:
-            answer = openai_edit.ask(system, prompt+last, schema, images, name='cinema_visual_edit', tokens=8000)
+            answer = openai_edit.ask(system, prompt+last, schema, images, name='cinema_visual_edit', tokens=24000)
         except HTTPException as exc:
             raise Unavailable(str(exc.detail)) from None
         try:

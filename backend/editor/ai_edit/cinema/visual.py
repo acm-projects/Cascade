@@ -20,9 +20,10 @@ from .render import Overlay, Shot
 
 LOG = logging.getLogger(__name__)
 MESSAGE = settings.get('pacing.message_seconds', 3.4)
-ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.), 'close': (1.85, 1.95)}
+ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.), 'close': (1.85, 1.95), 'rise': (1., 1.35)}
 SHORTEST = .5   # seconds on screen
-QUICKEST = .6   # a quick music shot is not shortened below this to make an edit fit
+QUICKEST = .45  # a quick music shot is not shortened below this to make an edit fit
+OUTRO = 1.7     # the ending word: pop, hold, zoom into it
 LOOP = .75      # the closing return to the opening shot, for a seamless loop
 TYPE_SECONDS = .9   # how long the typed title takes to spell out
 TITLE_SECONDS = 3.6   # how long a "corners" title stays up
@@ -36,7 +37,8 @@ class VisualShot(BaseModel):
     start: float = Field(ge=0)                     # source seconds
     end: float = Field(gt=0)
     speed: float = Field(default=1., ge=.25, le=2.)   # .5 = half-speed slow motion, 2 = double speed
-    zoom: Literal['none', 'push', 'punch', 'pull', 'close'] = 'none'   # 'close': a strong close-up on people filmed from far away
+    # 'close': a strong close-up on people filmed from far away; 'rise': the camera rises toward the sky (hands up, an ending)
+    zoom: Literal['none', 'push', 'punch', 'pull', 'close', 'rise'] = 'none'
     focus_x: float = Field(default=.5, ge=0, le=1)   # where the subject is, left (0) to right (1), for vertical crops
     focus_y: float = Field(default=.45, ge=0, le=1)  # where the subject is, top (0) to bottom (1), for a 'close' zoom
     effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake', 'slices', 'window'] | None = None   # a transition as this shot lands
@@ -47,6 +49,10 @@ class VisualShot(BaseModel):
     flash: bool = False   # a 0.1-0.3 s glimpse in a burst of very fast cuts (not snapped to the beat)
     mono: bool = False    # this shot in high-contrast black and white (one standout moment)
     big_captions: bool = False   # a talking shot's words big, bold and centred (a chant, a punchline)
+    # a collage: the frame split into vertical strips, this shot in the middle and these other moments (source
+    # seconds) in the strips around it, all playing at once
+    panels: list[float] = Field(default_factory=list, max_length=5)
+    silhouette: bool = False   # a bright splash: the background flashes to cream and the people become cut-out silhouettes
 
 
 class VisualPlan(BaseModel):
@@ -71,6 +77,7 @@ class VisualPlan(BaseModel):
     settings: Settings = Field(default_factory=Settings)
     end_line: str = Field(default='', max_length=90)
     clip_order: list[int] = Field(default_factory=list, max_length=20)   # the request's order of the joined clips (1-based)
+    outro: str = Field(default='', max_length=20)   # an ending word ("CASCADE"): pops in with a bing, then the camera zooms into it
     loop: bool = False      # end on a short return to the opening shot and title, so the reel plays as a seamless loop
     seconds: float = Field(default=0, ge=0, le=60)   # the edit's length when the user asked for one; 0 = the house length
 
@@ -82,6 +89,8 @@ class VisualPlan(BaseModel):
         # captions are drawn for the talking shots only (speech_captions); the dialogue caption track stays off
         self.settings.captions = False
         if any(s.voice for s in self.shots) and self.sound == 'score': self.sound = 'both'
+        # a coloured title word only exists in the corners style (the typed title is always cream)
+        if self.title_color != 'red' and self.title_style == 'typed': self.title_style = 'corners'
         return self
 
 
@@ -97,6 +106,8 @@ def check(plan, duration, windows=None, cuts=(), parts=None):
         if s.end > duration+.05: raise ValueError(f'shots[{k}]: ends at {s.end:.1f} s but the clip is {duration:.1f} s long')
         if s.end-s.start < (.08 if s.flash else .3):
             raise ValueError(f'shots[{k}]: needs end at least {.08 if s.flash else .3} s after start')
+        if any(not 0 <= p <= duration-.3 for p in s.panels):
+            raise ValueError(f'shots[{k}]: panels must be source seconds inside the clip (0-{duration-.3:.1f})')
         if windows and not any(s.start >= a-.05 and s.end <= b+.05 for a, b in windows):
             raise ValueError(f'shots[{k}]: {s.start:.1f}-{s.end:.1f} s is outside the usable ranges {windows}')
     for s in plan.shots: s.end = min(s.end, duration)
@@ -104,17 +115,19 @@ def check(plan, duration, windows=None, cuts=(), parts=None):
         n = len(parts)
         if any(not 1 <= c <= n for c in plan.clip_order): raise ValueError(f'clip_order: use clip numbers 1-{n}')
         which = lambda s: next((k+1 for k, p in enumerate(parts) if p['from']-.05 <= s.start < p['to']), 0)
-        played = []
+        played, strips = [], set()
         for k, s in enumerate(plan.shots):
             c = which(s)
             if c and s.end > parts[c-1]['to']+.1:
                 raise ValueError(f"shots[{k}]: runs from clip {c} into the next clip; end it by {parts[c-1]['to']:.1f} s")
             if c and not s.flash and (not played or played[-1] != c): played.append(c)
+            strips.update(which(type('P', (), {'start': x})) for x in s.panels)   # a collage plays its strips' clips too
         want = list(dict.fromkeys(plan.clip_order))
-        missing = [c for c in want if c not in played]
+        missing = [c for c in want if c not in played and c not in strips]
         if missing:
             raise ValueError(f"clip_order {want}: clip(s) {missing} ({'; '.join(parts[c-1]['title'] for c in missing)}) are not "
                              f"played; your shots play clips {played}. Give each one at least one shot, shortening others to fit.")
+        want = [c for c in want if c in played]   # (clips seen only inside a collage have no order of their own)
         order = [c for c in played if c in want]
         if [c for c in dict.fromkeys(order)] != want:
             raise ValueError(f'clip_order {want}: your shots play the clips in the order {played}; put the shots in clip_order.')
@@ -233,7 +246,7 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
     """Make the edit play in at most `seconds` (a black intro of `lead` seconds included): later shots go, the last
     one is trimmed. Every cut lands on `grid` (edit times, e.g. a song's beats and half-beats) or on the half-beat
     grid of `beat`."""
-    budget = seconds-lead-(LOOP if plan.loop else 0)
+    budget = seconds-lead-(LOOP if plan.loop else 0)-(OUTRO if plan.outro.strip() else 0)
     for s in plan.shots:   # a burst glimpse lasts 0.1-0.3 s whatever was planned
         if s.flash: s.end = s.start+min(.3, max(.1, s.end-s.start))*s.speed
     # too long: music shots from the middle go first (latest first); talking shots, the opening and the ending stay
@@ -248,7 +261,8 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
             cut = max(0., on(x)-QUICKEST)*share
             plan.shots[k] = x.model_copy(update={'end': x.end-cut*x.speed})
     while sum(map(on, plan.shots)) > budget+1e-6:
-        middle = [k for k, x in enumerate(plan.shots) if 0 < k < len(plan.shots)-1 and not x.voice]
+        # (a silhouette or a collage is a designed moment the request asked for: it is never the one dropped)
+        middle = [k for k, x in enumerate(plan.shots) if 0 < k < len(plan.shots)-1 and not x.voice and not x.silhouette and not x.panels]
         if not middle or sum(on(plan.shots[k]) for k in middle) <= SHORTEST: break
         k = middle[-1]
         over = sum(map(on, plan.shots))-budget
@@ -418,6 +432,24 @@ def speech_captions(words, voiced, most=4):
     return out
 
 
+def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg'):
+    """A collage: the frame split into vertical strips, each playing a different moment of the source at once (the
+    first moment in the middle strip). Written as a short silent clip at the output size."""
+    import subprocess
+    n = len(starts)
+    order = starts[1:1+(n-1)//2]+starts[:1]+starts[1+(n-1)//2:]   # the main moment in the middle
+    widths = [W//n]*(n-1)+[W-W//n*(n-1)]
+    cmd = [ffmpeg, '-nostdin', '-v', 'error', '-y']
+    for a in order: cmd += ['-ss', f'{a:.3f}', '-t', f'{seconds+.4:.3f}', '-i', str(source)]
+    graph = [f'[{i}:v:0]fps={look.FPS},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},'
+             f'crop={w}:{H}:{(W-w)//2}:0,setsar=1[s{i}]' for i, w in enumerate(widths)]
+    graph.append(''.join(f'[s{i}]' for i in range(n))+f'hstack=inputs={n}[v]')
+    cmd += ['-filter_complex', ';'.join(graph), '-map', '[v]', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14',
+            '-pix_fmt', 'yuv420p', str(out)]
+    subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+    return out
+
+
 def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', lines=1080, faces=True, words=None):
     """Render a VisualPlan over `source` to `out` (mp4). No AI model is called. `words` (the clip's transcript,
     source seconds) caption the talking shots."""
@@ -439,6 +471,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     timing = song_timing(plan, plan.seconds or settings.get('output.target_seconds', 15) or 15)
     lead = timing[3] if timing else 0.
     shots, overlays, events, t = [], [], [], lead
+    made = []     # temporary clips (collages), removed after the render
     voiced = []   # (edit from, edit to, source from) of every talking shot
     if lead:   # the opening black: the music plays, the picture waits for the beat
         first = plan.shots[0]
@@ -450,10 +483,17 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         cx = v.focus_x
         face = render.find_face(source, v.start+(v.end-v.start)/2, ffmpeg) if faces and W < H else None
         if face: cx = face[0]
-        shots.append(Shot(t, t+dur, 'aroll', str(source), v.start, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1,
+        path, src = str(source), v.start
+        if v.panels:   # the collage is built once as its own short clip, then graded and framed like any shot
+            path, src = str(collage_clip(source, [v.start]+list(v.panels), dur*v.speed, W, H, out.with_name(f'collage-{n}.mp4'), ffmpeg)), 0.
+            made.append(Path(path))
+        shots.append(Shot(t, t+dur, 'aroll', path, src, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1,
                           grade='bwhot' if v.mono else plan.grade,
-                          # a close-up zooms in on the people where they are in the frame
-                          face=(v.focus_x*W, v.focus_y*H) if v.zoom == 'close' else None))
+                          # a close-up zooms in on the people where they are; a rise climbs toward the sky
+                          face=(v.focus_x*W, v.focus_y*H) if v.zoom == 'close' else (W/2, H*.04) if v.zoom == 'rise' else None))
+        if v.silhouette:
+            overlays.append(Overlay(t, min(t+dur, t+.55), 'silhouette'))
+            events.append((t, 'flash', 'calm'))
         if v.voice: voiced.append((t, t+dur, v.start, v.big_captions))
         tone = v.tone or look.tone_of(v.text, None) or 'calm'
         if v.effect and n:
@@ -492,6 +532,15 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
             word = plan.title.upper()
             overlays.append(Overlay(t, t+LOOP, 'typed', {'text': word, 'from': t, 'to': t+TYPE_SECONDS*len(word), 'fixed': min(2, len(word))}))
         t += LOOP
+    if plan.outro.strip() and shots:   # the ending word over the last moment, slowing to a near-hold
+        last = shots[-1]
+        shots.append(Shot(t, t+OUTRO, 'aroll', last.path, last.src+(last.t1-last.t0)*last.rate, rate=.3, cx=last.cx,
+                          zoom0=last.zoom1, zoom1=last.zoom1+.04, grade=last.grade, face=last.face))
+        paint = TITLE_PAINT.get(plan.title_color, {})
+        overlays.append(Overlay(t, t+OUTRO, 'outro', {'text': plan.outro.strip().upper(),
+                                                      'fill': paint.get('fill') or look.TONES[TITLE_TONES[plan.title_color]]}))
+        events.append((t+.04, 'bing', 'calm'))
+        t += OUTRO
     main_end = t
     if plan.end_line:   # the closing message over a held, softened last moment
         last = shots[-1]
@@ -529,7 +578,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         if n:
             music[:int(.08*score.SR)] *= np.linspace(0, 1, min(n, int(.08*score.SR)), dtype=np.float32)[:, None]
             tail = min(n, int(.9*score.SR)); music[n-tail:] *= np.linspace(1, 0, tail, dtype=np.float32)[:, None]
-        events = [e for e in events if e[1] == 'broll']   # a real song needs only the whooshes, not the score's hits
+        events = [e for e in events if e[1] in ('broll', 'bing', 'flash')]   # a real song needs only the whooshes, bings and splashes
     else:
         music = score.compose(main_end, {'silence': None, 'end': main_end, 'hook_end': min(3., main_end)}, plan.mood)
     if plan.sound == 'original' or not options.music: music = music*0
@@ -553,7 +602,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     # --- 3. picture
     progress(.25, 'Composing the picture…')
     matter = None
-    if any(o.kind == 'behind' for o in overlays):   # the big word sits behind the people
+    if any(o.kind in ('behind', 'silhouette') for o in overlays):   # the big word sits behind the people; silhouettes
         try:
             from .matte import Matter
             matter = Matter()
@@ -566,7 +615,10 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         yield from composer.frames()
         last = composer.last if composer.last is not None else np.zeros((H, W, 3), np.uint8)
         if options.stamp: yield from stamp.frames(last)
-    render.encode(all_frames(), wav, out, ffmpeg)
+    try:
+        render.encode(all_frames(), wav, out, ffmpeg)
+    finally:
+        for clip in made: clip.unlink(missing_ok=True)
     wav.unlink(missing_ok=True)
     lap('picture')
     progress(1, 'Done')

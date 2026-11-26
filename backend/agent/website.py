@@ -50,25 +50,46 @@ def transcript_first_request(prompt: str) -> bool:
     return not bool(re.search(r'\b(silent|gesture|gestures|camera|slap|punch|kick|running|jumping)\b', prompt, re.I))
 
 
-RANGE = re.compile(r'(\d{1,2}):(\d{2})\s*(?:-|–|to|until)\s*(\d{1,2}):(\d{2})\s*(?:in|of|from|into)\s+(?:the\s+)?'
-                   r'(\d{1,2}):(\d{2})\s*(?:min(?:ute)?s?\s*)?(?:long\s+)?(?:clip|video|recording)', re.I)
+T = r'(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?'   # 5:30, 5:30.01, or 2:16:24 (minutes:seconds:hundredths)
+CLIP = r'\s*(?:in|of|from|into)\s+(?:the\s+|a\s+)?(\d{1,2}):(\d{2})\s*(?:min(?:ute)?s?\s*)?(?:length\s+|long\s+)?(?:clip|video|recording)'
+RANGE = re.compile(T+r'\s*(?:-|–|to|until)\s*'+T+CLIP, re.I)
+SINGLE = re.compile(r'(?:\bat\s+|\bfrom\s+|^|[\s,(])'+T+CLIP, re.I)
+SINGLE_SECONDS = 3.0   # a single time ("2:16.24 in the 6:17 clip") becomes a clip this long, starting just before it
+
+
+def _seconds(m, s, f):
+    return int(m)*60+int(s)+(int(f)/10**len(f) if f else 0.)
 
 
 def add_given_ranges(toolbox, prompt, parts):
-    """Exact ranges the request writes out ("5:28 to 5:33 in the 15:40 clip") become clips before the agent starts:
-    a recording is named by its length as a phone shows it. Returns a note for the agent about what was added."""
+    """Times the request writes out become clips before the agent starts: a range ("5:30.01 to 5:31 in the 15:40
+    clip") exactly, a single time ("2:16.24 in the 6:17 clip") as a short clip around it. A recording is named by its
+    length as a phone shows it. Returns a note for the agent about what was added."""
     if not parts or not prompt: return ''
-    added = []
+    find = lambda length: next((p for p in parts if abs(int(p['end']-p['start'])-length) <= 1), None)
+    wanted, used = [], []
     for m in RANGE.finditer(prompt):
-        a, b, length = (int(m.group(1))*60+int(m.group(2)), int(m.group(3))*60+int(m.group(4)), int(m.group(5))*60+int(m.group(6)))
-        part = next((p for p in parts if abs(int(p['end']-p['start'])-length) <= 1), None)
-        if part is None or b <= a: continue
+        part = find(int(m.group(7))*60+int(m.group(8)))
+        a, b = _seconds(*m.group(1, 2, 3)), _seconds(*m.group(4, 5, 6))
+        if part and b > a: wanted.append((part, a, b, m.group(0))); used.append(m.span())
+    for m in SINGLE.finditer(prompt):
+        if any(x <= m.start(1) < y for x, y in used): continue
+        part = find(int(m.group(4))*60+int(m.group(5)))
+        if part: t = _seconds(*m.group(1, 2, 3)); wanted.append((part, max(0., t-.3), t-.3+SINGLE_SECONDS, m.group(0).strip(' ,(')))
+    added = []
+    floor = toolbox.min_clip_seconds
+    for part, a, b, said in wanted:
         start, end = part['start']+a, min(part['end'], part['start']+b)
-        blocks, err = toolbox.call('add_candidate', {'start_time': round(start, 2), 'end_time': round(end, 2), 'score': .9, 'asked_for': True,
-                                                     'title': f'{m.group(1)}:{m.group(2)}-{m.group(3)}:{m.group(4)} of the {m.group(5)}:{m.group(6)} clip',
-                                                     'reason': 'The exact range the request asks for.'})
-        if not err: added.append(f'{start:.1f}-{end:.1f}s')
-    return (f"\n\n(Already added from the request's exact time ranges: {', '.join(added)}. Do not add those again; find the other moments.)"
+        toolbox.min_clip_seconds = min(floor, max(.5, end-start))   # an exact range may be shorter than usual clips
+        try:
+            blocks, err = toolbox.call('add_candidate', {'start_time': round(start, 2), 'end_time': round(end, 2), 'score': .9,
+                                                         'asked_for': True, 'title': said[:70], 'reason': 'The exact time the request asks for.'})
+        finally:
+            toolbox.min_clip_seconds = floor
+        if not err:
+            toolbox.candidates[-1]['exact'] = True   # the user's own times are kept before any other pick
+            added.append(f'{start:.2f}-{end:.2f}s ({said})')
+    return (f"\n\n(Already added from the request's exact times: {'; '.join(added)}. Do not add those again; find the other moments.)"
             if added else '')
 
 

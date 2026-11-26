@@ -327,7 +327,7 @@ class Composer:
     def _compose(self, frame, t, active, shot):
         W, H, u = look.W, look.H, look.unit()
         kinds = {o.kind for o in active}
-        need_matte = shot.kind == 'aroll' and kinds & {'behind', 'outline', 'glow'}
+        need_matte = shot.kind == 'aroll' and kinds & {'behind', 'outline', 'glow', 'silhouette'}
         person = self._matte(frame) if need_matte else None
         mute = []
         for o in active:
@@ -389,6 +389,15 @@ class Composer:
             elif o.kind == 'flash':
                 k = 1-abs((t-(o.t0+o.t1)/2)/((o.t1-o.t0)/2))
                 frame[:] = np.clip(frame.astype(np.int16)+int(110*max(0, k)), 0, 255).astype(np.uint8)
+            elif o.kind == 'silhouette':   # a bright splash: cream background, the people as cut-out silhouettes
+                k = 1. if t-o.t0 < .3 else max(0., 1-(t-o.t0-.3)/max(.01, o.t1-o.t0-.3))
+                splash = np.empty_like(frame); splash[:] = (246, 241, 226)
+                if person is not None:
+                    a = person[..., None]
+                    splash = (splash*(1-a)+np.array((16, 22, 34))*a).astype(np.uint8)
+                frame[:] = (frame*(1-k)+splash*k).astype(np.uint8)
+            elif o.kind == 'outro':   # the ending word pops in, holds, then the camera flies into it
+                frame[:] = self._outro(frame, t, o)
             elif o.kind == 'typed':   # a big place name typed out letter by letter (the trip-reel opener)
                 self._typed(frame, t, o)
             elif o.kind == 'corner':   # a lyric-video word popping in, white, in a top corner
@@ -439,6 +448,32 @@ class Composer:
         return frame
 
     TYPED_COLOUR = (244, 231, 198)   # warm cream
+
+    def _outro(self, frame, t, o):
+        import cv2
+        W, H = look.W, look.H
+        text, fill = o.data['text'], tuple(o.data['fill'])
+        key = ('outro', text, W)
+        if key not in self.sprites:
+            f = look.fit_heavy(text, W*.78, int(min(H*.3, W*.22)))
+            sp = look.text_sprite(text, f, fill=(255, 255, 255), shadow=0, tracking=-int(f.size*.02))
+            mask = np.zeros((H, W), np.float32)
+            y0, x0 = int(H*.5-sp.h/2), int(W/2-sp.w/2)
+            ys, xs = max(0, y0), max(0, x0)
+            part = sp.rgba[ys-y0:, xs-x0:, 3][:H-ys, :W-xs]
+            mask[ys:ys+part.shape[0], xs:xs+part.shape[1]] = part/255.
+            self.sprites[key] = mask
+        mask = self.sprites[key]
+        p = (t-o.t0)/max(.01, o.t1-o.t0)
+        if p < .1: z = 1.35-.35*_ease(p/.1)                       # pop in
+        elif p < .5: z = 1.                                        # hold
+        else: z = math.exp((p-.5)/.5*math.log(45))                 # fly into the letters
+        m = cv2.warpAffine(mask, np.float32([[z, 0, (1-z)*W/2], [0, z, (1-z)*H*.5]]), (W, H))[..., None] if abs(z-1) > 1e-3 else mask[..., None]
+        dark = min(1., max(0., (p-.45)/.3))                         # the picture falls away around the word
+        base = frame*(1-.55*min(1., p/.1))*(1-dark)
+        out = base*(1-m)+np.array(fill, np.float32)*m
+        if p > .92: out *= max(0., 1-(p-.92)/.08)                  # and the film ends
+        return np.clip(out, 0, 255).astype(np.uint8)
 
     def _typed(self, frame, t, o):
         W, H, u = look.W, look.H, look.unit()

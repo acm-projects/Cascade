@@ -34,6 +34,10 @@ CINEMATIC (when the request asks for cinematic, professional or "crazy good" edi
 - Slow motion ("speed": 0.5) for 1-1.5 s on the best action (a climb, a jump, a throw), then back to normal speed.
 - "push" on wide views, "punch" on reactions; every music shot 0.6-1.4 s.
 - A moment filmed from far away that the request wants closer ("make the hug closer so we're visible"): "zoom": "close", with "focus_x" and "focus_y" on the people (0-1 across and down the frame, read from the contact sheets).
+- "panels" (a collage, like the reference's vertical blocks): a list of 2-4 other source seconds; the frame splits into vertical strips, this shot in the middle and those moments around it, all playing at once. Use it when the request asks for vertical blocks / a collage, with the moments it names (each strip a different moment), 1-1.8 s.
+- "silhouette": true on the moment the request wants as a cut-out silhouette or bright splash: the background flashes cream and the people become dark cut-out shapes, then the shot plays.
+- "zoom": "rise" on an ending where hands go up or the request says the shot rises to the sky.
+- "outro": an ending word (e.g. "CASCADE") when the request wants the edit to end on the word popping in (with a bing) and zooming into it; it takes 1.7 s after the last shot, in the title's colour.
 - When the request asks for bigger or centred text on a line (a chant, a punchline), set "big_captions": true on that talking shot.
 
 TITLE STYLES: "typed" (a place name typed out letter by letter over the opening, the trip-reel opener) or "corners" (the lyric-video opener: the title's words pop in white in the top corners one after another and its LAST word lands huge behind the people, in "title_color" (red unless the request names a colour; "dark blue" is a deep blue word with a thick navy outline); use it for a title like "HIKE WITH CASCADE" or when the request asks for the song video's text style). The opening shot holds for the whole title; with "corners", make the opening a shot with people facing the camera (their intro works well).

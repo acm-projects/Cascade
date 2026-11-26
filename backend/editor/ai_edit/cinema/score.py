@@ -235,6 +235,14 @@ def compose(total, cues, mood='awakening', seed=11):
     return music[:int(total*SR)]
 
 
+def _bing(d=1.4):
+    """A bright bell 'bing' for a word popping on screen: a few bell partials with a fast attack and a long ring."""
+    n = int(d*SR); t = np.arange(n)/SR
+    x = sum(a*np.sin(2*np.pi*f*t)*np.exp(-t*r) for f, a, r in ((1567.98, 1., 3.2), (2349.3, .45, 4.5), (3135.96, .25, 6.), (4186., .12, 9.)))
+    x *= np.minimum(1, t/.004)
+    return x/np.abs(x).max()
+
+
 def sound_design(total, events):
     """events: [(t, kind, tone)] -> stereo effects bed."""
     N = int((total+3)*SR)
@@ -248,6 +256,7 @@ def sound_design(total, events):
         elif kind == 'slam': _add(fx, t, _level(_st(_boom(46)), -22))
         elif kind == 'boom': _add(fx, t, _level(_st(_boom(49)), -21))
         elif kind == 'flash': _add(fx, t-.25, _level(_st(_air(.4, True, 77)), -34))
+        elif kind == 'bing': _add(fx, t, _level(_st(_bing()), -20))
     return fx[:int(total*SR)]
 
 

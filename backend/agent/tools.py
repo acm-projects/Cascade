@@ -496,7 +496,8 @@ class ToolBox:
 
         base_gap = self.index.duration / (2 * self.target_clips)
         # moments the request names come first and are never dropped for spacing (only for overlapping)
-        asked = [cid for cid in order if by_id[cid].get('asked_for')]
+        asked = ([cid for cid in order if by_id[cid].get('exact')]
+                 + [cid for cid in order if by_id[cid].get('asked_for') and not by_id[cid].get('exact')])
         kept: list[int] = []
         for cid in asked:
             if len(kept) < self.target_clips and all(
