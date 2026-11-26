@@ -22,9 +22,12 @@ LOG = logging.getLogger(__name__)
 MESSAGE = settings.get('pacing.message_seconds', 3.4)
 ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.)}
 SHORTEST = .5   # seconds on screen
+QUICKEST = .6   # a quick music shot is not shortened below this to make an edit fit
 LOOP = .75      # the closing return to the opening shot, for a seamless loop
 TYPE_SECONDS = .9   # how long the typed title takes to spell out
 TITLE_SECONDS = 3.6   # how long a "corners" title stays up
+TITLE_TONES = {'red': 'danger', 'blue': 'water', 'dark blue': 'water', 'yellow': 'money', 'green': 'life', 'white': 'calm'}
+TITLE_PAINT = {'dark blue': {'fill': (30, 78, 178), 'edge': (6, 20, 66)}}   # colours that are not one of the tones
 
 
 class VisualShot(BaseModel):
@@ -34,7 +37,7 @@ class VisualShot(BaseModel):
     speed: float = Field(default=1., ge=.25, le=2.)   # .5 = half-speed slow motion, 2 = double speed
     zoom: Literal['none', 'push', 'punch', 'pull'] = 'none'
     focus_x: float = Field(default=.5, ge=0, le=1)   # where the subject is, left (0) to right (1), for vertical crops
-    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom'] | None = None   # a transition as this shot lands
+    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake'] | None = None   # a transition as this shot lands
     text: str = Field(default='', max_length=16)       # one big word over the start of this shot
     text_style: Literal['slam', 'perspective'] = 'perspective'
     tone: Tone | None = None
@@ -50,6 +53,8 @@ class VisualPlan(BaseModel):
     # 'typed': a big place name typed out letter by letter over the opening shot; 'corners': the title's words pop in
     # white in the top corners one after another and its last word lands huge and red behind the people (a lyric-video opener)
     title_style: Literal['small', 'typed', 'corners'] = 'small'
+    # the big word of a "corners" title; 'dark blue': a deep blue word with a thick, darker navy outline
+    title_color: Literal['red', 'blue', 'dark blue', 'yellow', 'green', 'white'] = 'red'
     shots: list[VisualShot] = Field(min_length=1, max_length=40)
     mood: Literal['awakening', 'wonder', 'tension', 'warm'] = 'awakening'
     grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm', 'natural'] = 'cinema'
@@ -60,6 +65,7 @@ class VisualPlan(BaseModel):
     intro: Literal['none', 'black'] = 'none'               # 'black': open on black while the music builds, first shot on the beat
     settings: Settings = Field(default_factory=Settings)
     end_line: str = Field(default='', max_length=90)
+    clip_order: list[int] = Field(default_factory=list, max_length=20)   # the request's order of the joined clips (1-based)
     loop: bool = False      # end on a short return to the opening shot and title, so the reel plays as a seamless loop
     seconds: float = Field(default=0, ge=0, le=60)   # the edit's length when the user asked for one; 0 = the house length
 
@@ -74,9 +80,10 @@ class VisualPlan(BaseModel):
         return self
 
 
-def check(plan, duration, windows=None, cuts=()):
+def check(plan, duration, windows=None, cuts=(), parts=None):
     """Raises ValueError naming what is wrong, in words a planner can fix. A shot edge a few frames from a
-    camera cut moves onto the cut, so no shot opens or closes on a flash of the neighbouring camera shot."""
+    camera cut moves onto the cut, so no shot opens or closes on a flash of the neighbouring camera shot. With
+    `parts` (the joined clips) and a clip_order, the shots must play those clips in that order, none left out."""
     for s in plan.shots:
         for c in cuts:
             if s.start < c < s.start+.35 and s.end-c >= .3: s.start = c
@@ -88,6 +95,57 @@ def check(plan, duration, windows=None, cuts=()):
         if windows and not any(s.start >= a-.05 and s.end <= b+.05 for a, b in windows):
             raise ValueError(f'shots[{k}]: {s.start:.1f}-{s.end:.1f} s is outside the usable ranges {windows}')
     for s in plan.shots: s.end = min(s.end, duration)
+    if parts and plan.clip_order:
+        n = len(parts)
+        if any(not 1 <= c <= n for c in plan.clip_order): raise ValueError(f'clip_order: use clip numbers 1-{n}')
+        which = lambda s: next((k+1 for k, p in enumerate(parts) if p['from']-.05 <= s.start < p['to']), 0)
+        played = []
+        for k, s in enumerate(plan.shots):
+            c = which(s)
+            if c and s.end > parts[c-1]['to']+.1:
+                raise ValueError(f"shots[{k}]: runs from clip {c} into the next clip; end it by {parts[c-1]['to']:.1f} s")
+            if c and not s.flash and (not played or played[-1] != c): played.append(c)
+        want = list(dict.fromkeys(plan.clip_order))
+        missing = [c for c in want if c not in played]
+        if missing:
+            raise ValueError(f"clip_order {want}: clip(s) {missing} ({'; '.join(parts[c-1]['title'] for c in missing)}) are not "
+                             f"played; your shots play clips {played}. Give each one at least one shot, shortening others to fit.")
+        order = [c for c in played if c in want]
+        if [c for c in dict.fromkeys(order)] != want:
+            raise ValueError(f'clip_order {want}: your shots play the clips in the order {played}; put the shots in clip_order.')
+
+
+def story_edges(plan, words, parts=None, most=4.):
+    """A montage opens and ends on people: the first and last shots are talking shots when they are mostly speech
+    (an intro, a chant), and with a requested clip order the ending plays to the end of its clip (its payoff),
+    at most `most` s longer."""
+    shots = [s for s in plan.shots if not s.flash]
+    if not shots: return plan
+    for s in {id(x): x for x in (shots[0], shots[-1])}.values():
+        spoken = sum(max(0., min(w['e'], s.end)-max(w['s'], s.start)) for w in words or [])
+        if spoken >= .5*(s.end-s.start): s.voice, s.speed = True, 1.
+    if parts and plan.clip_order:
+        last = shots[-1]
+        clip = next((p for p in parts if p['from']-.05 <= last.start < p['to']), None)
+        if clip and 0 < clip['to']-last.end <= most: last.end = clip['to']-.05
+    return plan
+
+
+def stop_at(plan, words, request):
+    """'stop the intro at presentation prep': a talking shot that says those words ends right after them."""
+    import re
+    m = re.search(r"\bstop(?:s|ping)?\b[^.;]*?\b(?:at|after)\s+[\"'“]?([a-z0-9' ]{3,60}?)[\"'”]?(?=\s*(?:[,.;]|\band\b|\bthen\b|$))",
+                  request or '', re.I)
+    if not m or not words: return plan
+    target = [w for w in re.findall(r"[a-z0-9']+", m.group(1).lower())]
+    said = [re.sub(r"[^a-z0-9']", '', w['w'].lower()) for w in words]
+    for s in plan.shots:
+        if not s.voice: continue
+        for i in range(len(words)-len(target)+1):
+            if said[i:i+len(target)] == target and s.start-.05 <= words[i]['s'] < s.end:
+                s.end = min(s.end, words[i+len(target)-1]['e']+.2)
+                return plan
+    return plan
 
 
 NEAR = 2.5   # seconds: two shots whose source moments are this close read as one long shot when played back to back
@@ -132,7 +190,7 @@ def interleave(plan, budget=20000):
 
 def whole_phrases(plan, words, gap=.6, most=6., cuts=()):
     """Talking shots start and end on sentence edges: a shot that would cut into speech grows to the edges of the
-    phrase it touches (words closer than `gap` s run on), at most `most` s each way, and never across a camera cut
+    sentence it touches (words closer than `gap` s run on, up to the full stop), at most `most` s each way, never across a camera cut
     (a clip made of several clips: the next clip is another moment)."""
     if not words: return plan
     for s in plan.shots:
@@ -140,8 +198,9 @@ def whole_phrases(plan, words, gap=.6, most=6., cuts=()):
         inside = [w for w in words if w['e'] > s.start and w['s'] < s.end]
         if not inside: continue
         first, last = words.index(inside[0]), words.index(inside[-1])
-        while first > 0 and words[first]['s']-words[first-1]['e'] < gap and s.start-words[first-1]['s'] < most: first -= 1
-        while last+1 < len(words) and words[last+1]['s']-words[last]['e'] < gap and words[last+1]['e']-s.end < most: last += 1
+        ends = lambda w: w['w'].rstrip('"\'”’').endswith(('.', '?', '!'))   # a sentence ends here: the shot may stop
+        while first > 0 and not ends(words[first-1]) and words[first]['s']-words[first-1]['e'] < gap and s.start-words[first-1]['s'] < most: first -= 1
+        while last+1 < len(words) and not ends(words[last]) and words[last+1]['s']-words[last]['e'] < gap and words[last+1]['e']-s.end < most: last += 1
         start, end = min(s.start, max(0., words[first]['s']-.12)), max(s.end, words[last]['e']+.25)
         before = [c for c in cuts if start < c <= s.start+.05]
         after = [c for c in cuts if s.end-.05 <= c < end]
@@ -165,6 +224,15 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
         if s.flash: s.end = s.start+min(.3, max(.1, s.end-s.start))*s.speed
     # too long: music shots from the middle go first (latest first); talking shots, the opening and the ending stay
     on = lambda x: (x.end-x.start)/x.speed
+    over = sum(map(on, plan.shots))-budget
+    middle = [k for k, x in enumerate(plan.shots) if 0 < k < len(plan.shots)-1 and not x.voice and not x.flash]
+    room = sum(max(0., on(plan.shots[k])-QUICKEST) for k in middle)
+    if over > 0 and room > 0:   # first shorten every quick shot in proportion (down to QUICKEST)
+        share = min(1., over/room)
+        for k in middle:
+            x = plan.shots[k]
+            cut = max(0., on(x)-QUICKEST)*share
+            plan.shots[k] = x.model_copy(update={'end': x.end-cut*x.speed})
     while sum(map(on, plan.shots)) > budget+1e-6:
         middle = [k for k, x in enumerate(plan.shots) if 0 < k < len(plan.shots)-1 and not x.voice]
         if not middle or sum(on(plan.shots[k]) for k in middle) <= SHORTEST: break
@@ -368,7 +436,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         if v.voice: voiced.append((t, t+dur, v.start))
         tone = v.tone or look.tone_of(v.text, None) or 'calm'
         if v.effect and n:
-            overlays.append(Overlay(t, t+.32, 'accent', {'kind': v.effect}))
+            overlays.append(Overlay(t, t+(.45 if v.effect == 'shake' else .32), 'accent', {'kind': v.effect}))
             events.append((t, 'broll', 'water' if v.effect == 'ripple' else 'calm'))
         if v.text.strip():
             word = v.text.strip().upper()
@@ -391,8 +459,10 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         for k, w in enumerate(title_words[:-1]):
             overlays.append(Overlay(opening.t0+k*step, title_end, 'corner', {'text': w, 'side': 'left' if k % 2 == 0 else 'right', 'row': k//2}))
         at = opening.t0+max(0, len(title_words)-1)*step
-        overlays.append(Overlay(at, max(title_end, at+1.4), 'behind', {'text': title_words[-1], 'tone': 'danger', 'y': look.H*.42}))
-        events.append((at, 'moment', 'danger'))
+        tone = TITLE_TONES[plan.title_color]
+        overlays.append(Overlay(at, max(title_end, at+1.4), 'behind', {'text': title_words[-1], 'tone': tone, 'y': look.H*.42,
+                                                                       **TITLE_PAINT.get(plan.title_color, {})}))
+        events.append((at, 'moment', tone))
     if plan.loop and plan.shots:   # back to the opening shot (and the start of the title) so the reel loops
         first = plan.shots[0]
         shots.append(Shot(t, t+LOOP, 'aroll', str(source), first.start, cx=shots[1 if lead else 0].cx,
@@ -411,7 +481,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         overlays.append(Overlay(t+.15, t+MESSAGE, 'message', {'words': [(w, t+.35+k*step, None) for k, w in enumerate(parts)]}))
         events.append((t+.3, 'boom', 'calm'))
         main_end = t+MESSAGE
-    if plan.title and plan.title_style != 'typed':
+    if plan.title and plan.title_style == 'small':   # (typed and corners titles draw themselves)
         overlays.append(Overlay(.15, min(2.2, main_end), 'title', {'text': plan.title}))
     if timing and plan.lyrics != 'off':   # the song's words, but never over someone talking
         overlays += [o for o in lyric_lines(timing[0], timing[1], main_end, plan.lyrics)

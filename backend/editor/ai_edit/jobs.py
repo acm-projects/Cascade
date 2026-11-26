@@ -112,6 +112,12 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
             speechless = not prep['words']   # nobody speaks: a visual edit planned from the frames and the motion
             # a music-led montage (friends, a trip, an Insta or trend edit): the same visual edit, with talking shots
             montage = not speechless and planner.wants_montage(message)
+            try:   # a clip joined from several Studio picks: tell the planner which part is which
+                from backend.core import jobs as job_service
+                owner = job_service.load_json(job_service.JOBS_DIR/jid/'owner.json')
+                if owner.get('parts'): prep = {**prep, 'parts': owner['parts']}
+            except Exception:
+                pass
             if montage and not prep.get('motion'):
                 prep = {**prep, 'motion': preparation.motion(source)}
             current = project.load(folder/state.ai_edit.version) if state.ai_edit else None

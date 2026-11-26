@@ -135,6 +135,15 @@ def _part(pid, user, ref, stack):
             'captions': captions, 'start': float(clip.get('start', 0)), 'end': float(clip.get('end', 0))}
 
 
+def timeline(parts):
+    """[{'title', 'from', 'to'}]: each picked clip's place in the joined video, in order."""
+    out, at = [], 0.
+    for p in parts:
+        out.append({'title': p['title'][:120], 'from': round(at, 2), 'to': round(at+p['duration'], 2)})
+        at += p['duration']
+    return out
+
+
 def default_title(titles):
     title = ' + '.join(t.strip() for t in titles if t.strip())
     return title if len(title) <= 120 else f'{len(titles)} clips combined'
@@ -190,6 +199,8 @@ def _combine(pid, user, body, refs, parts):
                  'media_kind': 'video', 'video_sha256': fingerprint.hexdigest(), 'requested_clip_count': 1,
                  'history_id': job_id, 'source_job': job_id, 'created_at': time.time(),
                  'combined_from': [{**r.model_dump(), 'start': p['start'], 'end': p['end']} for r, p in zip(refs, parts)],
+                 # where each picked clip sits in the joined video, with its Studio title, so the AI Editor knows which is which
+                 'parts': timeline(parts),
                  'user_folder': storage['folder'], 'folder_source': storage['source'], **info}
         job_service.save_json(folder/'owner.json', owner)
         shutil.copyfile(source, folder/'clip_1.mp4')

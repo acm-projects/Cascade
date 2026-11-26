@@ -340,7 +340,10 @@ class Composer:
             if o.kind in ('behind', 'outline', 'soft'):
                 text, tone = o.data['text'], o.data['tone']
                 f = look.fit_heavy(text, W*.92, int(min(H*.34, W*.42)))
-                solid = self._sprite(('behind', text, tone, W), lambda: look.text_sprite(text, f, fill=look.TONES[tone], shadow=.35, tracking=-int(f.size*.03)))
+                fill, edge = tuple(o.data.get('fill') or look.TONES[tone]), o.data.get('edge')   # edge: an outline colour
+                solid = self._sprite(('behind', text, fill, tuple(edge or ()), W), lambda: look.text_sprite(
+                    text, f, fill=fill, shadow=.35, tracking=-int(f.size*.03),
+                    **({'stroke': max(4, int(f.size*.045)), 'stroke_fill': tuple(edge)} if edge else {})))
                 k = _ease((t-o.t0)/.22)
                 out = min(1, max(0, (o.t1-t)/.2))
                 y = o.data.get('y', H*.3)

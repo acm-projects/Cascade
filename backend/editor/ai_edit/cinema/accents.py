@@ -41,6 +41,14 @@ def apply(frame, previous, kind, phase):
         glow = np.exp(-((xs-centre)/.45)**2)*(1-p)*.85
         warm = np.array([255, 150, 60], np.float32)
         return np.clip(frame*(1-glow*.35)+warm*glow, 0, 255).astype(np.uint8)
+    if kind == 'shake':   # a camera shake that settles: a punch in, jolting left/right and up/down, easing out
+        k = (1-p)**2
+        dx, dy = w*.035*k*math.sin(p*math.pi*9), h*.03*k*math.cos(p*math.pi*7)
+        z = 1+.08*k
+        M = np.float32([[z, 0, (1-z)*w/2+dx], [0, z, (1-z)*h/2+dy]])
+        moved = cv2.warpAffine(frame, M, (w, h), borderMode=cv2.BORDER_REFLECT_101)
+        size = max(1, int(w*.012*k) | 1)
+        return cv2.blur(moved, (size, size)) if size > 1 else moved
     if kind == 'zoom':    # a radial zoom blur into the new shot
         k = (1-p)**2
         out = frame.astype(np.float32)

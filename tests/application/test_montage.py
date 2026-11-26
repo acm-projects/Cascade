@@ -83,6 +83,47 @@ class MontageTests(unittest.TestCase):
         self.assertGreaterEqual(p.shots[0].end, 3.4)
         self.assertEqual((p.shots[1].start, p.shots[1].end), (9.5, 10.5))   # music shots are left alone
 
+    def test_talking_stops_at_the_sentence_end(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('taking', 0.2), ('a', .6), ('break', 1.0), ('prep.', 1.4), ('I', 1.8), ('have', 2.2), ('no', 2.6), ('clue.', 3.0)]]
+        p = visual.whole_phrases(plan([{'start': 0.1, 'end': 1.7, 'voice': True}]), words)
+        self.assertLess(p.shots[0].end, 2.0)   # stops after "prep." instead of running into the next sentence
+
+    def test_blue_title_and_shake(self):
+        p = plan([{'start': 0, 'end': 2, 'effect': 'shake'}], title='HIKE WITH CASCADE', title_style='corners', title_color='blue')
+        self.assertEqual(visual.TITLE_TONES[p.title_color], 'water')
+        import numpy as np
+        from backend.editor.ai_edit.cinema import accents
+        frame = np.zeros((90, 160, 3), np.uint8); frame[40:50, 70:90] = 255
+        self.assertEqual(accents.apply(frame, None, 'shake', .3).shape, frame.shape)
+        self.assertTrue((accents.apply(frame, None, 'shake', 1.) == frame).all())
+
+    def test_shots_must_follow_the_requested_clip_order(self):
+        parts = [{'title': 'hands', 'from': 0, 'to': 5}, {'title': 'intro', 'from': 5, 'to': 11}, {'title': 'wave', 'from': 11, 'to': 14}]
+        good = plan([{'start': 5, 'end': 9, 'voice': True}, {'start': 11, 'end': 12}, {'start': 0, 'end': 4, 'voice': True}], clip_order=[2, 3, 1])
+        visual.check(good, 14, parts=parts)
+        with self.assertRaisesRegex(ValueError, 'not played'):
+            visual.check(plan([{'start': 5, 'end': 9}, {'start': 0, 'end': 4}], clip_order=[2, 3, 1]), 14, parts=parts)
+        with self.assertRaisesRegex(ValueError, 'order'):
+            visual.check(plan([{'start': 0, 'end': 4}, {'start': 5, 'end': 9}, {'start': 11, 'end': 12}], clip_order=[2, 3, 1]), 14, parts=parts)
+
+    def test_stop_at_the_words_the_request_names(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('break', 0.2), ('from', .6), ('presentation', 1.0), ('prep.', 1.4), ('I', 1.8), ('have', 2.2)]]
+        p = visual.stop_at(plan([{'start': 0, 'end': 3, 'voice': True}]), words, 'keep the intro, and stop the intro at presentation prep. Then the wave')
+        self.assertAlmostEqual(p.shots[0].end, 1.9)
+
+    def test_the_intro_and_ending_are_heard_and_the_ending_plays_out(self):
+        words = [{'w': w, 's': a, 'e': a + .4} for w, a in [('Set.', .2), ('Cascade', .7), ('on', 1.2), ('three.', 1.6), ('one', 2.4), ('two', 2.9), ('three.', 3.4), ('Cascade.', 4.2),
+                                                          ('Hey', 5.1), ('guys.', 5.6), ('This', 6.1), ('is', 6.6), ('Cascade.', 7.1)]]
+        parts = [{'title': 'hands', 'from': 0, 'to': 5}, {'title': 'intro', 'from': 5, 'to': 8}]
+        p = visual.story_edges(plan([{'start': 5, 'end': 7.5}, {'start': 0, 'end': 2.3}], clip_order=[2, 1]), words, parts)
+        self.assertTrue(p.shots[0].voice and p.shots[-1].voice)
+        self.assertGreater(p.shots[-1].end, 4.9)
+
+    def test_quick_shots_shrink_before_any_is_dropped(self):
+        p = plan([{'start': 0, 'end': 4, 'voice': True}] + [{'start': 10 + 3 * k, 'end': 11.5 + 3 * k} for k in range(4)] + [{'start': 30, 'end': 34, 'voice': True}])
+        visual.fit(p, 11.6)
+        self.assertEqual(len(p.shots), 6)
+
     def test_a_long_edit_loses_middle_music_shots_not_its_talking_or_ending(self):
         p = plan([{'start': 0, 'end': 6, 'voice': True}, {'start': 10, 'end': 12}, {'start': 14, 'end': 16},
                   {'start': 18, 'end': 20}, {'start': 30, 'end': 35, 'voice': True}])

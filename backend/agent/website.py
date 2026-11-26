@@ -63,7 +63,8 @@ def footage_note(parts, short):
                  'means that recording\'s start plus that time (e.g. a recording at 148.2-1088.7s, 5:28 in = 148.2 + 328 = 476.2s). '
                  'For every time the request gives, read the transcript and inspect frames around that exact second (people misremember '
                  'by a minute or so: if the described moment is not there, look nearby and in the other recordings for it) and add it '
-                 'with asked_for: true.)')
+                 'with asked_for: true. A time RANGE given with no description ("5:28 to 5:31 in the 15:40 clip") is the clip itself: '
+                 'add exactly that range with asked_for: true, even if it looks ordinary to you.)')
     if short:
         note += ('\n\n(These are short moments for a fast music edit, like an Instagram reel of friends: each clip is the single best beat - '
                  'a laugh, a reaction, a funny line said in full, friends together, a striking view. Start right before it and cut right after; '

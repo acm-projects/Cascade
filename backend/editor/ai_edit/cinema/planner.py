@@ -45,14 +45,14 @@ def output(plan, words, new=True):
     if ratio and (new or plan.settings.ratio is None): plan.settings.ratio = ratio
     target = settings.get('output.target_seconds', 15)
     if isinstance(plan, visual.VisualPlan) and plan.seconds: target = plan.seconds   # the length the user asked for
-    if isinstance(plan, visual.VisualPlan) and new and target:
+    if isinstance(plan, visual.VisualPlan) and new and target and not plan.seconds:   # (an asked-for length is kept)
         talking = sum(s.end-s.start for s in plan.shots if s.voice)
         if talking: target = min(40, max(target, talking+8))   # room for the quick cuts around the talking
     if target and isinstance(plan, visual.VisualPlan):
         from . import score
         message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
         timing = visual.song_timing(plan, target)
-        if new: visual.interleave(plan)   # a new edit never plays two pieces of one moment back to back
+        if new and not plan.clip_order: visual.interleave(plan)   # never two pieces of one moment back to back (a requested order wins)
         if plan.song and not timing:   # an unknown song: Cascade's own score instead
             plan.song, plan.lyrics, plan.intro = '', 'off', 'none'
         if timing: visual.fit(plan, max(2., target-message), grid=timing[2], lead=timing[3])
@@ -88,7 +88,15 @@ def _footage(prep, windows):
     motion = prep.get('motion') or []
     return (f"Clip: {prep['duration']:.1f} s. Usable source ranges: {windows}. Contact sheets: one cell every {every} s, 8 across and 6 down, "
             f"labelled with the source second. Camera cuts at seconds: {[round(c, 1) for c in prep.get('cuts', [])][:200]}.\n"
-            f"Motion per second (index = second): {motion[:600]}\n\n{speech(prep.get('words') or [], windows)}{songs()}")
+            f"Motion per second (index = second): {motion[:600]}\n\n{clips(prep.get('parts'))}{speech(prep.get('words') or [], windows)}{songs()}")
+
+
+def clips(parts):
+    """The picked clips this video was joined from, so "the wave" or "the hands thing" in a request maps to seconds."""
+    if not parts: return ''
+    listed = '\n'.join(f"{n+1}. {p['from']:.1f}-{p['to']:.1f} s: {p['title']}" for n, p in enumerate(parts))
+    return ('Clips (this video is these picked clips joined in this order; a request naming a moment means the clip with that '
+            f'title; use every clip unless the request leaves one out, and never let a shot cross from one clip into the next):\n{listed}\n\n')
 
 
 def speech(words, windows):
@@ -127,7 +135,7 @@ def songs():
     return 'Music Library (pick "song" by id and "song_section" by number; sections start at their own drop or chorus):\n'+json.dumps(catalogue)
 
 
-def _watch(prompt, prep_dir, prep, windows, tries=2):
+def _watch(prompt, prep_dir, prep, windows, tries=3):
     system, images = VISUAL_PROMPT.read_text(), director.images(prep_dir, prep)
     schema, last = openai_edit.strict_schema(visual.VisualPlan), ''
     for _ in range(tries):
@@ -137,7 +145,7 @@ def _watch(prompt, prep_dir, prep, windows, tries=2):
             raise Unavailable(str(exc.detail)) from None
         try:
             plan = visual.VisualPlan.model_validate(answer)
-            visual.check(plan, prep['duration'], windows, prep.get('cuts', []))
+            visual.check(plan, prep['duration'], windows, prep.get('cuts', []), prep.get('parts'))
             return plan
         except ValueError as exc:
             logging.getLogger(__name__).warning('Visual plan rejected: %s', exc)
@@ -160,7 +168,10 @@ def plan_visual(request, prep_dir, prep, windows, history):
     length = f"Length: {seconds:g} s, as asked." if seconds else ''
     prompt = f"Request: {request}\n{length}\n\nEarlier chat:\n{json.dumps(history[-8:])}\n\n{_footage(prep, windows)}"
     plan = _watch(prompt, prep_dir, prep, windows)
-    visual.whole_phrases(plan, [{**w, 'e': min(w['e'], prep['duration'])} for w in prep.get('words') or []], cuts=prep.get('cuts') or [])
+    said = [{**w, 'e': min(w['e'], prep['duration'])} for w in prep.get('words') or []]
+    visual.story_edges(plan, said, prep.get('parts'))   # the intro and the ending are heard, the ending plays out
+    visual.whole_phrases(plan, said, cuts=prep.get('cuts') or [])
+    visual.stop_at(plan, said, request)   # "stop the intro at presentation prep"
     if seconds: plan.seconds = seconds
     plan = output(plan, [])
     ratio = requested_ratio(request)
