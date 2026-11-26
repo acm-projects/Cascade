@@ -311,3 +311,11 @@ class StripTests(unittest.TestCase):
         self.assertEqual(p.shots[1].start, 5.02)   # the replaced clip plays from its start
         self.assertEqual(p.shots[1].panels, [8.5])   # the kept clip keeps its moment
         self.assertEqual(p.shots[1].panel_ends, [8, 11])
+
+
+class TransitionMoveTests(unittest.TestCase):
+    def test_the_vertical_transition_moves_onto_the_collage(self):
+        p = plan([{'start': 0, 'end': 1, 'effect': 'zoom'}, {'start': 2, 'end': 3, 'effect': 'slices'}, {'start': 4, 'end': 5, 'panels': [6, 8]}])
+        visual.transition_requests(p, 'do the vertical transtion before all the vertical clips come back, when the bench scen ends, '
+                                      'and for the bench scene to start a cool differnt transtion')
+        self.assertEqual([s.effect for s in p.shots], ['zoom', 'leak', 'slices'])

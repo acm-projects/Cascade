@@ -190,6 +190,7 @@ def plan_visual(request, prep_dir, prep, windows, history):
         clip = next((p for p in prep['parts'] if p['from']-.05 <= prev.start < p['to']), None)
         if clip: plan.shots[-1].carry_until = clip['to']-.03
     visual.ending_transition(plan)
+    visual.transition_requests(plan, request)   # "the vertical transition before the vertical clips"
     visual.strip_subjects(plan, request)   # "the 3rd box ... focus on the girl in the red coat"
     for shot in plan.shots:   # each collage strip stops where its own clip ends (it then holds its last frame)
         if shot.panels and prep.get('parts'):

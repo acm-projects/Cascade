@@ -542,6 +542,10 @@ class Composer:
                 self.accent_previous[key] = self.last.copy() if self.last is not None else None
             phase = (t-o.t0)/max(.001, o.t1-o.t0)
             frame = accents.apply(frame, self.accent_previous[key], o.data['kind'], phase)
+            for b in active:   # a transition's glow never spills onto the letterbox
+                if b.kind == 'bars' and W > H:
+                    bar = max(0, int((H-W/2.39)/2))
+                    if bar: frame[:bar] = 0; frame[H-bar:] = 0
         keep = {}
         for k, v in self.accent_previous.items():
             if (k[0] in ('cutin', 'under') and t-k[1] < 2) or (k[0] not in ('cutin', 'under') and t < k[1]): keep[k] = v

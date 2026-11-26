@@ -1053,3 +1053,23 @@ def strip_subjects(plan, request):
             who[k] = re.sub(r'\s+', ' ', m.group(3)).strip().lower().replace('/', ' or ')
     if any(who): collage.panel_who = who
     return plan
+
+
+THEME_TRANSITIONS = ('leak', 'window', 'cutin')   # fresh transitions (a warm light leak first: hikes, nostalgia), in order of preference, for a shot that gives its own away
+
+
+def transition_requests(plan, request):
+    """ "do the vertical transition before the vertical clips (when the bench scene ends), and a different transition
+    for the bench to start": the slices move onto the collage, and the shot they leave gets a transition the edit has
+    not used yet."""
+    if not request or not re.search(r'\b(vertical|slices?|strips?|split)\s+transi?tion', request, re.I): return plan
+    if not re.search(r'before\s+(?:all\s+)?(?:the\s+)?(?:vertical|collage|split)|(?:goes|go|leads?|into)\s+(?:in)?(?:to\s+)?the\s+(?:vertical|collage)'
+                     r'|when\s+the\s+[\w ]{1,20}?\s+(?:scene|clip|part|shot)\s+ends', request, re.I): return plan
+    k = next((i for i, s in enumerate(plan.shots) if s.panels), None)
+    if not k: return plan
+    before = plan.shots[k-1]
+    plan.shots[k].effect = 'slices'
+    if before.effect == 'slices' or re.search(r'differ\w*\s+transi?tion|another\s+transi?tion|new\s+transi?tion', request, re.I):
+        used = {s.effect for s in plan.shots}
+        before.effect = next((e for e in THEME_TRANSITIONS if e not in used), 'cutin')
+    return plan
