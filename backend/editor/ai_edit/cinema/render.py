@@ -54,6 +54,7 @@ class Shot:
     face: tuple | None = None  # (x, y) of the face in output pixels
     tone: str = 'calm'
     center: bool = False       # zoom brings `face` to the middle of the frame (a close-up of people filmed far away)
+    ease_in: bool = False      # the zoom holds, then accelerates (a dive: see the whole subject, then plunge in)
 
 
 @dataclass
@@ -298,6 +299,7 @@ class Composer:
     def _base(self, shot, reader, t):
         frame = reader.next()
         k = (t-shot.t0)/max(.01, shot.t1-shot.t0)
+        if shot.ease_in: k = min(1., max(0., k))**2.6
         z = shot.zoom0+(shot.zoom1-shot.zoom0)*k
         if shot.look == 'card': return accents.card(frame, k, shot.tone)
         if shot.look == 'band':
@@ -371,6 +373,29 @@ class Composer:
                 back = under*(1-scene)+f32*scene
                 out = back*(1-a*appear)+people*a*appear+halo*255*.85
                 frame[:] = np.clip(out, 0, 255).astype(np.uint8)
+            if o.kind == 'iris':   # an Earth-zoom push: the old shot rushes in, a circle opens on the new one, zooming in
+                import cv2
+                p = (t-o.t0)/max(.01, o.t1-o.t0)
+                cx, cy = o.data.get('center') or (W/2, H/2)
+                under = self._under(o, frame)
+                zo = 1+1.4*p**1.6                                      # the old shot pushes in hard
+                old = cv2.warpAffine(under, np.float32([[zo, 0, (1-zo)*cx], [0, zo, (1-zo)*cy]]), (W, H), borderMode=cv2.BORDER_REFLECT_101)
+                blur = max(1, int(W*.03*p) | 1)
+                if blur > 1:   # with a radial-ish rush: a blend of a few scales
+                    acc = old.astype(np.float32)
+                    for sc in (1.03, 1.06):
+                        acc += cv2.warpAffine(old, cv2.getRotationMatrix2D((cx, cy), 0, sc), (W, H), borderMode=cv2.BORDER_REFLECT_101)
+                    old = (acc/3).astype(np.uint8)
+                zn = 1.5-.5*_ease(p)                                   # the new shot settles from close in
+                new = cv2.warpAffine(frame, np.float32([[zn, 0, (1-zn)*cx], [0, zn, (1-zn)*cy]]), (W, H), borderMode=cv2.BORDER_REFLECT_101)
+                yy, xx = np.ogrid[:H, :W]
+                r = (_ease(p)**1.3)*math.hypot(max(cx, W-cx), max(cy, H-cy))*1.05
+                d = np.sqrt((xx-cx)**2+(yy-cy)**2)
+                a = np.clip((r-d)/max(2., W*.01), 0, 1)[..., None]
+                frame[:] = (old*(1-a)+new*a).astype(np.uint8)
+            if o.kind == 'fadeout':   # the film fades to black
+                k = min(1., max(0., (t-o.t0)/.4))
+                frame[:] = (frame*(1-k)).astype(np.uint8)
             if o.kind == 'fade':   # a smooth dissolve from the previous shot (still playing) into this one
                 k = _ease((t-o.t0)/max(.01, o.t1-o.t0))
                 frame[:] = (self._under(o, frame).astype(np.float32)*(1-k)+frame*k).astype(np.uint8)

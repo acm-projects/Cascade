@@ -177,13 +177,33 @@ class MontageTests(unittest.TestCase):
         words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('123.', 1.0), ('Custade.', 2.0), ('yay', 3.5)]]
         p = plan([{'start': 0, 'end': 1}, {'start': 0.8, 'end': 5, 'voice': True}])
         visual.stop_at(p, words, 'and when we say Cascade with our hands up, fade into the rock')
-        self.assertAlmostEqual(p.shots[1].end, 2.9)   # the misheard "Custade." is still the word
+        self.assertAlmostEqual(p.shots[1].end, 2.5)   # the misheard "Custade." is still the word: just after it starts
         heard = [{'w': w, 's': a, 'e': e} for w, a, e in [('One', 21.09, 21.68), ('two', 21.64, 22.27), ('three.', 22.23, 22.69), ('Cut', 22.65, 22.89), ('thee.', 22.85, 23.88)]]
         q = plan([{'start': 0, 'end': 1}, {'start': 20.97, 'end': 21.55, 'voice': True}])
         visual.stop_at(q, heard, 'and when we say Cascade with our hands up, fade into the rock')
-        self.assertAlmostEqual(q.shots[1].end, 24.48)   # "Cut thee." after the count is the shouted Cascade
+        self.assertAlmostEqual(q.shots[1].end, 23.15)   # "Cut thee." after the count is the shouted Cascade
         caps = visual.speech_captions(heard, [(0., 3.5, 20.97, True, 0, (q.shots[1].said_word, q.shots[1].said_from, q.shots[1].said_to))])
-        self.assertEqual([w for o in caps for w, _ in o.data['words']], ['One', 'two', 'three', 'Cascade'])
+        self.assertEqual([w for o in caps for w, _ in o.data['words']], ['One', 'two', 'three'])   # the shout is heard, not captioned
+
+    @unittest.skipUnless(__import__('shutil').which('ffmpeg'), 'needs ffmpeg')
+    def test_iris_push_and_dive_ending_render(self):
+        import subprocess, tempfile
+        from pathlib import Path
+        folder = Path(tempfile.mkdtemp())
+        src = folder / 'src.mp4'
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=s=320x180:d=6:r=30', '-f', 'lavfi', '-i', 'sine=d=6',
+                        '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(src)], check=True)
+        p = plan([{'start': 0, 'end': 1.5}, {'start': 3, 'end': 4.5, 'effect': 'iris', 'zoom': 'dive', 'focus_x': .8, 'focus_y': .5}], sound='original')
+        p.settings.music, p.settings.stamp = False, False
+        out = folder / 'out.mp4'
+        visual.make(src, p, out, ffmpeg='ffmpeg', ratio='16:9', lines=180, faces=False)
+        last = subprocess.run(['ffmpeg', '-v', 'error', '-sseof', '-0.05', '-i', str(out), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
+                              capture_output=True).stdout
+        self.assertLess(sum(last)/max(1, len(last)), 40)   # the dive ends in black
+
+    def test_the_circle_push_moves_to_the_dive_ending(self):
+        p = visual.ending_transition(plan([{'start': 0, 'end': 2, 'effect': 'iris'}, {'start': 3, 'end': 5, 'zoom': 'dive'}]))
+        self.assertEqual((p.shots[0].effect, p.shots[1].effect), (None, 'iris'))
 
     def test_quick_shots_shrink_before_any_is_dropped(self):
         p = plan([{'start': 0, 'end': 4, 'voice': True}] + [{'start': 10 + 3 * k, 'end': 11.5 + 3 * k} for k in range(4)] + [{'start': 30, 'end': 34, 'voice': True}])

@@ -23,12 +23,12 @@ MESSAGE = settings.get('pacing.message_seconds', 3.4)
 ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.), 'close': (1.85, 1.95), 'rise': (1., 1.35),
          'dive': (1., 2.6)}
 SHORTEST = .5   # seconds on screen
-QUICKEST = .45  # a quick music shot is not shortened below this to make an edit fit
+QUICKEST = .4   # a quick music shot is not shortened below this to make an edit fit
 OUTRO = 1.7     # the ending word: pop, hold, zoom into it
 LOOP = .75      # the closing return to the opening shot, for a seamless loop
 TYPE_SECONDS = .9   # how long the typed title takes to spell out
 TITLE_SECONDS = 3.6   # how long a "corners" title stays up
-EFFECT_SECONDS = {'shake': .45, 'slices': .5, 'window': .6, 'cutin': .9, 'glowpop': .6, 'fade': .6}   # transitions longer than the default 0.32 s
+EFFECT_SECONDS = {'shake': .45, 'slices': .5, 'window': .6, 'cutin': .9, 'glowpop': .6, 'fade': .6, 'iris': .7}   # transitions longer than the default 0.32 s
 TITLE_TONES = {'red': 'danger', 'blue': 'water', 'dark blue': 'water', 'water': 'water', 'yellow': 'money', 'green': 'life', 'white': 'calm'}
 TITLE_PAINT = {'water': {'fill': (24, 86, 196), 'texture': 'water'}, 'blue': {'fill': (38, 98, 214)}, 'dark blue': {'fill': (30, 78, 178), 'edge': (6, 20, 66)}}   # colours that are not one of the tones
 
@@ -46,7 +46,9 @@ class VisualShot(BaseModel):
     # 'cutin': the people of this shot appear cut out on top of the previous shot, then its picture fades in behind them
     # 'glowpop': the people pop up big as a glowing white cut-out, turn to their colours, then the scene fades in around them
     # 'fade': a smooth dissolve from the previous shot
-    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake', 'slices', 'window', 'cutin', 'glowpop', 'fade'] | None = None   # a transition as this shot lands
+    # 'iris': an Earth-zoom push: the previous shot rushes in while a circle opens around this shot's focus point,
+    # this shot zooming in inside it, until it fills the frame
+    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake', 'slices', 'window', 'cutin', 'glowpop', 'fade', 'iris'] | None = None   # a transition as this shot lands
     text: str = Field(default='', max_length=16)       # one big word over the start of this shot
     text_style: Literal['slam', 'perspective'] = 'perspective'
     tone: Tone | None = None
@@ -95,6 +97,7 @@ class VisualPlan(BaseModel):
     transition_sounds: bool = True   # whooshes under the designed transitions (off: the song and voices only)
     loop: bool = False      # end on a short return to the opening shot and title, so the reel plays as a seamless loop
     seconds: float = Field(default=0, ge=0, le=60)   # the edit's length when the user asked for one; 0 = the house length
+    hard_length: bool = False   # (set by Cascade: the request gives that length as a maximum: it is never stretched)
 
     @model_validator(mode='after')
     def _tidy(self):
@@ -202,6 +205,17 @@ def spoken_tokens(word):
     return [DIGITS[int(c)] for c in w] if w.isdigit() and len(w) <= 3 else [w]
 
 
+def ending_transition(plan):
+    """A push into the ending belongs on the ending: when the edit ends on a dive and the planner put the circle push
+    (iris) on an earlier shot, it moves to the dive (aimed at the dive's focus)."""
+    if len(plan.shots) < 2 or plan.shots[-1].zoom != 'dive' or plan.shots[-1].effect == 'iris': return plan
+    early = [x for x in plan.shots[:-1] if x.effect == 'iris']
+    if early:
+        for x in early: x.effect = None
+        plan.shots[-1].effect = 'iris'
+    return plan
+
+
 def keep_in_clips(plan, parts):
     """Shots stay inside their own clip (a sentence run on to its end may otherwise spill into the next clip)."""
     for x in plan.shots:
@@ -240,7 +254,7 @@ def stop_at(plan, words, request):
     phrase = r"[\"'“]?([a-z0-9' ]{3,60}?)[\"'”]?"+ending
     rules = [('stop', r"\bstop(?:s|ping)?\b[^.;]*?\b(?:at|after)\s+(?:the\s+)?"+phrase, .2, False),
              ('end', r"\bend(?:s|ing)?\s+(?:it\s+)?(?:right\s+|just\s+)?after\s+(?:the\s+|we\s+say\s+|they\s+say\s+)?"+phrase, .9, True),
-             ('say', r"\bwhen\s+(?:we|they|you)\s+(?:all\s+)?(?:say|shout|yell)\s+"+phrase, .6, True),
+             ('say', r"\bwhen\s+(?:we|they|you)\s+(?:all\s+)?(?:say|shout|yell)\s+"+phrase, .35, True),
              ('start', r"\bstart(?:s|ing)?\b(?:\s+(?:it|the\s+\w+(?:\s+\w+)?))?\s+(?:right\s+|just\s+)?(?:from|at|with)\s+(?:the\s+|when\s+we\s+say\s+)?"+phrase, .12, True)]
     for kind, pattern, pad, last in rules:
         m = re.search(pattern, request or '', re.I)
@@ -253,7 +267,7 @@ def stop_at(plan, words, request):
             near = [w for w in words if s.start-.05 <= w['s'] < s.end+3 and len(re.sub(r"[^a-z]", '', w['w'].lower())) >= 4]
             best = max(near, key=lambda w: difflib.SequenceMatcher(None, target[0], re.sub(r"[^a-z]", '', w['w'].lower())).ratio(), default=None)
             if best and difflib.SequenceMatcher(None, target[0], re.sub(r"[^a-z]", '', best['w'].lower())).ratio() >= .55:
-                s.end = best['e']+pad
+                s.end = min(best['e'], best['s']+.15)+pad   # the moment turns as the shout starts (hands going up)
                 s.said_word, s.said_from, s.said_to = m.group(1).strip(), best['s'], best['e']   # caption it as the word named
             else:   # misheard beyond recognition ("Cut thee."): the word shouted right after a count ("... three, Cascade!")
                 span = [w for w in words if s.start-.05 <= w['s'] < s.end+3]
@@ -261,7 +275,7 @@ def stop_at(plan, words, request):
                 if k is not None and k+1 < len(span):
                     j = k+1
                     while j+1 < len(span) and span[j+1]['s']-span[j]['e'] < .3 and span[j+1]['s']-span[k+1]['s'] < 1.5: j += 1
-                    s.end = max(s.end, span[j]['e']+pad) if s.end < span[k]['e'] else span[j]['e']+pad
+                    s.end = min(span[j]['e'], span[k+1]['s']+.15)+pad   # the moment turns as the shout starts (hands going up)
                     s.said_word, s.said_from, s.said_to = m.group(1).strip(), span[k+1]['s'], span[j]['e']   # caption it as said
             continue
         for s in (talking[-1:] if last else talking):
@@ -357,9 +371,9 @@ def shortest(plan):
     total = 0.
     for x in plan.shots:
         on = (x.end-x.start)/x.speed
-        if x.panels: total += max(on, 1.2)
+        if x.panels: total += max(on, 1.1)
         elif x.voice or x.silhouette: total += on
-        elif x.effect in EFFECT_SECONDS: total += max(on, EFFECT_SECONDS[x.effect]+.4)
+        elif x.effect in EFFECT_SECONDS: total += max(on, EFFECT_SECONDS[x.effect]+.3)
         elif x.flash: total += min(on, .3)
         else: total += min(on, QUICKEST)
     return total
@@ -381,12 +395,17 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
     # too long: music shots from the middle go first (latest first); talking shots, the opening and the ending stay
     on = lambda x: (x.end-x.start)/x.speed
     over = sum(map(on, plan.shots))-budget
-    designed = lambda x: x.silhouette or x.panels or x.effect in ('cutin', 'glowpop', 'window', 'slices')   # these need their time
+    designed = lambda x: x.silhouette or x.panels or x.effect in ('cutin', 'glowpop', 'window', 'slices', 'iris')   # these need their time
     middle = [k for k, x in enumerate(plan.shots) if 0 < k < len(plan.shots)-1 and not x.voice and not x.flash and not designed(x)]
     for k, x in enumerate(plan.shots):   # a designed transition gets at least its own length plus a beat; a collage plays a second
-        need = EFFECT_SECONDS.get(x.effect, 0)+.4 if x.effect in EFFECT_SECONDS else 0
-        if x.panels: need = max(need, 1.2)
+        need = EFFECT_SECONDS.get(x.effect, 0)+.3 if x.effect in EFFECT_SECONDS else 0
+        if x.panels: need = max(need, 1.1)
         if need and on(x) < need: plan.shots[k] = x.model_copy(update={'end': x.start+need*x.speed})
+    last = plan.shots[-1] if plan.shots else None   # an ending that is not talking gives up time before any named clip
+    over = sum(map(on, plan.shots))-budget
+    if over > 0 and last is not None and not last.voice and on(last) > 1.:
+        plan.shots[-1] = last.model_copy(update={'end': last.start+max(1., on(last)-over)*last.speed})
+    over = sum(map(on, plan.shots))-budget
     room = sum(max(0., on(plan.shots[k])-QUICKEST) for k in middle)
     if over > 0 and room > 0:   # first shorten every quick shot in proportion (down to QUICKEST)
         share = min(1., over/room)
@@ -555,9 +574,7 @@ def speech_captions(words, voiced, most=4):
         for w in words:   # a word belongs to the piece it starts in (beat cuts split a moment into pieces)
             if src-.02 <= w['s'] < src+(b-a)-.02 and id(w) not in seen and (until is None or w['s'] <= until):
                 seen.add(id(w))
-                if fix and fix[1]-.02 <= w['s'] <= fix[2]:
-                    if w['s'] <= fix[1]+.02:   # (its first transcript word carries the named word; the rest of the mishearing goes)
-                        timed.append((fix[0], a+w['s']-src, a+fix[2]-src, big, run_end))
+                if fix and fix[1]-.02 <= w['s'] <= fix[2]:   # the shout the edit cuts on is heard, not captioned
                     continue
                 toks = spoken_tokens(w['w'])
                 if toks[0] in DIGITS and len(toks) > 1:   # "123." said as one two three: each its own subtitle, in turn
@@ -691,6 +708,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
                           # a close-up zooms in on the people where they are; a rise climbs toward the sky
                           face=(v.focus_x*W, v.focus_y*H) if v.zoom in ('close', 'dive') else (W/2, H*.04) if v.zoom == 'rise' else None))
         if v.zoom == 'close': shots[-1].center = True   # the people come to the middle of the frame, big
+        if v.zoom == 'dive': shots[-1].ease_in = True   # the whole subject first, then the plunge
         if v.silhouette:
             overlays.append(Overlay(t, min(t+dur, t+.55), 'silhouette'))
             events.append((t, 'flash', 'calm'))
@@ -698,11 +716,12 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         tone = v.tone or look.tone_of(v.text, None) or 'calm'
         if v.effect and n:
             data = {'kind': v.effect}
-            if v.effect in ('cutin', 'glowpop', 'fade') and len(shots) > 1:   # the previous shot keeps playing underneath
+            if v.effect == 'iris': data['center'] = (v.focus_x*W, v.focus_y*H)
+            if v.effect in ('cutin', 'glowpop', 'fade', 'iris') and len(shots) > 1:   # the previous shot keeps playing underneath
                 prev = shots[-2]
                 data['under'] = Shot(t, t+EFFECT_SECONDS[v.effect], prev.kind, prev.path, prev.src+(prev.t1-prev.t0)*prev.rate,
                                      rate=prev.rate, cx=prev.cx, grade=prev.grade)
-            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), v.effect if v.effect in ('cutin', 'glowpop', 'fade') else 'accent', data))
+            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), v.effect if v.effect in ('cutin', 'glowpop', 'fade', 'iris') else 'accent', data))
             events.append((t, 'broll', 'water' if v.effect == 'ripple' else 'calm'))
         if v.text.strip() and not v.voice:   # (a talking shot's text is its captions)
             word = v.text.strip().upper()
@@ -759,6 +778,8 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         events.append((t+.04, 'bing', 'calm'))
         t += OUTRO
     main_end = t
+    if plan.shots and plan.shots[-1].zoom == 'dive' and not plan.outro.strip():   # a dive ends the film in black
+        overlays.append(Overlay(max(0., t-.4), t+1, 'fadeout'))
     if plan.end_line:   # the closing message over a held, softened last moment
         last = shots[-1]
         shots.append(Shot(t, t+MESSAGE, 'aroll', str(source), last.src+(last.t1-last.t0)*last.rate, rate=min(1., last.rate), cx=last.cx,

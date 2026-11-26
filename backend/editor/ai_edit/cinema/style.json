@@ -9,7 +9,7 @@
     "filler_words": ["um", "umm", "uh", "uhh", "uhm", "erm", "er", "ah", "ahh", "hmm", "hm", "mm", "mhm", "mmm", "eh", "uh-huh"]
   },
   "captions": {"size_wide": 82, "size_tall": 78, "max_words": 7, "keyword_scale": 1.12},
-  "mix": {"music_under_voice_db": -17, "montage_music_under_voice_db": -9, "loudness_lufs": -14, "true_peak_db": -1.2},
+  "mix": {"music_under_voice_db": -17, "montage_music_under_voice_db": -14, "loudness_lufs": -14, "true_peak_db": -1.2},
   "broll": {"min_seconds": 1.5, "max_seconds": 3.4, "lead_seconds": 0.12},
   "pacing": {"longest_hold_seconds": 3.2, "message_seconds": 3.4, "tail_seconds": 0.5},
   "output": {"target_seconds": 15, "ratio": "9:16", "stamp": false},

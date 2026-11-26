@@ -45,13 +45,13 @@ def output(plan, words, new=True):
     if ratio and (new or plan.settings.ratio is None): plan.settings.ratio = ratio
     target = settings.get('output.target_seconds', 15)
     if isinstance(plan, visual.VisualPlan) and plan.seconds: target = plan.seconds   # the length the user asked for
-    if isinstance(plan, visual.VisualPlan) and new and target and not plan.seconds:   # (an asked-for length is kept)
+    if isinstance(plan, visual.VisualPlan) and new and target and not plan.seconds and not plan.hard_length:   # (an asked-for length is kept)
         talking = sum(s.end-s.start for s in plan.shots if s.voice)
         if talking: target = min(40, max(target, talking+8))   # room for the quick cuts around the talking
     if target and isinstance(plan, visual.VisualPlan):
         from . import score
         message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
-        if plan.clip_order and new:   # every clip the request names stays: run a little long rather than drop one
+        if plan.clip_order and new and not plan.hard_length:   # every clip the request names stays: run a little long rather than drop one
             ending = (visual.OUTRO*.4 if plan.shots and plan.shots[-1].voice else visual.OUTRO) if plan.outro.strip() else 0
             target = min(target+3.5, max(target, visual.shortest(plan)+ending+message+.7))   # (+ room for beat snapping)
         timing = visual.song_timing(plan, target)
@@ -153,6 +153,7 @@ def _watch(prompt, prep_dir, prep, windows, tries=4):
             plan = visual.VisualPlan.model_validate(answer)
             for shot in plan.shots:   # Cascade's own markers: never taken from the planner
                 shot.hard_end, shot.panel_ends, shot.said_until, shot.said_word = False, [], 0, ''
+            plan.hard_length = False
             visual.check(plan, prep['duration'], windows, prep.get('cuts', []), prep.get('parts'))
             return plan
         except ValueError as exc:
@@ -183,12 +184,15 @@ def plan_visual(request, prep_dir, prep, windows, history):
     visual.trim_to_outro(plan, said)      # an ending word said in the last shot: the shot stops just after it
     visual.text_requests(plan, request)   # "big text in the middle"
     visual.keep_in_clips(plan, prep.get('parts'))
+    visual.ending_transition(plan)
     for shot in plan.shots:   # each collage strip stops where its own clip ends (it then holds its last frame)
         if shot.panels and prep.get('parts'):
             end_of = lambda x: next((p['to'] for p in prep['parts'] if p['from']-.05 <= x < p['to']), None)
             shot.panel_ends = [e for e in [end_of(x) for x in [shot.start]+list(shot.panels)] if e is not None]
             if len(shot.panel_ends) != len(shot.panels)+1: shot.panel_ends = []
     if seconds: plan.seconds = seconds
+    # "12 seconds max", "at most 12 seconds": a ceiling, never stretched to fit everything
+    plan.hard_length = bool(seconds) and bool(re.search(r'\bmax(imum)?\b|\bat\s+most\b|no\s+longer\s+than|\bunder\s+\d', request or '', re.I))
     plan = output(plan, [])
     ratio = requested_ratio(request)
     if ratio: plan.settings.ratio = ratio
