@@ -42,6 +42,16 @@ export default function ClipWorkspace({ projectId, clip, sidebar, layout, clipTa
   useEffect(() => { refreshAIStatus(); }, [refreshAIStatus]);
   const [thinking, setThinking] = useState(false);
   const [brollSearch, setBrollSearch] = useState(null);
+  // Demo: the B-roll tab opens already searched for "cascade" (searched in the background when the clip opens)
+  const demoClip = !!draft?.info?.demo;
+  useEffect(() => {
+    if (!demoClip) return undefined;
+    let active = true;
+    api.searchBroll(projectId, clip.job_id, clip.clip_index, "cascade", 1)
+      .then((result) => { if (active) setBrollSearch((current) => current ?? result); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [demoClip, api, projectId, clip.job_id, clip.clip_index]);
   const [selectedSegment, setSelectedSegment] = useState(null);
   const selectBroll = useCallback(id => setSelectedSegment(id), []);
   const [focusedCue, setFocusedCue] = useState(null); // caption line clicked on the timeline (for the Captions tab)
@@ -214,7 +224,7 @@ export default function ClipWorkspace({ projectId, clip, sidebar, layout, clipTa
     <MusicControls projectId={projectId} clip={clip} state={state} duration={info.duration} change={change} />
   ) : (
     <AIEditorChat messages={chatMessages} onSend={sendChat} onClear={clearChat} disabled={thinking || jobRunning} typing={thinking}
-      clip={clip} result={editorResult} status={aiStatus} cues={info?.cues} job={jobRunning ? aiJob : null} aiEdit={state.ai_edit}
+      clip={clip} result={editorResult} status={aiStatus} cues={info?.cues} job={jobRunning ? aiJob : null} aiEdit={state.ai_edit} demo={!!info?.demo}
       onUseTimeline={() => change(s => ({ ...s, ai_edit: null }))} />
   );
   const trendsModal = trendsOpen && state && <TrendsModal projectId={projectId} clip={clip} info={info} state={state} flush={draft.flush}

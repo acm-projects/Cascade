@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { DEMO_POST } from "../../demo";
 import useApi from "../../api/useApi";
 import Button from "../../components/ui/Button";
 import Spinner from "../../components/ui/Spinner";
@@ -27,6 +28,10 @@ function PostPanel({ projectId, clip, onChange }) {
     api.getPost(projectId, clip.job_id, clip.clip_index)
       .then((saved) => {
         if (!active) return;
+        if (clip.demo && (!saved.caption || !saved.name || saved.name === clip.title)) {   // demo: the post copy is written already
+          saved = { ...saved, ...DEMO_POST };
+          api.savePost(projectId, clip.job_id, clip.clip_index, saved).catch(() => {});
+        }
         setPost(saved);
         setTagText(saved.hashtags.join(" "));
         latest.current.onChange?.(saved);

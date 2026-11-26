@@ -16,7 +16,7 @@ const DEFAULT_CLIPS = 4;   // when the prompt doesn't say how many
 //   note             - optional line under the box (e.g. "2 picked clips will guide this prompt")
 //   chips            - picked-clip controls above the composer
 function ChatPanel({ messages, onSend, disabled = false, text: controlledText, onTextChange, note, chips,
-  focusRequest, onStop, onRetry, onRetryBackup, onReuse }) {
+  focusRequest, onStop, onRetry, onRetryBackup, onReuse, prefill }) {
   const [ownText, setOwnText] = useState("");
   const text = controlledText ?? ownText;
   const setText = onTextChange ?? setOwnText;
@@ -111,6 +111,7 @@ function ChatPanel({ messages, onSend, disabled = false, text: controlledText, o
           placeholder="e.g. Find 10 funny clips…"
           aria-label="Prompt"
           value={text}
+          onFocus={() => { if (prefill && !text.trim() && !disabled) setText(prefill); }}   // the demo's prompt
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
         />

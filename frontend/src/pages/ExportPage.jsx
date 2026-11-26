@@ -74,6 +74,11 @@ function ExportPage() {
         setProjectName(project.name);
         setCurrentKey(shown[0] && clipKey(shown[0]));
         setInZip(shown.map(clipKey));
+        const demoEdit = shown.find((clip) => clip.demo && clip.edited_seconds);
+        if (demoEdit) {   // demo: straight to Publish online, on the finished edit
+          setCurrentKey(clipKey(demoEdit));
+          setDestination("youtube"); setConfigured(true);
+        }
       })
       .catch((err) => active && setError(err));
     return () => {
@@ -372,11 +377,6 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
           <>
             <h2 className="export-panel-title">3. Publish online</h2>
             <PostPanel projectId={projectId} clip={clip} onChange={setPost} />
-            {state && (
-              <Button size="sm" className="export-trends-button" aria-haspopup="dialog" onClick={() => setTrendsOpen(true)}>
-                <Icon name="compass" /> Trends analysis
-              </Button>
-            )}
             <section className="export-publish" aria-label="Publish">
               <YouTubePanel projectId={projectId} clip={clip} post={post} state={state} />
               <LinkedInPanel key={`${projectId}:${clip.job_id}:${clip.clip_index}`} projectId={projectId} clip={clip} post={post} state={state} />

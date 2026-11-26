@@ -18,7 +18,7 @@ function YouTubePanel({ projectId, clip, post, state }) {
   const api = useApi();
   const toast = useToast();
   const [connection, setConnection] = useState(null); // { connected, channel } or { error }
-  const [privacy, setPrivacy] = useState("private");
+  const [privacy, setPrivacy] = useState("public");
   const [upload, setUpload] = useState(null);         // { status, url?, error? }
   const [busy, setBusy] = useState(null);             // null | "connect" | "publish"
   const submission = useRef(null);

@@ -1,4 +1,6 @@
 import ChatBox from '../../components/ChatBox';
+import Mascot from '../../components/Mascot';
+import { DEMO_EDIT_PROMPT } from '../../demo';
 import './AIEditorChat.css';
 
 // Three quick starts; anything else, the person just types
@@ -31,7 +33,7 @@ function Storyboard({ board, cues, onSend, disabled }) {
   </section>;
 }
 
-export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, result, cues, job, aiEdit, onUseTimeline }) {
+export default function AIEditorChat({ messages, onSend, onClear, disabled, typing, result, cues, job, aiEdit, onUseTimeline, demo }) {
   const analysis = result?.analysis;
   const placeholder = job
     ? 'Working on the edit. You can ask for changes when it finishes…'
@@ -39,7 +41,8 @@ export default function AIEditorChat({ messages, onSend, onClear, disabled, typi
   return <div className="ai-editor-chat">
     <ChatBox title="AI Editor" subtitle="OpenAI plans your edit from the footage and speech. The Edited preview shows the rendered result."
       messages={messages} onSend={onSend} disabled={disabled} typing={typing}
-      quickActions={suggestions} placeholder={placeholder} />
+      quickActions={suggestions} placeholder={placeholder} prefill={demo && !aiEdit ? DEMO_EDIT_PROMPT : undefined}
+      peek={<Mascot variant="full" size={92} />} />
     {job && <section className="ai-edit-progress" role="status" aria-live="polite">
       <div className="ai-edit-progress-bar"><i style={{ width: `${Math.round((job.progress || 0) * 100)}%` }} /></div>
       <p>{job.stage}</p>

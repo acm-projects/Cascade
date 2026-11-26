@@ -1,3 +1,4 @@
+import { isDemoFiles } from "../demo";
 import { apiFetch, apiUpload } from "./client";
 
 // AI Studio: backend/studio.py (Kashmine). Everything lives under /api/projects/{projectId}/studio.
@@ -83,21 +84,9 @@ export function studioGenerate(token, projectId, sessionId, body) {
  */
 // Demo mode (demo_final branch): the hike recordings are already joined and searched on the server, so only their
 // names are sent (about 19 GB would otherwise upload). Any other files upload as usual.
-const DEMO_RECORDINGS = new Set([
-  "IMG_0158.mov",
-  "Video_1074791232_DJI_20261125102501_0013_D_MP4_56828872_6000_2026112510250_video_original.MP4",
-  "Video_1074791296_DJI_20261125102550_0014_D_MP4_1016579242_119000_20261125102550_video_original.MP4",
-  "Video_1074791424_DJI_20261125102835_0016_D_MP4_195198087_22000_20261125102834_video_original.mov",
-  "Video_1074791488_DJI_20261125102906_0017_D_MP4_7981198553_940000_2026112510296_video_original.MP4",
-  "Video_1074791552_DJI_20261125104707_0018_D_MP4_6466740034_761000_2026112510476_video_original.MP4",
-  "Video_1074791872_DJI_20261125110028_0023_D_MP4_3198071390_377000_2026112511028_video_original.MP4",
-  "Video_1074791936_DJI_20261125110709_0024_D_MP4_443170651_52000_202611251178_video_original.MP4",
-  "Video_1074792000_DJI_20261125110821_0025_D_MP4_103912127_12000_2026112511820_video_original.MP4"
-]);
-
 function demoStandIns(videos) {
   const list = Array.from(videos || []);
-  if (list.length < 2 || !list.every((video) => DEMO_RECORDINGS.has(video.name))) return list;
+  if (!isDemoFiles(list)) return list;
   return list.map((video) => new File([new Uint8Array(1)], video.name, { type: video.type || "video/mp4" }));
 }
 

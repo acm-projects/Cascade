@@ -59,7 +59,9 @@ export default function MusicControls({ projectId, clip, state, duration, change
     {loading && <Spinner label="Loading available music" />}
     {!loading && !assets.length && <p>No tracks available. Upload your own audio.</p>}
     <h3>On your timeline</h3>
-    {!segments.length && <p>No added audio. Choose a track below or ask the chat.</p>}
+    {state.ai_edit?.song && <div className="music-asset music-chosen"><strong>♪ {state.ai_edit.song}</strong>
+      <small>music · your song · chosen for this edit by the AI Editor ({state.ai_edit.version}), cut on the beat and ducked under your voices</small></div>}
+    {!segments.length && !state.ai_edit?.song && <p>No added audio. Choose a track below or ask the chat.</p>}
     {segments.map(segment => <fieldset className="editor-controls music-segment" key={segment.id}><legend>{assets.find(a => a.id === segment.asset_id)?.name || 'Saved audio'} · {segment.track}</legend>
       <label className="editor-control">Volume · {Math.round(segment.volume * 100)}%<input aria-label={`${segment.track} volume`} type="range" min="0" max="2" step=".01" value={segment.volume} onChange={e => update(segment.id, 'volume', Number(e.target.value))} /></label>
       {[['start', 'Timeline start (s)', 0, duration], ['duration', 'Duration (s)', .05, duration - segment.start], ['offset', 'Source trim start (s)', 0, assets.find(a => a.id === segment.asset_id)?.duration || 1200], ['fade_in', 'Fade in (s)', 0, 30], ['fade_out', 'Fade out (s)', 0, 30]].map(([key,label,min,max]) => <label className="editor-control" key={key}>{label}<input type="number" min={min} max={max} step=".05" value={segment[key]} onChange={e => update(segment.id, key, Number(e.target.value))} /></label>)}

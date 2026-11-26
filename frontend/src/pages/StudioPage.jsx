@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DEMO_FIND_PROMPT, isDemoFiles } from "../demo";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -347,6 +348,15 @@ function StudioPage() {
     list.some((item) => sameRef(item, ref)) ? list.filter((item) => !sameRef(item, ref)) : [...list, ref]);
 
   const clipTotal = sessionGroups(session, groups).reduce((n, group) => n + displayClips(session, groups, group).length, 0);
+  // Select all: every clip this session found, in order (or let go of them all when they are all picked already)
+  const sessionRefs = sessionGroups(session, groups).flatMap((group) => displayClips(session, groups, group).map((item) => item.ref));
+  const allPicked = sessionRefs.length > 0 && sessionRefs.every((ref) => editorClips.some((item) => sameRef(item, ref)));
+  function pickAll() {
+    const others = editorClips.filter((item) => !sessionRefs.some((ref) => sameRef(item, ref)));
+    const next = allPicked ? others : [...others, ...sessionRefs].slice(0, 100);
+    setStudio((current) => ({ ...current, editor_clips: next }));
+    api.setEditorSelection(projectId, next).catch((err) => { toast.show(err.message, "error"); refresh(); });
+  }
   let note;
   if (!references.length && !session.source_job) {
     note = pendingFiles.length > 1 ? `Your ${pendingFiles.length} files are joined into one and upload when you send your first prompt.`
@@ -370,6 +380,11 @@ function StudioPage() {
         {clipTotal > 0 && (
           <span className="session-bar-count"><b>{editorClips.length}</b> of {plural(clipTotal, "clip")} picked</span>
         )}
+        {clipTotal > 1 && (
+          <button type="button" className="btn btn-small session-bar-all" onClick={pickAll}>
+            {allPicked ? "Clear picks" : "Select all clips"}
+          </button>
+        )}
         <button type="button" className="btn btn-small btn-primary session-bar-go" disabled={!editorClips.length}
           title={!editorClips.length ? "Pick at least one clip first"
             : editorClips.length >= 2 ? `Joins your ${editorClips.length} picked clips into one video and opens it` : undefined}
@@ -381,6 +396,7 @@ function StudioPage() {
       <div className="studio-body">
         <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note}
           focusRequest={chatFocus} onStop={stop} onRetry={retry} onRetryBackup={retryBackup} onReuse={setDraft}
+          prefill={!session.source_job && isDemoFiles(pendingFiles) ? DEMO_FIND_PROMPT : undefined}
           chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
 
         <div className="studio-canvas-frame">

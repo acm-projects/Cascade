@@ -13,9 +13,11 @@ import Icon from "./ui/Icon";
 //   onRemoveTag      - called when the close (x) on the tag is clicked
 //   quickActions     - [{ label, prompt }]: buttons under the text box that send a ready-made prompt
 //   typing           - show the "…" bubble while the AI is answering
+//   prefill          - text the empty box fills with when it is clicked (the demo's prompt)
+//   peek             - something peeking over the top of the text box (the frog)
 function ChatBox({
   title, subtitle, onNewChat, messages, onSend, placeholder = "Type a message...",
-  tag, onRemoveTag, quickActions = [], disabled, typing,
+  tag, onRemoveTag, quickActions = [], disabled, typing, prefill, peek,
 }) {
   const [text, setText] = useState("");
 
@@ -70,13 +72,28 @@ function ChatBox({
         </div>
       )}
 
-      <div className="chatbox-input-row">
-        <input
-          className="chatbox-input"
-          placeholder={placeholder}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
+      <div className={`chatbox-input-row${peek ? " has-peek" : ""}`}>
+        {peek && <span className="chatbox-peek" aria-hidden="true">{peek}</span>}
+        {prefill ? (
+          <textarea
+            className="chatbox-input chatbox-textarea"
+            rows={3}
+            placeholder={placeholder}
+            value={text}
+            onFocus={() => { if (!text.trim() && !disabled) setText(prefill); }}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSubmit(e); }
+            }}
+          />
+        ) : (
+          <input
+            className="chatbox-input"
+            placeholder={placeholder}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        )}
         <button type="submit" className="chatbox-send" title="Send" disabled={disabled}>
           <Icon name="send" />
         </button>
