@@ -75,6 +75,7 @@ class AIEditRef(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
     version: str = Field(pattern=r'^v[0-9]{3}$')
     duration: float = Field(gt=0)
+    song: str | None = Field(default=None, max_length=160)   # the music in the edit, shown on the timeline
 
 
 class Edit(BaseModel):

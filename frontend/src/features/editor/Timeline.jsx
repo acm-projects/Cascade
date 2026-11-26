@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatTime } from "../../utils/time";
 import { filmstripFrameIndex, filmstripTileCount, moveEnd, moveStart, rulerStep, rulerTicks, timeToX, xToTime } from "./timelineMath";
-import useFilmstrip from "./useFilmstrip";
+import useFilmstrip, { useUrlFilmstrip } from "./useFilmstrip";
 import "./Timeline.css";
 import BrollTrack from "./BrollTrack";
 import Icon from "../../components/ui/Icon";
@@ -323,6 +323,81 @@ function Timeline({ projectId, clip, hasVideo, duration, cues, state, player, ch
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// After an AI edit, the timeline is the finished film's: its own frames and length (the Edited preview and Export play
+// exactly this file). The captions, titles and music are part of the film; "Use the timeline" in the AI Editor goes back.
+// Props: url (the edited file), duration (s), version, player, music (song name or null), onOpenTool(name)
+export function EditedTimeline({ url, duration, version, player, music, onOpenTool }) {
+  const trackRef = useRef(null);
+  const playheadRef = useRef(null);
+  const [trackSize, setTrackSize] = useState({ width: 0, height: 0 });
+  const strip = useUrlFilmstrip(url, duration);
+  useEffect(() => {
+    const observer = new ResizeObserver(([entry]) =>
+      setTrackSize({ width: entry.contentRect.width, height: entry.contentRect.height }));
+    observer.observe(trackRef.current);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    let frame;
+    const tick = () => {
+      const t = player.current?.getTime() ?? 0;
+      if (playheadRef.current) playheadRef.current.style.left = pct(Math.min(t, duration), duration);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [player, duration]);
+  const tileCount = strip.frames.length ? filmstripTileCount(trackSize.width, trackSize.height, strip.aspect) : 0;
+  const seekAt = (event) => {
+    const box = trackRef.current.getBoundingClientRect();
+    player.current?.seek(xToTime(event.clientX - box.left, duration, box.width));
+  };
+  const step = rulerStep(duration);
+  const label = (t) => (step < 1 ? `${t.toFixed(step < 0.5 ? 2 : 1)}s` : formatTime(t));
+  const whole = (text, tool) => (
+    <div className="timeline-lane">
+      <button type="button" className="timeline-block" style={{ left: 0, width: "100%" }} onClick={() => onOpenTool?.(tool)}>{text}</button>
+    </div>
+  );
+  return (
+    <div className="timeline timeline-edited">
+      <div className="timeline-row">
+        <span />
+        <div className="timeline-ruler" title="Click to move the playhead" onPointerDown={seekAt}>
+          {rulerTicks(duration).map((t) => (
+            <span key={t} className="timeline-tick" style={{ left: pct(t, duration) }}>{label(t)}</span>
+          ))}
+        </div>
+      </div>
+      <div className="timeline-tracks">
+        <TrackRow kind="captions" label="Captions" icon="captions">
+          {whole("Captions and titles are part of the edit", "AI Editor")}
+        </TrackRow>
+        <TrackRow kind="video" label="Video" icon="play">
+          <div ref={trackRef} className={`timeline-track${tileCount ? " has-filmstrip" : ""}`} onPointerDown={seekAt}
+            title={`AI edit ${version} · ${formatTime(duration)}`}>
+            {tileCount > 0 && (
+              <div className="timeline-filmstrip" aria-hidden="true">
+                {Array.from({ length: tileCount }, (_, index) => {
+                  const frame = strip.frames[filmstripFrameIndex(index, tileCount, strip.total)];
+                  return frame ? <img key={index} src={frame} alt="" draggable="false" /> : <span key={index} />;
+                })}
+              </div>
+            )}
+            <div className="timeline-kept" style={{ left: 0, right: 0 }} />
+          </div>
+        </TrackRow>
+        <TrackRow kind="music" label="Music" icon="headphones">
+          {music ? whole(`♪ ${music}`, "AI Editor") : <div className="timeline-lane" />}
+        </TrackRow>
+        <div className="timeline-playhead-layer">
+          <div ref={playheadRef} className="timeline-playhead" />
+        </div>
+      </div>
     </div>
   );
 }

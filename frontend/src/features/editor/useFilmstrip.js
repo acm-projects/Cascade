@@ -87,3 +87,25 @@ export default function useFilmstrip(projectId, clip, duration, enabled = true) 
   const strip = enabled ? strips.get(key) : null;
   return { frames: strip?.frames ?? [], aspect: strip?.aspect ?? 0, total: FRAME_COUNT };
 }
+
+// Frames of a finished file by its URL (an AI edit is its own film): { frames, aspect, total }
+export function useUrlFilmstrip(url, duration) {
+  const key = url ? `url:${url}` : null;
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    if (!key || !duration) return undefined;
+    let strip = strips.get(key);
+    if (!strip) {
+      strip = { frames: [], aspect: 0, listeners: new Set() };
+      strips.set(key, strip);
+      const started = strip;
+      grabFrames(url, duration, started).catch(() => { if (!started.frames.length) strips.delete(key); });
+    }
+    const listener = () => redraw((n) => n + 1);
+    strip.listeners.add(listener);
+    listener();
+    return () => strip.listeners.delete(listener);
+  }, [key, url, duration]);
+  const strip = key ? strips.get(key) : null;
+  return { frames: strip?.frames ?? [], aspect: strip?.aspect ?? 0, total: FRAME_COUNT };
+}

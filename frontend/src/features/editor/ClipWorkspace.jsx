@@ -11,7 +11,7 @@ import useClipDraft from "./useClipDraft";
 import useAutoFraming from "./useAutoFraming";
 import ClipPlayer from "./ClipPlayer";
 import BrollPanel from "./BrollPanel";
-import Timeline from "./Timeline";
+import Timeline, { EditedTimeline } from "./Timeline";
 import { TrimControls } from "./EditorControls";
 import AspectTab from "./tabs/AspectTab";
 import CaptionsTab from "./tabs/CaptionsTab";
@@ -31,6 +31,7 @@ export default function ClipWorkspace({ projectId, clip, sidebar, layout, clipTa
   const toast = useToast();
   const draft = useClipDraft(projectId, clip);
   const [panelTab, setPanelTab] = useState("Trim");
+  const [editedFilm, setEditedFilm] = useState(null);   // the AI edit's file once the preview has it (its own timeline)
   const [trendsOpen, setTrendsOpen] = useState(Boolean(openTrends));
   const [chatChanges, setChatChanges] = useState({});
   const [editorResult, setEditorResult] = useState(null);
@@ -166,12 +167,16 @@ export default function ClipWorkspace({ projectId, clip, sidebar, layout, clipTa
   const preview = draft.error ? (
     <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
   ) : info && state ? (
-    <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player}
+    <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} onEdited={setEditedFilm}
       framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
   ) : (
     <ClipLoading />
   );
-  const timeline = info && state && (<>
+  const editedSong = state?.ai_edit?.song || null;
+  const timeline = info && state && (state.ai_edit && editedFilm ? (
+    <EditedTimeline url={editedFilm} duration={state.ai_edit.duration} version={state.ai_edit.version} player={player}
+      music={editedSong} onOpenTool={(tool) => setPanelTab(tool)} />
+  ) : <>
     <SequenceControls state={state} change={change} player={player} />
     <Timeline projectId={projectId} clip={clip} hasVideo={info.has_video !== false}
       duration={info.duration} cues={info.cues} state={state} player={player}
@@ -216,7 +221,7 @@ export default function ClipWorkspace({ projectId, clip, sidebar, layout, clipTa
     change={change} clips={clips} onSelectClip={onSelectClipForTrends} onClose={() => setTrendsOpen(false)}
     onOpenEditor={(t) => { setTrendsOpen(false); if (Number.isFinite(t)) setTimeout(() => player.current?.seek(t), 50); }} />;
 
-  const pieces = { info, state, draft, projectId, clip, player, panelTab, setPanelTab, activeTab, trendsOpen, setTrendsOpen, goToExport, clipTabs, sidebar, preview, undoRedo, statuses, timeline, panelContent, trendsModal };
+  const pieces = { onEdited: setEditedFilm, info, state, draft, projectId, clip, player, panelTab, setPanelTab, activeTab, trendsOpen, setTrendsOpen, goToExport, clipTabs, sidebar, preview, undoRedo, statuses, timeline, panelContent, trendsModal };
   if (layout === "revamp") return <RevampLayout {...pieces} />;
   if (layout === "split") return <SplitLayout {...pieces} />;
   return <ClassicLayout {...pieces} />;

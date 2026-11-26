@@ -79,7 +79,7 @@ export function RevampLayout({ info, state, panelTab, setPanelTab, setTrendsOpen
 }
 
 // ---------- Abhishri's layout (from davebranch) ----------
-export function SplitLayout({ info, state, draft, projectId, clip, player, setPanelTab, activeTab, trendsOpen, setTrendsOpen, goToExport, clipTabs, undoRedo, statuses, timeline, panelContent, trendsModal }) {
+export function SplitLayout({ info, state, draft, projectId, clip, player, setPanelTab, activeTab, trendsOpen, setTrendsOpen, goToExport, clipTabs, undoRedo, statuses, timeline, panelContent, trendsModal, onEdited }) {
   return (
     <>
       <div className="es-body">
@@ -89,7 +89,7 @@ export function SplitLayout({ info, state, draft, projectId, clip, player, setPa
           {draft.error ? (
             <EmptyState icon="cloud" title="Couldn't load this clip" text={draft.error.message} />
           ) : info && state ? (
-            <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses}
+            <ClipPlayer projectId={projectId} clip={clip} info={info} state={state} controlRef={player} saveStatus={statuses} onEdited={onEdited}
               framing={{ patch: draft.patch, recordUndo: draft.recordUndo }} />
           ) : (
             <ClipLoading />

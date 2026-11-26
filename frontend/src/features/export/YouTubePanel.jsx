@@ -38,6 +38,10 @@ function YouTubePanel({ projectId, clip, post, state }) {
 
   // While YouTube is rendering/uploading/processing, check again every few seconds
   const working = upload && WORKING.includes(upload.status);
+  const failed = upload?.status === "Failed";
+  useEffect(() => {   // a failed upload may mean the YouTube sign-in ended: check whether it is still connected
+    if (failed) api.getYoutubeConnection(projectId).then(setConnection).catch(() => {});
+  }, [failed, api, projectId]);
   useEffect(() => {
     if (!working) return;
     const timer = setTimeout(() => {
@@ -79,6 +83,8 @@ function YouTubePanel({ projectId, clip, post, state }) {
       setUpload((current) => (current && WORKING.includes(current.status) ? current : { status: "Failed", error: err.message }));
       submission.current = null;
       toast.show(err.message, "error");
+      // a sign-in Google ended is forgotten on the server: check again, so the button offers to sign in again
+      api.getYoutubeConnection(projectId).then(setConnection).catch(() => {});
     } finally {
       setBusy(null);
     }

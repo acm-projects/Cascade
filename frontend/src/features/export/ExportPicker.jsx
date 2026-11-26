@@ -5,7 +5,7 @@ import Spinner from "../../components/ui/Spinner";
 import Icon from "../../components/ui/Icon";
 import useApi from "../../api/useApi";
 import { formatTime } from "../../utils/time";
-import { clipKey, flattenClips } from "../editor/clips";
+import { clipKey, flattenClips, clipSeconds } from "../editor/clips";
 import { defaultPicks } from "./exportPicks";
 import "./ExportPicker.css";
 
@@ -67,7 +67,7 @@ export default function ExportPicker({ projectId, currentKey, onConfirm, onClose
                       {clip.edited
                         ? <span className="export-picker-tag is-edited"><Icon name="check" /> Edited</span>
                         : <span className="export-picker-tag">Not edited</span>}
-                      <span className="export-picker-time">{formatTime(clip.end - clip.start)}</span>
+                      <span className="export-picker-time">{formatTime(clipSeconds(clip))}</span>
                     </label>
                   </li>
                 );

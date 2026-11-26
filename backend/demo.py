@@ -14,7 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent/'demo'/'hike'
 STUDIO_SECONDS = 0.8   # (+ the upload request and the page's next check: about 4 s on screen)
-EDIT_SECONDS = 6.5   # (+ the page's next check: about 8 s on screen)
+EDIT_SECONDS = 6.5
+TRENDS_SECONDS = 3.0   # Trends on the demo edit
 
 
 def enabled():
@@ -95,3 +96,37 @@ def edit(out, progress):
     shutil.copyfile(ROOT/'edited.mp4', out/'edited.mp4')
     plan = visual.VisualPlan.model_validate_json((ROOT/'plan.json').read_text())
     return plan, _load('report.json')
+
+
+def trends_result(jid):
+    """Trends on the demo edit: the research Cascade made on it (demo/hike/trends.json), or None."""
+    from backend.core import jobs as job_service
+    if not enabled() or not (ROOT/'trends.json').is_file(): return None
+    try:
+        if not job_service.load_json(job_service.JOBS_DIR/jid/'owner.json').get('demo'): return None
+        saved = _load('trends.json')
+    except Exception:
+        return None
+    return saved if saved.get('result') else None
+
+
+def start_trends(pid, jid, index, state, edit_version, root, put, running, ttl):
+    """Trends on the demo edit: a research record that finishes with the saved result after TRENDS_SECONDS."""
+    import threading
+    import uuid
+    saved = trends_result(jid)
+    record = {**{k: v for k, v in saved.items() if k not in ('result', 'fresh')}, 'id': uuid.uuid4().hex, 'status': 'running',
+              'message': 'Searching YouTube for hiking and camping friendship edits…', 'project_id': pid, 'job_id': jid,
+              'clip_index': index, 'edit_version': edit_version, 'edit_state': state.model_dump(mode='json'), 'started_at': time.time()}
+    running.add(record['id']); put(root, record)
+
+    def finish():
+        time.sleep(TRENDS_SECONDS/2)
+        record['message'] = f"Comparing your edit with {len(saved['result'].get('references', []))} memorable friendship and trip edits…"
+        put(root, record)
+        time.sleep(TRENDS_SECONDS/2)
+        record.update(status='done', result={**saved['result'], 'state': state.model_dump(mode='json')},
+                      message='YouTube research ready; no edits applied.', researched_at=time.time(), expires_at=time.time()+ttl)
+        put(root, record); running.discard(record['id'])
+    threading.Thread(target=finish, daemon=True).start()
+    return record

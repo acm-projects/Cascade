@@ -145,6 +145,8 @@ def start(pid: str,jid: str,index: int,body: ResearchInput,request: Request):
     goal=body.goal.strip() or 'Help me improve this clip’s editing.'
     topic=derive_search(clip,info,goal,body.topic)
     if len(topic)<3:raise HTTPException(422,'Enter a topic with at least three characters.')
+    from backend import demo   # (demo mode: the research made on this edit, found again in a few seconds)
+    if demo.trends_result(jid):return demo.start_trends(pid,jid,index,body.state,version(body.state),folder(pid,jid,index,user),put,RUNNING,TTL)
     from backend.cascade_llm import selected_model
     model=selected_model();root=folder(pid,jid,index,user);edit_version=version(body.state)
     added=reference_ids(body.references)

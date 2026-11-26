@@ -240,7 +240,14 @@ def _save_result(pid, jid, index, user, state, version, duration, text):
                 draft = None
         if draft is None and state is None: raise HTTPException(409, 'Open this clip in the Editor first.')
         draft = draft or Draft(state=state)
-        if version: draft.state.ai_edit = AIEditRef(version=version, duration=duration)
+        if version:
+            song = None
+            try:   # "Music: Alive Again (your audio)." -> "Alive Again"
+                said = json.loads((root(pid, jid, index, user)/version/'report.json').read_text()).get('song') or ''
+                song = re.sub(r'^Music:\s*|\s*\(.*$|\.$', '', said).strip()[:160] or None
+            except (OSError, ValueError):
+                pass
+            draft.state.ai_edit = AIEditRef(version=version, duration=duration, song=song)
         draft.chat = [*draft.chat, {'role': 'assistant', 'text': text[:4000]}][-200:]
         path.parent.mkdir(parents=True, exist_ok=True)
         save_json(path, draft.model_dump())

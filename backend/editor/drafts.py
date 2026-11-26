@@ -40,12 +40,24 @@ def editor_index(pid: str, request: Request, selected_only: bool = False):
             group['session_name'] = match['name']
             group['session_id'] = match['id']
         if selected_only:
-            group['clips'] = [{**c, 'edited': edited(pid, c, request.state.user_id)} for c in group['clips']
+            group['clips'] = [{**c, **summary(pid, c, request.state.user_id)} for c in group['clips']
                               if (c['job_id'], c['clip_index']) in allowed]
     sessions = label_waves(sessions)
     sessions = [group for group in sessions if group['clips']]
     selection = chosen[0] if selected_only and chosen else project.get('editor_selection')
     return {'sessions': sessions, 'selection': selection}
+
+
+def summary(pid, clip, user):
+    """{'edited': bool, 'edited_seconds': the AI edit's length when the clip has one (what Export saves)}."""
+    out = {'edited': edited(pid, clip, user)}
+    path = draft_path(pid, clip['job_id'], clip['clip_index'], user)
+    try:
+        ai = Draft.model_validate(load_json(path)).state.ai_edit if metadata_exists(path) else None
+    except ValueError:
+        ai = None
+    if ai: out['edited_seconds'] = round(ai.duration, 2)
+    return out
 
 
 def edited(pid, clip, user):

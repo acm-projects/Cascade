@@ -7,7 +7,7 @@ import DolphinLoader from "../components/DolphinLoader";
 import { useToast } from "../components/ui/ToastContext";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
-import { clipKey, combinable, flattenClips } from "../features/editor/clips";
+import { clipKey, combinable, flattenClips, clipSeconds } from "../features/editor/clips";
 import Icon from "../components/ui/Icon";
 import { EDITOR_LAYOUT } from "../features/editor/editorLayout";
 import UploadClipButton from "../features/editor/UploadClipButton";
@@ -124,7 +124,7 @@ function EditorPage() {
             className={`editor-media-item${clipKey(clip) === currentKey ? " active" : ""}`}
             onClick={() => selectClip(clip)} title={clip.title}>
             {index + 1}. {clip.title || "Clip"}
-            <span>{clip.sessionName ? `${clip.sessionName} · ` : ""}{formatTime(clip.end - clip.start)}</span>
+            <span>{clip.sessionName ? `${clip.sessionName} · ` : ""}{formatTime(clipSeconds(clip))}</span>
           </button>
         ))}
         <UploadClipButton projectId={projectId} onUploaded={addOwnClip} beforeUpload={saveCurrent}
@@ -141,7 +141,7 @@ function EditorPage() {
         <button key={clipKey(clip)} type="button" role="tab" aria-selected={clipKey(clip) === currentKey}
           className={`er-clip-tab${clipKey(clip) === currentKey ? " active" : ""}`} onClick={() => selectClip(clip)} title={clip.title} aria-label={`Clip ${index + 1}`}>
           <span className="er-clip-tab-name">{layout === "split" ? index + 1 : clip.kind === "combined" ? `Combined ${index + 1}` : `Clip ${index + 1}`}</span>
-          {layout !== "split" && <span className="er-clip-tab-time">{formatTime(clip.end - clip.start)}</span>}
+          {layout !== "split" && <span className="er-clip-tab-time">{formatTime(clipSeconds(clip))}</span>}
         </button>
       ))}
       <UploadClipButton projectId={projectId} onUploaded={addOwnClip} beforeUpload={saveCurrent}

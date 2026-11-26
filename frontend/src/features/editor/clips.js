@@ -41,3 +41,6 @@ export function downloadBlob(blob, filename) {
 export function fileSafe(text, fallback = "clip") {
   return (text || fallback).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || fallback;
 }
+
+// How long a clip plays once edited: an AI edit is its own film (its length), otherwise the picked moment's
+export const clipSeconds = (clip) => clip.edited_seconds ?? (clip.end - clip.start);

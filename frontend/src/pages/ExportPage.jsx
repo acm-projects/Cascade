@@ -10,7 +10,7 @@ import DolphinLoader from "../components/DolphinLoader";
 import { useToast } from "../components/ui/ToastContext";
 import useApi from "../api/useApi";
 import { formatTime } from "../utils/time";
-import { clipKey, flattenClips } from "../features/editor/clips";
+import { clipKey, flattenClips, clipSeconds } from "../features/editor/clips";
 import useClipDraft from "../features/editor/useClipDraft";
 import useAutoFraming from "../features/editor/useAutoFraming";
 import useFilmstrip from "../features/editor/useFilmstrip";
@@ -174,7 +174,7 @@ function ExportPage() {
                                   <button type="button" className={`export-tree-clip-name${key === currentKey ? " active" : ""}`}
                                     onClick={() => pickClip(key)} title={clip.title}>
                                     <span>Clip {clips.indexOf(clip) + 1}</span>
-                                    <span className="export-tree-time">{formatTime(clip.end - clip.start)}</span>
+                                    <span className="export-tree-time">{formatTime(clipSeconds(clip))}</span>
                                   </button>
                                 </div>
                               );
@@ -324,7 +324,8 @@ function ClipExport({ projectId, clip, clips, picked, onPick, onDownloadSelected
   if (framing.status === "error") status = `Couldn't prepare framing: ${framing.message}`;
   else if (framing.status === "working") status = `Preparing automatic framing… ${Math.round(framing.progress * 100)}%`;
   else if (state) {
-    status = `${formatTime(state.end - state.start)} · ${audioOnly ? "Audio"
+    status = state.ai_edit ? `${formatTime(state.ai_edit.duration)} · AI edit ${state.ai_edit.version} · captions and music in the edit`
+      : `${formatTime(state.end - state.start)} · ${audioOnly ? "Audio"
       : state.composition.ratio === "original" ? "Original" : state.composition.ratio} · captions ${state.captions.enabled ? "on" : "off"}`;
   }
 
@@ -441,7 +442,7 @@ function StripCard({ projectId, clip, number, active, onClick }) {
       {frame && <img className="export-strip-frame" src={frame} alt="" draggable="false" />}
       <span className="export-strip-play"><Icon name="play" /></span>
       <b>Clip {number}</b>
-      <span className="export-strip-time">{formatTime(clip.end - clip.start)}</span>
+      <span className="export-strip-time">{formatTime(clipSeconds(clip))}</span>
     </button>
   );
 }

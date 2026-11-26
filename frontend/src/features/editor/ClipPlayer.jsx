@@ -23,7 +23,7 @@ import Icon from "../../components/ui/Icon";
 //                   when it passes saveStatus), so the video gets the height that row would take
 //   onFitWidth(px) - optional: told how wide the video would be if it used the stage's full height, so the
 //                    page can make the player's column exactly that wide (no empty space beside the video)
-function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus, versionsInBar = false, onFitWidth }) {
+function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourceMedia, onOpenTrends, trendsOpen, saveStatus, versionsInBar = false, onFitWidth, onEdited }) {
   const api = useApi();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
@@ -47,6 +47,8 @@ function ClipPlayer({ projectId, clip, info, state, controlRef, framing, onSourc
   const renderNotes = current?.notes ?? [];   // parts the render had to leave out (a motion card), said under the video
   const rendering = advanced && !current;
   const showEdited = view === "edited" && !!rendered;
+  const editedFilm = state.ai_edit && rendered ? rendered : null;
+  useEffect(() => { onEdited?.(editedFilm); }, [editedFilm, onEdited]);   // the timeline shows the AI edit's own frames
   // Until the server's render of this exact edit arrives, the shape is shown instantly by cropping the video itself
   const cropNow = view === "edited" && !showEdited && state.composition.mode === "fill";
   // Fan-edit previews first compute subject cutouts locally; show that progress while rendering.

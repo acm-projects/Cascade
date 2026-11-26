@@ -205,6 +205,12 @@ def credentials(user, transaction=None):
         if response.status_code != 200:
             reason = provider_reason(response)
             logger.warning('YouTube request failed step=token_refresh http_status=%s reason=%s', response.status_code, reason)
+            if reason == 'invalid_grant':   # Google ended this sign-in (expired or revoked): forget it, so the next try signs in again
+                if transaction is not None:
+                    transaction.execute('DELETE FROM records WHERE kind=? AND key=?', ('connection', user))
+                else:
+                    with db() as c: c.execute('DELETE FROM records WHERE kind=? AND key=?', ('connection', user))
+                raise HTTPException(409, 'Your YouTube sign-in expired. Press "Connect & publish to YouTube" to sign in again.')
             raise HTTPException(409, f'YouTube token refresh failed (HTTP {response.status_code}: {reason}). Reconnect YouTube; if this persists, check the backend OAuth client configuration.')
         token.update(response.json());token['expires_at'] = time.time()+token.get('expires_in', 3600)
         renewed = {**record, 'token': protect(token)}
