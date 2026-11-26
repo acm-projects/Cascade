@@ -342,3 +342,13 @@ def test_an_exact_range_in_a_named_recording_becomes_a_clip():
     note = add_given_ranges(box, "the moment 0:08 to 0:13 in the 1:10 clip please", [{"name": "a", "start": 0, "end": 30}, {"name": "b", "start": 30, "end": 100}])
     assert box.candidates[0]["start"] == 38 and box.candidates[0]["end"] == 43 and box.candidates[0]["asked_for"]
     assert "Already added" in note
+
+
+def test_rough_recording_names_and_short_video_times():
+    from backend.agent.website import add_given_ranges
+    parts = [{"name": "a", "start": 0, "end": 4.8}, {"name": "b", "start": 4.8, "end": 945}]
+    box = make_box(min_clip_seconds=2.0, max_clip_seconds=10.0, parts=parts)
+    box.index.duration = 945
+    add_given_ranges(box, "01:14-1:40 from the 5 second length video and 05:30:02-05:30:98 from the 15 minute video", parts)
+    got = sorted((round(c["start"], 2), round(c["end"], 2)) for c in box.candidates)
+    assert got == [(1.1, 1.4), (334.8, 335.8)]   # (candidates are kept to 0.1 s)

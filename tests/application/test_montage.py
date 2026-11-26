@@ -165,7 +165,8 @@ class MontageTests(unittest.TestCase):
         visual.stop_at(p, words, 'the last part: start from one two three, as big text')
         self.assertAlmostEqual(p.shots[1].start, 4.88)
         lines = visual.speech_captions(words, [(0., 4., 3., True)])
-        self.assertIn('one two three', ' '.join(w for o in lines for w, _ in o.data['words']))
+        said = [[w for w, _ in o.data['words']] for o in lines]
+        self.assertIn(['one'], said); self.assertIn(['two'], said); self.assertIn(['three'], said)   # each said in turn
         self.assertAlmostEqual(visual.outro_word_time(p, words, [(10., 14., 3., True)]), 13.6)
 
     def test_quick_shots_shrink_before_any_is_dropped(self):

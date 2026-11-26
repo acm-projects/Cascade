@@ -27,7 +27,7 @@ OUTRO = 1.7     # the ending word: pop, hold, zoom into it
 LOOP = .75      # the closing return to the opening shot, for a seamless loop
 TYPE_SECONDS = .9   # how long the typed title takes to spell out
 TITLE_SECONDS = 3.6   # how long a "corners" title stays up
-EFFECT_SECONDS = {'shake': .45, 'slices': .5, 'window': .6, 'cutin': .9, 'glowpop': 1.1}   # transitions longer than the default 0.32 s
+EFFECT_SECONDS = {'shake': .45, 'slices': .5, 'window': .6, 'cutin': .9, 'glowpop': 1.5}   # transitions longer than the default 0.32 s
 TITLE_TONES = {'red': 'danger', 'blue': 'water', 'dark blue': 'water', 'water': 'water', 'yellow': 'money', 'green': 'life', 'white': 'calm'}
 TITLE_PAINT = {'water': {'fill': (24, 86, 196), 'texture': 'water'}, 'blue': {'fill': (38, 98, 214)}, 'dark blue': {'fill': (30, 78, 178), 'edge': (6, 20, 66)}}   # colours that are not one of the tones
 
@@ -51,8 +51,8 @@ class VisualShot(BaseModel):
     flash: bool = False   # a 0.1-0.3 s glimpse in a burst of very fast cuts (not snapped to the beat)
     mono: bool = False    # this shot in high-contrast black and white (one standout moment)
     big_captions: bool = False   # a talking shot's words big, bold and centred (a chant, a punchline)
-    # a collage: the frame split into vertical strips, this shot in the middle and these other moments (source
-    # seconds) in the strips around it, all playing at once
+    # a collage: the frame split into vertical strips, all playing at once; left to right: this shot, then these other
+    # moments (source seconds) in order
     panels: list[float] = Field(default_factory=list, max_length=5)
     panel_ends: list[float] = Field(default_factory=list, max_length=6)   # (set by Cascade: where each strip's clip ends)
     hard_end: bool = False     # (set by Cascade: the request says where this talking shot stops; it is not stretched to a beat)
@@ -184,6 +184,8 @@ def text_requests(plan, request):
     """Text the request asks for in so many words: "big text" / "make the text bigger" on the last talking moment
     (a chant, a punchline) shows its words big and centred."""
     import re
+    if re.search(r'colou?rful|\b(no|not|without|don\'?t|do\s+not)\b[^.]{0,20}black\s+(and|&)\s+white|\bin\s+colou?r\b', request or '', re.I):
+        for s in plan.shots: s.mono = False   # the request wants colour
     if re.search(r'\b(big|bigger|large|huge)\s+text\b|\btext\s+(much\s+)?bigger\b', request or '', re.I):
         talking = [s for s in plan.shots if s.voice]
         if talking:
@@ -497,11 +499,18 @@ def speech_captions(words, voiced, most=4):
         for w in words:   # a word belongs to the piece it starts in (beat cuts split a moment into pieces)
             if src-.02 <= w['s'] < src+(b-a)-.02 and id(w) not in seen:
                 seen.add(id(w))
-                text = ' '.join(spoken_tokens(w['w'])) if spoken_tokens(w['w'])[0] in DIGITS else w['w'].strip()
+                toks = spoken_tokens(w['w'])
+                if toks[0] in DIGITS and len(toks) > 1:   # "123." said as one two three: each its own subtitle, in turn
+                    after = next((x['s'] for x in words if x['s'] > w['s']+.01), w['e']+.6)   # (the count runs up to the next word)
+                    step = max(w['e']-w['s'], min(after-w['s'], 1.2))/len(toks)
+                    for k, tok in enumerate(toks):
+                        timed.append((tok, a+w['s']+k*step-src, a+w['s']+(k+1)*step-src, big, run_end))
+                    continue
+                text = toks[0] if toks[0] in DIGITS else w['w'].strip()
                 timed.append((text, a+w['s']-src, a+w['e']-src, big, run_end))
     lines, run = [], []
     for item in sorted(timed, key=lambda x: x[1]):
-        if run and (item[1]-run[-1][2] > .45 or len(run) >= (2 if item[3] else most) or item[3] != run[-1][3]
+        if run and (item[1]-run[-1][2] > .45 or len(run) >= (1 if item[3] else most) or item[3] != run[-1][3]
                     or run[-1][0].endswith(('.', ',', '?', '!'))):
             lines.append(run); run = []
         run.append(item)
@@ -552,13 +561,12 @@ def outro_word_time(plan, words, voiced):
 
 
 def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None):
-    """A collage: the frame split into vertical strips, each playing a different moment of the source at once (the
-    first moment in the middle strip). Written as a short silent clip at the output size."""
+    """A collage: the frame split into vertical strips, each playing a different moment of the source at once, left to
+    right in the order given. Written as a short silent clip at the output size."""
     import subprocess
     n = len(starts)
     ends = ends if ends and len(ends) == n else [None]*n
-    pick = list(range(1, 1+(n-1)//2))+[0]+list(range(1+(n-1)//2, n))   # the main moment in the middle
-    order, stops = [starts[i] for i in pick], [ends[i] for i in pick]
+    order, stops = list(starts), list(ends)   # left to right: the shot itself, then its panels in order
     widths = [W//n]*(n-1)+[W-W//n*(n-1)]
     cmd = [ffmpeg, '-nostdin', '-v', 'error', '-y']
     for a, e in zip(order, stops):   # a strip whose clip is shorter than the collage holds its last frame
@@ -621,7 +629,12 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         if v.voice: voiced.append((t, t+dur, v.start, v.big_captions))
         tone = v.tone or look.tone_of(v.text, None) or 'calm'
         if v.effect and n:
-            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), v.effect if v.effect in ('cutin', 'glowpop') else 'accent', {'kind': v.effect}))
+            data = {'kind': v.effect}
+            if v.effect in ('cutin', 'glowpop') and len(shots) > 1:   # the previous shot keeps playing underneath
+                prev = shots[-2]
+                data['under'] = Shot(t, t+EFFECT_SECONDS[v.effect], prev.kind, prev.path, prev.src+(prev.t1-prev.t0)*prev.rate,
+                                     rate=prev.rate, cx=prev.cx, grade=prev.grade)
+            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), v.effect if v.effect in ('cutin', 'glowpop') else 'accent', data))
             events.append((t, 'broll', 'water' if v.effect == 'ripple' else 'calm'))
         if v.text.strip() and not v.voice:   # (a talking shot's text is its captions)
             word = v.text.strip().upper()

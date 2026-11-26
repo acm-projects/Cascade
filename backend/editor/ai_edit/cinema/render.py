@@ -351,25 +351,22 @@ class Composer:
         person = self._matte(frame) if need_matte else None
         mute = []
         for o in active:
-            if o.kind == 'glowpop' and person is not None:   # the people pop up as a glowing white cut-out, turn to colour, then the scene returns
-                import cv2
+            if o.kind == 'glowpop' and person is not None:   # over the previous shot (still playing): a glowing white
+                import cv2                                     # cut-out of the people fades in, turns to colour, then their scene
                 p = (t-o.t0)/max(.01, o.t1-o.t0)
-                pop = 1.12-.12*_ease(p/.18)                          # a little bounce as they appear
+                under = self._under(o, frame).astype(np.float32)
                 f32 = frame.astype(np.float32)
                 a = cv2.GaussianBlur(person, (0, 0), 1.2)[..., None]
-                colour = _ease((p-.3)/.25)                            # white -> their real colours
-                scene = _ease((p-.6)/.4)                              # dark -> the full, colourful picture
-                halo = np.clip(cv2.GaussianBlur(person, (0, 0), 24*u)*1.8-person, 0, 1)[..., None]*(1-scene)
+                appear = _ease(p/.25)                                 # the white glow fades in on top
+                colour = _ease((p-.35)/.25)                           # white -> their real colours
+                scene = _ease((p-.6)/.4)                              # the previous shot -> their own, colourful scene
+                halo = np.clip(cv2.GaussianBlur(person, (0, 0), 24*u)*1.8-person, 0, 1)[..., None]*appear*(1-scene)
                 people = 255*(1-colour)+f32*colour
-                back = f32*(.08+.92*scene)
-                out = back*(1-a)+people*a+halo*255*.85
-                if abs(pop-1) > .003: out = _zoom(np.clip(out, 0, 255).astype(np.uint8), pop).astype(np.float32)
+                back = under*(1-scene)+f32*scene
+                out = back*(1-a*appear)+people*a*appear+halo*255*.85
                 frame[:] = np.clip(out, 0, 255).astype(np.uint8)
             if o.kind == 'cutin':   # the people arrive cut out over the previous shot, then their own picture fades in
-                key = ('cutin', o.t0)
-                if key not in self.accent_previous:
-                    self.accent_previous[key] = self.last.copy() if self.last is not None else frame.copy()
-                prev = self.accent_previous[key].astype(np.float32)
+                prev = self._under(o, frame).astype(np.float32)
                 p = (t-o.t0)/max(.01, o.t1-o.t0)
                 k = 0. if p < .45 else _ease((p-.45)/.55)
                 bg = prev*(1-k)+frame*k
@@ -494,10 +491,23 @@ class Composer:
                 self.accent_previous[key] = self.last.copy() if self.last is not None else None
             phase = (t-o.t0)/max(.001, o.t1-o.t0)
             frame = accents.apply(frame, self.accent_previous[key], o.data['kind'], phase)
-        self.accent_previous = {k: v for k, v in self.accent_previous.items() if (k[0] == 'cutin' and t-k[1] < 2) or (k[0] != 'cutin' and t < k[1])}
+        keep = {}
+        for k, v in self.accent_previous.items():
+            if (k[0] in ('cutin', 'under') and t-k[1] < 2) or (k[0] not in ('cutin', 'under') and t < k[1]): keep[k] = v
+            elif isinstance(v, Reader): v.close()
+        self.accent_previous = keep
         return frame
 
     TYPED_COLOUR = (244, 231, 198)   # warm cream
+
+    def _under(self, o, frame):
+        """The previous shot carrying on under a transition (or its last frame when it cannot be read on)."""
+        key = ('under', o.t0)
+        if key not in self.accent_previous:
+            under = o.data.get('under')
+            self.accent_previous[key] = Reader(under, self.ffmpeg) if under is not None else (self.last.copy() if self.last is not None else frame.copy())
+        got = self.accent_previous[key]
+        return got.next() if isinstance(got, Reader) else got
 
     def _outro(self, frame, t, o):
         """The ending word pops in, holds, then the camera flies into its first letter until that letter's colour
@@ -533,8 +543,7 @@ class Composer:
             paint = water(H, W, t)*(1-k)+fill*k
         else:
             paint = fill
-        dark = min(1., max(0., (p-.45)/.3))                         # the picture falls away around the word
-        base = frame*(1-.55*min(1., p/.1))*(1-dark)
+        base = frame*(1-.25*min(1., p/.1))   # the moment itself stays behind the word as the camera flies in
         out = base*(1-m)+paint*m
         if p > .86:   # and the film ends in the word's colour
             k = min(1., (p-.86)/.14)
