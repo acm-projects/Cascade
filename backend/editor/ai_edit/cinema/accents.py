@@ -41,6 +41,29 @@ def apply(frame, previous, kind, phase):
         glow = np.exp(-((xs-centre)/.45)**2)*(1-p)*.85
         warm = np.array([255, 150, 60], np.float32)
         return np.clip(frame*(1-glow*.35)+warm*glow, 0, 255).astype(np.uint8)
+    if kind == 'slices' and previous is not None:   # the new shot arrives through vertical strips, staggered, over the old one
+        out = previous.copy()
+        strips = 5
+        for i in range(strips):
+            local = min(1., max(0., p*1.6-i*.15))          # each strip starts a little later
+            if local <= 0: continue
+            x0, x1 = int(w*i/strips), int(w*(i+1)/strips)
+            grow = int(h*min(1., local*1.4))               # it slides in from the top or bottom, alternating
+            if i % 2: out[:grow, x0:x1] = frame[:grow, x0:x1]
+            else: out[h-grow:, x0:x1] = frame[h-grow:, x0:x1]
+        return out
+    if kind == 'window' and previous is not None:   # the new shot appears in a box over the old one, then fills the frame
+        k = min(1., p*1.25)
+        grow = .38+.62*(k**2.2)
+        bw, bh = max(2, int(w*grow)), max(2, int(h*grow))
+        cx, cy = w*(.62-.12*k), h*(.45+.05*k)
+        x0, y0 = int(min(max(0, cx-bw/2), w-bw)), int(min(max(0, cy-bh/2), h-bh))
+        out = (previous*(1-.35*(1-k))).astype(np.uint8)       # the old shot dims behind the box
+        small = cv2.resize(frame, (bw, bh))
+        out[y0:y0+bh, x0:x0+bw] = small
+        if k < .98:   # a thin white edge, like a photo laid on top
+            cv2.rectangle(out, (x0, y0), (x0+bw-1, y0+bh-1), (245, 245, 240), max(1, int(min(w, h)*.004)))
+        return out
     if kind == 'shake':   # a camera shake that settles: a punch in, jolting left/right and up/down, easing out
         k = (1-p)**2
         dx, dy = w*.035*k*math.sin(p*math.pi*9), h*.03*k*math.cos(p*math.pi*7)

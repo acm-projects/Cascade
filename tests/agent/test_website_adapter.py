@@ -334,3 +334,11 @@ def test_a_clip_running_into_the_next_recording_is_trimmed_not_rejected():
 def test_speech_search_prefers_lines_that_say_the_query_words():
     from backend.agent.index import _word_overlap
     assert _word_overlap("cascade on three", "Set. Cascade on three.") > _word_overlap("cascade on three", "We're team Cascade, and we're on our daily walk.")
+
+
+def test_an_exact_range_in_a_named_recording_becomes_a_clip():
+    from backend.agent.website import add_given_ranges
+    box = make_box(min_clip_seconds=2.0, max_clip_seconds=10.0, parts=[{"name": "a", "start": 0, "end": 30}, {"name": "b", "start": 30, "end": 100}])
+    note = add_given_ranges(box, "the moment 0:08 to 0:13 in the 1:10 clip please", [{"name": "a", "start": 0, "end": 30}, {"name": "b", "start": 30, "end": 100}])
+    assert box.candidates[0]["start"] == 38 and box.candidates[0]["end"] == 43 and box.candidates[0]["asked_for"]
+    assert "Already added" in note

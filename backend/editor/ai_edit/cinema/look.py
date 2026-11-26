@@ -176,6 +176,12 @@ GRADES = {
     'bw': "hue=s=0,eq=contrast=1.28:brightness=-0.02,curves=master='0/0 0.25/0.18 0.75/0.82 1/1',noise=alls=6:allf=t",
     'cold': "eq=contrast=1.12:saturation=0.72:brightness=-0.03,colorbalance=rs=-0.08:gs=-0.02:bs=0.12:rm=-0.05:bm=0.08:rh=-0.03:bh=0.06",
     'red': "eq=contrast=1.2:saturation=0.9:brightness=-0.05,colorchannelmixer=rr=1.1:rg=0.15:gg=0.55:gb=0.05:bb=0.5:br=0.1",
+    # a film look: deep contrast, teal shadows and greens, warm skin and highlights, a little lifted black (the cinematic reference)
+    'film': "eq=contrast=1.14:saturation=1.12:gamma=0.97,"
+            "colorbalance=rs=-0.07:gs=0.01:bs=0.07:rm=0.02:gm=0.01:bm=-0.03:rh=0.07:gh=0.02:bh=-0.06,"
+            "curves=master='0/0.035 0.2/0.15 0.5/0.5 0.82/0.86 1/0.97'",
+    # black and white with bright highlights, for one standout moment
+    'bwhot': "hue=s=0,eq=contrast=1.32:brightness=0.02:gamma=0.92,curves=master='0/0 0.3/0.18 0.7/0.82 1/1'",
     # true-to-life and slightly muted, like a travel film shot on a good phone (the trip-reel reference)
     'natural': "eq=contrast=1.03:saturation=0.9:gamma=1.01,colorbalance=rs=-0.01:bs=0.015:rh=0.01,curves=master='0/0.035 0.5/0.5 1/0.965'",
     'warm': "eq=contrast=1.05:saturation=1.1:gamma=1.02,colorbalance=rs=0.06:gs=0.02:bs=-0.07:rm=0.05:bm=-0.05:rh=0.04:bh=-0.04",

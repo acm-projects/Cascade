@@ -397,7 +397,9 @@ class Composer:
                 sp = self._sprite(('corner', text, W), lambda: look.text_sprite(text, look.HEAVY(size), fill=(250, 250, 248), shadow=.5, tracking=int(size*.02)))
                 k = _ease((t-o.t0)/.12)
                 x = W*.06+sp.w/2 if o.data['side'] == 'left' else W*.94-sp.w/2
-                look.paste(frame, sp, x, H*.13+o.data.get('row', 0)*size*1.05, alpha=k, scale=1.12-.12*k)
+                bars = any(x.kind == 'bars' for x in active) and W > H   # below a letterbox bar, never under it
+                top = max(H*.13, (H-W/2.39)/2+size*.75) if bars else H*.13
+                look.paste(frame, sp, x, top+o.data.get('row', 0)*size*1.05, alpha=k, scale=1.12-.12*k)
             elif o.kind == 'title':
                 text = o.data['text']
                 sp = self._sprite(('title', text, W), lambda: look.text_sprite(text.upper(), look.TIGHT(34*u, 700), fill=(236, 240, 236), tracking=int(10*u), shadow=.7))
@@ -419,6 +421,10 @@ class Composer:
                 else:
                     look.paste(frame, sp, W*.5, H*.64, alpha=p)
                     accents.circle(frame, t-o.t0, look.TONES[o.data['tone']])
+        for o in active:
+            if o.kind == 'bars' and W > H:   # cinematic letterbox: a 2.39:1 picture
+                bar = max(0, int((H-W/2.39)/2))
+                if bar: frame[:bar] = 0; frame[H-bar:] = 0
         for o in active:
             if o.kind == 'lyric': self._lyric(frame, t, o)
         if self.captions: self.captions.draw(frame, t, mute)

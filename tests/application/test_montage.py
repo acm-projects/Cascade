@@ -119,6 +119,23 @@ class MontageTests(unittest.TestCase):
         self.assertTrue(p.shots[0].voice and p.shots[-1].voice)
         self.assertGreater(p.shots[-1].end, 4.9)
 
+    def test_end_right_after_the_named_words(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('Set.', .2), ('Cascade', .7), ('on', 1.1), ('three.', 1.5), ('One', 2.4), ('two', 2.8), ('three.', 3.2), ('Cascade.', 4.2)]]
+        p = plan([{'start': 10, 'end': 12, 'voice': True}, {'start': 0, 'end': 5, 'voice': True}])
+        visual.stop_at(p, words, 'end right after the one two three and our hands are up')
+        self.assertAlmostEqual(p.shots[-1].end, 4.4)
+        self.assertEqual(p.shots[0].end, 12)
+
+    def test_effects_and_big_captions(self):
+        import numpy as np
+        from backend.editor.ai_edit.cinema import accents
+        a, b = np.zeros((90, 160, 3), np.uint8), np.full((90, 160, 3), 200, np.uint8)
+        for kind in ('slices', 'window'):
+            self.assertEqual(accents.apply(b, a, kind, .4).shape, a.shape)
+            self.assertTrue((accents.apply(b, a, kind, 1.) == b).all())
+        words = [{'w': 'cascade', 's': 1.0, 'e': 1.4}]
+        self.assertEqual(visual.speech_captions(words, [(0., 2., 0., True)])[0].data['style'], 'bold')
+
     def test_quick_shots_shrink_before_any_is_dropped(self):
         p = plan([{'start': 0, 'end': 4, 'voice': True}] + [{'start': 10 + 3 * k, 'end': 11.5 + 3 * k} for k in range(4)] + [{'start': 30, 'end': 34, 'voice': True}])
         visual.fit(p, 11.6)

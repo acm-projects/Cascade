@@ -20,14 +20,15 @@ from .render import Overlay, Shot
 
 LOG = logging.getLogger(__name__)
 MESSAGE = settings.get('pacing.message_seconds', 3.4)
-ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.)}
+ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.), 'close': (1.85, 1.95)}
 SHORTEST = .5   # seconds on screen
 QUICKEST = .6   # a quick music shot is not shortened below this to make an edit fit
 LOOP = .75      # the closing return to the opening shot, for a seamless loop
 TYPE_SECONDS = .9   # how long the typed title takes to spell out
 TITLE_SECONDS = 3.6   # how long a "corners" title stays up
+EFFECT_SECONDS = {'shake': .45, 'slices': .5, 'window': .6}   # transitions longer than the default 0.32 s
 TITLE_TONES = {'red': 'danger', 'blue': 'water', 'dark blue': 'water', 'yellow': 'money', 'green': 'life', 'white': 'calm'}
-TITLE_PAINT = {'dark blue': {'fill': (30, 78, 178), 'edge': (6, 20, 66)}}   # colours that are not one of the tones
+TITLE_PAINT = {'blue': {'fill': (38, 98, 214)}, 'dark blue': {'fill': (30, 78, 178), 'edge': (6, 20, 66)}}   # colours that are not one of the tones
 
 
 class VisualShot(BaseModel):
@@ -35,14 +36,17 @@ class VisualShot(BaseModel):
     start: float = Field(ge=0)                     # source seconds
     end: float = Field(gt=0)
     speed: float = Field(default=1., ge=.25, le=2.)   # .5 = half-speed slow motion, 2 = double speed
-    zoom: Literal['none', 'push', 'punch', 'pull'] = 'none'
+    zoom: Literal['none', 'push', 'punch', 'pull', 'close'] = 'none'   # 'close': a strong close-up on people filmed from far away
     focus_x: float = Field(default=.5, ge=0, le=1)   # where the subject is, left (0) to right (1), for vertical crops
-    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake'] | None = None   # a transition as this shot lands
+    focus_y: float = Field(default=.45, ge=0, le=1)  # where the subject is, top (0) to bottom (1), for a 'close' zoom
+    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake', 'slices', 'window'] | None = None   # a transition as this shot lands
     text: str = Field(default='', max_length=16)       # one big word over the start of this shot
     text_style: Literal['slam', 'perspective'] = 'perspective'
     tone: Tone | None = None
     voice: bool = False   # a talking moment: its own sound up front, the music dipped under it, its words captioned
     flash: bool = False   # a 0.1-0.3 s glimpse in a burst of very fast cuts (not snapped to the beat)
+    mono: bool = False    # this shot in high-contrast black and white (one standout moment)
+    big_captions: bool = False   # a talking shot's words big, bold and centred (a chant, a punchline)
 
 
 class VisualPlan(BaseModel):
@@ -57,7 +61,8 @@ class VisualPlan(BaseModel):
     title_color: Literal['red', 'blue', 'dark blue', 'yellow', 'green', 'white'] = 'red'
     shots: list[VisualShot] = Field(min_length=1, max_length=40)
     mood: Literal['awakening', 'wonder', 'tension', 'warm'] = 'awakening'
-    grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm', 'natural'] = 'cinema'
+    grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm', 'natural', 'film'] = 'cinema'
+    bars: bool = False   # cinematic letterbox bars (a 2.39:1 picture inside the frame)
     sound: Literal['both', 'score', 'original'] = 'both'   # music over the clip's own sound, music only, or only the clip's sound
     song: str = Field(default='', max_length=40)          # a Music Library song id; '' = Cascade's composed score
     song_section: int = Field(default=0, ge=0, le=5)       # which of that song's candidate sections plays
@@ -132,19 +137,28 @@ def story_edges(plan, words, parts=None, most=4.):
 
 
 def stop_at(plan, words, request):
-    """'stop the intro at presentation prep': a talking shot that says those words ends right after them."""
+    """Where the request says talking stops: "stop the intro at presentation prep" ends the talking shot that says
+    those words right after them; "end right after the one two three" ends the edit's last talking shot right after
+    those words (with a beat more, so the moment lands: hands going up)."""
     import re
-    m = re.search(r"\bstop(?:s|ping)?\b[^.;]*?\b(?:at|after)\s+[\"'“]?([a-z0-9' ]{3,60}?)[\"'”]?(?=\s*(?:[,.;]|\band\b|\bthen\b|$))",
-                  request or '', re.I)
-    if not m or not words: return plan
-    target = [w for w in re.findall(r"[a-z0-9']+", m.group(1).lower())]
+    if not words: return plan
     said = [re.sub(r"[^a-z0-9']", '', w['w'].lower()) for w in words]
-    for s in plan.shots:
-        if not s.voice: continue
-        for i in range(len(words)-len(target)+1):
-            if said[i:i+len(target)] == target and s.start-.05 <= words[i]['s'] < s.end:
-                s.end = min(s.end, words[i+len(target)-1]['e']+.2)
-                return plan
+    ending = r"(?=\s*(?:[,.;]|\band\b|\bthen\b|\bwhen\b|\bwith\b|$))"
+    rules = [(r"\bstop(?:s|ping)?\b[^.;]*?\b(?:at|after)\s+(?:the\s+)?[\"'“]?([a-z0-9' ]{3,60}?)[\"'”]?"+ending, .2, False),
+             (r"\bend(?:s|ing)?\s+(?:it\s+)?(?:right\s+|just\s+)?after\s+(?:the\s+|we\s+say\s+|they\s+say\s+)?[\"'“]?([a-z0-9' ]{3,60}?)[\"'”]?"+ending, .9, True)]
+    for pattern, tail, last in rules:
+        m = re.search(pattern, request or '', re.I)
+        if not m: continue
+        target = re.findall(r"[a-z0-9']+", m.group(1).lower())
+        talking = [s for s in plan.shots if s.voice]
+        for s in (talking[-1:] if last else talking):
+            for i in range(len(words)-len(target)+1):
+                if said[i:i+len(target)] == target and s.start-.05 <= words[i]['s'] < s.end+3:
+                    s.end = min(s.end, words[i+len(target)-1]['e']+tail) if not last else words[i+len(target)-1]['e']+tail
+                    break
+            else:
+                continue
+            break
     return plan
 
 
@@ -369,7 +383,7 @@ def _split(natural, voiced, sr):
     """The clip's own sound split into the talking shots (with short fades) and everything else."""
     mask = np.zeros(len(natural), np.float32)
     ramp = int(.06*sr)
-    for a, b, _ in voiced:
+    for a, b, *_ in voiced:
         i, j = int(a*sr), min(len(mask), int(b*sr))
         if j <= i: continue
         mask[i:j] = 1
@@ -379,15 +393,18 @@ def _split(natural, voiced, sr):
 
 
 def speech_captions(words, voiced, most=4):
-    """The words said in the talking shots, as short caption lines that build word by word as they are said."""
+    """The words said in the talking shots, as short caption lines that build word by word as they are said.
+    A shot marked big_captions shows its words big, bold and centred, two at a time."""
     timed = []
-    for a, b, src in voiced:
+    for a, b, src, *flags in voiced:
+        big = bool(flags and flags[0])
         for w in words:
             if src-.02 <= w['s'] and w['e'] <= src+(b-a)+.08:
-                timed.append((w['w'].strip(), a+w['s']-src, a+min(w['e'], src+(b-a))-src))
+                timed.append((w['w'].strip(), a+w['s']-src, a+min(w['e'], src+(b-a))-src, big))
     lines, run = [], []
     for item in sorted(timed, key=lambda x: x[1]):
-        if run and (item[1]-run[-1][2] > .45 or len(run) >= most or run[-1][0].endswith(('.', ',', '?', '!'))):
+        if run and (item[1]-run[-1][2] > .45 or len(run) >= (2 if item[3] else most) or item[3] != run[-1][3]
+                    or run[-1][0].endswith(('.', ',', '?', '!'))):
             lines.append(run); run = []
         run.append(item)
     if run: lines.append(run)
@@ -396,7 +413,8 @@ def speech_captions(words, voiced, most=4):
         t0 = line[0][1]-.05
         t1 = min(line[-1][2]+.35, (lines[n+1][0][1]-.06) if n+1 < len(lines) else line[-1][2]+.35)
         if t1-t0 > .15:
-            out.append(Overlay(t0, t1, 'lyric', {'style': 'caption', 'words': [(w.strip(',.'), at) for w, at, _ in line]}))
+            out.append(Overlay(t0, t1, 'lyric', {'style': 'bold' if line[0][3] else 'caption',
+                                                 'words': [(w.strip(',.'), at) for w, at, *_ in line]}))
     return out
 
 
@@ -432,11 +450,14 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         cx = v.focus_x
         face = render.find_face(source, v.start+(v.end-v.start)/2, ffmpeg) if faces and W < H else None
         if face: cx = face[0]
-        shots.append(Shot(t, t+dur, 'aroll', str(source), v.start, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1, grade=plan.grade))
-        if v.voice: voiced.append((t, t+dur, v.start))
+        shots.append(Shot(t, t+dur, 'aroll', str(source), v.start, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1,
+                          grade='bwhot' if v.mono else plan.grade,
+                          # a close-up zooms in on the people where they are in the frame
+                          face=(v.focus_x*W, v.focus_y*H) if v.zoom == 'close' else None))
+        if v.voice: voiced.append((t, t+dur, v.start, v.big_captions))
         tone = v.tone or look.tone_of(v.text, None) or 'calm'
         if v.effect and n:
-            overlays.append(Overlay(t, t+(.45 if v.effect == 'shake' else .32), 'accent', {'kind': v.effect}))
+            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), 'accent', {'kind': v.effect}))
             events.append((t, 'broll', 'water' if v.effect == 'ripple' else 'calm'))
         if v.text.strip():
             word = v.text.strip().upper()
@@ -485,9 +506,11 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         overlays.append(Overlay(.15, min(2.2, main_end), 'title', {'text': plan.title}))
     if timing and plan.lyrics != 'off':   # the song's words, but never over someone talking
         overlays += [o for o in lyric_lines(timing[0], timing[1], main_end, plan.lyrics)
-                     if not any(o.t0 < b and a < o.t1 for a, b, _ in voiced)]
+                     if not any(o.t0 < b and a < o.t1 for a, b, *_ in voiced)]
     if voiced:   # what is said in the talking shots, captioned as it is said
         overlays += speech_captions(words or [], voiced)
+    if plan.bars:   # cinematic letterbox
+        overlays.append(Overlay(0, main_end+10, 'bars'))
     lap('shots')
 
     # --- 2. sound: the score, the clip's own sound, or both
