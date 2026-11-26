@@ -121,10 +121,14 @@ def add_given_ranges(toolbox, prompt, parts):
 
 
 def finish_sentences(clips, transcript, parts=None, most=1.5):
-    """A clip never stops mid-sentence: when its end falls inside a spoken line, it runs on to the end of that line
-    (at most `most` s more, and never into the next recording)."""
+    """A clip never starts or stops mid-sentence: when an edge falls inside a spoken line, it moves out to that line's
+    start or end (at most `most` s, and never into another recording)."""
     for clip in clips:
         if clip.pop('exact', False): continue   # the user's own exact times are kept exactly
+        part = next((p for p in parts or [] if p['start']-.05 <= clip['start'] < p['end']), None)
+        first = next((seg for seg in transcript or [] if seg['start'] < clip['start'] < seg['end']), None)
+        if first and clip['start']-first['start'] <= most:   # it starts at the start of the line, too ("Hey guys", not "ey guys")
+            clip['start'] = round(max(first['start']-.1, part['start'] if part else 0.), 2)
         line = next((seg for seg in transcript or [] if seg['start'] < clip['end'] < seg['end']), None)
         if not line or line['end']-clip['end'] > most: continue
         end = line['end']+.1

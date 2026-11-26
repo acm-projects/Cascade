@@ -55,6 +55,9 @@ class Shot:
     tone: str = 'calm'
     center: bool = False       # zoom brings `face` to the middle of the frame (a close-up of people filmed far away)
     ease_in: bool = False      # the zoom holds, then accelerates (a dive: see the whole subject, then plunge in)
+    carry: bool = False        # plays the previous shot's sound carrying on (see audio_src)
+    audio_src: float | None = None   # source second its sound starts at, when it is not its own
+    audio_until: float | None = None  # and where that carried sound stops
 
 
 @dataclass
@@ -96,6 +99,20 @@ def grab(path, at, width=640, ffmpeg='ffmpeg'):
                           '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'], capture_output=True, timeout=60).stdout
     if len(raw) < width*h*3: return None
     return np.frombuffer(raw[:width*h*3], np.uint8).reshape(h, width, 3)
+
+
+def find_faces(path, at, ffmpeg='ffmpeg'):
+    """[(cx, cy, width)] of every face, as fractions of the source frame (biggest first)."""
+    try:
+        frame = grab(path, at, 640, ffmpeg)
+        if frame is None: return []
+        h, w = frame.shape[:2]
+        found = _detector(w, h).detect(frame)[1]
+        if found is None: return []
+        return [(float((f[0]+f[2]/2)/w), float((f[1]+f[3]/2)/h), float(f[2]/w)) for f in sorted(found, key=lambda f: -f[2]*f[3])]
+    except Exception:
+        LOG.info('face search failed', exc_info=True)
+        return []
 
 
 def find_face(path, at, ffmpeg='ffmpeg'):

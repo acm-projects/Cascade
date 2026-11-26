@@ -113,7 +113,7 @@ class MontageTests(unittest.TestCase):
     def test_stop_at_the_words_the_request_names(self):
         words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('break', 0.2), ('from', .6), ('presentation', 1.0), ('prep.', 1.4), ('I', 1.8), ('have', 2.2)]]
         p = visual.stop_at(plan([{'start': 0, 'end': 3, 'voice': True}]), words, 'keep the intro, and stop the intro at presentation prep. Then the wave')
-        self.assertAlmostEqual(p.shots[0].end, 1.82)   # "prep." is said in full
+        self.assertAlmostEqual(p.shots[0].end, 1.78)   # "prep." is said in full, stopping before "I" starts
         self.assertAlmostEqual(p.shots[0].said_until, 1.43)   # and nothing after it is captioned
 
     def test_the_intro_and_ending_are_heard_and_the_ending_plays_out(self):
@@ -204,6 +204,34 @@ class MontageTests(unittest.TestCase):
     def test_the_circle_push_moves_to_the_dive_ending(self):
         p = visual.ending_transition(plan([{'start': 0, 'end': 2, 'effect': 'iris'}, {'start': 3, 'end': 5, 'zoom': 'dive'}]))
         self.assertEqual((p.shots[0].effect, p.shots[1].effect), (None, 'iris'))
+
+    def test_a_collage_brings_no_stray_sound_and_a_carried_shot_continues_the_last(self):
+        from backend.editor.ai_edit.cinema.render import Shot
+        sr = 100
+        samples = np.arange(1000, dtype=np.float32)[:, None].repeat(2, 1)   # each source second is recognisable
+        shots = [Shot(0, 2, 'aroll', 'src.mp4', 3.), Shot(2, 3, 'aroll', 'collage-1.mp4', 0.), Shot(3, 4, 'aroll', 'src.mp4', 8.)]
+        shots[2].audio_src = 5.   # carries on the first shot's sound
+        out = visual._natural(samples, sr, shots, 4, 'src.mp4')
+        self.assertTrue((out[210:290] == 0).all())          # the collage: silence, not the start of the footage
+        self.assertAlmostEqual(float(out[350, 0]), 550.)    # the carried shot plays source 5.5 s
+
+    def test_a_named_clip_plays_once(self):
+        parts = [{'title': 'a', 'from': 0, 'to': 5}, {'title': 'b', 'from': 5, 'to': 10}]
+        p = plan([{'start': 0, 'end': 1}, {'start': 5, 'end': 6}, {'start': 6.5, 'end': 7, 'effect': 'zoom'}], clip_order=[1, 2])
+        visual.check(p, 10, parts=parts)
+        self.assertEqual([x.start for x in p.shots], [0, 6.5])   # the repeat of clip 2 went; the one with the transition stays
+
+    def test_a_shot_moves_into_the_clip_it_names(self):
+        parts = [{'title': 'a', 'from': 0, 'to': 5}, {'title': 'b', 'from': 5, 'to': 10}]
+        p = plan([{'start': 0, 'end': 2, 'clip': 1}, {'start': 4.2, 'end': 4.8, 'clip': 2}], clip_order=[1, 2])
+        visual.check(p, 10, parts=parts)
+        self.assertEqual((p.shots[1].start, p.shots[1].end), (5.02, 5.62))
+
+    def test_a_plain_repeat_of_a_collage_strip_goes(self):
+        parts = [{'title': 'a', 'from': 0, 'to': 5}, {'title': 'b', 'from': 5, 'to': 10}, {'title': 'c', 'from': 10, 'to': 15}]
+        p = plan([{'start': 0, 'end': 1.2, 'panels': [6]}, {'start': 6.5, 'end': 7}, {'start': 11, 'end': 12}], clip_order=[1, 2, 3])
+        visual.check(p, 15, parts=parts)
+        self.assertEqual([x.start for x in p.shots], [0, 11])
 
     def test_quick_shots_shrink_before_any_is_dropped(self):
         p = plan([{'start': 0, 'end': 4, 'voice': True}] + [{'start': 10 + 3 * k, 'end': 11.5 + 3 * k} for k in range(4)] + [{'start': 30, 'end': 34, 'voice': True}])

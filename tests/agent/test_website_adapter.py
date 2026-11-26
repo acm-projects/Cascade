@@ -356,7 +356,9 @@ def test_rough_recording_names_and_short_video_times():
 
 def test_a_clip_never_stops_mid_sentence():
     from backend.agent.website import finish_sentences
-    clips = [{"start": 0.0, "end": 4.0}, {"start": 10.0, "end": 12.0}]
-    lines = [{"start": 2.0, "end": 4.3, "text": "a break from presentation prep."}, {"start": 11.0, "end": 20.0, "text": "long"}]
+    clips = [{"start": 0.0, "end": 4.0}, {"start": 10.0, "end": 12.0}, {"start": 30.03, "end": 33.0}]
+    lines = [{"start": 2.0, "end": 4.3, "text": "a break from presentation prep."}, {"start": 11.0, "end": 20.0, "text": "long"},
+             {"start": 30.0, "end": 31.0, "text": "Hey, guys."}]
     finish_sentences(clips, lines)
     assert clips[0]["end"] == 4.4 and clips[1]["end"] == 12.0   # (a line ending far later is left alone)
+    assert clips[2]["start"] == 29.9   # and a clip starting mid-line starts with the line

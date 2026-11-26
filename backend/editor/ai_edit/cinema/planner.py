@@ -154,6 +154,7 @@ def _watch(prompt, prep_dir, prep, windows, tries=4):
             for shot in plan.shots:   # Cascade's own markers: never taken from the planner
                 shot.hard_end, shot.panel_ends, shot.said_until, shot.said_word = False, [], 0, ''
             plan.hard_length = False
+            for shot in plan.shots: shot.carry_sound, shot.carry_until = False, 0   # (set from the request's words, not the planner)
             visual.check(plan, prep['duration'], windows, prep.get('cuts', []), prep.get('parts'))
             return plan
         except ValueError as exc:
@@ -184,6 +185,10 @@ def plan_visual(request, prep_dir, prep, windows, history):
     visual.trim_to_outro(plan, said)      # an ending word said in the last shot: the shot stops just after it
     visual.text_requests(plan, request)   # "big text in the middle"
     visual.keep_in_clips(plan, prep.get('parts'))
+    if len(plan.shots) > 1 and plan.shots[-1].carry_sound and prep.get('parts'):   # the carried sound ends with its own clip
+        prev = plan.shots[-2]
+        clip = next((p for p in prep['parts'] if p['from']-.05 <= prev.start < p['to']), None)
+        if clip: plan.shots[-1].carry_until = clip['to']-.03
     visual.ending_transition(plan)
     for shot in plan.shots:   # each collage strip stops where its own clip ends (it then holds its last frame)
         if shot.panels and prep.get('parts'):
