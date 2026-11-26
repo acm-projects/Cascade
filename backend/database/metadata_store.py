@@ -16,6 +16,23 @@ from fastapi import HTTPException
 
 MIGRATIONS = Path(__file__).parent / 'migrations'
 JOB_FILES = {'owner.json', 'results.json', 'progress.json', 'failure.json'}
+CACHE_SECONDS = 3    # a record read this recently is served from memory (this process's own writes replace it)
+FRESH_SECONDS = 20   # a pooled connection used this recently is not checked again before use
+
+
+def _writing(method):
+    """A write: the record's cached read is dropped before it starts and again once it is done (so a read that
+    overlapped it is not served afterwards)."""
+    from functools import wraps
+    @wraps(method)
+    def run(self, path, *args, **kwargs):
+        key = self.key(path)
+        self._changed(key)
+        try:
+            return method(self, path, *args, **kwargs)
+        finally:
+            self._changed(key)
+    return run
 
 
 class MetadataStore:
@@ -25,6 +42,14 @@ class MetadataStore:
         self.pool = None
         self.init_lock = Lock()
         self.connection_slots = BoundedSemaphore(8)
+        self.last_used = {}
+        self.recent = {}   # key -> (when read, payload as JSON): records read in the last CACHE_SECONDS
+        self.writes = {}   # key -> how many writes this process started on it
+
+    def _changed(self, key):
+        if key:
+            self.writes[key] = self.writes.get(key, 0)+1
+            self.recent.pop(key, None)
 
     def key(self, path):
         try:
@@ -57,8 +82,12 @@ class MetadataStore:
             for attempt in range(2):
                 try:
                     conn = self.pool.getconn()
-                    with conn.cursor() as cur:
-                        cur.execute("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '5s'; SELECT 1")
+                    # (a connection used in the last few seconds is still open: checking it costs a round trip to the
+                    #  database on every read and write, so only an idle one is checked)
+                    if attempt or time.monotonic()-self.last_used.get(id(conn), 0) > FRESH_SECONDS:
+                        with conn.cursor() as cur:   # (the time limits hold for the connection's whole session)
+                            cur.execute("SET statement_timeout = '10s'; SET lock_timeout = '5s'; SELECT 1")
+                        conn.commit()
                     break
                 except (OperationalError, InterfaceError):
                     if conn is not None:
@@ -68,6 +97,7 @@ class MetadataStore:
                         raise
             with conn:
                 yield conn
+            self.last_used[id(conn)] = time.monotonic()
         except HTTPException:
             raise
         except Exception as error:
@@ -125,9 +155,17 @@ class MetadataStore:
     def read(self, path):
         key = self.key(path)
         if self.database_url and key:
+            hit = self.recent.get(key)
+            if hit and time.monotonic()-hit[0] < CACHE_SECONDS:   # (read a moment ago: no second round trip)
+                if hit[1] is None: raise FileNotFoundError('Metadata record not found')
+                return json.loads(hit[1])
+            before = self.writes.get(key, 0)
             with self.connection() as conn, conn.cursor() as cur:
                 cur.execute('SELECT payload FROM cascade_app.records WHERE key = %s', (key,))
                 row = cur.fetchone()
+            if self.writes.get(key, 0) == before:   # (not cached when a write to it happened meanwhile)
+                self.recent[key] = (time.monotonic(), None if row is None else json.dumps(row[0]))
+            if len(self.recent) > 2000: self.recent.clear()
             if row is None:
                 raise FileNotFoundError('Metadata record not found')
             return row[0]
@@ -154,10 +192,12 @@ class MetadataStore:
             cur.execute('SELECT key, payload FROM cascade_app.records WHERE key = ANY(%s)', (list(keys),))
             return {keys[key]: data for key, data in cur.fetchall()}
 
+    @_writing
     def write(self, path, data, *, import_only=False):
         from psycopg2.extras import Json
         path = Path(path)
         key = self.key(path)
+        self._changed(key)
         if self.database_url and key:
             conflict = 'DO NOTHING' if import_only else 'DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()'
             with self.connection() as conn, conn.cursor() as cur:
@@ -194,9 +234,11 @@ class MetadataStore:
                         self.update_project(project_path, owner['user_id'], {})
         return 1
 
+    @_writing
     def update_project(self, path, user_id, changes):
         """Atomic JSON merge preserves saved clips when a project is renamed."""
         patch = {**changes, 'updated_at': time.time()}
+        self._changed(self.key(path))
         if self.database_url:
             from psycopg2.extras import Json
             with self.connection() as conn, conn.cursor() as cur:
@@ -214,14 +256,17 @@ class MetadataStore:
         self.local_write(Path(path), data)
         return data
 
+    @_writing
     def delete(self, path):
         key = self.key(path)
+        self._changed(key)
         if self.database_url and key:
             with self.connection() as conn, conn.cursor() as cur:
                 cur.execute('DELETE FROM cascade_app.records WHERE key = %s', (key,))
         Path(path).unlink(missing_ok=True)
 
     def delete_project_metadata(self, path, user_id, job_ids, referenced):
+        self.recent.clear(); self.writes = {k: v+1 for k, v in self.writes.items()}
         if not self.database_url:
             return
         from psycopg2.extras import Json
@@ -264,7 +309,9 @@ class MetadataStore:
     def paths(self, pattern):
         return [path for path, data in self.documents(pattern)]
 
+    @_writing
     def append_saved_clip(self, path, user_id, entry):
+        self._changed(self.key(path))
         if not self.database_url:
             data = self.read(path)
             if entry not in data['saved_clips']:

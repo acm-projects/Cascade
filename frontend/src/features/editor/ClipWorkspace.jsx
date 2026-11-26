@@ -71,7 +71,7 @@ export default function ClipWorkspace({ projectId, clip, sidebar, layout, clipTa
         setPanelTab("AI Editor");
       }
     }).catch(() => {});
-    const timer = setInterval(poll, 2000);
+    const timer = setInterval(poll, 1000);
     poll();
     return () => { active = false; clearInterval(timer); };
   }, [api, projectId, clip.job_id, clip.clip_index, jobRunning, adoptAIEdit]);

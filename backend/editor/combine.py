@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from backend.core import config, jobs as job_service, storage as storage_service
 from backend.services import projects_store
 
-MAX_PARTS = 10
+MAX_PARTS = 12
 MAX_SECONDS = 15*60
 FADE = .012          # seconds of fade on the sound at each join, so the seams don't click
 
@@ -159,9 +159,35 @@ def combine_clips(pid: str, body: CombineInput, request: Request):
         key = (ref.job_id, ref.clip_index)
         if key not in seen: seen.add(key); refs.append(ref)
     if len(refs) < 2: raise HTTPException(400, 'Pick at least two different clips to combine.')
+    fast = _demo_parts(pid, user, refs)
+    if fast: return _combine(pid, user, body, refs, fast)
     with ExitStack() as stack:
         parts = [_part(pid, user, ref, stack) for ref in refs]
         return _combine(pid, user, body, refs, parts)
+
+
+def _demo_parts(pid, user, refs):
+    """Demo mode: clips picked from one demo Studio job, read in one go (each clip's own lookups cost a database
+    round trip apiece). None when these are not demo clips."""
+    from backend import demo
+    if not demo.enabled() or len({r.job_id for r in refs}) != 1: return None
+    folder = job_service.JOBS_DIR/refs[0].job_id
+    try:
+        owner = job_service.load_json(folder/'owner.json')
+        clips = job_service.load_json(folder/'results.json')['clips']
+    except Exception:
+        return None
+    if owner.get('user_id') != user or owner.get('project_id') != pid or not demo.is_demo_upload(owner): return None
+    if any(r.clip_index >= len(clips) for r in refs): raise HTTPException(404, 'Clip not found.')
+    info = {'has_video': True, 'has_audio': True, 'width': 1920, 'height': 1080, 'media_kind': 'video'}
+    parts = []
+    for r in refs:
+        clip = clips[r.clip_index]
+        vtt = folder/f'clip_{r.clip_index+1}.vtt'
+        parts.append({'path': folder/f'clip_{r.clip_index+1}.mp4', 'duration': float(clip['end'])-float(clip['start']), 'info': info,
+                      'title': clip.get('title') or f'Clip {r.clip_index+1}', 'captions': vtt.read_text(encoding='utf-8-sig') if vtt.is_file() else '',
+                      'start': float(clip['start']), 'end': float(clip['end'])})
+    return parts
 
 
 def _combine(pid, user, body, refs, parts):
@@ -183,8 +209,20 @@ def _combine(pid, user, body, refs, parts):
     folder.mkdir(parents=True)
     try:
         joined = folder/'combined.mp4'
-        command = join_command([(p['path'], 0., p['duration'], p['info']['has_audio']) for p in parts], joined, width, height)
-        run = subprocess.run(command, capture_output=True, text=True, timeout=1800)
+        from backend import demo
+        owners, seen = [], {}
+        for r in refs:   # (each job's owner read once)
+            if r.job_id not in seen:
+                try: seen[r.job_id] = job_service.load_json(job_service.JOBS_DIR/r.job_id/'owner.json')
+                except Exception: seen[r.job_id] = {}
+            owners.append(seen[r.job_id])
+        demo_edit = demo.is_demo_combine(refs, owners)
+        if demo_edit:   # demo mode: the picked hike clips, joined in the edit's order
+            shutil.copyfile(demo.combined_file(), joined)
+            run = subprocess.CompletedProcess([], 0, '', '')
+        else:
+            command = join_command([(p['path'], 0., p['duration'], p['info']['has_audio']) for p in parts], joined, width, height)
+            run = subprocess.run(command, capture_output=True, text=True, timeout=1800)
         if run.returncode or not joined.is_file():
             logging.getLogger(__name__).error('Combining clips failed: %s', run.stderr[-1500:])
             raise HTTPException(500, 'Could not combine the clips. Try again, or pick different clips.')
@@ -194,13 +232,13 @@ def _combine(pid, user, body, refs, parts):
         fingerprint = hashlib.sha256()
         with source.open('rb') as f:
             while chunk := f.read(1024*1024): fingerprint.update(chunk)
-        title = (body.title or '').strip() or default_title([p['title'] for p in parts])
+        title = (body.title or '').strip() or ('Hike with Cascade' if demo_edit else default_title([p['title'] for p in parts]))
         owner = {'user_id': user, 'project_id': pid, 'kind': 'combined', 'prompt': '', 'source_name': f'{title}.mp4',
                  'media_kind': 'video', 'video_sha256': fingerprint.hexdigest(), 'requested_clip_count': 1,
                  'history_id': job_id, 'source_job': job_id, 'created_at': time.time(),
                  'combined_from': [{**r.model_dump(), 'start': p['start'], 'end': p['end']} for r, p in zip(refs, parts)],
                  # where each picked clip sits in the joined video, with its Studio title, so the AI Editor knows which is which
-                 'parts': timeline(parts),
+                 'parts': demo.combined_parts() if demo_edit else timeline(parts), **({'demo': True} if demo_edit else {}),
                  'user_folder': storage['folder'], 'folder_source': storage['source'], **info}
         job_service.save_json(folder/'owner.json', owner)
         shutil.copyfile(source, folder/'clip_1.mp4')
@@ -224,7 +262,7 @@ def _combine(pid, user, body, refs, parts):
         studio.set_selection(project['studio'], [ref, *project['studio'].get('editor_clips', [])])
         project['editor_selection'] = ref
         studio.save(project, user)
-    if not storage_service.uses_local_storage():
+    if not storage_service.uses_local_storage() and not demo_edit:   # (demo: no 70 MB upload competing with the demo)
         from .own_clip import _back_up
         threading.Thread(target=_back_up, args=(folder, job_id), daemon=True).start()
     return {**ref, 'title': title, 'duration': info['duration'], 'parts': len(parts)}

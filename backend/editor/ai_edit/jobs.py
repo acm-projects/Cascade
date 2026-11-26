@@ -104,6 +104,24 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
         job.update(status=status, message=text, finished=time.time(), **more)
         _write(folder/'job.json', job)
     try:
+        from backend import demo
+        from backend.core import jobs as job_service
+        try: demo_clip = demo.enabled() and job_service.load_json(job_service.JOBS_DIR/jid/'owner.json').get('demo')
+        except Exception: demo_clip = False
+        if demo_clip and not state.ai_edit:   # demo mode: the finished hike edit
+            name = _next_version(folder)
+            out = folder/name; out.mkdir(parents=True, exist_ok=True)
+            plan, report = demo.edit(out, progress)
+            duration = preparation.probe(out/'edited.mp4')['duration']
+            project.save(out, plan, dict(report), 'openai', message, {'job': jid, 'clip': index, 'duration': duration, 'credits': []})
+            report.pop('timeline', None)
+            _write(out/'report.json', report)
+            _write(folder/'versions.json', [*versions(folder), {'version': name, 'title': plan.title, 'request': message[:500], 'duration': duration, 'created': time.time()}])
+            text = '\n'.join([plan.reply or f'{plan.title} is ready.', '',
+                               f"{name} · {report['seconds']} s · {report['size']} · visual edit, {report['pieces']} shots · {report['lufs']} LUFS · planned by openai.",
+                               'Ask for any change here.'])[:4000]
+            _publish(pid, jid, index, user, state, name, duration, text)
+            return finish('done', text, progress=1, stage='Done', version=name, duration=duration)
         with RENDER_SLOT, media(jid, clip) as source:
             progress(.02, 'Getting the clip ready…')
             prep_dir = folder/'prep'

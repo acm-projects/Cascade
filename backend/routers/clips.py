@@ -60,6 +60,20 @@ def process_upload(
             state="processing",
         )
 
+        from backend import demo
+        if demo.is_demo_upload(job_service.load_json(folder/'owner.json')):   # demo mode: the clips the finished edit uses
+            clips, metadata = demo.find_clips(job_id, folder, progress)
+            owner = job_service.load_json(folder/'owner.json')
+            owner.update({'duration': 2295.887, 'has_video': True, 'media_kind': 'video', 'width': 1920, 'height': 1080})
+            job_service.save_json(folder/'owner.json', owner)
+            job_service.save_json(folder/'selected_clips.json', {'query': search, 'model': metadata['model'], 'provider': metadata['provider'],
+                                                                 'clips': [{k: c[k] for k in ('start', 'end', 'title', 'explanation')} for c in clips]})
+            job_service.save_json(folder/'results.json', {'clips': clips, 'timings': {}, 'steps_log': list(steps), 'steps_elapsed': list(steps_elapsed), **metadata})
+            job_service.update_job(job_id, state='done', message=f'{len(clips)} clip(s) ready.', media_kind='video',
+                                   clips=[storage_service.public_clip(c) for c in clips], ready_clip_count=len(clips), **metadata)
+            from backend.services import project_thumbnails
+            project_thumbnails.save(job_id, clips)
+            return
         progress("Reading uploaded audio..." if job_service.load_json(folder/"owner.json").get("media_kind") == "audio" else "Reading uploaded video...")
         timer.start('Video inspection')
         from backend.media import probe_media, normalize_media

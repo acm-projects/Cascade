@@ -401,6 +401,10 @@ def joined_upload(pid, sid, request, videos, request_id):
             return {'job_id': done['job_id']}
         if session['source_job']:
             raise HTTPException(400, 'This session already has generated clips. Start a new session to upload a different source video.')
+    from backend import demo
+    if demo.matches([v.filename for v in videos]):   # demo mode: the hike recordings, already joined and searched
+        first = Path(videos[0].filename).stem[:80]
+        return UploadFile(demo.stand_in().open('rb'), filename=f'{first} + {len(videos) - 1} more.mp4'), demo.source_parts()
     folder = Path(tempfile.mkdtemp(prefix='studio-join-'))
     try:
         paths = []

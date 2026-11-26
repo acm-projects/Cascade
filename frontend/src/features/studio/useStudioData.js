@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import useApi from "../../api/useApi";
 
-const POLL_MS = 2400;
+const POLL_MS = 1000;   // (checked often while clips are being found, so they appear as soon as they are ready)
 const isRunning = (group) => ["queued", "processing"].includes(group.state) || group.backup_state === "pending";
 
 // Everything the AI Studio page needs from the backend, in one place.

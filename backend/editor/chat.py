@@ -25,7 +25,11 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     # Which path handles this message: the AI chooses (chat_router), except where the app's state decides it.
     from . import chat_router, storyboard_chat
     pending=storyboard_chat.pending(body,info,request.state.user_id,pid,jid,index)
-    route=chat_router.fixed(body,info,pending) or chat_router.choose(body,{**info,'clip_title':clip.get('title','')})
+    from backend import demo
+    from backend.core import jobs as job_service
+    try: demo_clip=demo.enabled() and not getattr(body.state,'ai_edit',None) and job_service.load_json(job_service.JOBS_DIR/jid/'owner.json').get('demo')
+    except Exception: demo_clip=False
+    route='finished_edit' if demo_clip else (chat_router.fixed(body,info,pending) or chat_router.choose(body,{**info,'clip_title':clip.get('title','')}))   # (demo: the first ask is the edit)
     if route=='finished_edit':   # a whole new edit, or any follow-up on a finished one
         from .ai_edit import jobs as ai_edit_jobs
         return ai_edit_jobs.turn(pid,jid,index,request.state.user_id,clip,body,info,stock,audio_store)
