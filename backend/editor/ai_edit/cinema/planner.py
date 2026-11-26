@@ -51,6 +51,9 @@ def output(plan, words, new=True):
     if target and isinstance(plan, visual.VisualPlan):
         from . import score
         message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
+        if plan.clip_order and new:   # every clip the request names stays: run a little long rather than drop one
+            ending = (visual.OUTRO*.4 if plan.shots and plan.shots[-1].voice else visual.OUTRO) if plan.outro.strip() else 0
+            target = min(target+3, max(target, visual.shortest(plan)+ending+message+.2))
         timing = visual.song_timing(plan, target)
         if new and not plan.clip_order: visual.interleave(plan)   # never two pieces of one moment back to back (a requested order wins)
         if plan.song and not timing:   # an unknown song: Cascade's own score instead
@@ -88,13 +91,16 @@ def _footage(prep, windows):
     motion = prep.get('motion') or []
     return (f"Clip: {prep['duration']:.1f} s. Usable source ranges: {windows}. Contact sheets: one cell every {every} s, 8 across and 6 down, "
             f"labelled with the source second. Camera cuts at seconds: {[round(c, 1) for c in prep.get('cuts', [])][:200]}.\n"
-            f"Motion per second (index = second): {motion[:600]}\n\n{clips(prep.get('parts'))}{speech(prep.get('words') or [], windows)}{songs()}")
+            f"Motion per second (index = second): {motion[:600]}\n\n{clips(prep.get('parts'), prep.get('words'))}{speech(prep.get('words') or [], windows)}{songs()}")
 
 
-def clips(parts):
-    """The picked clips this video was joined from, so "the wave" or "the hands thing" in a request maps to seconds."""
+def clips(parts, words=None):
+    """The picked clips this video was joined from, so "the wave" or "the hands thing" in a request maps to seconds;
+    each with the first words said in it, so a talking clip (an intro, a chant) is recognised by what is said."""
     if not parts: return ''
-    listed = '\n'.join(f"{n+1}. {p['from']:.1f}-{p['to']:.1f} s: {p['title']}" for n, p in enumerate(parts))
+    said = lambda p: ' '.join(w['w'] for w in (words or []) if p['from'] <= w['s'] < p['to'])[:110]
+    listed = '\n'.join(f"{n+1}. {p['from']:.1f}-{p['to']:.1f} s: {p['title']}" + (f' | says: "{said(p)}"' if said(p) else ' | (no speech)')
+                       for n, p in enumerate(parts))
     return ('Clips (this video is these picked clips joined in this order; a request naming a moment means the clip with that '
             f'title; use every clip unless the request leaves one out, and never let a shot cross from one clip into the next):\n{listed}\n\n')
 
@@ -172,6 +178,12 @@ def plan_visual(request, prep_dir, prep, windows, history):
     visual.story_edges(plan, said, prep.get('parts'))   # the intro and the ending are heard, the ending plays out
     visual.whole_phrases(plan, said, cuts=prep.get('cuts') or [])
     visual.stop_at(plan, said, request)   # "stop the intro at presentation prep"
+    visual.trim_to_outro(plan, said)      # an ending word said in the last shot: the shot stops just after it
+    for shot in plan.shots:   # each collage strip stops where its own clip ends (it then holds its last frame)
+        if shot.panels and prep.get('parts'):
+            end_of = lambda x: next((p['to'] for p in prep['parts'] if p['from']-.05 <= x < p['to']), None)
+            shot.panel_ends = [e for e in [end_of(x) for x in [shot.start]+list(shot.panels)] if e is not None]
+            if len(shot.panel_ends) != len(shot.panels)+1: shot.panel_ends = []
     if seconds: plan.seconds = seconds
     plan = output(plan, [])
     ratio = requested_ratio(request)

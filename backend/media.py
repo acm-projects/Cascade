@@ -83,7 +83,7 @@ MAX_JOINED_LONG, MAX_JOINED_SHORT = 1920, 1080   # joined footage is at most 108
 def join_media(paths, target_dir, names=None):
     """Join several uploads end to end into one source file, in the order given.
 
-    All videos: scaled and padded to the first video's shape (at most 1080p, so phone 4K footage stays quick to
+    All videos: scaled and padded to the longest video's shape (at most 1080p, so phone 4K footage stays quick to
     search and edit), 30 fps, silent audio added where a file has none.
     All audio: joined into one MP3. A mix of video and audio-only files is rejected.
     Returns (joined file path, parts): parts is [{'name', 'start', 'end'}] in joined seconds, one per file, so clip
@@ -104,7 +104,10 @@ def join_media(paths, target_dir, names=None):
         command += (['-hwaccel', 'auto'] if info['has_video'] else []) + ['-i', str(path)]
     filters, extra = [], len(paths)
     if infos[0]['has_video']:
-        w0, h0 = infos[0]['width'], infos[0]['height']
+        # the frame takes the shape of the longest recording (a short vertical phone clip does not turn a
+        # landscape trip vertical); the others fit inside it
+        shape = max((i for i in infos if i['has_video']), key=lambda i: i['duration'])
+        w0, h0 = shape['width'], shape['height']
         fit = min(1., MAX_JOINED_LONG / max(w0, h0), MAX_JOINED_SHORT / max(1, min(w0, h0)))
         width, height = (max(2, int(w0 * fit) // 2 * 2), max(2, int(h0 * fit) // 2 * 2))
         for i, info in enumerate(infos):

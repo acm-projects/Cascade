@@ -178,6 +178,16 @@ class MontageTests(unittest.TestCase):
         self.assertAlmostEqual(report['seconds'], 1.5 + 1.5 + 1.2 + visual.OUTRO, delta=.2)
         self.assertFalse(list(folder.glob('collage-*.mp4')))   # temporary collage clips are removed
 
+    def test_the_ending_word_lands_when_it_is_said(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('One', 10.0), ('two', 10.4), ('three.', 10.8), ('Cascade!', 11.4)]]
+        p = plan([{'start': 0, 'end': 2}], outro='CASCADE')
+        self.assertAlmostEqual(visual.outro_word_time(p, words, [(8.0, 10.0, 9.5, True)]), 9.9)   # 8.0 + (11.4 - 9.5)
+        self.assertIsNone(visual.outro_word_time(plan([{'start': 0, 'end': 2}], outro='HIKE'), words, [(8.0, 10.0, 9.5)]))
+        misheard = words[:3]+[{'w': 'Custained.', 's': 11.4, 'e': 11.8}]   # what transcription made of a shouted "Cascade!"
+        self.assertAlmostEqual(visual.outro_word_time(p, misheard, [(8.0, 10.0, 9.5, True)]), 9.9)
+        # the moment split into beat pieces: the word is in an earlier piece than the last one
+        self.assertAlmostEqual(visual.outro_word_time(p, misheard, [(8.0, 9.8, 9.5, True), (9.8, 10.6, 11.3, True)]), 9.9)
+
     def test_montage_requests_and_the_speech_list(self):
         self.assertTrue(wants_montage('make an insta edit of our hike like my references'))
         self.assertFalse(wants_montage('Edit this video'))

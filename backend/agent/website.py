@@ -80,7 +80,7 @@ def add_given_ranges(toolbox, prompt, parts):
     floor = toolbox.min_clip_seconds
     for part, a, b, said in wanted:
         start, end = part['start']+a, min(part['end'], part['start']+b)
-        toolbox.min_clip_seconds = min(floor, max(.5, end-start))   # an exact range may be shorter than usual clips
+        toolbox.min_clip_seconds = min(floor, max(.3, end-start-.05))   # (a margin for rounding)   # an exact range may be shorter than usual clips
         try:
             blocks, err = toolbox.call('add_candidate', {'start_time': round(start, 2), 'end_time': round(end, 2), 'score': .9,
                                                          'asked_for': True, 'title': said[:70], 'reason': 'The exact time the request asks for.'})

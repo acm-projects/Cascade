@@ -176,7 +176,7 @@ class StudioTests(unittest.TestCase):
         jid = response.json()['job_id']
         info = probe_media(core_jobs.JOBS_DIR / jid / 'source.video')
         self.assertAlmostEqual(info['duration'], 3, delta=.3)
-        self.assertEqual((info['width'], info['height']), (320, 240))
+        self.assertEqual((info['width'], info['height']), (640, 360))   # the longest recording sets the frame
         self.assertEqual(core_jobs.load_json(core_jobs.JOBS_DIR / jid / 'owner.json')['source_name'], 'one + 1 more.mp4')
         state = self.client.get(url, headers=self.headers).json()
         self.assertEqual(state['sessions'][0]['source_job'], jid)

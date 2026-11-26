@@ -260,6 +260,26 @@ class Captions:
 
 # ---------------------------------------------------------------- the composer
 
+_WATER = {}
+
+
+def water(h, w, t):
+    """A moving water texture (h x w x 3 float): deep to bright blue with drifting light caustics."""
+    key = (h, w)
+    if key not in _WATER:
+        y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+        _WATER[key] = (x/max(1, w), y/max(1, h))
+    x, y = _WATER[key]
+    s = max(w, h)/900
+    c = (np.sin((x*w/s)*.045+t*2.1+np.sin((y*h/s)*.03+t*1.3)*2.2)
+         + np.sin((y*h/s)*.052-t*1.7+np.sin((x*w/s)*.027-t)*2.6)
+         + np.sin(((x*w+y*h)/s)*.031+t*2.6))
+    caustic = np.clip((c-1.1)/1.9, 0, 1)**2                        # thin bright ridges where the waves meet
+    deep, light = np.array((14, 62, 168), np.float32), np.array((70, 160, 240), np.float32)
+    base = deep+(light-deep)*(1-y)[..., None]*.8
+    return np.clip(base+caustic[..., None]*np.array((150, 170, 160), np.float32), 0, 255)
+
+
 class Composer:
     def __init__(self, shots, overlays, captions, total, matter=None, ffmpeg='ffmpeg', progress=None, start=0.):
         self.shots, self.overlays, self.captions = shots, overlays, captions
@@ -327,9 +347,20 @@ class Composer:
     def _compose(self, frame, t, active, shot):
         W, H, u = look.W, look.H, look.unit()
         kinds = {o.kind for o in active}
-        need_matte = shot.kind == 'aroll' and kinds & {'behind', 'outline', 'glow', 'silhouette'}
+        need_matte = shot.kind == 'aroll' and kinds & {'behind', 'outline', 'glow', 'silhouette', 'cutin'}
         person = self._matte(frame) if need_matte else None
         mute = []
+        for o in active:
+            if o.kind == 'cutin':   # the people arrive cut out over the previous shot, then their own picture fades in
+                key = ('cutin', o.t0)
+                if key not in self.accent_previous:
+                    self.accent_previous[key] = self.last.copy() if self.last is not None else frame.copy()
+                prev = self.accent_previous[key].astype(np.float32)
+                p = (t-o.t0)/max(.01, o.t1-o.t0)
+                k = 0. if p < .45 else _ease((p-.45)/.55)
+                bg = prev*(1-k)+frame*k
+                a = person[..., None] if person is not None else np.full(frame.shape[:2]+(1,), min(1., p*2), np.float32)
+                frame[:] = (bg*(1-a)+frame*a).astype(np.uint8)
         for o in active:
             if o.kind in ('quote', 'message'):   # the picture falls back so the words can land
                 k = _ease((t-o.t0)/.4)
@@ -341,9 +372,14 @@ class Composer:
                 text, tone = o.data['text'], o.data['tone']
                 f = look.fit_heavy(text, W*.92, int(min(H*.34, W*.42)))
                 fill, edge = tuple(o.data.get('fill') or look.TONES[tone]), o.data.get('edge')   # edge: an outline colour
+                if o.data.get('texture') == 'water': fill = (255, 255, 255)   # painted with moving water below
                 solid = self._sprite(('behind', text, fill, tuple(edge or ()), W), lambda: look.text_sprite(
                     text, f, fill=fill, shadow=.35, tracking=-int(f.size*.03),
                     **({'stroke': max(4, int(f.size*.045)), 'stroke_fill': tuple(edge)} if edge else {})))
+                if o.data.get('texture') == 'water':   # the letters filled with moving water
+                    rgba = solid.rgba.copy()
+                    rgba[..., :3] = water(rgba.shape[0], rgba.shape[1], t).astype(np.uint8)
+                    solid = look.Sprite(rgba, solid.ax, solid.ay, solid.pad, solid.ascent, solid.width)
                 k = _ease((t-o.t0)/.22)
                 out = min(1, max(0, (o.t1-t)/.2))
                 y = o.data.get('y', H*.3)
@@ -444,15 +480,17 @@ class Composer:
                 self.accent_previous[key] = self.last.copy() if self.last is not None else None
             phase = (t-o.t0)/max(.001, o.t1-o.t0)
             frame = accents.apply(frame, self.accent_previous[key], o.data['kind'], phase)
-        self.accent_previous = {k: v for k, v in self.accent_previous.items() if t < k[1]}
+        self.accent_previous = {k: v for k, v in self.accent_previous.items() if (k[0] == 'cutin' and t-k[1] < 2) or (k[0] != 'cutin' and t < k[1])}
         return frame
 
     TYPED_COLOUR = (244, 231, 198)   # warm cream
 
     def _outro(self, frame, t, o):
+        """The ending word pops in, holds, then the camera flies into its first letter until that letter's colour
+        (or water texture) fills the frame: the film ends in the word's colour."""
         import cv2
         W, H = look.W, look.H
-        text, fill = o.data['text'], tuple(o.data['fill'])
+        text, fill = o.data['text'], np.array(o.data['fill'], np.float32)
         key = ('outro', text, W)
         if key not in self.sprites:
             f = look.fit_heavy(text, W*.78, int(min(H*.3, W*.22)))
@@ -462,17 +500,26 @@ class Composer:
             ys, xs = max(0, y0), max(0, x0)
             part = sp.rgba[ys-y0:, xs-x0:, 3][:H-ys, :W-xs]
             mask[ys:ys+part.shape[0], xs:xs+part.shape[1]] = part/255.
-            self.sprites[key] = mask
-        mask = self.sprites[key]
+            # aim at the first letter's thick left stroke, so the flight ends inside its colour
+            cols = np.nonzero(mask.max(0) > .5)[0]
+            first = x0+sp.pad+f.getlength(text[0])*.16 if len(cols) else W/2
+            rows = np.nonzero(mask[:, int(min(W-1, max(0, first)))] > .5)[0]
+            aim = (float(first), float(rows.mean()) if len(rows) else H*.5)
+            self.sprites[key] = (mask, aim)
+        mask, (ax, ay) = self.sprites[key]
         p = (t-o.t0)/max(.01, o.t1-o.t0)
         if p < .1: z = 1.35-.35*_ease(p/.1)                       # pop in
         elif p < .5: z = 1.                                        # hold
-        else: z = math.exp((p-.5)/.5*math.log(45))                 # fly into the letters
-        m = cv2.warpAffine(mask, np.float32([[z, 0, (1-z)*W/2], [0, z, (1-z)*H*.5]]), (W, H))[..., None] if abs(z-1) > 1e-3 else mask[..., None]
+        else: z = math.exp((p-.5)/.42*math.log(60))                # fly into the first letter
+        cx, cy = (W/2, H*.5) if p < .5 else (ax, ay)
+        m = cv2.warpAffine(mask, np.float32([[z, 0, (1-z)*cx], [0, z, (1-z)*cy]]), (W, H))[..., None] if abs(z-1) > 1e-3 else mask[..., None]
+        paint = water(H, W, t) if o.data.get('texture') == 'water' else fill
         dark = min(1., max(0., (p-.45)/.3))                         # the picture falls away around the word
         base = frame*(1-.55*min(1., p/.1))*(1-dark)
-        out = base*(1-m)+np.array(fill, np.float32)*m
-        if p > .92: out *= max(0., 1-(p-.92)/.08)                  # and the film ends
+        out = base*(1-m)+paint*m
+        if p > .86:   # and the film ends in the word's colour
+            k = min(1., (p-.86)/.14)
+            out = out*(1-k)+fill*k
         return np.clip(out, 0, 255).astype(np.uint8)
 
     def _typed(self, frame, t, o):
