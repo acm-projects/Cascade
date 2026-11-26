@@ -52,10 +52,13 @@ def transcript_first_request(prompt: str) -> bool:
 
 T = r'(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?'   # 5:30, 5:30.01, or 2:16:24 (minutes:seconds:hundredths)
 # the recording, by its length as a phone shows it ("the 15:40 clip") or roughly ("the 15 minute video", "the 5 second clip")
-CLIP = (r'\s*(?:in|of|from|into)\s+(?:the\s+|a\s+)?(?:(\d{1,2}):(\d{2})|(\d{1,3})\s*[- ]?(min(?:ute)?|sec(?:ond)?)s?)'
-        r'\s*(?:min(?:ute)?s?\s*)?(?:length\s+|long\s+)*(?:clip|video|recording)')
+# (a few words may come between the time and the recording: "6:42.67 for the 4th bit from the 15 minute video";
+#  units may be misspelt or have seconds after them: "the 6 mintue video", "the 15 minut 40 second clip")
+CLIP = (r"(?:[\s,]+(?!in\b|of\b|from\b|into\b)[a-z0-9']+){0,5}?"
+        r'\s*(?:in|of|from|into)\s+(?:the\s+|a\s+)?(?:(\d{1,2}):(\d{2})|(\d{1,3})\s*[- ]?(min\w*|sec\w*))'
+        r'\s*(?:\d{1,2}\s*sec\w*\s*)?(?:length\s+|long\s+)*(?:clip|video|recording)')
 RANGE = re.compile(T+r'\s*(?:-|–|to|until)\s*'+T+CLIP, re.I)
-SINGLE = re.compile(r'(?:\bat\s+|\bfrom\s+|^|[\s,(])'+T+CLIP, re.I)
+SINGLE = re.compile(r'(?:\bat\s+|\bfrom\s+|^|[\s,(])'+T+r'(\s*[-–])?'+CLIP, re.I)   # "5:17.70-": from there on
 SINGLE_SECONDS = 3.0   # a single time ("2:16.24 in the 6:17 clip") becomes a clip this long, starting just before it
 
 
@@ -99,10 +102,11 @@ def add_given_ranges(toolbox, prompt, parts):
         if b > a: wanted.append((part, a, b, m.group(0))); used.append(m.span())
     for m in SINGLE.finditer(prompt):
         if any(x <= m.start(1) < y for x, y in used): continue
-        part = _recording(parts, m.group(4, 5, 6, 7))
+        part = _recording(parts, m.group(5, 6, 7, 8))
         if part:
             t = _time_in(*m.group(1, 2, 3), part['end']-part['start'])
-            wanted.append((part, max(0., t-.3), t-.3+SINGLE_SECONDS, m.group(0).strip(' ,(')))
+            back = 0. if m.group(4) else .3   # an open range ("5:17.70-") starts exactly there
+            wanted.append((part, max(0., t-back), t-back+SINGLE_SECONDS, m.group(0).strip(' ,(')))
     added = []
     floor = toolbox.min_clip_seconds
     for part, a, b, said in wanted:

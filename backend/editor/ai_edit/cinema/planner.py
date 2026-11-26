@@ -152,7 +152,7 @@ def _watch(prompt, prep_dir, prep, windows, tries=4):
         try:
             plan = visual.VisualPlan.model_validate(answer)
             for shot in plan.shots:   # Cascade's own markers: never taken from the planner
-                shot.hard_end, shot.panel_ends, shot.said_until, shot.said_word = False, [], 0, ''
+                shot.hard_end, shot.panel_ends, shot.panel_who, shot.said_until, shot.said_word = False, [], [], 0, ''
             plan.hard_length = False
             for shot in plan.shots: shot.carry_sound, shot.carry_until = False, 0   # (set from the request's words, not the planner)
             visual.check(plan, prep['duration'], windows, prep.get('cuts', []), prep.get('parts'))
@@ -190,6 +190,7 @@ def plan_visual(request, prep_dir, prep, windows, history):
         clip = next((p for p in prep['parts'] if p['from']-.05 <= prev.start < p['to']), None)
         if clip: plan.shots[-1].carry_until = clip['to']-.03
     visual.ending_transition(plan)
+    visual.strip_subjects(plan, request)   # "the 3rd box ... focus on the girl in the red coat"
     for shot in plan.shots:   # each collage strip stops where its own clip ends (it then holds its last frame)
         if shot.panels and prep.get('parts'):
             end_of = lambda x: next((p['to'] for p in prep['parts'] if p['from']-.05 <= x < p['to']), None)

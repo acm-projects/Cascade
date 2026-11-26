@@ -293,3 +293,21 @@ class MontageTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StripTests(unittest.TestCase):
+    def test_the_request_names_who_each_strip_frames(self):
+        p = plan([{'start': 0, 'end': 1, 'panels': [2, 4, 6]}])
+        visual.strip_subjects(p, 'for the 3rd vertical box do 2:18 FOCUS ON THE GIRL WITH THE RED/MARRON COAT ONLY and then '
+                                 'the 4th bit should focus on the girl with glasses in which she spins')
+        self.assertEqual(p.shots[0].panel_who, ['', '', 'girl with the red or marron coat', 'girl with glasses'])
+
+    def test_swapping_clips_keeps_every_shot_in_its_place(self):
+        old = [{'title': 'a', 'from': 0, 'to': 5}, {'title': 'b', 'from': 5, 'to': 6}, {'title': 'c', 'from': 6, 'to': 9}]
+        new = [{'title': 'a', 'from': 0, 'to': 5}, {'title': 'B', 'from': 5, 'to': 8}, {'title': 'c', 'from': 8, 'to': 11}]
+        p = plan([{'start': 1, 'end': 2}, {'start': 5.3, 'end': 5.8, 'panels': [6.5]}])
+        visual.swap_clips(p, old, new, replaced={2})
+        self.assertEqual((p.shots[0].start, p.shots[0].end), (1, 2))
+        self.assertEqual(p.shots[1].start, 5.02)   # the replaced clip plays from its start
+        self.assertEqual(p.shots[1].panels, [8.5])   # the kept clip keeps its moment
+        self.assertEqual(p.shots[1].panel_ends, [8, 11])

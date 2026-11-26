@@ -362,3 +362,14 @@ def test_a_clip_never_stops_mid_sentence():
     finish_sentences(clips, lines)
     assert clips[0]["end"] == 4.4 and clips[1]["end"] == 12.0   # (a line ending far later is left alone)
     assert clips[2]["start"] == 29.9   # and a clip starting mid-line starts with the line
+
+
+def test_misspelt_names_words_in_between_and_open_ranges():
+    from backend.agent.website import add_given_ranges
+    parts = [{"name": "a", "start": 0, "end": 377}, {"name": "b", "start": 377, "end": 1317}]
+    box = make_box(min_clip_seconds=2.0, max_clip_seconds=10.0, parts=parts)
+    box.index.duration = 1317
+    add_given_ranges(box, "the 3rd box do 2:18:20 - 2:21:44 from the 6 mintue long video and 06:42:67-06:44:67 for the 4th bit "
+                          "from the 15 minute long video and the bench to 5:17:70-  from the 15 minut 40 second clip", parts)
+    got = sorted((round(c["start"], 1), round(c["end"], 1)) for c in box.candidates)
+    assert got == [(138.2, 141.4), (377+317.7, 377+320.7), (377+402.7, 377+404.7)]

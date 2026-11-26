@@ -70,6 +70,7 @@ class VisualShot(BaseModel):
     # a collage's strips, left to right (this shot, then its panels): where to look across each (0-1) and how far to zoom in
     panel_focus: list[float] = Field(default_factory=list, max_length=6)
     panel_zoom: list[float] = Field(default_factory=list, max_length=6)
+    panel_who: list[str] = Field(default_factory=list, max_length=6)   # (set by Cascade from the request: who each strip frames)
     carry_sound: bool = False  # this shot plays the previous shot's sound carrying on (the chant heard over the last picture)
     carry_until: float = 0     # (set by Cascade: the carried sound stops here, where the previous moment's clip ends)
     silhouette: bool = False   # a bright splash: the background flashes to cream and the people become cut-out silhouettes
@@ -680,9 +681,10 @@ def outro_word_time(plan, words, voiced):
     return at[id(near[best])]
 
 
-def person_at(source, at, ffmpeg='ffmpeg'):
+def person_at(source, at, ffmpeg='ffmpeg', who=''):
     """Where the main person is in the frame at `at`: (centre x, centre y, height), each 0-1, or None. Uses the
-    person cut-out model; the largest figure wins."""
+    person cut-out model; the largest figure wins, or, given a description (`who`: "the girl in the red coat"), the
+    figure the visual search model matches best to it."""
     try:
         import cv2
         from .matte import Matter
@@ -695,6 +697,8 @@ def person_at(source, at, ffmpeg='ffmpeg'):
         if count < 2: return None
         k = 1+int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
         if stats[k, cv2.CC_STAT_AREA] < binary.size*.003: return None
+        people = [j for j in range(1, count) if stats[j, cv2.CC_STAT_AREA] >= binary.size*.003]
+        if who and len(people) > 1: k = _likeliest(frame, labels, stats, people, who)
         x, y, w, h = stats[k, :4]
         H, W = binary.shape
         return ((x+w/2)/W, (y+h/2)/H, h/H)
@@ -703,7 +707,25 @@ def person_at(source, at, ffmpeg='ffmpeg'):
         return None
 
 
-def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None, focus=None, zoom=None):
+def _likeliest(frame, labels, stats, people, who):
+    """Of the people cut out of a frame, the one the visual search model matches best to a description."""
+    from PIL import Image
+    from backend.video_search import router
+    router.load_models('visual')
+    rgb = np.ascontiguousarray(frame[..., ::-1])
+    crops = []
+    for j in people:
+        x, y, w, h = stats[j, :4]
+        piece = rgb[y:y+h, x:x+w].copy()
+        piece[labels[y:y+h, x:x+w] != j] = 128   # that person alone, on grey
+        crops.append(Image.fromarray(piece))
+    model = router.visual_model
+    pics = model.encode(crops, normalize_embeddings=True)
+    text = model.encode([f'a photo of {who}'], normalize_embeddings=True)[0]
+    return people[int(np.argmax(pics @ text))]
+
+
+def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None, focus=None, zoom=None, who=None):
     """A collage: the frame split into vertical strips, each playing a different moment of the source at once, left to
     right in the order given. Written as a short silent clip at the output size."""
     import subprocess
@@ -717,6 +739,7 @@ def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None,
         cmd += ['-ss', f'{a:.3f}', '-t', f'{max(.1, min(seconds+.4, (e-a-2/look.FPS) if e else seconds+.4)):.3f}', '-i', str(source)]
     focus = focus if focus and len(focus) == n else [.5]*n
     zoom = zoom if zoom and len(zoom) == n else [1.]*n
+    who = (list(who or [])+['']*n)[:n]
     graph = []
     for i, w in enumerate(widths):   # each strip: zoomed in on its subject, cropped around where it is
         z = min(4., max(1., zoom[i]))
@@ -729,6 +752,13 @@ def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None,
             face = min(close, key=lambda f: abs(f[0]-fx))
             fx, fy = face[0], min(.6, face[1]+.08)
         found = None if z <= 1.05 or close else person_at(source, order[i]+.1, ffmpeg)
+        if who[i]:   # the request names who this strip is about ("the girl in the red coat"): that person, zoomed on
+            named = person_at(source, order[i]+.1, ffmpeg, who[i])
+            if named: found, z = named, 1.3   # (room for them to move)
+        moving = None
+        if who[i] and found:   # ...and followed: where they are by the strip's end, the view pans between the two
+            span = min(seconds+.3, (stops[i]-order[i]-.15) if stops[i] else seconds+.3)
+            moving = (person_at(source, order[i]+span, ffmpeg, who[i]), span) if span > .4 else None
         if z <= 1.05 and not faces:   # no face at all: their figure
             found = person_at(source, order[i]+.1, ffmpeg)
             if found and abs(found[0]-fx) > half: fx = found[0]
@@ -742,8 +772,12 @@ def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None,
         zw, zh = int(W*z)//2*2, int(H*z)//2*2
         x = int(min(max(0, fx*zw-w/2), zw-w))
         y = int(min(max(0, fy*zh-H/2), zh-H))
+        cx = str(x)
+        if moving and moving[0]:
+            x1 = int(min(max(0, moving[0][0]*zw-w/2), zw-w))
+            cx = f"'{x}+({x1-x})*min(1,t/{moving[1]:.3f})'"
         graph.append(f'[{i}:v:0]fps={look.FPS},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},'
-                     f'scale={zw}:{zh},crop={w}:{H}:{x}:{y},setsar=1,tpad=stop_mode=clone:stop_duration={seconds+.5:.3f},'
+                     f'scale={zw}:{zh},crop={w}:{H}:{cx}:{y},setsar=1,tpad=stop_mode=clone:stop_duration={seconds+.5:.3f},'
                      f'trim=duration={seconds+.4:.3f}[s{i}]')
     graph.append(''.join(f'[s{i}]' for i in range(n))+f'hstack=inputs={n}[v]')
     cmd += ['-filter_complex', ';'.join(graph), '-map', '[v]', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14',
@@ -788,7 +822,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         path, src = str(source), v.start
         if v.panels:   # the collage is built once as its own short clip, then graded and framed like any shot
             path, src = str(collage_clip(source, [v.start]+list(v.panels), dur*v.speed, W, H, out.with_name(f'collage-{n}.mp4'), ffmpeg,
-                                         ends=list(v.panel_ends) or None, focus=list(v.panel_focus) or None, zoom=list(v.panel_zoom) or None)), 0.
+                                         ends=list(v.panel_ends) or None, focus=list(v.panel_focus) or None, zoom=list(v.panel_zoom) or None, who=list(v.panel_who) or None)), 0.
             made.append(Path(path))
         shots.append(Shot(t, t+dur, 'aroll', path, src, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1,
                           grade='bwhot' if v.mono else plan.grade,
@@ -971,3 +1005,51 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     return {'visual': True, 'song': timing[0]['credit'] if timing else None, 'seconds': round(total, 1), 'spoken_seconds': 0, 'pieces': len(plan.shots), 'removed_fillers': 0, 'removed_interjections': 0,
             'broll': 0, 'broll_share': 0, 'moments': sum(1 for s in plan.shots if s.text.strip()), 'accents': sum(1 for s in plan.shots if s.effect),
             'visual_family': 'visual', 'lufs': lufs, 'peak': peak, 'cut_out': False, 'size': f'{W}x{H}', 'timings': timings, 'timeline': timeline}
+
+
+def swap_clips(plan, old_parts, new_parts, replaced=()):
+    """A follow-up that only replaces some clips ("change the bench part to 5:17.70"): every shot and collage strip keeps
+    its place in the edit and moves onto the same clip in the new joined timeline. A replaced clip (1-based numbers in
+    `replaced`) plays from its new start; the others keep their offset inside their clip. Nothing else changes."""
+    def where(x):
+        return next((k for k, p in enumerate(old_parts) if p['from']-.05 <= x < p['to']), None)
+    def move(x, k, offset=None):
+        new = new_parts[k]
+        at = new['from']+.02 if k+1 in replaced else new['from']+(x-old_parts[k]['from'])
+        return round(min(max(new['from'], at), new['to']-.1), 3)
+    for s in plan.shots:
+        k = where(s.start)
+        if k is None or k >= len(new_parts): continue
+        length = s.end-s.start
+        s.start = move(s.start, k)
+        s.end = round(min(new_parts[k]['to']-.02, s.start+length), 3)
+        if s.said_from or s.said_to:
+            s.said_from, s.said_to = (round(new_parts[k]['from']+(v-old_parts[k]['from']), 3) if v else v for v in (s.said_from, s.said_to))
+        if s.said_until: s.said_until = round(new_parts[k]['from']+(s.said_until-old_parts[k]['from']), 3)
+        s.panels = [move(x, j) if j is not None and j < len(new_parts) else x for x, j in ((x, where(x)) for x in s.panels)]
+        if s.panels:   # each strip stops where its own clip ends
+            ends = [next((p['to'] for p in new_parts if p['from']-.05 <= x < p['to']), None) for x in [s.start]+list(s.panels)]
+            s.panel_ends = ends if None not in ends else []
+        if s.carry_until:
+            j = where(s.carry_until-.01)
+            if j is not None: s.carry_until = round(new_parts[j]['to']-.03, 3)
+    return plan
+
+
+ORDINALS = {'first': 1, '1st': 1, 'second': 2, '2nd': 2, 'third': 3, '3rd': 3, 'fourth': 4, '4th': 4, 'fifth': 5, '5th': 5, 'sixth': 6, '6th': 6}
+
+
+def strip_subjects(plan, request):
+    """ "the 3rd vertical box ... focus on the girl with the red coat": who each collage strip frames (left to right)."""
+    collage = next((s for s in plan.shots if s.panels), None)
+    if not collage or not request: return plan
+    n = len(collage.panels)+1
+    who = (list(collage.panel_who)+['']*n)[:n]
+    pattern = (r'\b(' + '|'.join(ORDINALS) + r')\s+(?:vertical\s+)?(?:box|bit|strip|panel|slot)\b(.{0,160}?)'
+               r'\bfocus(?:es|ed|ing)?\s+on\s+(?:the\s+|a\s+)?(.+?)(?=\s+only\b|\s+in\s+which\b|\s+and\s+then\b|\s+who\b|[.,;!]|\.\.\.|$)')
+    for m in re.finditer(pattern, request, re.I):
+        k = ORDINALS[m.group(1).lower()]-1
+        if k < n and not re.search(r'\b(' + '|'.join(ORDINALS) + r')\s+(?:vertical\s+)?(?:box|bit|strip|panel|slot)\b', m.group(2), re.I):
+            who[k] = re.sub(r'\s+', ' ', m.group(3)).strip().lower().replace('/', ' or ')
+    if any(who): collage.panel_who = who
+    return plan
