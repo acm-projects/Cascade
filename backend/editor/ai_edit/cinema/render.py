@@ -347,10 +347,24 @@ class Composer:
     def _compose(self, frame, t, active, shot):
         W, H, u = look.W, look.H, look.unit()
         kinds = {o.kind for o in active}
-        need_matte = shot.kind == 'aroll' and kinds & {'behind', 'outline', 'glow', 'silhouette', 'cutin'}
+        need_matte = shot.kind == 'aroll' and kinds & {'behind', 'outline', 'glow', 'silhouette', 'cutin', 'glowpop'}
         person = self._matte(frame) if need_matte else None
         mute = []
         for o in active:
+            if o.kind == 'glowpop' and person is not None:   # the people pop up as a glowing white cut-out, turn to colour, then the scene returns
+                import cv2
+                p = (t-o.t0)/max(.01, o.t1-o.t0)
+                pop = 1.12-.12*_ease(p/.18)                          # a little bounce as they appear
+                f32 = frame.astype(np.float32)
+                a = cv2.GaussianBlur(person, (0, 0), 1.2)[..., None]
+                colour = _ease((p-.3)/.25)                            # white -> their real colours
+                scene = _ease((p-.6)/.4)                              # dark -> the full, colourful picture
+                halo = np.clip(cv2.GaussianBlur(person, (0, 0), 24*u)*1.8-person, 0, 1)[..., None]*(1-scene)
+                people = 255*(1-colour)+f32*colour
+                back = f32*(.08+.92*scene)
+                out = back*(1-a)+people*a+halo*255*.85
+                if abs(pop-1) > .003: out = _zoom(np.clip(out, 0, 255).astype(np.uint8), pop).astype(np.float32)
+                frame[:] = np.clip(out, 0, 255).astype(np.uint8)
             if o.kind == 'cutin':   # the people arrive cut out over the previous shot, then their own picture fades in
                 key = ('cutin', o.t0)
                 if key not in self.accent_previous:
@@ -513,7 +527,12 @@ class Composer:
         else: z = math.exp((p-.5)/.42*math.log(60))                # fly into the first letter
         cx, cy = (W/2, H*.5) if p < .5 else (ax, ay)
         m = cv2.warpAffine(mask, np.float32([[z, 0, (1-z)*cx], [0, z, (1-z)*cy]]), (W, H))[..., None] if abs(z-1) > 1e-3 else mask[..., None]
-        paint = water(H, W, t) if o.data.get('texture') == 'water' else fill
+        # the water texture while the word stands; once the camera flies in, plain colour (no white streaks)
+        if o.data.get('texture') == 'water' and p < .58:
+            k = min(1., max(0., (p-.48)/.1))
+            paint = water(H, W, t)*(1-k)+fill*k
+        else:
+            paint = fill
         dark = min(1., max(0., (p-.45)/.3))                         # the picture falls away around the word
         base = frame*(1-.55*min(1., p/.1))*(1-dark)
         out = base*(1-m)+paint*m

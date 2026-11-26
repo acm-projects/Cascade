@@ -53,7 +53,7 @@ def output(plan, words, new=True):
         message = settings.get('pacing.message_seconds', 3.4) if plan.end_line else 0
         if plan.clip_order and new:   # every clip the request names stays: run a little long rather than drop one
             ending = (visual.OUTRO*.4 if plan.shots and plan.shots[-1].voice else visual.OUTRO) if plan.outro.strip() else 0
-            target = min(target+3, max(target, visual.shortest(plan)+ending+message+.2))
+            target = min(target+3.5, max(target, visual.shortest(plan)+ending+message+.7))   # (+ room for beat snapping)
         timing = visual.song_timing(plan, target)
         if new and not plan.clip_order: visual.interleave(plan)   # never two pieces of one moment back to back (a requested order wins)
         if plan.song and not timing:   # an unknown song: Cascade's own score instead
@@ -151,6 +151,8 @@ def _watch(prompt, prep_dir, prep, windows, tries=3):
             raise Unavailable(str(exc.detail)) from None
         try:
             plan = visual.VisualPlan.model_validate(answer)
+            for shot in plan.shots:   # Cascade's own markers: never taken from the planner
+                shot.hard_end, shot.panel_ends = False, []
             visual.check(plan, prep['duration'], windows, prep.get('cuts', []), prep.get('parts'))
             return plan
         except ValueError as exc:
@@ -179,6 +181,7 @@ def plan_visual(request, prep_dir, prep, windows, history):
     visual.whole_phrases(plan, said, cuts=prep.get('cuts') or [])
     visual.stop_at(plan, said, request)   # "stop the intro at presentation prep"
     visual.trim_to_outro(plan, said)      # an ending word said in the last shot: the shot stops just after it
+    visual.text_requests(plan, request)   # "big text in the middle"
     for shot in plan.shots:   # each collage strip stops where its own clip ends (it then holds its last frame)
         if shot.panels and prep.get('parts'):
             end_of = lambda x: next((p['to'] for p in prep['parts'] if p['from']-.05 <= x < p['to']), None)

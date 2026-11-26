@@ -38,6 +38,7 @@ CINEMATIC (when the request asks for cinematic, professional or "crazy good" edi
 - "silhouette": true on the moment the request wants as a cut-out silhouette or bright splash: the background flashes cream and the people become dark cut-out shapes, then the shot plays.
 - "zoom": "rise" on an ending where hands go up or the request says the shot rises to the sky.
 - "effect": "cutin" on a shot whose people should arrive cut out on top of the previous shot (e.g. "have the hug come on top of the vertical thing"), then its own background fades in behind them.
+- "effect": "glowpop" on a moment that should pop up big in the middle as a glowing white cut-out of the people, turn to colour, then fade into its colourful background (with "zoom": "close" and focus on the people so they are big).
 - "transition_sounds": false when the request asks for no whooshes or sounds on the transitions.
 - When the request wants the ending word to land as it is said ("when they say Cascade the blue CASCADE comes"), set "outro" to that word and end on the talking shot that says it: Cascade puts the word on screen at the exact moment it is spoken and the edit ends 1.7 s later.
 - "outro": an ending word (e.g. "CASCADE") when the request wants the edit to end on the word popping in (with a bing) and zooming into it; it takes 1.7 s after the last shot, in the title's colour.

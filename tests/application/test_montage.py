@@ -113,7 +113,7 @@ class MontageTests(unittest.TestCase):
     def test_stop_at_the_words_the_request_names(self):
         words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('break', 0.2), ('from', .6), ('presentation', 1.0), ('prep.', 1.4), ('I', 1.8), ('have', 2.2)]]
         p = visual.stop_at(plan([{'start': 0, 'end': 3, 'voice': True}]), words, 'keep the intro, and stop the intro at presentation prep. Then the wave')
-        self.assertAlmostEqual(p.shots[0].end, 1.9)
+        self.assertAlmostEqual(p.shots[0].end, 1.78)   # right after "prep.", before "I" starts
 
     def test_the_intro_and_ending_are_heard_and_the_ending_plays_out(self):
         words = [{'w': w, 's': a, 'e': a + .4} for w, a in [('Set.', .2), ('Cascade', .7), ('on', 1.2), ('three.', 1.6), ('one', 2.4), ('two', 2.9), ('three.', 3.4), ('Cascade.', 4.2),
@@ -139,6 +139,34 @@ class MontageTests(unittest.TestCase):
             self.assertTrue((accents.apply(b, a, kind, 1.) == b).all())
         words = [{'w': 'cascade', 's': 1.0, 'e': 1.4}]
         self.assertEqual(visual.speech_captions(words, [(0., 2., 0., True)])[0].data['style'], 'bold')
+
+    def test_stop_before_the_next_word_and_start_from_words(self):
+        words = [{'w': w, 's': a, 'e': e} for w, a, e in [('presentation', 3.18, 3.74), ('prep.', 3.7, 4.15), ('I', 4.11, 4.36),
+                                                         ("That's", 10.0, 10.2), ('it.', 10.2, 10.5), ('One', 12.0, 12.4), ('two', 12.5, 12.9), ('three.', 13.0, 13.4), ('Cascade.', 13.5, 14.0)]]
+        p = plan([{'start': 1, 'end': 6, 'voice': True}, {'start': 9.8, 'end': 14.5, 'voice': True}])
+        visual.stop_at(p, words, 'stop the intro at presentation prep, and the last part is too long just start from one two three')
+        self.assertLess(p.shots[0].end, 4.11)          # "I" is not heard
+        self.assertTrue(p.shots[0].hard_end)
+        self.assertAlmostEqual(p.shots[1].start, 11.88)
+
+    def test_an_opening_intro_starts_at_its_first_word(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('Hey,', 2.8), ('guys.', 3.1), ('This', 3.5), ('is', 3.8), ('Cascade.', 4.1)]]
+        p = visual.story_edges(plan([{'start': 3.45, 'end': 4.5}, {'start': 10, 'end': 11}]), words,
+                               [{'title': 'intro', 'from': 0, 'to': 9}, {'title': 'b', 'from': 9, 'to': 12}])
+        self.assertAlmostEqual(p.shots[0].start, 2.7)
+        chatter = [{'w': w, 's': a, 'e': a + .3} for w, a in [("It's", 1.0), ('a', 1.3), ('good', 1.6), ('hour.', 1.9), ("Let's.", 2.3)]] + words
+        p = visual.story_edges(plan([{'start': 3.45, 'end': 4.5}, {'start': 10, 'end': 11}]), chatter,
+                               [{'title': 'intro', 'from': 0, 'to': 9}, {'title': 'b', 'from': 9, 'to': 12}])
+        self.assertAlmostEqual(p.shots[0].start, 2.7)   # only the "Hey, guys." greeting, not the chatter before it
+
+    def test_counted_numbers_in_digits_still_match(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('Gascade', 4.0), ('on', 4.4), ('3.', 4.6), ('123.', 5.0), ('Custade.', 6.6)]]
+        p = plan([{'start': 0, 'end': 2, 'voice': True}, {'start': 3, 'end': 7, 'voice': True}], outro='CASCADE')
+        visual.stop_at(p, words, 'the last part: start from one two three, as big text')
+        self.assertAlmostEqual(p.shots[1].start, 4.88)
+        lines = visual.speech_captions(words, [(0., 4., 3., True)])
+        self.assertIn('one two three', ' '.join(w for o in lines for w, _ in o.data['words']))
+        self.assertAlmostEqual(visual.outro_word_time(p, words, [(10., 14., 3., True)]), 13.6)
 
     def test_quick_shots_shrink_before_any_is_dropped(self):
         p = plan([{'start': 0, 'end': 4, 'voice': True}] + [{'start': 10 + 3 * k, 'end': 11.5 + 3 * k} for k in range(4)] + [{'start': 30, 'end': 34, 'voice': True}])
