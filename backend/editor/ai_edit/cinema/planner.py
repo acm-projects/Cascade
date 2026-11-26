@@ -141,7 +141,7 @@ def songs():
     return 'Music Library (pick "song" by id and "song_section" by number; sections start at their own drop or chorus):\n'+json.dumps(catalogue)
 
 
-def _watch(prompt, prep_dir, prep, windows, tries=3):
+def _watch(prompt, prep_dir, prep, windows, tries=4):
     system, images = VISUAL_PROMPT.read_text(), director.images(prep_dir, prep)
     schema, last = openai_edit.strict_schema(visual.VisualPlan), ''
     for _ in range(tries):
@@ -152,7 +152,7 @@ def _watch(prompt, prep_dir, prep, windows, tries=3):
         try:
             plan = visual.VisualPlan.model_validate(answer)
             for shot in plan.shots:   # Cascade's own markers: never taken from the planner
-                shot.hard_end, shot.panel_ends = False, []
+                shot.hard_end, shot.panel_ends, shot.said_until, shot.said_word = False, [], 0, ''
             visual.check(plan, prep['duration'], windows, prep.get('cuts', []), prep.get('parts'))
             return plan
         except ValueError as exc:
@@ -182,6 +182,7 @@ def plan_visual(request, prep_dir, prep, windows, history):
     visual.stop_at(plan, said, request)   # "stop the intro at presentation prep"
     visual.trim_to_outro(plan, said)      # an ending word said in the last shot: the shot stops just after it
     visual.text_requests(plan, request)   # "big text in the middle"
+    visual.keep_in_clips(plan, prep.get('parts'))
     for shot in plan.shots:   # each collage strip stops where its own clip ends (it then holds its last frame)
         if shot.panels and prep.get('parts'):
             end_of = lambda x: next((p['to'] for p in prep['parts'] if p['from']-.05 <= x < p['to']), None)

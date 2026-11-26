@@ -120,6 +120,20 @@ def add_given_ranges(toolbox, prompt, parts):
             if added else '')
 
 
+def finish_sentences(clips, transcript, parts=None, most=1.5):
+    """A clip never stops mid-sentence: when its end falls inside a spoken line, it runs on to the end of that line
+    (at most `most` s more, and never into the next recording)."""
+    for clip in clips:
+        if clip.pop('exact', False): continue   # the user's own exact times are kept exactly
+        line = next((seg for seg in transcript or [] if seg['start'] < clip['end'] < seg['end']), None)
+        if not line or line['end']-clip['end'] > most: continue
+        end = line['end']+.1
+        part = next((p for p in parts or [] if p['start']-.05 <= clip['start'] < p['end']), None)
+        if part: end = min(end, part['end'])
+        clip['end'] = round(max(clip['end'], end), 2)
+    return clips
+
+
 def footage_note(parts, short):
     """Context for the agent about how the footage was made and what a short-moment request wants."""
     note = ''
@@ -245,6 +259,7 @@ def select_with_agent(
                 "title": pick["title"],
                 "explanation": explanation[:MAX_EXPLANATION_CHARS],
                 **({'reference_matches': pick['reference_matches']} if pick.get('reference_matches') else {}),
+                **({'exact': True} if pick.get('exact') else {}),
             }
         )
 
@@ -266,4 +281,5 @@ def select_with_agent(
     if len(references or []) > 1 and len(clips) < requested_count:
         metadata['selection_note'] = (f'Found {len(clips)} of {requested_count} requested combined matches. '
             'The remaining candidates did not form distinct new moments matching all selected references.')
+    finish_sentences(clips, index.transcript, parts)
     return clips, index.transcript, metadata

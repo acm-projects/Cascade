@@ -352,3 +352,11 @@ def test_rough_recording_names_and_short_video_times():
     add_given_ranges(box, "01:14-1:40 from the 5 second length video and 05:30:02-05:30:98 from the 15 minute video", parts)
     got = sorted((round(c["start"], 2), round(c["end"], 2)) for c in box.candidates)
     assert got == [(1.1, 1.4), (334.8, 335.8)]   # (candidates are kept to 0.1 s)
+
+
+def test_a_clip_never_stops_mid_sentence():
+    from backend.agent.website import finish_sentences
+    clips = [{"start": 0.0, "end": 4.0}, {"start": 10.0, "end": 12.0}]
+    lines = [{"start": 2.0, "end": 4.3, "text": "a break from presentation prep."}, {"start": 11.0, "end": 20.0, "text": "long"}]
+    finish_sentences(clips, lines)
+    assert clips[0]["end"] == 4.4 and clips[1]["end"] == 12.0   # (a line ending far later is left alone)

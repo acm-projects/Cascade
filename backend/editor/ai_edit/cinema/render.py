@@ -53,6 +53,7 @@ class Shot:
     look: str = 'full'        # full | mono
     face: tuple | None = None  # (x, y) of the face in output pixels
     tone: str = 'calm'
+    center: bool = False       # zoom brings `face` to the middle of the frame (a close-up of people filmed far away)
 
 
 @dataclass
@@ -306,6 +307,11 @@ class Composer:
             frame = np.full_like(frame, look.INK)
             y = (h-band.shape[0])//2
             frame[y:y+band.shape[0]] = band
+        if shot.face and shot.center:   # the subject moves to the middle as the frame zooms in on it
+            import cv2
+            h, w = frame.shape[:2]
+            m = np.array([[z, 0, w/2-z*shot.face[0]], [0, z, h/2-z*shot.face[1]]], np.float32)
+            return cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
         if shot.face: return _zoom(frame, z, shot.face[0], shot.face[1])
         return _zoom(frame, z)
 
@@ -357,14 +363,17 @@ class Composer:
                 under = self._under(o, frame).astype(np.float32)
                 f32 = frame.astype(np.float32)
                 a = cv2.GaussianBlur(person, (0, 0), 1.2)[..., None]
-                appear = _ease(p/.25)                                 # the white glow fades in on top
-                colour = _ease((p-.35)/.25)                           # white -> their real colours
-                scene = _ease((p-.6)/.4)                              # the previous shot -> their own, colourful scene
+                appear = _ease(p/.18)                                 # a glimpse: the white glow pops in on top
+                colour = _ease((p-.25)/.3)                            # white -> their real colours
+                scene = _ease((p-.4)/.6)                              # the previous shot -> their own, colourful scene
                 halo = np.clip(cv2.GaussianBlur(person, (0, 0), 24*u)*1.8-person, 0, 1)[..., None]*appear*(1-scene)
                 people = 255*(1-colour)+f32*colour
                 back = under*(1-scene)+f32*scene
                 out = back*(1-a*appear)+people*a*appear+halo*255*.85
                 frame[:] = np.clip(out, 0, 255).astype(np.uint8)
+            if o.kind == 'fade':   # a smooth dissolve from the previous shot (still playing) into this one
+                k = _ease((t-o.t0)/max(.01, o.t1-o.t0))
+                frame[:] = (self._under(o, frame).astype(np.float32)*(1-k)+frame*k).astype(np.uint8)
             if o.kind == 'cutin':   # the people arrive cut out over the previous shot, then their own picture fades in
                 prev = self._under(o, frame).astype(np.float32)
                 p = (t-o.t0)/max(.01, o.t1-o.t0)

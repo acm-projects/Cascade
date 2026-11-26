@@ -539,6 +539,7 @@ class ToolBox:
                 "score": by_id[cid]["score"],
                 "comparison": notes.get(cid, ""),
                 **({'reference_matches': by_id[cid]['reference_matches']} if 'reference_matches' in by_id[cid] else {}),
+                **({'exact': True} if by_id[cid].get('exact') else {}),
             }
             for n, cid in enumerate(chosen)
         ]

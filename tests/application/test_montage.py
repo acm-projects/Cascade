@@ -97,14 +97,14 @@ class MontageTests(unittest.TestCase):
         self.assertEqual(accents.apply(frame, None, 'shake', .3).shape, frame.shape)
         self.assertTrue((accents.apply(frame, None, 'shake', 1.) == frame).all())
 
-    def test_shots_must_follow_the_requested_clip_order(self):
+    def test_shots_follow_the_requested_clip_order_and_missing_clips_are_added(self):
         parts = [{'title': 'hands', 'from': 0, 'to': 5}, {'title': 'intro', 'from': 5, 'to': 11}, {'title': 'wave', 'from': 11, 'to': 14}]
-        good = plan([{'start': 5, 'end': 9, 'voice': True}, {'start': 11, 'end': 12}, {'start': 0, 'end': 4, 'voice': True}], clip_order=[2, 3, 1])
-        visual.check(good, 14, parts=parts)
-        with self.assertRaisesRegex(ValueError, 'not played'):
-            visual.check(plan([{'start': 5, 'end': 9}, {'start': 0, 'end': 4}], clip_order=[2, 3, 1]), 14, parts=parts)
-        with self.assertRaisesRegex(ValueError, 'order'):
-            visual.check(plan([{'start': 0, 'end': 4}, {'start': 5, 'end': 9}, {'start': 11, 'end': 12}], clip_order=[2, 3, 1]), 14, parts=parts)
+        missing = plan([{'start': 5, 'end': 9}, {'start': 0, 'end': 4}], clip_order=[2, 3, 1])
+        visual.check(missing, 14, parts=parts)
+        self.assertEqual([round(x.start) for x in missing.shots], [5, 12, 0])   # the wave was added, in its place
+        shuffled = plan([{'start': 0, 'end': 4}, {'start': 5, 'end': 9}, {'start': 11, 'end': 12}], clip_order=[2, 3, 1])
+        visual.check(shuffled, 14, parts=parts)
+        self.assertEqual([x.start for x in shuffled.shots], [5, 11, 0])   # put in the requested order
 
     def test_clips_in_a_collage_count_as_played(self):
         parts = [{'title': 'a', 'from': 0, 'to': 5}, {'title': 'b', 'from': 5, 'to': 10}, {'title': 'c', 'from': 10, 'to': 15}]
@@ -113,7 +113,8 @@ class MontageTests(unittest.TestCase):
     def test_stop_at_the_words_the_request_names(self):
         words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('break', 0.2), ('from', .6), ('presentation', 1.0), ('prep.', 1.4), ('I', 1.8), ('have', 2.2)]]
         p = visual.stop_at(plan([{'start': 0, 'end': 3, 'voice': True}]), words, 'keep the intro, and stop the intro at presentation prep. Then the wave')
-        self.assertAlmostEqual(p.shots[0].end, 1.78)   # right after "prep.", before "I" starts
+        self.assertAlmostEqual(p.shots[0].end, 1.82)   # "prep." is said in full
+        self.assertAlmostEqual(p.shots[0].said_until, 1.43)   # and nothing after it is captioned
 
     def test_the_intro_and_ending_are_heard_and_the_ending_plays_out(self):
         words = [{'w': w, 's': a, 'e': a + .4} for w, a in [('Set.', .2), ('Cascade', .7), ('on', 1.2), ('three.', 1.6), ('one', 2.4), ('two', 2.9), ('three.', 3.4), ('Cascade.', 4.2),
@@ -145,7 +146,10 @@ class MontageTests(unittest.TestCase):
                                                          ("That's", 10.0, 10.2), ('it.', 10.2, 10.5), ('One', 12.0, 12.4), ('two', 12.5, 12.9), ('three.', 13.0, 13.4), ('Cascade.', 13.5, 14.0)]]
         p = plan([{'start': 1, 'end': 6, 'voice': True}, {'start': 9.8, 'end': 14.5, 'voice': True}])
         visual.stop_at(p, words, 'stop the intro at presentation prep, and the last part is too long just start from one two three')
-        self.assertLess(p.shots[0].end, 4.11)          # "I" is not heard
+        self.assertGreaterEqual(p.shots[0].end, 4.15)   # "prep." is said in full
+        self.assertAlmostEqual(p.shots[0].said_until, 3.73)
+        caps = visual.speech_captions(words, [(0., 3.3, 1., False, p.shots[0].said_until)])
+        self.assertNotIn('I', [w for o in caps for w, _ in o.data['words']])   # "I" is not captioned
         self.assertTrue(p.shots[0].hard_end)
         self.assertAlmostEqual(p.shots[1].start, 11.88)
 
@@ -168,6 +172,18 @@ class MontageTests(unittest.TestCase):
         said = [[w for w, _ in o.data['words']] for o in lines]
         self.assertIn(['one'], said); self.assertIn(['two'], said); self.assertIn(['three'], said)   # each said in turn
         self.assertAlmostEqual(visual.outro_word_time(p, words, [(10., 14., 3., True)]), 13.6)
+
+    def test_when_we_say_a_word_the_moment_ends_after_it(self):
+        words = [{'w': w, 's': a, 'e': a + .3} for w, a in [('123.', 1.0), ('Custade.', 2.0), ('yay', 3.5)]]
+        p = plan([{'start': 0, 'end': 1}, {'start': 0.8, 'end': 5, 'voice': True}])
+        visual.stop_at(p, words, 'and when we say Cascade with our hands up, fade into the rock')
+        self.assertAlmostEqual(p.shots[1].end, 2.9)   # the misheard "Custade." is still the word
+        heard = [{'w': w, 's': a, 'e': e} for w, a, e in [('One', 21.09, 21.68), ('two', 21.64, 22.27), ('three.', 22.23, 22.69), ('Cut', 22.65, 22.89), ('thee.', 22.85, 23.88)]]
+        q = plan([{'start': 0, 'end': 1}, {'start': 20.97, 'end': 21.55, 'voice': True}])
+        visual.stop_at(q, heard, 'and when we say Cascade with our hands up, fade into the rock')
+        self.assertAlmostEqual(q.shots[1].end, 24.48)   # "Cut thee." after the count is the shouted Cascade
+        caps = visual.speech_captions(heard, [(0., 3.5, 20.97, True, 0, (q.shots[1].said_word, q.shots[1].said_from, q.shots[1].said_to))])
+        self.assertEqual([w for o in caps for w, _ in o.data['words']], ['One', 'two', 'three', 'Cascade'])
 
     def test_quick_shots_shrink_before_any_is_dropped(self):
         p = plan([{'start': 0, 'end': 4, 'voice': True}] + [{'start': 10 + 3 * k, 'end': 11.5 + 3 * k} for k in range(4)] + [{'start': 30, 'end': 34, 'voice': True}])

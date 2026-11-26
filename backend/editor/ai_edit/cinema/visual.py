@@ -20,14 +20,15 @@ from .render import Overlay, Shot
 
 LOG = logging.getLogger(__name__)
 MESSAGE = settings.get('pacing.message_seconds', 3.4)
-ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.), 'close': (1.85, 1.95), 'rise': (1., 1.35)}
+ZOOMS = {'none': (1., 1.03), 'push': (1., 1.12), 'punch': (1.14, 1.17), 'pull': (1.14, 1.), 'close': (1.85, 1.95), 'rise': (1., 1.35),
+         'dive': (1., 2.6)}
 SHORTEST = .5   # seconds on screen
 QUICKEST = .45  # a quick music shot is not shortened below this to make an edit fit
 OUTRO = 1.7     # the ending word: pop, hold, zoom into it
 LOOP = .75      # the closing return to the opening shot, for a seamless loop
 TYPE_SECONDS = .9   # how long the typed title takes to spell out
 TITLE_SECONDS = 3.6   # how long a "corners" title stays up
-EFFECT_SECONDS = {'shake': .45, 'slices': .5, 'window': .6, 'cutin': .9, 'glowpop': 1.5}   # transitions longer than the default 0.32 s
+EFFECT_SECONDS = {'shake': .45, 'slices': .5, 'window': .6, 'cutin': .9, 'glowpop': .6, 'fade': .6}   # transitions longer than the default 0.32 s
 TITLE_TONES = {'red': 'danger', 'blue': 'water', 'dark blue': 'water', 'water': 'water', 'yellow': 'money', 'green': 'life', 'white': 'calm'}
 TITLE_PAINT = {'water': {'fill': (24, 86, 196), 'texture': 'water'}, 'blue': {'fill': (38, 98, 214)}, 'dark blue': {'fill': (30, 78, 178), 'edge': (6, 20, 66)}}   # colours that are not one of the tones
 
@@ -38,12 +39,14 @@ class VisualShot(BaseModel):
     end: float = Field(gt=0)
     speed: float = Field(default=1., ge=.25, le=2.)   # .5 = half-speed slow motion, 2 = double speed
     # 'close': a strong close-up on people filmed from far away; 'rise': the camera rises toward the sky (hands up, an ending)
-    zoom: Literal['none', 'push', 'punch', 'pull', 'close', 'rise'] = 'none'
+    # 'dive': the camera plunges into the subject (an ending: "zoom into the rock and end")
+    zoom: Literal['none', 'push', 'punch', 'pull', 'close', 'rise', 'dive'] = 'none'
     focus_x: float = Field(default=.5, ge=0, le=1)   # where the subject is, left (0) to right (1), for vertical crops
     focus_y: float = Field(default=.45, ge=0, le=1)  # where the subject is, top (0) to bottom (1), for a 'close' zoom
     # 'cutin': the people of this shot appear cut out on top of the previous shot, then its picture fades in behind them
     # 'glowpop': the people pop up big as a glowing white cut-out, turn to their colours, then the scene fades in around them
-    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake', 'slices', 'window', 'cutin', 'glowpop'] | None = None   # a transition as this shot lands
+    # 'fade': a smooth dissolve from the previous shot
+    effect: Literal['whip', 'rgb', 'ink', 'ripple', 'flash', 'invert', 'glitch', 'leak', 'zoom', 'shake', 'slices', 'window', 'cutin', 'glowpop', 'fade'] | None = None   # a transition as this shot lands
     text: str = Field(default='', max_length=16)       # one big word over the start of this shot
     text_style: Literal['slam', 'perspective'] = 'perspective'
     tone: Tone | None = None
@@ -56,6 +59,13 @@ class VisualShot(BaseModel):
     panels: list[float] = Field(default_factory=list, max_length=5)
     panel_ends: list[float] = Field(default_factory=list, max_length=6)   # (set by Cascade: where each strip's clip ends)
     hard_end: bool = False     # (set by Cascade: the request says where this talking shot stops; it is not stretched to a beat)
+    said_until: float = 0      # (set by Cascade: no word starting after this is captioned, in source seconds)
+    said_word: str = ''        # (set by Cascade: a misheard shout, captioned as the word the request names...)
+    said_from: float = 0       # (...for the transcript words between these source seconds)
+    said_to: float = 0
+    # a collage's strips, left to right (this shot, then its panels): where to look across each (0-1) and how far to zoom in
+    panel_focus: list[float] = Field(default_factory=list, max_length=6)
+    panel_zoom: list[float] = Field(default_factory=list, max_length=6)
     silhouette: bool = False   # a bright splash: the background flashes to cream and the people become cut-out silhouettes
 
 
@@ -109,8 +119,13 @@ def check(plan, duration, windows=None, cuts=(), parts=None):
             if s.start < c < s.start+.35 and s.end-c >= .3: s.start = c
             if s.end-.35 < c < s.end and c-s.start >= .3: s.end = c
     for k, s in enumerate(plan.shots):
+        if not s.flash and s.end-s.start < .3:   # too short to see: grow it to 0.3 s inside its own clip
+            clip = next((p for p in parts or [] if p['from']-.05 <= s.start < p['to']), None)
+            top = clip['to'] if clip else duration
+            s.end = min(top, s.start+.31)
+            if s.end-s.start < .3: s.start = max(clip['from'] if clip else 0., s.end-.31)
         if s.end > duration+.05: raise ValueError(f'shots[{k}]: ends at {s.end:.1f} s but the clip is {duration:.1f} s long')
-        if s.end-s.start < (.08 if s.flash else .3):
+        if s.end-s.start < (.08 if s.flash else .3)-1e-6:
             raise ValueError(f'shots[{k}]: needs end at least {.08 if s.flash else .3} s after start')
         if any(not 0 <= p <= duration-.3 for p in s.panels):
             raise ValueError(f'shots[{k}]: panels must be source seconds inside the clip (0-{duration-.3:.1f})')
@@ -124,19 +139,26 @@ def check(plan, duration, windows=None, cuts=(), parts=None):
         played, strips = [], set()
         for k, s in enumerate(plan.shots):
             c = which(s)
-            if c and s.end > parts[c-1]['to']+.1:
-                raise ValueError(f"shots[{k}]: runs from clip {c} into the next clip; end it by {parts[c-1]['to']:.1f} s")
+            if c and s.end > parts[c-1]['to']+.1:   # a shot that runs into the next clip stops at its own clip's end
+                s.end = parts[c-1]['to']-.02
+                if s.end-s.start < .3: s.start = max(parts[c-1]['from'], s.end-max(.3, min(1., s.end-parts[c-1]['from'])))
+                if s.end-s.start < .08: raise ValueError(f"shots[{k}]: starts at the very end of clip {c}; start it earlier in that clip")
             if c and not s.flash and (not played or played[-1] != c): played.append(c)
             strips.update(which(type('P', (), {'start': x})) for x in s.panels)   # a collage plays its strips' clips too
         want = list(dict.fromkeys(plan.clip_order))
+        # Cascade repairs what the planner missed rather than refusing the plan: every clip the request names gets a
+        # shot (a short one from its middle), and the shots are put in the requested order
         missing = [c for c in want if c not in played and c not in strips]
-        if missing:
-            raise ValueError(f"clip_order {want}: clip(s) {missing} ({'; '.join(parts[c-1]['title'] for c in missing)}) are not "
-                             f"played; your shots play clips {played}. Give each one at least one shot, shortening others to fit.")
-        want = [c for c in want if c in played]   # (clips seen only inside a collage have no order of their own)
-        order = [c for c in played if c in want]
-        if [c for c in dict.fromkeys(order)] != want:
-            raise ValueError(f'clip_order {want}: your shots play the clips in the order {played}; put the shots in clip_order.')
+        groups = {}
+        for x in plan.shots:
+            groups.setdefault(which(x) or 0, []).append(x)
+        for c in missing:
+            p = parts[c-1]
+            mid, room = (p['from']+p['to'])/2, min(.8, p['to']-p['from'])
+            groups[c] = [VisualShot(start=round(max(p['from'], mid-room/2), 3), end=round(min(p['to'], mid+room/2), 3))]
+        ordered = [x for c in want for x in groups.pop(c, [])]
+        plan.shots = ordered+[x for c, xs in groups.items() for x in xs if c not in want] if ordered else plan.shots
+        played = [which(x) for x in plan.shots]
 
 
 def story_edges(plan, words, parts=None, most=4.):
@@ -180,6 +202,14 @@ def spoken_tokens(word):
     return [DIGITS[int(c)] for c in w] if w.isdigit() and len(w) <= 3 else [w]
 
 
+def keep_in_clips(plan, parts):
+    """Shots stay inside their own clip (a sentence run on to its end may otherwise spill into the next clip)."""
+    for x in plan.shots:
+        clip = next((p for p in parts or [] if p['from']-.05 <= x.start < p['to']), None)
+        if clip and x.end > clip['to']: x.end = clip['to']-.02
+    return plan
+
+
 def text_requests(plan, request):
     """Text the request asks for in so many words: "big text" / "make the text bigger" on the last talking moment
     (a chant, a punchline) shows its words big and centred."""
@@ -210,12 +240,30 @@ def stop_at(plan, words, request):
     phrase = r"[\"'“]?([a-z0-9' ]{3,60}?)[\"'”]?"+ending
     rules = [('stop', r"\bstop(?:s|ping)?\b[^.;]*?\b(?:at|after)\s+(?:the\s+)?"+phrase, .2, False),
              ('end', r"\bend(?:s|ing)?\s+(?:it\s+)?(?:right\s+|just\s+)?after\s+(?:the\s+|we\s+say\s+|they\s+say\s+)?"+phrase, .9, True),
+             ('say', r"\bwhen\s+(?:we|they|you)\s+(?:all\s+)?(?:say|shout|yell)\s+"+phrase, .6, True),
              ('start', r"\bstart(?:s|ing)?\b(?:\s+(?:it|the\s+\w+(?:\s+\w+)?))?\s+(?:right\s+|just\s+)?(?:from|at|with)\s+(?:the\s+|when\s+we\s+say\s+)?"+phrase, .12, True)]
     for kind, pattern, pad, last in rules:
         m = re.search(pattern, request or '', re.I)
         if not m: continue
         target = re.findall(r"[a-z0-9']+", m.group(1).lower())
         talking = [s for s in plan.shots if s.voice]
+        if kind == 'say' and len(target) == 1 and talking:   # one shouted word may be misheard ("Cascade!" -> "Custade."): closest match
+            import difflib
+            s = talking[-1]
+            near = [w for w in words if s.start-.05 <= w['s'] < s.end+3 and len(re.sub(r"[^a-z]", '', w['w'].lower())) >= 4]
+            best = max(near, key=lambda w: difflib.SequenceMatcher(None, target[0], re.sub(r"[^a-z]", '', w['w'].lower())).ratio(), default=None)
+            if best and difflib.SequenceMatcher(None, target[0], re.sub(r"[^a-z]", '', best['w'].lower())).ratio() >= .55:
+                s.end = best['e']+pad
+                s.said_word, s.said_from, s.said_to = m.group(1).strip(), best['s'], best['e']   # caption it as the word named
+            else:   # misheard beyond recognition ("Cut thee."): the word shouted right after a count ("... three, Cascade!")
+                span = [w for w in words if s.start-.05 <= w['s'] < s.end+3]
+                k = next((i for i, w in enumerate(span) if spoken_tokens(w['w'])[-1] == 'three'), None)
+                if k is not None and k+1 < len(span):
+                    j = k+1
+                    while j+1 < len(span) and span[j+1]['s']-span[j]['e'] < .3 and span[j+1]['s']-span[k+1]['s'] < 1.5: j += 1
+                    s.end = max(s.end, span[j]['e']+pad) if s.end < span[k]['e'] else span[j]['e']+pad
+                    s.said_word, s.said_from, s.said_to = m.group(1).strip(), span[k+1]['s'], span[j]['e']   # caption it as said
+            continue
         for s in (talking[-1:] if last else talking):
             reach = 6 if kind == 'start' else 3
             for i in range(len(said)-len(target)+1):
@@ -223,10 +271,14 @@ def stop_at(plan, words, request):
                 if said[i:i+len(target)] == target and s.start-reach <= words[first]['s'] < s.end+reach:
                     if kind == 'start':
                         s.start = max(0., words[first]['s']-pad)
+                    elif kind == 'say':   # "when we say Cascade, fade into ...": the moment ends just after the word
+                        if words[first]['s'] >= s.start: s.end = words[last_word]['e']+pad
                     else:
                         j = last_word
                         stop = words[j]['e']+pad
-                        if kind == 'stop' and j+1 < len(words): stop = min(stop, words[j+1]['s']-.02)   # before the next word
+                        if kind == 'stop':   # the word is said in full (a breath of the next one at most), and nothing after it is captioned
+                            stop = words[j]['e']+.12
+                            s.said_until = words[j]['s']+.03   # (by start: the next word may overlap its end)
                         s.end = min(s.end, stop) if kind == 'stop' else stop
                         if kind == 'stop': s.hard_end = True
                     break
@@ -305,7 +357,8 @@ def shortest(plan):
     total = 0.
     for x in plan.shots:
         on = (x.end-x.start)/x.speed
-        if x.voice or x.panels or x.silhouette: total += on
+        if x.panels: total += max(on, 1.2)
+        elif x.voice or x.silhouette: total += on
         elif x.effect in EFFECT_SECONDS: total += max(on, EFFECT_SECONDS[x.effect]+.4)
         elif x.flash: total += min(on, .3)
         else: total += min(on, QUICKEST)
@@ -330,8 +383,9 @@ def fit(plan, seconds, beat=None, grid=None, lead=0.):
     over = sum(map(on, plan.shots))-budget
     designed = lambda x: x.silhouette or x.panels or x.effect in ('cutin', 'glowpop', 'window', 'slices')   # these need their time
     middle = [k for k, x in enumerate(plan.shots) if 0 < k < len(plan.shots)-1 and not x.voice and not x.flash and not designed(x)]
-    for k, x in enumerate(plan.shots):   # a designed transition gets at least its own length plus a beat
+    for k, x in enumerate(plan.shots):   # a designed transition gets at least its own length plus a beat; a collage plays a second
         need = EFFECT_SECONDS.get(x.effect, 0)+.4 if x.effect in EFFECT_SECONDS else 0
+        if x.panels: need = max(need, 1.2)
         if need and on(x) < need: plan.shots[k] = x.model_copy(update={'end': x.start+need*x.speed})
     room = sum(max(0., on(plan.shots[k])-QUICKEST) for k in middle)
     if over > 0 and room > 0:   # first shorten every quick shot in proportion (down to QUICKEST)
@@ -387,7 +441,7 @@ def _on_the_beat(shots, points, lead, hold_first=False):
     out, t = [], lead
     for n, s in enumerate(shots):
         end = t+(s.end-s.start)/s.speed
-        if end-t <= LONGEST+.05 or (n == 0 and hold_first):   # a typed title holds its opening shot
+        if end-t <= LONGEST+.05 or (n == 0 and hold_first) or s.zoom in ('dive', 'rise'):   # a typed title holds its opening; a dive or rise is one move
             out.append(s); t = end; continue
         cuts, last = [], t
         for g in points:
@@ -493,12 +547,18 @@ def speech_captions(words, voiced, most=4):
     timed, seen = [], set()
     for a, b, src, *flags in voiced:
         big = bool(flags and flags[0])
+        until = flags[1] if len(flags) > 1 and flags[1] else None   # nothing said after this is captioned
+        fix = flags[2] if len(flags) > 2 and flags[2] and flags[2][0] else None   # a misheard shout, captioned as named
         run_end = b   # captions end with their talking moment (the run of pieces it was cut into)
         for a2, b2, src2, *_ in voiced:
             if abs(a2-run_end) < .05 and abs((src2-a2)-(src-a)) < .05: run_end = b2
         for w in words:   # a word belongs to the piece it starts in (beat cuts split a moment into pieces)
-            if src-.02 <= w['s'] < src+(b-a)-.02 and id(w) not in seen:
+            if src-.02 <= w['s'] < src+(b-a)-.02 and id(w) not in seen and (until is None or w['s'] <= until):
                 seen.add(id(w))
+                if fix and fix[1]-.02 <= w['s'] <= fix[2]:
+                    if w['s'] <= fix[1]+.02:   # (its first transcript word carries the named word; the rest of the mishearing goes)
+                        timed.append((fix[0], a+w['s']-src, a+fix[2]-src, big, run_end))
+                    continue
                 toks = spoken_tokens(w['w'])
                 if toks[0] in DIGITS and len(toks) > 1:   # "123." said as one two three: each its own subtitle, in turn
                     after = next((x['s'] for x in words if x['s'] > w['s']+.01), w['e']+.6)   # (the count runs up to the next word)
@@ -506,7 +566,7 @@ def speech_captions(words, voiced, most=4):
                     for k, tok in enumerate(toks):
                         timed.append((tok, a+w['s']+k*step-src, a+w['s']+(k+1)*step-src, big, run_end))
                     continue
-                text = toks[0] if toks[0] in DIGITS else w['w'].strip()
+                text = toks[0] if w['w'].strip('.,!?').isdigit() else w['w'].strip()
                 timed.append((text, a+w['s']-src, a+w['e']-src, big, run_end))
     lines, run = [], []
     for item in sorted(timed, key=lambda x: x[1]):
@@ -560,7 +620,7 @@ def outro_word_time(plan, words, voiced):
     return at[id(near[best])]
 
 
-def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None):
+def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None, focus=None, zoom=None):
     """A collage: the frame split into vertical strips, each playing a different moment of the source at once, left to
     right in the order given. Written as a short silent clip at the output size."""
     import subprocess
@@ -571,9 +631,16 @@ def collage_clip(source, starts, seconds, W, H, out, ffmpeg='ffmpeg', ends=None)
     cmd = [ffmpeg, '-nostdin', '-v', 'error', '-y']
     for a, e in zip(order, stops):   # a strip whose clip is shorter than the collage holds its last frame
         cmd += ['-ss', f'{a:.3f}', '-t', f'{max(.1, min(seconds+.4, (e-a) if e else seconds+.4)):.3f}', '-i', str(source)]
-    graph = [f'[{i}:v:0]fps={look.FPS},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},'
-             f'crop={w}:{H}:{(W-w)//2}:0,setsar=1,tpad=stop_mode=clone:stop_duration={seconds+.5:.3f},'
-             f'trim=duration={seconds+.4:.3f}[s{i}]' for i, w in enumerate(widths)]
+    focus = focus if focus and len(focus) == n else [.5]*n
+    zoom = zoom if zoom and len(zoom) == n else [1.]*n
+    graph = []
+    for i, w in enumerate(widths):   # each strip: zoomed in on its subject, cropped around where it is
+        z = min(4., max(1., zoom[i]))
+        zw, zh = int(W*z)//2*2, int(H*z)//2*2
+        x = int(min(max(0, focus[i]*zw-w/2), zw-w))
+        graph.append(f'[{i}:v:0]fps={look.FPS},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},'
+                     f'scale={zw}:{zh},crop={w}:{H}:{x}:{(zh-H)//2},setsar=1,tpad=stop_mode=clone:stop_duration={seconds+.5:.3f},'
+                     f'trim=duration={seconds+.4:.3f}[s{i}]')
     graph.append(''.join(f'[s{i}]' for i in range(n))+f'hstack=inputs={n}[v]')
     cmd += ['-filter_complex', ';'.join(graph), '-map', '[v]', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14',
             '-pix_fmt', 'yuv420p', str(out)]
@@ -617,24 +684,25 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         path, src = str(source), v.start
         if v.panels:   # the collage is built once as its own short clip, then graded and framed like any shot
             path, src = str(collage_clip(source, [v.start]+list(v.panels), dur*v.speed, W, H, out.with_name(f'collage-{n}.mp4'), ffmpeg,
-                                         ends=list(v.panel_ends) or None)), 0.
+                                         ends=list(v.panel_ends) or None, focus=list(v.panel_focus) or None, zoom=list(v.panel_zoom) or None)), 0.
             made.append(Path(path))
         shots.append(Shot(t, t+dur, 'aroll', path, src, rate=v.speed, cx=cx, zoom0=z0, zoom1=z1,
                           grade='bwhot' if v.mono else plan.grade,
                           # a close-up zooms in on the people where they are; a rise climbs toward the sky
-                          face=(v.focus_x*W, v.focus_y*H) if v.zoom == 'close' else (W/2, H*.04) if v.zoom == 'rise' else None))
+                          face=(v.focus_x*W, v.focus_y*H) if v.zoom in ('close', 'dive') else (W/2, H*.04) if v.zoom == 'rise' else None))
+        if v.zoom == 'close': shots[-1].center = True   # the people come to the middle of the frame, big
         if v.silhouette:
             overlays.append(Overlay(t, min(t+dur, t+.55), 'silhouette'))
             events.append((t, 'flash', 'calm'))
-        if v.voice: voiced.append((t, t+dur, v.start, v.big_captions))
+        if v.voice: voiced.append((t, t+dur, v.start, v.big_captions, v.said_until, (v.said_word, v.said_from, v.said_to)))
         tone = v.tone or look.tone_of(v.text, None) or 'calm'
         if v.effect and n:
             data = {'kind': v.effect}
-            if v.effect in ('cutin', 'glowpop') and len(shots) > 1:   # the previous shot keeps playing underneath
+            if v.effect in ('cutin', 'glowpop', 'fade') and len(shots) > 1:   # the previous shot keeps playing underneath
                 prev = shots[-2]
                 data['under'] = Shot(t, t+EFFECT_SECONDS[v.effect], prev.kind, prev.path, prev.src+(prev.t1-prev.t0)*prev.rate,
                                      rate=prev.rate, cx=prev.cx, grade=prev.grade)
-            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), v.effect if v.effect in ('cutin', 'glowpop') else 'accent', data))
+            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), v.effect if v.effect in ('cutin', 'glowpop', 'fade') else 'accent', data))
             events.append((t, 'broll', 'water' if v.effect == 'ripple' else 'calm'))
         if v.text.strip() and not v.voice:   # (a talking shot's text is its captions)
             word = v.text.strip().upper()
