@@ -140,7 +140,12 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
                 prep = {**prep, 'motion': preparation.motion(source)}
             current = project.load(folder/state.ai_edit.version) if state.ai_edit else None
             notes = []
-            if current is None:
+            from .cinema import reference
+            if current is None and len(reference.rows(message)) >= 8:   # a reference edit's shot list: followed exactly
+                progress(.3, 'Gathering the moments your shot list names…')
+                plan = reference.plan_request(message, folder/'reference.mp4', tools.ffmpeg())
+                source, who, prep = folder/'reference.mp4', 'reference', {**prep, 'words': []}
+            elif current is None:
                 progress(.3, 'Watching the clip and planning the edit…')
                 plan, who = (planner.plan_visual if speechless or montage else planner.plan_edit)(message, prep_dir, prep, windows, chat)
                 if who == 'rules' and planner.choice() != 'rules':

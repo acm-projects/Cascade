@@ -74,6 +74,10 @@ class VisualShot(BaseModel):
     carry_sound: bool = False  # this shot plays the previous shot's sound carrying on (the chant heard over the last picture)
     carry_until: float = 0     # (set by Cascade: the carried sound stops here, where the previous moment's clip ends)
     silhouette: bool = False   # a bright splash: the background flashes to cream and the people become cut-out silhouettes
+    # the people of this shot cut out and standing in front of another moment (source second of that background; -1 = none):
+    # the same person over changing places, like a travel edit's ending
+    backdrop: float = -1.
+    voice_through: float = Field(default=0, ge=0, le=4)   # its own sound keeps playing this long over the next shots
 
 
 class VisualPlan(BaseModel):
@@ -86,7 +90,7 @@ class VisualPlan(BaseModel):
     title_style: Literal['small', 'typed', 'corners'] = 'small'
     # the big word of a "corners" title; 'dark blue': a deep blue word with a thick, darker navy outline
     title_color: Literal['red', 'blue', 'dark blue', 'water', 'yellow', 'green', 'white'] = 'red'
-    shots: list[VisualShot] = Field(min_length=1, max_length=40)
+    shots: list[VisualShot] = Field(min_length=1, max_length=64)
     mood: Literal['awakening', 'wonder', 'tension', 'warm'] = 'awakening'
     grade: Literal['cinema', 'forest', 'night', 'vintage', 'bw', 'cold', 'red', 'warm', 'natural', 'film'] = 'cinema'
     bars: bool = False   # cinematic letterbox bars (a 2.39:1 picture inside the frame)
@@ -104,6 +108,12 @@ class VisualPlan(BaseModel):
     loop: bool = False      # end on a short return to the opening shot and title, so the reel plays as a seamless loop
     seconds: float = Field(default=0, ge=0, le=60)   # the edit's length when the user asked for one; 0 = the house length
     hard_length: bool = False   # (set by Cascade: the request gives that length as a maximum: it is never stretched)
+    # a reference edit's line, building word by word in small white italics (a word in capitals lands bigger, on a new line)
+    line: str = Field(default='', max_length=80)
+    line_from: float = 0       # edit seconds: the first word appears...
+    line_to: float = 0         # ...the last word appears...
+    line_until: float = 0      # ...and the line clears
+    exact: bool = False        # (a reference edit: every shot keeps the reference's exact length; nothing is refitted)
 
     @model_validator(mode='after')
     def _tidy(self):
@@ -829,6 +839,8 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
                           # a close-up zooms in on the people where they are; a rise climbs toward the sky
                           face=(v.focus_x*W, v.focus_y*H) if v.zoom in ('close', 'dive') else (W/2, H*.04) if v.zoom == 'rise' else None))
         if v.zoom == 'close': shots[-1].center = True   # the people come to the middle of the frame, big
+        if v.backdrop >= 0: shots[-1].backdrop = (str(source), v.backdrop)   # the people of this shot over another place
+        if v.voice_through: shots[-1].voice_through = v.voice_through
         if v.zoom == 'dive': shots[-1].ease_in = True   # the whole subject first, then the plunge
         if v.silhouette:
             overlays.append(Overlay(t, min(t+dur, t+.55), 'silhouette'))
@@ -856,6 +868,10 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
                 overlays.append(Overlay(t, min(t+dur, t+1.6), 'perspective', {'text': word, 'tone': tone}))
                 events.append((t, 'moment', tone))
         t += dur
+    if plan.line.strip() and plan.line_until > plan.line_from:   # the reference's line, word by word
+        parts = plan.line.split()
+        step = (plan.line_to-plan.line_from)/max(1, len(parts)-1)
+        overlays.append(Overlay(plan.line_from, plan.line_until, 'whisper', {'words': [(w, plan.line_from+k*step) for k, w in enumerate(parts)]}))
     if plan.title and plan.title_style == 'typed':   # the place name, typed out over the opening shot
         opening = shots[1 if lead else 0]
         overlays.append(Overlay(opening.t0, max(opening.t1, opening.t0+1.2), 'typed',
@@ -940,6 +956,16 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     total = main_end+(stamp.DURATION if options.stamp else 0)
     samples = _audio(source, score.SR, ffmpeg) if info.get('has_audio', True) else np.zeros((0, 2), np.float32)
     natural = _natural(samples, score.SR, shots, total, source) if plan.sound != 'score' and len(samples) else np.zeros((int(total*score.SR), 2), np.float32)
+    for s in shots:   # a moment whose sound keeps going over the next pictures (the chant in the background)
+        extra = getattr(s, 'voice_through', 0)
+        if not extra or not len(samples) or plan.sound == 'score': continue
+        a, n = int((s.src+(s.t1-s.t0)*s.rate)*score.SR), int(extra*score.SR)
+        piece = samples[a:a+n].copy()
+        if not len(piece): continue
+        piece *= np.linspace(1, 0, len(piece), dtype=np.float32)[:, None]**.5
+        i = int(s.t1*score.SR)
+        natural[i:i+len(piece)] += piece[:max(0, len(natural)-i)]
+        voiced.append((s.t1, s.t1+extra, 0.))
     if timing:   # the song's chosen section, with a short fade in and a longer fade out
         from . import music as library
         music = library.samples(timing[0]['file'], score.SR, timing[1], main_end+.1)
@@ -976,7 +1002,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     # --- 3. picture
     progress(.25, 'Composing the picture…')
     matter = None
-    if any(o.kind in ('behind', 'silhouette', 'cutin', 'glowpop') for o in overlays):   # the big word sits behind the people; silhouettes
+    if any(o.kind in ('behind', 'silhouette', 'cutin', 'glowpop') for o in overlays) or any(getattr(s, 'backdrop', None) for s in shots):   # the big word sits behind the people; silhouettes
         try:
             from .matte import Matter
             matter = Matter()

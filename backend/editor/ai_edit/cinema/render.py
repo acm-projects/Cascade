@@ -58,6 +58,8 @@ class Shot:
     carry: bool = False        # plays the previous shot's sound carrying on (see audio_src)
     audio_src: float | None = None   # source second its sound starts at, when it is not its own
     audio_until: float | None = None  # and where that carried sound stops
+    backdrop: tuple | None = None     # (path, source second): the people of this shot are cut out over that moment
+    voice_through: float = 0.         # its own sound keeps playing this long after it ends
 
 
 @dataclass
@@ -340,15 +342,23 @@ class Composer:
             first = int(round(self.start*FPS))
             shot_i = max(0, max((k for k, s in enumerate(self.shots) if s.t0 <= first/FPS+1e-6), default=0))
             reader = Reader(self.shots[shot_i], self.ffmpeg)
+            behind = self._behind(self.shots[shot_i])
             for n in range(first, n_total):
                 t = n/FPS
                 while shot_i+1 < len(self.shots) and self.shots[shot_i+1].t0 <= t+1e-6:
                     shot_i += 1
                     reader.close()
+                    if behind: behind.close()
                     reader = Reader(self.shots[shot_i], self.ffmpeg)
+                    behind = self._behind(self.shots[shot_i])
                     if self.matter: self.matter.reset()
                 shot = self.shots[shot_i]
                 frame = self._base(shot, reader, t)
+                if behind:   # the people of this shot, standing in front of another place
+                    mask = self._matte(frame)
+                    if mask is not None:
+                        m = mask[..., None]
+                        frame = (behind.next()*(1-m)+frame*m).astype(np.uint8)
                 active = [o for o in self.overlays if o.t0 <= t < o.t1]
                 frame = self._compose(frame, t, active, shot)
                 since = t-shot.t0
@@ -360,6 +370,13 @@ class Composer:
                 yield frame
         finally:
             reader.close()
+            if behind: behind.close()
+
+    def _behind(self, shot):
+        """The background moment a cut-out shot stands in front of (a Reader), or None."""
+        if not shot.backdrop or not self.matter: return None
+        path, src = shot.backdrop
+        return Reader(Shot(shot.t0, shot.t1, 'aroll', path, src, rate=shot.rate, cx=.5, grade=shot.grade), self.ffmpeg)
 
     def _matte(self, frame):
         try:
@@ -534,6 +551,7 @@ class Composer:
                 if bar: frame[:bar] = 0; frame[H-bar:] = 0
         for o in active:
             if o.kind == 'lyric': self._lyric(frame, t, o)
+            if o.kind == 'whisper': self._whisper(frame, t, o)
         if self.captions: self.captions.draw(frame, t, mute)
         for o in active:
             if o.kind != 'accent': continue
@@ -662,6 +680,36 @@ class Composer:
             frame[..., 2] = np.maximum(frame[..., 2], np.roll(layer[..., 2], -shift, 1))
         else:
             look.paste(frame, sp, W/2, y, alpha=fade, scale=pop)
+
+    def _whisper(self, frame, t, o):
+        """A reference edit's line ("I wish that I could STAY here..."): small white italic words appearing one by one in
+        the open sky above the people; the word in capitals starts a second line, bigger and bolder."""
+        W, H, u = look.W, look.H, look.unit()
+        words = [(w, at) for w, at in o.data['words'] if at <= t]
+        if not words: return
+        lines, line = [], []
+        for w, _ in words:
+            loud = w.isupper() and len(w) > 1
+            if loud and line: lines.append(line); line = []
+            line.append(w)
+        if line: lines.append(line)
+        def sprite(text, loud):
+            size = int((62 if loud else 38)*u)
+            def make():
+                sp = look.text_sprite(text, look.SANS(size, 800 if loud else 500), shadow=.7)
+                from PIL import Image   # an italic slant
+                img = Image.fromarray(sp.rgba)
+                k = .2
+                img = img.transform((img.width+int(img.height*k), img.height), Image.AFFINE, (1, k, -img.height*k, 0, 1, 0), Image.BICUBIC)
+                return look.Sprite(np.asarray(img), .5, .5)
+            return self._sprite(('whisper', text, loud, size), make)
+        fade = min(1., max(0., (o.t1-t)/.12))
+        x, y = W*.62, H*.3
+        for k, line in enumerate(lines):
+            loud = any(w.isupper() and len(w) > 1 for w in line)
+            sp = sprite(' '.join(line), loud)
+            look.paste(frame, sp, x+(W*.04 if k else 0), y, alpha=fade)
+            y += (70 if loud else 52)*u
 
     def _words(self, frame, t, o):
         """The payoff (quote) or the closing message: centred, word by word, each word as it is spoken."""
