@@ -410,6 +410,29 @@ def paper_close(layout, u):
     return canvas
 
 
+def scrunch(layout, p):
+    """The ending (p: 0..1): the sheet crumples up into a ball, smaller and smaller, and fades fast to black."""
+    import cv2
+    H, W = layout.shape[:2]
+    key = ('scrunch', H, W)
+    if key not in _PAPER:   # a smooth random crumple field, made once
+        rng = np.random.default_rng(5)
+        fx = cv2.resize(rng.normal(0, 1, (6, 10)).astype(np.float32), (W, H), interpolation=cv2.INTER_CUBIC)
+        fy = cv2.resize(rng.normal(0, 1, (6, 10)).astype(np.float32), (W, H), interpolation=cv2.INTER_CUBIC)
+        _PAPER[key] = (fx, fy)
+    fx, fy = _PAPER[key]
+    e = _ease(p)
+    scale = 1-.72*e
+    y, x = np.mgrid[0:H, 0:W].astype(np.float32)
+    sx = (x-W/2)/scale+W/2+fx*90*e   # squeezed toward the middle, buckling as it goes
+    sy = (y-H/2)/scale+H/2+fy*90*e
+    out = cv2.remap(layout, sx, sy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=BACKDROP).astype(np.float32)
+    shade = 1-.45*e*np.clip(np.abs(fx+fy)/2.5, 0, 1)   # crease shadows deepen as it crumples
+    out = out*shade[..., None]
+    fade = min(1., p*1.25)**1.4
+    return np.clip(out*(1-fade)+np.array(BACKDROP, np.float32)*fade, 0, 255).astype(np.uint8)
+
+
 def tear(under, sheet, p, seed=3):
     """The paper tearing open from the middle (the second inspo): a ragged hole in `sheet` grows (p: 0..1) and shows
     `under` through it; the torn edge is a rim of white paper fibre with a shadow inside."""
@@ -517,11 +540,11 @@ class Composer:
                         frame = paper_layout(frame, t, o.data)
                     elif o.kind == 'paperout':   # back onto the paper, then the paper folds closed
                         u = (t-o.t0)/max(.01, o.t1-o.t0)
-                        if u < .42:
-                            k = _ease(u/.42)
+                        if u < .45:   # the opening, backwards: back onto the paper square, its words returning
+                            k = _ease(u/.45)
                             frame = paper_layout(frame, t, o.data, k=k, words=k)
-                        else:
-                            frame = paper_close(paper_layout(frame, t, o.data), (u-.42)/.58)
+                        else:         # then the paper scrunches up and is gone
+                            frame = scrunch(paper_layout(frame, t, o.data), (u-.45)/.55)
                     elif o.kind == 'tear':
                         key = (o.t0, o.t1, 'tear')
                         if key not in self.accent_previous:
