@@ -335,12 +335,18 @@ def paper_layout(frame, t, data, k=1., words=1.):
     if words > 0:
         for text, at, y, size in ((data.get('top', ''), data.get('top_at', -1), y0-H*.1, .15), (data.get('bottom', ''), data.get('bottom_at', -1), y0+fh+H*.105, .115)):
             if not text or t < at: continue
+            if data.get('typed'):   # typed out letter by letter
+                text = text[:max(1, min(len(text), int((t-at)/data.get('per_letter', .055))+1))]
             f = look.TIGHT(int(H*size), 900)
             sp = look.text_sprite(text, f, fill=(255, 255, 255), shadow=.25, tracking=-int(f.size*.02))
             rgba = sp.rgba.copy(); rgba[..., :3] = water(rgba.shape[0], rgba.shape[1], t).astype(np.uint8)
-            pop = 1+.12*max(0., 1-(t-at)/.18)
+            pop = 1. if data.get('typed') else 1+.12*max(0., 1-(t-at)/.18)
             img = out.astype(np.uint8)
-            look.paste(img, look.Sprite(rgba, .5, .5), W/2, y, alpha=words*min(1., (t-at)/.08+.2), scale=pop)
+            if data.get('typed'):   # anchored at its full width, so the line grows to the right as it is typed
+                full = f.getlength(data['top'] if size > .1 else data['bottom'])
+                look.paste(img, look.Sprite(rgba, 0., .5), W/2-full/2-sp.pad, y, alpha=words)
+            else:
+                look.paste(img, look.Sprite(rgba, .5, .5), W/2, y, alpha=words*min(1., (t-at)/.08+.2), scale=pop)
             out = img.astype(np.float32)
     flash = data.get('flash_at', -1)
     if 0 <= t-flash < .14:   # the white flash as the word lands (the inspo's flash frame)

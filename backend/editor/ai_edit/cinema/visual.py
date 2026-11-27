@@ -123,6 +123,9 @@ class VisualPlan(BaseModel):
     tear: float = Field(default=0, ge=0, le=2)        # how long the paper takes to tear open after the layout
     paper_end: float = Field(default=0, ge=0, le=3)   # the last this-many seconds wrap back onto the paper
     music_from: float = Field(default=0, ge=0, le=10)  # the song starts this many seconds in (a spoken opening first)
+    paper_typed: bool = False  # the paper's words are typed out letter by letter from the start
+    bed: float = Field(default=.35, ge=0, le=1)        # how much of the clips' own sound plays outside the talking shots
+    music_under_voice_db: float | None = Field(default=None, ge=-30, le=0)   # the song's level under a talking shot
 
     @model_validator(mode='after')
     def _tidy(self):
@@ -880,6 +883,8 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     if plan.paper_until:   # the inspo's paper layout, then the paper tearing open into the next shot
         data = {'top': plan.paper_top, 'bottom': plan.paper_bottom, 'top_at': 0., 'bottom_at': plan.paper_word_at,
                 'flash_at': plan.paper_word_at if plan.paper_bottom else -1}
+        if plan.paper_typed:   # typed from the first frame: the top word, then the line under the picture
+            data.update(typed=True, bottom_at=.06*len(plan.paper_top)+.15, flash_at=plan.paper_word_at)
         overlays.append(Overlay(0, plan.paper_until, 'paper', data))
         if plan.tear: overlays.append(Overlay(plan.paper_until, plan.paper_until+plan.tear, 'tear'))
     if plan.paper_end:   # the ending wraps back onto the paper, its words returning
@@ -1013,8 +1018,9 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         n = min(len(music), len(bed))
         if n and bed[:n].any():
             music = music.copy()
-            music[:n] += bed[:n]*.35*float(np.sqrt((music[:n]**2).mean())/(np.sqrt((bed[:n]**2).mean())+1e-9))
-        under = settings.get('mix.montage_music_under_voice_db', -9.)+options.music_db
+            music[:n] += bed[:n]*plan.bed*float(np.sqrt((music[:n]**2).mean())/(np.sqrt((bed[:n]**2).mean())+1e-9))
+        under = (plan.music_under_voice_db if plan.music_under_voice_db is not None
+                 else settings.get('mix.montage_music_under_voice_db', -9.))+options.music_db
     lufs, peak = score.mix(voice, music, fx, 0, wav, ffmpeg, music_under=under,
                            stamp=score.stamp_audio(stamp.DURATION) if options.stamp else None, stamp_at=main_end)
     lap('sound')

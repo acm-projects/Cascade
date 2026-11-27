@@ -224,4 +224,6 @@ def paper_of(request, opener):
     rest = m.group(3)
     num = lambda word, default: float(re.search(word + r'\s*([\d.]+)', rest, re.I).group(1)) if re.search(word + r'\s*([\d.]+)', rest, re.I) else default
     return {'paper_until': opener, 'paper_top': m.group(1), 'paper_bottom': m.group(2), 'paper_word_at': num(r'\bat', opener*.7),
-            'tear': num(r'tear', .6), 'paper_end': num(r'wrap', 0.), 'music_from': num(r'music from', 0.)}
+            'tear': num(r'tear', .6), 'paper_end': num(r'wrap', 0.), 'music_from': num(r'music from', 0.),
+            'paper_typed': bool(re.search(r'\btyped?\b|typing', rest, re.I)), 'bed': num(r'clip sound', .35),
+            'music_under_voice_db': -num(r'music under voices? -?', 9.)}
