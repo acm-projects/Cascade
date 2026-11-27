@@ -335,6 +335,7 @@ def paper_layout(frame, t, data, k=1., words=1.):
     if words > 0:
         for text, at, y, size in ((data.get('top', ''), data.get('top_at', -1), y0-H*.1, .15), (data.get('bottom', ''), data.get('bottom_at', -1), y0+fh+H*.105, .115)):
             if not text or t < at: continue
+            whole = text
             if data.get('typed'):   # typed out letter by letter
                 text = text[:max(1, min(len(text), int((t-at)/data.get('per_letter', .055))+1))]
             f = look.TIGHT(int(H*size), 900)
@@ -343,7 +344,7 @@ def paper_layout(frame, t, data, k=1., words=1.):
             pop = 1. if data.get('typed') else 1+.12*max(0., 1-(t-at)/.18)
             img = out.astype(np.uint8)
             if data.get('typed'):   # anchored at its full width, so the line grows to the right as it is typed
-                full = f.getlength(data['top'] if size > .1 else data['bottom'])
+                full = f.getlength(whole)   # (centred on the whole line, so it never runs off the edge)
                 look.paste(img, look.Sprite(rgba, 0., .5), W/2-full/2-sp.pad, y, alpha=words)
             else:
                 look.paste(img, look.Sprite(rgba, .5, .5), W/2, y, alpha=words*min(1., (t-at)/.08+.2), scale=pop)
@@ -353,6 +354,60 @@ def paper_layout(frame, t, data, k=1., words=1.):
         a = 1-(t-flash)/.14
         out = out*(1-a)+255*a
     return np.clip(out, 0, 255).astype(np.uint8)
+
+
+BACKDROP = (18, 18, 22)
+
+
+def _fold(img, p, horizontal=False):
+    """One paper fold (p: 0..1): the first half of the sheet swings over onto the second half (its plain back showing
+    once past upright); what it uncovers is the dark backdrop."""
+    if horizontal: return _fold(img.transpose(1, 0, 2), p).transpose(1, 0, 2)
+    import cv2
+    H, W = img.shape[:2]
+    mid = H//2
+    out = np.empty_like(img); out[:] = BACKDROP
+    out[mid:] = img[mid:]
+    c = float(np.cos(np.pi*min(1., max(0., p))))
+    h = int(abs(c)*mid)
+    if h < 2: return out
+    if c > 0:   # still on its way: the front, foreshortened, darker as it tips
+        flap = cv2.resize(img[:mid], (W, h), interpolation=cv2.INTER_AREA).astype(np.float32)*(.55+.45*c)
+        out[mid-h:mid] = flap.astype(np.uint8)
+    else:       # past upright: the back of the paper lands on the lower half
+        back = cv2.resize(np.ascontiguousarray(paper(mid, W, 1)[::-1]), (W, h), interpolation=cv2.INTER_AREA).astype(np.float32)*(.7+.3*-c)
+        out[mid:mid+h] = back.astype(np.uint8)
+    return out
+
+
+def paper_close(layout, u):
+    """The ending (u: 0..1 after the layout): the sheet folds in half top to bottom, then left to right, staying in the
+    middle of the frame, and the folded square shrinks away."""
+    import cv2
+    H, W = layout.shape[:2]
+    mid = H//2
+    canvas = np.empty_like(layout); canvas[:] = BACKDROP
+    if u < .45:   # fold 1: the top half over the bottom half; the sheet rises so the fold stays centred
+        p = u/.45
+        img = _fold(layout, p)
+        shift = int(H/4*_ease(p))
+        canvas[:H-shift] = img[shift:]
+        return canvas
+    half = _fold(layout, 1.)[mid:]
+    y0 = (H-half.shape[0])//2
+    if u < .8:    # fold 2: the left half over the right half; the sheet slides so it stays centred
+        p = (u-.45)/.35
+        img = _fold(half, p, horizontal=True)
+        shift = int(W/4*_ease(p))
+        canvas[y0:y0+half.shape[0], :W-shift] = img[:, shift:]
+        return canvas
+    piece = _fold(half, 1., horizontal=True)[:, W//2:]   # the folded square
+    p = _ease((u-.8)/.2)
+    scale = max(.02, 1-p)
+    h, w = max(2, int(piece.shape[0]*scale)), max(2, int(piece.shape[1]*scale))
+    small = cv2.resize(piece, (w, h), interpolation=cv2.INTER_AREA)
+    canvas[(H-h)//2:(H-h)//2+h, (W-w)//2:(W-w)//2+w] = small
+    return canvas
 
 
 def tear(under, sheet, p, seed=3):
@@ -460,9 +515,13 @@ class Composer:
                 for o in active:   # the paper: the opening layout, its tearing open, and the wrap-up back onto it
                     if o.kind == 'paper':
                         frame = paper_layout(frame, t, o.data)
-                    elif o.kind == 'paperout':
-                        k = _ease(min(1., (t-o.t0)/max(.01, (o.t1-o.t0)*.6)))
-                        frame = paper_layout(frame, t, o.data, k=k, words=k)
+                    elif o.kind == 'paperout':   # back onto the paper, then the paper folds closed
+                        u = (t-o.t0)/max(.01, o.t1-o.t0)
+                        if u < .42:
+                            k = _ease(u/.42)
+                            frame = paper_layout(frame, t, o.data, k=k, words=k)
+                        else:
+                            frame = paper_close(paper_layout(frame, t, o.data), (u-.42)/.58)
                     elif o.kind == 'tear':
                         key = (o.t0, o.t1, 'tear')
                         if key not in self.accent_previous:
