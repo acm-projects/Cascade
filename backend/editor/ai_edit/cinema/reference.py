@@ -136,6 +136,9 @@ def build(request, footage, out, end, reference_start=0., pad=.25, ffmpeg='ffmpe
                           backdrop=behind.get(k, -1.), voice_through=r['through'],
                           voice=bool(r['through']) or bool(re.search(r'\bvoice\b|chant|saying', r['note'], re.I)))
         if re.search(r'push in|slow zoom', r['note'], re.I): shot.zoom = 'push'
+        for word, fx in (('sticker', 'sticker'), ('red cut', 'redcut'), ('red paper', 'redcut'), ('scribble', 'scribble'), ('polaroid', 'polaroid')):
+            if re.search(word, r['note'], re.I): shot.fx = fx
+        if k and re.search(r'\brip\b|torn', r['note'], re.I): shot.rip_in = True
         if k in panels:
             at = [starts[len(moments)+i] for i in panels[k]]
             shot.panels = [round(x, 3) for x in at]
@@ -225,5 +228,5 @@ def paper_of(request, opener):
     num = lambda word, default: float(re.search(word + r'\s*([\d.]+)', rest, re.I).group(1)) if re.search(word + r'\s*([\d.]+)', rest, re.I) else default
     return {'paper_until': opener, 'paper_top': m.group(1), 'paper_bottom': m.group(2), 'paper_word_at': num(r'\bat', opener*.7),
             'tear': num(r'tear', .6), 'paper_end': num(r'wrap', 0.), 'music_from': num(r'music from', 0.),
-            'paper_typed': bool(re.search(r'\btyped?\b|typing', rest, re.I)), 'bed': num(r'clip sound', .35),
+            'paper_typed': bool(re.search(r'\btyped?\b|typing', rest, re.I)), 'vintage': bool(re.search(r'vintage', rest, re.I)), 'bed': num(r'clip sound', .35),
             'music_under_voice_db': -num(r'music under voices? -?', 9.)}

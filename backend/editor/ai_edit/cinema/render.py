@@ -60,6 +60,7 @@ class Shot:
     audio_until: float | None = None  # and where that carried sound stops
     backdrop: tuple | None = None     # (path, source second): the people of this shot are cut out over that moment
     voice_through: float = 0.         # its own sound keeps playing this long after it ends
+    fx: str = ''                      # mixed media: sticker | redcut | scribble | polaroid
 
 
 @dataclass
@@ -433,6 +434,103 @@ def scrunch(layout, p):
     return np.clip(out*(1-fade)+np.array(BACKDROP, np.float32)*fade, 0, 255).astype(np.uint8)
 
 
+def _edge(mask, width):
+    """The ring around a cut-out (a paper-sticker edge), `width` pixels wide."""
+    import cv2
+    m = (mask > .5).astype(np.uint8)
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (width*2+1, width*2+1))
+    return (cv2.dilate(m, k) > 0) & (m == 0), m.astype(bool)
+
+
+def mixed_media(frame, mask, fx, since, t):
+    """The mixed-media looks over one shot's people (mask: 0..1). sticker: a thick white paper edge with a soft shadow;
+    redcut: the people as flat red paper for the first moment, then the footage with its white edge; scribble: a
+    hand-drawn outline that wiggles around them."""
+    import cv2
+    if mask is None: return frame
+    H, W = frame.shape[:2]
+    out = frame.astype(np.float32)
+    if fx in ('sticker', 'redcut'):
+        ring, body = _edge(mask, max(6, W//160))
+        shadow = cv2.GaussianBlur((ring | body).astype(np.float32), (0, 0), W/200)
+        shadow = np.roll(np.roll(shadow, W//300, 1), W//300, 0)
+        out *= (1-.35*shadow*(~(ring | body)))[..., None]
+        if fx == 'redcut' and since < .3:   # the red paper silhouette (the inspo's opening)
+            tex = paper(H, W, 2).astype(np.float32)/246.
+            out[body] = (np.array((178, 30, 38), np.float32)*tex[body])
+        out[ring] = np.array((250, 248, 240), np.float32)*(paper(H, W, 1)[ring]/246.)
+    elif fx == 'scribble':
+        m = (mask > .5).astype(np.uint8)
+        contours, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        rng = np.random.default_rng(int(t*8))   # the line boils, redrawn a few times a second
+        img = out.astype(np.uint8)
+        for c in sorted(contours, key=cv2.contourArea, reverse=True)[:3]:
+            if cv2.contourArea(c) < H*W*.002: continue
+            pts = c[::6, 0, :].astype(np.float32)
+            for colour, spread in (((236, 196, 40), 7.), ((214, 52, 44), 5.)):
+                wob = pts+rng.normal(0, spread, pts.shape)
+                cv2.polylines(img, [wob.astype(np.int32)], True, colour, max(3, W//420), cv2.LINE_AA)
+        return img
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def polaroid(frame, t, since):
+    """The shot as an instant photo laid on paper: a white border (thicker at the bottom), a small tilt, a soft shadow."""
+    import cv2
+    H, W = frame.shape[:2]
+    sheet = paper(H, W, int(t*8) % 3).astype(np.float32)
+    s = .6
+    fw, fh = int(W*s), int(H*s)
+    pic = cv2.resize(frame, (fw, fh), interpolation=cv2.INTER_AREA)
+    b, bb = int(fw*.03), int(fw*.11)
+    card = np.full((fh+b+bb, fw+2*b, 3), (247, 245, 238), np.uint8)
+    card[b:b+fh, b:b+fw] = pic
+    angle = -3+1.5*_ease(min(1., since/.4))   # it settles as it lands
+    ch, cw = card.shape[:2]
+    m = cv2.getRotationMatrix2D((cw/2, ch/2), angle, 1.)
+    canvas = np.zeros((H, W, 3), np.uint8); alpha = np.zeros((H, W), np.float32)
+    x0, y0 = (W-cw)//2, (H-ch)//2
+    m[0, 2] += x0; m[1, 2] += y0
+    canvas = cv2.warpAffine(card, m, (W, H))
+    alpha = cv2.warpAffine(np.ones((ch, cw), np.float32), m, (W, H))
+    shadow = cv2.GaussianBlur(np.roll(alpha, 14, 0), (0, 0), 16)
+    out = sheet*(1-.45*shadow[..., None])
+    out = out*(1-alpha[..., None])+canvas.astype(np.float32)*alpha[..., None]
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def rip(under, sheet, p, seed=9):
+    """A torn-paper wipe: the last picture tears away from right to left along a ragged edge with a white paper rim."""
+    H, W = sheet.shape[:2]
+    rng = np.random.default_rng(seed)
+    ys = np.linspace(0, H, 24)
+    jag = np.interp(np.arange(H), ys, rng.normal(0, W*.025, 24))
+    x = W*(1.08-1.2*_ease(p))+jag   # the edge, per row
+    cols = np.arange(W)[None, :]
+    gone = cols >= x[:, None]             # the torn-off part shows the new picture
+    rim = (cols >= x[:, None]-W*.012) & ~gone
+    out = sheet.copy()
+    out[gone] = under[gone]
+    out[rim] = (np.array((250, 248, 240))*(paper(H, W, 1)[rim]/246.)).astype(np.uint8)
+    return out
+
+
+def vintage(frame, t):
+    """A worn, warm film look: lifted blacks, a soft warm fade, grain, a few dust specks and a gentle flicker."""
+    import cv2
+    H, W = frame.shape[:2]
+    rng = np.random.default_rng(int(t*30))
+    out = frame.astype(np.float32)
+    out = out*.9+np.array((22, 16, 8), np.float32)                      # faded, warm
+    out *= 1+.025*np.sin(t*37)                                          # flicker
+    grain = cv2.resize(rng.normal(0, 7, (H//3, W//3)).astype(np.float32), (W, H))
+    out += grain[..., None]
+    for _ in range(rng.integers(0, 4)):                                 # dust
+        cx, cy, r = int(rng.random()*W), int(rng.random()*H), int(1+rng.random()*3)
+        cv2.circle(out, (cx, cy), r, (235, 230, 215) if rng.random() > .5 else (40, 34, 28), -1)
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
 def tear(under, sheet, p, seed=3):
     """The paper tearing open from the middle (the second inspo): a ragged hole in `sheet` grows (p: 0..1) and shows
     `under` through it; the torn edge is a rim of white paper fibre with a shadow inside."""
@@ -529,6 +627,10 @@ class Composer:
                     if self.matter: self.matter.reset()
                 shot = self.shots[shot_i]
                 frame = self._base(shot, reader, t)
+                if shot.fx in ('sticker', 'redcut', 'scribble'):   # mixed media over the people
+                    frame = mixed_media(frame, self._matte(frame), shot.fx, t-shot.t0, t)
+                elif shot.fx == 'polaroid':
+                    frame = polaroid(frame, t, t-shot.t0)
                 if behind:   # the people of this shot, standing in front of another place
                     mask = self._matte(frame)
                     if mask is not None:
@@ -545,12 +647,18 @@ class Composer:
                             frame = paper_layout(frame, t, o.data, k=k, words=k)
                         else:         # then the paper scrunches up and is gone
                             frame = scrunch(paper_layout(frame, t, o.data), (u-.45)/.55)
+                    elif o.kind == 'rip':   # the last picture tears away
+                        key = (o.t0, o.t1, 'rip')
+                        if key not in self.accent_previous:
+                            self.accent_previous[key] = self.last.copy() if self.last is not None else frame.copy()
+                        frame = rip(frame, self.accent_previous[key], (t-o.t0)/max(.01, o.t1-o.t0))
                     elif o.kind == 'tear':
                         key = (o.t0, o.t1, 'tear')
                         if key not in self.accent_previous:
                             self.accent_previous[key] = self.last.copy() if self.last is not None else paper(*frame.shape[:2])
                         frame = tear(frame, self.accent_previous[key], (t-o.t0)/max(.01, o.t1-o.t0))
                 frame = self._compose(frame, t, active, shot)
+                if any(o.kind == 'vintage' for o in active): frame = vintage(frame, t)
                 since = t-shot.t0
                 if shot.kind == 'broll' and since < .16:   # b-roll lands with a short zoom settle and motion blur
                     k = 1-since/.16

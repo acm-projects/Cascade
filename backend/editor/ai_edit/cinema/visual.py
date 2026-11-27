@@ -78,6 +78,10 @@ class VisualShot(BaseModel):
     # the same person over changing places, like a travel edit's ending
     backdrop: float = -1.
     voice_through: float = Field(default=0, ge=0, le=4)   # its own sound keeps playing this long over the next shots
+    # mixed media: 'sticker' (a white paper edge around the people), 'redcut' (they land as red paper first),
+    # 'scribble' (a hand-drawn outline wiggling around them), 'polaroid' (the shot as an instant photo on paper)
+    fx: Literal['', 'sticker', 'redcut', 'scribble', 'polaroid'] = ''
+    rip_in: bool = False   # the last picture tears away along a ragged paper edge as this one lands
 
 
 class VisualPlan(BaseModel):
@@ -124,6 +128,7 @@ class VisualPlan(BaseModel):
     paper_end: float = Field(default=0, ge=0, le=3)   # the last this-many seconds wrap back onto the paper
     music_from: float = Field(default=0, ge=0, le=10)  # the song starts this many seconds in (a spoken opening first)
     paper_typed: bool = False  # the paper's words are typed out letter by letter from the start
+    vintage: bool = False      # a worn warm film look over the whole edit: grain, dust, a soft fade
     bed: float = Field(default=.35, ge=0, le=1)        # how much of the clips' own sound plays outside the talking shots
     music_under_voice_db: float | None = Field(default=None, ge=-30, le=0)   # the song's level under a talking shot
 
@@ -853,6 +858,8 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         if v.zoom == 'close': shots[-1].center = True   # the people come to the middle of the frame, big
         if v.backdrop >= 0: shots[-1].backdrop = (str(source), v.backdrop)   # the people of this shot over another place
         if v.voice_through: shots[-1].voice_through = v.voice_through
+        if v.fx: shots[-1].fx = v.fx
+        if v.rip_in and n: overlays.append(Overlay(t, t+min(.28, dur*.8), 'rip'))
         if v.zoom == 'dive': shots[-1].ease_in = True   # the whole subject first, then the plunge
         if v.silhouette:
             overlays.append(Overlay(t, min(t+dur, t+.55), 'silhouette'))
@@ -887,6 +894,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
             data.update(typed=True, bottom_at=.06*len(plan.paper_top)+.15, flash_at=plan.paper_word_at)
         overlays.append(Overlay(0, plan.paper_until, 'paper', data))
         if plan.tear: overlays.append(Overlay(plan.paper_until, plan.paper_until+plan.tear, 'tear'))
+    if plan.vintage: overlays.append(Overlay(0, t+1, 'vintage'))
     if plan.paper_end:   # the ending wraps back onto the paper, its words returning
         overlays.append(Overlay(max(0., t-plan.paper_end), t+.01, 'paperout',
                                 {'top': plan.paper_top, 'bottom': plan.paper_bottom, 'top_at': 0., 'bottom_at': 0., 'boil': True}))
@@ -1028,7 +1036,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     # --- 3. picture
     progress(.25, 'Composing the picture…')
     matter = None
-    if any(o.kind in ('behind', 'silhouette', 'cutin', 'glowpop') for o in overlays) or any(getattr(s, 'backdrop', None) for s in shots):   # the big word sits behind the people; silhouettes
+    if any(o.kind in ('behind', 'silhouette', 'cutin', 'glowpop') for o in overlays) or any(getattr(s, 'backdrop', None) or getattr(s, 'fx', '') in ('sticker', 'redcut', 'scribble') for s in shots):   # the big word sits behind the people; silhouettes
         try:
             from .matte import Matter
             matter = Matter()
