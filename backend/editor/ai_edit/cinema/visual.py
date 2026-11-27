@@ -114,6 +114,15 @@ class VisualPlan(BaseModel):
     line_to: float = 0         # ...the last word appears...
     line_until: float = 0      # ...and the line clears
     exact: bool = False        # (a reference edit: every shot keeps the reference's exact length; nothing is refitted)
+    # the inspo's paper: the opening shots laid out small on crumpled paper with a line above and below, the paper
+    # tearing open into the next shot, and the last shot wrapping back onto the paper
+    paper_until: float = 0     # edit seconds the paper layout lasts from the start (0 = no paper)
+    paper_top: str = Field(default='', max_length=30)
+    paper_bottom: str = Field(default='', max_length=40)
+    paper_word_at: float = 0   # when the bottom line lands (with a white flash)
+    tear: float = Field(default=0, ge=0, le=2)        # how long the paper takes to tear open after the layout
+    paper_end: float = Field(default=0, ge=0, le=3)   # the last this-many seconds wrap back onto the paper
+    music_from: float = Field(default=0, ge=0, le=10)  # the song starts this many seconds in (a spoken opening first)
 
     @model_validator(mode='after')
     def _tidy(self):
@@ -868,6 +877,14 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
                 overlays.append(Overlay(t, min(t+dur, t+1.6), 'perspective', {'text': word, 'tone': tone}))
                 events.append((t, 'moment', tone))
         t += dur
+    if plan.paper_until:   # the inspo's paper layout, then the paper tearing open into the next shot
+        data = {'top': plan.paper_top, 'bottom': plan.paper_bottom, 'top_at': 0., 'bottom_at': plan.paper_word_at,
+                'flash_at': plan.paper_word_at if plan.paper_bottom else -1}
+        overlays.append(Overlay(0, plan.paper_until, 'paper', data))
+        if plan.tear: overlays.append(Overlay(plan.paper_until, plan.paper_until+plan.tear, 'tear'))
+    if plan.paper_end:   # the ending wraps back onto the paper, its words returning
+        overlays.append(Overlay(max(0., t-plan.paper_end), t+.01, 'paperout',
+                                {'top': plan.paper_top, 'bottom': plan.paper_bottom, 'top_at': 0., 'bottom_at': 0., 'boil': True}))
     if plan.line.strip() and plan.line_until > plan.line_from:   # the reference's line, word by word
         parts = plan.line.split()
         step = (plan.line_to-plan.line_from)/max(1, len(parts)-1)
@@ -973,6 +990,9 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         if 0 < len(music) < want:   # a short song loops to cover the edit
             whole = library.samples(timing[0]['file'], score.SR, 0.)
             music = np.concatenate([music]+[whole]*(1+(want-len(music))//max(1, len(whole))))[:want]
+        if plan.music_from:   # a spoken opening first; the song comes in after it
+            pad = int(plan.music_from*score.SR)
+            music = np.concatenate([np.zeros((pad, 2), np.float32), music])[:want]
         n = len(music)
         if n:
             music[:int(.08*score.SR)] *= np.linspace(0, 1, min(n, int(.08*score.SR)), dtype=np.float32)[:, None]

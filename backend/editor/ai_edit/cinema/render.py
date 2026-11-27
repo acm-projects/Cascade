@@ -284,6 +284,97 @@ class Captions:
 _WATER = {}
 
 
+_PAPER = {}
+
+
+def paper(h, w, variant=0):
+    """Crumpled paper (h x w x 3 uint8): faceted folds lit from the top left, creases, fine grain. A few variants, so the
+    sheet can 'boil' (scramble) between them like stop-motion paper."""
+    key = (h, w, variant)
+    if key not in _PAPER:
+        import cv2
+        rng = np.random.default_rng(11+variant)
+        sh, sw = max(8, h//4), max(8, w//4)
+        pts = rng.random((90, 2))*(sh, sw)
+        y, x = np.mgrid[0:sh, 0:sw].astype(np.float32)
+        d = (y[..., None]-pts[:, 0])**2+(x[..., None]-pts[:, 1])**2
+        order = np.argsort(d, axis=2)
+        near, second = order[..., 0], order[..., 1]
+        tilt = rng.normal(0, 1, (90, 2))
+        shade = .95+.03*(tilt[near, 0]*-.7+tilt[near, 1]*-.7)                     # each facet tilted to the light
+        gap = np.sqrt(np.take_along_axis(d, second[..., None], 2)[..., 0])-np.sqrt(np.take_along_axis(d, near[..., None], 2)[..., 0])
+        crease = np.exp(-gap/1.2)                                                 # thin dark folds between facets
+        shade = shade-.05*crease+.025*np.exp(-gap/3.5)*(tilt[near, 0] > 0)
+        shade = cv2.GaussianBlur(shade.astype(np.float32), (0, 0), 1.1)
+        shade = cv2.resize(shade, (w, h), interpolation=cv2.INTER_CUBIC)
+        grain = cv2.GaussianBlur(rng.normal(0, 1, (h, w)).astype(np.float32), (0, 0), .7)*.018
+        yy = np.linspace(-1, 1, h, dtype=np.float32)[:, None]; xx = np.linspace(-1, 1, w, dtype=np.float32)[None, :]
+        vignette = 1-.06*(xx**2+yy**2)
+        base = np.array((246, 242, 234), np.float32)
+        _PAPER[key] = np.clip(base*((shade+grain)*vignette)[..., None], 0, 255).astype(np.uint8)
+    return _PAPER[key]
+
+
+def paper_layout(frame, t, data, k=1., words=1.):
+    """The inspo's layout on crumpled paper: the footage small in the middle (k: 0 = full frame, 1 = laid out on the
+    sheet), "pov" above it and the line below it, painted with moving water."""
+    import cv2
+    H, W = frame.shape[:2]
+    sheet = paper(H, W, int(t*8) % 3 if data.get('boil', True) else 0).astype(np.float32)
+    scale = 1-(1-data.get('scale', .5))*k
+    fw, fh = int(W*scale)//2*2, int(H*scale)//2*2
+    small = cv2.resize(frame, (fw, fh), interpolation=cv2.INTER_AREA).astype(np.float32)
+    x0, y0 = (W-fw)//2, int((H-fh)/2+H*.02*k)
+    out = sheet.copy() if k > 0 else frame.astype(np.float32)
+    if k > 0:   # a soft shadow under the print, and the paper's folds showing faintly through it
+        shadow = np.zeros((H, W), np.float32); shadow[y0+6:y0+fh+10, x0+4:x0+fw+8] = .35*k
+        shadow = cv2.GaussianBlur(shadow, (0, 0), 9)[..., None]
+        out = out*(1-shadow)
+        fold = (sheet[y0:y0+fh, x0:x0+fw]/236.)*.25+.75
+        out[y0:y0+fh, x0:x0+fw] = small*(fold*k+(1-k))
+    if words > 0:
+        for text, at, y, size in ((data.get('top', ''), data.get('top_at', -1), y0-H*.1, .15), (data.get('bottom', ''), data.get('bottom_at', -1), y0+fh+H*.105, .115)):
+            if not text or t < at: continue
+            f = look.TIGHT(int(H*size), 900)
+            sp = look.text_sprite(text, f, fill=(255, 255, 255), shadow=.25, tracking=-int(f.size*.02))
+            rgba = sp.rgba.copy(); rgba[..., :3] = water(rgba.shape[0], rgba.shape[1], t).astype(np.uint8)
+            pop = 1+.12*max(0., 1-(t-at)/.18)
+            img = out.astype(np.uint8)
+            look.paste(img, look.Sprite(rgba, .5, .5), W/2, y, alpha=words*min(1., (t-at)/.08+.2), scale=pop)
+            out = img.astype(np.float32)
+    flash = data.get('flash_at', -1)
+    if 0 <= t-flash < .14:   # the white flash as the word lands (the inspo's flash frame)
+        a = 1-(t-flash)/.14
+        out = out*(1-a)+255*a
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def tear(under, sheet, p, seed=3):
+    """The paper tearing open from the middle (the second inspo): a ragged hole in `sheet` grows (p: 0..1) and shows
+    `under` through it; the torn edge is a rim of white paper fibre with a shadow inside."""
+    import cv2
+    H, W = sheet.shape[:2]
+    rng = np.random.default_rng(seed)
+    n = 18
+    angles = np.sort(rng.random(n))*2*np.pi
+    jag = .72+.5*rng.random(n)
+    r = (p**1.7)*np.hypot(W, H)*.62
+    cx, cy = W*.5+W*.04*np.sin(p*3), H*.5
+    def poly(scale):
+        return np.stack([cx+np.cos(angles)*r*jag*scale, cy+np.sin(angles)*r*jag*scale*.86], 1).astype(np.int32)
+    hole = np.zeros((H, W), np.uint8); cv2.fillPoly(hole, [poly(1.)], 255)
+    rim = np.zeros((H, W), np.uint8); cv2.fillPoly(rim, [poly(1.12)], 255)
+    shade = cv2.GaussianBlur(hole.astype(np.float32)/255, (0, 0), 14)
+    out = sheet.astype(np.float32)
+    rimmed = (rim > 0) & (hole == 0)
+    out[rimmed] = out[rimmed]*.55+np.array((250, 248, 242), np.float32)*.45              # the white torn fibre
+    flap = cv2.GaussianBlur(((rim > 0) & (hole == 0)).astype(np.float32), (0, 0), 6)
+    out = out*(1-.25*flap[..., None]*(1-hole[..., None]/255))                              # curled edge shadow
+    m = (hole/255.).astype(np.float32)[..., None]
+    inside = under.astype(np.float32)*(1-.35*(1-shade[..., None])*m)                      # the edge's shadow inside the hole
+    return np.clip(out*(1-m)+inside*m, 0, 255).astype(np.uint8)
+
+
 def water(h, w, t):
     """A moving water texture (h x w x 3 float): deep to bright blue with drifting light caustics."""
     key = (h, w)
@@ -360,6 +451,17 @@ class Composer:
                         m = mask[..., None]
                         frame = (behind.next()*(1-m)+frame*m).astype(np.uint8)
                 active = [o for o in self.overlays if o.t0 <= t < o.t1]
+                for o in active:   # the paper: the opening layout, its tearing open, and the wrap-up back onto it
+                    if o.kind == 'paper':
+                        frame = paper_layout(frame, t, o.data)
+                    elif o.kind == 'paperout':
+                        k = _ease(min(1., (t-o.t0)/max(.01, (o.t1-o.t0)*.6)))
+                        frame = paper_layout(frame, t, o.data, k=k, words=k)
+                    elif o.kind == 'tear':
+                        key = (o.t0, o.t1, 'tear')
+                        if key not in self.accent_previous:
+                            self.accent_previous[key] = self.last.copy() if self.last is not None else paper(*frame.shape[:2])
+                        frame = tear(frame, self.accent_previous[key], (t-o.t0)/max(.01, o.t1-o.t0))
                 frame = self._compose(frame, t, active, shot)
                 since = t-shot.t0
                 if shot.kind == 'broll' and since < .16:   # b-roll lands with a short zoom settle and motion blur

@@ -17,7 +17,7 @@ from .visual import VisualPlan, VisualShot
 TIME = r'(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?'
 # "| 0:02.57 | IMG_6228 · 0:07.4 | Sun through the branches |"   or   "0:02.57 DJI 0024 0:23.5 shoes on the rock"
 ROW = re.compile(r'^\s*\|?\s*\**' + TIME + r'(?:\s*[-–]\s*' + TIME + r')?\**\s*\|?\s*\**\s*'
-                 r'(DJI\s*\d{4}|IMG[_ ]?\d{4}|[\w.-]+\.(?:mp4|mov))\s*[·:|-]?\s*' + TIME + r'(?:\s*[-–]\s*' + TIME + r')?\**\s*\|?\s*(.*)$',
+                 r'(DJI\s*\d{4}|IMG[_ ]?\d{4}|first|second|[\w.-]+\.(?:mp4|mov))\s*[·:|-]?\s*' + TIME + r'(?:\s*[-–]\s*' + TIME + r')?\**\s*\|?\s*(.*)$',
                  re.I | re.M)
 EFFECTS = [(r'whip', 'whip'), (r'zoom blur|zoom in fast|punch', 'zoom'), (r'dissolve|fade', 'fade'), (r'glitch', 'glitch'),
            (r'flash of light|white flash', 'flash'), (r'shake', 'shake')]
@@ -51,6 +51,7 @@ class Footage:
             if key.startswith('DJI') and number and f'_{number.group(1)}_' in stem: return p
             if key.startswith('IMG') and number and stem.replace('_', '').endswith('IMG'+number.group(1)): return p
             if stem == Path(name).stem.upper(): return p
+        if key in ('FIRST', 'SECOND') and stem == key: return p
         raise ValueError(f'No recording called {name} in the footage.')
 
 
@@ -114,22 +115,46 @@ def build(request, footage, out, end, reference_start=0., pad=.25, ffmpeg='ffmpe
     timed = rows(request)
     if len(timed) < 2: raise ValueError('The request needs a shot list: an edit time, then a recording and its second, per row.')
     lengths = [b['at']-a['at'] for a, b in zip(timed, timed[1:])]+[end-timed[-1]['at']]
-    moments, extra = [], []
+    moments, extra, panels = [], [], {}
     for r, length in zip(timed, lengths):
         through = re.search(r'voice through\s*([\d.]+)', r['note'], re.I)
         r['through'] = float(through.group(1)) if through else 0.
         moments.append((r['file'], r['src'], length+r['through']+pad))
         back = re.search(r'(?:over|in front of)\s+(DJI\s*\d{4}|IMG[_ ]?\d{4})\s*[·:]?\s*' + TIME, r['note'], re.I)
         if back: extra.append((len(moments)-1, (back.group(1), _seconds(*back.group(2, 3, 4)), length+pad)))
+        if re.search(r'\bcollage\b', r['note'], re.I):   # "collage: DJI 0018 11:24.26, first 2:18.20, ...": strips beside this shot
+            for name, *when in re.findall(r'(DJI\s*\d{4}|IMG[_ ]?\d{4}|first|second)\s*[·:]?\s*' + TIME, r['note'].split(':', 1)[-1], re.I):
+                panels.setdefault(len(moments)-1, []).append(len(extra))   # (an index into `extra`)
+                extra.append((None, (name, _seconds(*when), length+pad)))
     starts = gather(moments+[m for _, m in extra], footage, out, ffmpeg=ffmpeg)
-    behind = {k: starts[len(moments)+i] for i, (k, _) in enumerate(extra)}
+    behind = {k: starts[len(moments)+i] for i, (k, _) in enumerate(extra) if k is not None}
     shots = []
     for k, (r, length) in enumerate(zip(timed, lengths)):
         a = starts[k]
-        shots.append(VisualShot(start=a, end=round(a+length, 3), effect=_effect(r['note']) if k else None,
-                                silhouette=bool(re.search(r'silhouette', r['note'], re.I)),
-                                backdrop=behind.get(k, -1.), voice_through=r['through'],
-                                voice=bool(r['through']) or bool(re.search(r'\bvoice\b|chant|saying', r['note'], re.I))))
+        shot = VisualShot(start=a, end=round(a+length, 3), effect=_effect(r['note']) if k else None,
+                          silhouette=bool(re.search(r'silhouette', r['note'], re.I)),
+                          backdrop=behind.get(k, -1.), voice_through=r['through'],
+                          voice=bool(r['through']) or bool(re.search(r'\bvoice\b|chant|saying', r['note'], re.I)))
+        if re.search(r'push in|slow zoom', r['note'], re.I): shot.zoom = 'push'
+        if k in panels:
+            at = [starts[len(moments)+i] for i in panels[k]]
+            shot.panels = [round(x, 3) for x in at]
+            shot.panel_ends = [round(x+length+pad-.02, 3) for x in [a]+at]
+            z = re.search(r'zoom\s+([\d. ]+)', r['note'], re.I)
+            if z: shot.panel_zoom = [float(v) for v in z.group(1).split()][:len(shot.panels)+1]
+        spot = re.search(r'focus at ([\d.]+)\s+([\d.]+)', r['note'], re.I)
+        who = None if spot else re.search(r'focus(?:es|ed)? on (?:the )?(.+?)(?: only)?(?:[,.;]|$)', r['note'], re.I)
+        if spot:   # "focus at 0.40 0.18": a close-up that brings that point (across, down) to the middle
+            shot.focus_x, shot.focus_y, shot.zoom = float(spot.group(1)), float(spot.group(2)), 'close'
+        whos = re.search(r'who:\s*(.+?)(?:[,.;]\s*\w+\s*$|$)', r['note'], re.I)
+        if k in panels and whos: shot.panel_who = [w.strip().lower() for w in whos.group(1).split('/')][:len(shot.panels)+1]
+        if who:   # a close-up on the person named, found with the visual search model
+            from .visual import person_at
+            found = person_at(out, a+min(.15, length/2), ffmpeg, who.group(1).strip().lower())
+            if found:
+                shot.focus_x, shot.focus_y = round(float(found[0]), 3), round(float(min(.7, max(.2, found[1]-found[2]*.25))), 3)
+                shot.zoom = 'close' if found[2] < .45 else 'punch'
+        shots.append(shot)
     return VisualPlan(shots=shots, exact=True, **plan_fields)
 
 
@@ -187,4 +212,16 @@ def plan_request(request, out, ffmpeg='ffmpeg', footage=None):
                  song=song_for(request), sound='both', grade='cinema', transition_sounds=False,
                  settings={'ratio': '16:9', 'stamp': False, 'music': True},
                  line=said, line_from=round(opener*.37, 2) if said else 0, line_to=round(opener*.75, 2) if said else 0,
-                 line_until=round(opener*.95, 2) if said else 0, reply='Your footage, cut exactly like the reference shot list.')
+                 line_until=round(opener*.95, 2) if said else 0, reply='Your footage, cut exactly like the reference shot list.',
+                 **paper_of(request, opener))
+
+
+def paper_of(request, opener):
+    """The inspo's paper, when the request asks for it: 'Paper: "pov" / "hike with cascade" at 1.6, tear 0.6, wrap 0.9,
+    music from 2.25'."""
+    m = re.search(r'paper\s*:\s*["\u201c]([^"\u201d]*)["\u201d]\s*/\s*["\u201c]([^"\u201d]*)["\u201d](.*)', request or '', re.I)
+    if not m: return {}
+    rest = m.group(3)
+    num = lambda word, default: float(re.search(word + r'\s*([\d.]+)', rest, re.I).group(1)) if re.search(word + r'\s*([\d.]+)', rest, re.I) else default
+    return {'paper_until': opener, 'paper_top': m.group(1), 'paper_bottom': m.group(2), 'paper_word_at': num(r'\bat', opener*.7),
+            'tear': num(r'tear', .6), 'paper_end': num(r'wrap', 0.), 'music_from': num(r'music from', 0.)}
