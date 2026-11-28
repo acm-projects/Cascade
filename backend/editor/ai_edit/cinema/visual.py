@@ -80,7 +80,7 @@ class VisualShot(BaseModel):
     voice_through: float = Field(default=0, ge=0, le=4)   # its own sound keeps playing this long over the next shots
     # mixed media: 'sticker' (a white paper edge around the people), 'redcut' (they land as red paper first),
     # 'scribble' (a hand-drawn outline wiggling around them), 'polaroid' (the shot as an instant photo on paper)
-    fx: Literal['', 'sticker', 'redcut', 'scribble', 'polaroid'] = ''
+    fx: Literal['', 'sticker', 'redcut', 'scribble', 'polaroid', 'boomerang'] = ''   # boomerang: forward, then rewinding back
     rip_in: bool = False   # the last picture tears away along a ragged paper edge as this one lands
 
 
@@ -132,6 +132,8 @@ class VisualPlan(BaseModel):
     # big white words, one at a time, each from its second until the next (a count: ONE, TWO, THREE)
     big_words: list[tuple[str, float]] = Field(default_factory=list, max_length=12)
     big_words_until: float = 0  # when the last word goes
+    # stretches of the song replaced by another stretch of it (a word to hide), beat for beat: (edit second, song second, seconds)
+    music_patches: list[tuple[float, float, float]] = Field(default_factory=list, max_length=8)
     bed: float = Field(default=.35, ge=0, le=1)        # how much of the clips' own sound plays outside the talking shots
     music_under_voice_db: float | None = Field(default=None, ge=-30, le=0)   # the song's level under a talking shot
 
@@ -1009,6 +1011,13 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         if 0 < len(music) < want:   # a short song loops to cover the edit
             whole = library.samples(timing[0]['file'], score.SR, 0.)
             music = np.concatenate([music]+[whole]*(1+(want-len(music))//max(1, len(whole))))[:want]
+        for at, take, length in plan.music_patches:   # a word hidden: the same beat from a stretch with no singing
+            a, b, n = int(at*score.SR), int(take*score.SR), int(length*score.SR)
+            if a+n <= len(music) and b+n <= len(music):
+                piece = music[b:b+n].copy(); f = min(n//4, int(.02*score.SR))
+                ramp = np.linspace(0, 1, f, dtype=np.float32)[:, None]
+                piece[:f] = piece[:f]*ramp+music[a:a+f]*(1-ramp); piece[-f:] = piece[-f:]*ramp[::-1]+music[a+n-f:a+n]*(1-ramp[::-1])
+                music[a:a+n] = piece
         if plan.music_from:   # a spoken opening first; the song comes in after it
             pad = int(plan.music_from*score.SR)
             music = np.concatenate([np.zeros((pad, 2), np.float32), music])[:want]

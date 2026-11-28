@@ -19,7 +19,7 @@ TIME = r'(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?'
 ROW = re.compile(r'^\s*\|?\s*\**' + TIME + r'(?:\s*[-–]\s*' + TIME + r')?\**\s*\|?\s*\**\s*'
                  r'(DJI\s*\d{4}|IMG[_ ]?\d{4}|first|second|[\w.-]+\.(?:mp4|mov))\s*[·:|-]?\s*' + TIME + r'(?:\s*[-–]\s*' + TIME + r')?\**\s*\|?\s*(.*)$',
                  re.I | re.M)
-EFFECTS = [(r'whip', 'whip'), (r'zoom blur|zoom in fast|punch', 'zoom'), (r'dissolve|fade', 'fade'), (r'glitch', 'glitch'),
+EFFECTS = [(r'cut[- ]?out|cutin|pops? up', 'cutin'), (r'whip', 'whip'), (r'zoom blur|zoom in fast|punch', 'zoom'), (r'dissolve|fade', 'fade'), (r'glitch', 'glitch'),
            (r'flash of light|white flash', 'flash'), (r'shake', 'shake')]
 
 
@@ -136,7 +136,7 @@ def build(request, footage, out, end, reference_start=0., pad=.25, ffmpeg='ffmpe
                           backdrop=behind.get(k, -1.), voice_through=r['through'],
                           voice=bool(r['through']) or bool(re.search(r'\bvoice\b|chant|saying', r['note'], re.I)))
         if re.search(r'push in|slow zoom', r['note'], re.I): shot.zoom = 'push'
-        for word, fx in (('sticker', 'sticker'), ('red cut', 'redcut'), ('red paper', 'redcut'), ('scribble', 'scribble'), ('polaroid', 'polaroid')):
+        for word, fx in (('boomerang', 'boomerang'), ('forward and back', 'boomerang'), ('sticker', 'sticker'), ('red cut', 'redcut'), ('red paper', 'redcut'), ('scribble', 'scribble'), ('polaroid', 'polaroid')):
             if re.search(word, r['note'], re.I): shot.fx = fx
         if k and re.search(r'\brip\b|torn', r['note'], re.I): shot.rip_in = True
         if k in panels:
@@ -228,6 +228,8 @@ def sound_of(request):
     if get(r'music under voices?'): out['music_under_voice_db'] = -float(get(r'music under voices?').group(1))
     if get(r'clip sound'): out['bed'] = float(get(r'clip sound').group(1))
     if re.search(r'fade(?:s)? (?:out|to black) at the end', text, re.I): out['fade_out'] = True
+    patches = re.findall(r'hide the word at ([\d.]+) with the song at ([\d.]+) for ([\d.]+)', text, re.I)
+    if patches: out['music_patches'] = [tuple(float(v) for v in p) for p in patches]
     return out
 
 

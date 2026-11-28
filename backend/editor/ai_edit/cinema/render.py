@@ -626,7 +626,16 @@ class Composer:
                     behind = self._behind(self.shots[shot_i])
                     if self.matter: self.matter.reset()
                 shot = self.shots[shot_i]
-                frame = self._base(shot, reader, t)
+                if shot.fx == 'boomerang':   # forward for the first half, then the same frames rewinding
+                    held = self.accent_previous.setdefault((shot.t0, shot.t1, 'boomerang'), [])
+                    half = int((shot.t1-shot.t0)*FPS/2)
+                    k = n-int(round(shot.t0*FPS))
+                    if k < half:
+                        frame = self._base(shot, reader, t); held.append(frame.copy())
+                    else:
+                        frame = held[max(0, min(len(held)-1, 2*half-k-1))].copy() if held else self._base(shot, reader, t)
+                else:
+                    frame = self._base(shot, reader, t)
                 if shot.fx in ('sticker', 'redcut', 'scribble'):   # mixed media over the people
                     frame = mixed_media(frame, self._matte(frame), shot.fx, t-shot.t0, t)
                 elif shot.fx == 'polaroid':
