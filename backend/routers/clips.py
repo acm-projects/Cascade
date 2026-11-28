@@ -62,8 +62,15 @@ def process_upload(
 
         from backend import demo
         first = job_service.load_json(folder/'owner.json')
+        later = first.get('source_job', job_id) != job_id
+        if demo.is_demo_upload(first) and later and not first.get('parent_clips'):
+            # demo mode: a second prompt with no clip picked is not the branch; nothing new is made up
+            message = 'Pick the clips you like (tick Pick clip), then ask me to find more like them.'
+            job_service.save_json(folder/'results.json', {'clips': [], 'selection_note': message, 'requested_clip_count': 0})
+            job_service.update_job(job_id, state='done', message=message, clips=[], ready_clip_count=0, selection_note=message)
+            return
         if demo.is_demo_upload(first):   # demo mode: the clips the finished edit uses (a branch: more moments like them)
-            clips, metadata = demo.find_clips(job_id, folder, progress, branch=first.get('source_job', job_id) != job_id)
+            clips, metadata = demo.find_clips(job_id, folder, progress, branch=later)
             owner = job_service.load_json(folder/'owner.json')
             owner.update({'duration': round(demo.combined_parts()[-1]['to'], 3), 'has_video': True, 'media_kind': 'video', 'width': 1920, 'height': 1080})
             job_service.save_json(folder/'owner.json', owner)
