@@ -27,7 +27,7 @@ def chat(pid: str, jid: str, index: int, body: ChatInput, request: Request):
     pending=storyboard_chat.pending(body,info,request.state.user_id,pid,jid,index)
     from backend import demo
     from backend.core import jobs as job_service
-    try: demo_clip=demo.enabled() and not getattr(body.state,'ai_edit',None) and job_service.load_json(job_service.JOBS_DIR/jid/'owner.json').get('demo')
+    try: demo_clip=demo.enabled() and not getattr(body.state,'ai_edit',None) and demo.is_demo_clip(job_service.load_json(job_service.JOBS_DIR/jid/'owner.json'))
     except Exception: demo_clip=False
     route='finished_edit' if demo_clip else (chat_router.fixed(body,info,pending) or chat_router.choose(body,{**info,'clip_title':clip.get('title','')}))   # (demo: the first ask is the edit)
     if route=='finished_edit':   # a whole new edit, or any follow-up on a finished one

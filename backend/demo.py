@@ -107,6 +107,11 @@ def find_clips(job_id, folder, progress, branch=False):
     return clips, {'model': 'cascade-agent', 'provider': 'openai', 'requested_clip_count': len(clips), 'backup_state': 'local'}
 
 
+def is_demo_clip(owner):
+    """Any clip of the demo: the joined clip from Go to Editor, or a clip straight from a demo Studio job."""
+    return enabled() and bool((owner or {}).get('demo') or is_demo_upload(owner))
+
+
 def is_demo_combine(refs, owners):
     """Go to Editor with clips picked from a demo Studio job."""
     return enabled() and bool(refs) and all(is_demo_upload(o) for o in owners)
@@ -137,7 +142,7 @@ def trends_result(jid):
     from backend.core import jobs as job_service
     if not enabled() or not (ROOT/'trends.json').is_file(): return None
     try:
-        if not job_service.load_json(job_service.JOBS_DIR/jid/'owner.json').get('demo'): return None
+        if not is_demo_clip(job_service.load_json(job_service.JOBS_DIR/jid/'owner.json')): return None
         saved = _load('trends.json')
     except Exception:
         return None

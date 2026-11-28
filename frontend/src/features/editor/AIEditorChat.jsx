@@ -42,7 +42,7 @@ export default function AIEditorChat({ messages, onSend, onClear, disabled, typi
     <ChatBox title="AI Editor" subtitle="OpenAI plans your edit from the footage and speech. The Edited preview shows the rendered result."
       messages={messages} onSend={onSend} disabled={disabled} typing={typing}
       quickActions={suggestions} placeholder={placeholder} prefill={demo && !aiEdit ? DEMO_EDIT_PROMPT : undefined}
-      peek={<Mascot variant="full" size={92} />} />
+      peek={<><Mascot variant="full" size={118} /><span className="chatbox-peek-bubble">{aiEdit ? 'Want any changes?' : 'Tell me the edit you want!'}</span></>} />
     {job && <section className="ai-edit-progress" role="status" aria-live="polite">
       <div className="ai-edit-progress-bar"><i style={{ width: `${Math.round((job.progress || 0) * 100)}%` }} /></div>
       <p>{job.stage}</p>

@@ -60,7 +60,7 @@ def summary(pid, clip, user):
     from backend import demo
     if demo.enabled() and clip.get('job_id'):
         try:
-            if load_json(jobs_dir()/clip['job_id']/'owner.json').get('demo'): out['demo'] = True
+            if demo.is_demo_clip(load_json(jobs_dir()/clip['job_id']/'owner.json')): out['demo'] = True
         except Exception:
             pass
     return out
@@ -101,7 +101,7 @@ def get_draft(pid: str, jid: str, index: int, request: Request):
     from .ai_edit.jobs import job_status, root
     job = job_status(root(pid, jid, index, request.state.user_id))  # an edit may still be running after a reload or a clip switch
     from backend import demo
-    try: is_demo = demo.enabled() and bool(load_json(jobs_dir()/jid/'owner.json').get('demo'))
+    try: is_demo = demo.is_demo_clip(load_json(jobs_dir()/jid/'owner.json'))
     except Exception: is_demo = False
     return {**info, 'demo': is_demo, 'draft': draft.model_dump(), **({'storyboard': board.model_dump()} if board else {}), **({'ai_job': job} if job and job['status'] in ('queued', 'running') else {})}
 

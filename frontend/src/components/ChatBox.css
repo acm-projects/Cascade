@@ -187,9 +187,14 @@
   font-size: calc(18 * var(--u));
 }
 
-/* A frog peeking over the top of the text box (AI Editor) */
-.chatbox-input-row.has-peek { position: relative; margin-top: 44px; }
-.chatbox-peek { position: absolute; left: 18px; bottom: calc(100% - 4px); height: 52px; overflow: hidden; pointer-events: none; z-index: 1; }
+/* The frog sitting on top of the text box (AI Editor), talking in a little speech bubble */
+.chatbox-input-row.has-peek { position: relative; margin-top: 104px; }
+.chatbox-peek { position: absolute; left: 50%; bottom: calc(100% - 10px); transform: translateX(-50%); display: flex; align-items: flex-end;
+  gap: 6px; pointer-events: none; z-index: 2; }
 .chatbox-peek .mascot { display: block; }
-.chatbox-input-row:has(.chatbox-textarea) { height: auto; align-items: flex-end; padding-top: 8px; padding-bottom: 8px; }
-.chatbox-textarea { resize: none; min-height: 72px; line-height: 1.35; padding: 4px 0; }
+.chatbox-peek-bubble { position: relative; margin-bottom: 58px; padding: 7px 12px; border-radius: 14px; background: #fff; color: #1f3b2a;
+  font-size: 13px; font-weight: 600; white-space: nowrap; box-shadow: 0 3px 10px rgba(0, 0, 0, .15); animation: chatbox-bubble 2.6s ease-in-out infinite; }
+.chatbox-peek-bubble::before { content: ""; position: absolute; left: -6px; bottom: 9px; border: 7px solid transparent; border-left: 0; border-right-color: #fff; }
+@keyframes chatbox-bubble { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.chatbox .chatbox-input-row:has(.chatbox-textarea) { height: auto; align-items: flex-end; padding-top: 8px; padding-bottom: 8px; }
+.chatbox-textarea { resize: none; height: 96px; min-height: 96px; line-height: 1.35; padding: 4px 0; overflow-y: auto; }

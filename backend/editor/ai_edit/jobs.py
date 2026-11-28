@@ -106,7 +106,7 @@ def _run_cinema(folder, pid, jid, index, user, clip, info, state, chat, message,
     try:
         from backend import demo
         from backend.core import jobs as job_service
-        try: demo_clip = demo.enabled() and job_service.load_json(job_service.JOBS_DIR/jid/'owner.json').get('demo')
+        try: demo_clip = demo.is_demo_clip(job_service.load_json(job_service.JOBS_DIR/jid/'owner.json'))
         except Exception: demo_clip = False
         if demo_clip and not state.ai_edit:   # demo mode: the finished hike edit
             name = _next_version(folder)
