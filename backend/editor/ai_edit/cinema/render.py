@@ -850,6 +850,12 @@ class Composer:
         for o in active:
             if o.kind == 'lyric': self._lyric(frame, t, o)
             if o.kind == 'whisper': self._whisper(frame, t, o)
+            if o.kind == 'bigword':   # a count word: big, heavy, white, landing with a small pop
+                W, H = look.W, look.H
+                f = look.TIGHT(int(H*.2), 900)
+                sp = self._sprite(('bigword', o.data['text'], H), lambda: look.text_sprite(o.data['text'], f, fill=(255, 255, 255), shadow=.8, tracking=-int(f.size*.03)))
+                k = _ease(min(1., (t-o.t0)/.12))
+                look.paste(frame, sp, W/2, H*.5, alpha=k, scale=1.12-.12*k)
         if self.captions: self.captions.draw(frame, t, mute)
         for o in active:
             if o.kind != 'accent': continue

@@ -129,6 +129,9 @@ class VisualPlan(BaseModel):
     music_from: float = Field(default=0, ge=0, le=10)  # the song starts this many seconds in (a spoken opening first)
     paper_typed: bool = False  # the paper's words are typed out letter by letter from the start
     vintage: bool = False      # a worn warm film look over the whole edit: grain, dust, a soft fade
+    # big white words, one at a time, each from its second until the next (a count: ONE, TWO, THREE)
+    big_words: list[tuple[str, float]] = Field(default_factory=list, max_length=12)
+    big_words_until: float = 0  # when the last word goes
     bed: float = Field(default=.35, ge=0, le=1)        # how much of the clips' own sound plays outside the talking shots
     music_under_voice_db: float | None = Field(default=None, ge=-30, le=0)   # the song's level under a talking shot
 
@@ -895,6 +898,9 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         overlays.append(Overlay(0, plan.paper_until, 'paper', data))
         if plan.tear: overlays.append(Overlay(plan.paper_until, plan.paper_until+plan.tear, 'tear'))
     if plan.vintage: overlays.append(Overlay(0, t+1, 'vintage'))
+    for k, (word, at) in enumerate(plan.big_words):   # ONE, TWO, THREE: big, white, one at a time
+        until = plan.big_words[k+1][1] if k+1 < len(plan.big_words) else (plan.big_words_until or at+.5)
+        overlays.append(Overlay(at, until, 'bigword', {'text': word}))
     if plan.paper_end:   # the ending wraps back onto the paper, its words returning
         overlays.append(Overlay(max(0., t-plan.paper_end), t+.01, 'paperout',
                                 {'top': plan.paper_top, 'bottom': plan.paper_bottom, 'top_at': 0., 'bottom_at': 0., 'boil': True}))

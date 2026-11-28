@@ -216,7 +216,28 @@ def plan_request(request, out, ffmpeg='ffmpeg', footage=None):
                  settings={'ratio': '16:9', 'stamp': False, 'music': True},
                  line=said, line_from=round(opener*.37, 2) if said else 0, line_to=round(opener*.75, 2) if said else 0,
                  line_until=round(opener*.95, 2) if said else 0, reply='Your footage, cut exactly like the reference shot list.',
-                 **paper_of(request, opener))
+                 **{**sound_of(request), **paper_of(request, opener), **words_of(request)})
+
+
+def sound_of(request):
+    """The mix a request asks for, with or without the paper: 'music from 0, music under voice -2.5, clip sound 0'."""
+    text = request or ''
+    get = lambda pattern: re.search(pattern + r'\s*-?([\d.]+)', text, re.I)
+    out = {}
+    if get(r'music from'): out['music_from'] = float(get(r'music from').group(1))
+    if get(r'music under voices?'): out['music_under_voice_db'] = -float(get(r'music under voices?').group(1))
+    if get(r'clip sound'): out['bed'] = float(get(r'clip sound').group(1))
+    if re.search(r'fade(?:s)? (?:out|to black) at the end', text, re.I): out['fade_out'] = True
+    return out
+
+
+def words_of(request):
+    """Big white words a request times: 'Words: ONE at 0.04, TWO at 0.76, THREE at 1.24 until 1.64'."""
+    m = re.search(r'words\s*:\s*(.+)', request or '', re.I)
+    if not m: return {}
+    pairs = re.findall(r'([A-Z][A-Z!]+)\s+at\s+([\d.]+)', m.group(1))
+    until = re.search(r'until\s+([\d.]+)', m.group(1))
+    return {'big_words': [(w, float(a)) for w, a in pairs], **({'big_words_until': float(until.group(1))} if until else {})}
 
 
 def paper_of(request, opener):
@@ -227,6 +248,5 @@ def paper_of(request, opener):
     rest = m.group(3)
     num = lambda word, default: float(re.search(word + r'\s*([\d.]+)', rest, re.I).group(1)) if re.search(word + r'\s*([\d.]+)', rest, re.I) else default
     return {'paper_until': opener, 'paper_top': m.group(1), 'paper_bottom': m.group(2), 'paper_word_at': num(r'\bat', opener*.7),
-            'tear': num(r'tear', .6), 'paper_end': num(r'wrap', 0.), 'music_from': num(r'music from', 0.),
-            'paper_typed': bool(re.search(r'\btyped?\b|typing', rest, re.I)), 'vintage': bool(re.search(r'vintage', rest, re.I)), 'bed': num(r'clip sound', .35),
-            'music_under_voice_db': -num(r'music under voices? -?', 9.)}
+            'tear': num(r'tear', .6), 'paper_end': num(r'wrap', 0.),
+            'paper_typed': bool(re.search(r'\btyped?\b|typing', rest, re.I)), 'vintage': bool(re.search(r'vintage', rest, re.I))}
