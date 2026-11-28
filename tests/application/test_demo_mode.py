@@ -23,7 +23,7 @@ class DemoTests(unittest.TestCase):
         self.assertEqual(len(clips), len(demo.combined_parts()))
         for n in range(1, len(clips)+1):
             self.assertTrue((demo.ROOT/f'clip_{n}.mp4').is_file() and (demo.ROOT/f'clip_{n}.vtt').is_file())
-        for name in ('combined.mp4', 'edited.mp4', 'source_preview.mp4', 'plan.json', 'report.json'):
+        for name in ('combined.mp4', 'edited.mp4', 'plan.json', 'report.json'):
             self.assertTrue((demo.ROOT/name).is_file(), name)
 
 

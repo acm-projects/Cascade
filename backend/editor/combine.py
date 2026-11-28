@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from backend.core import config, jobs as job_service, storage as storage_service
 from backend.services import projects_store
 
-MAX_PARTS = 12
+MAX_PARTS = 30
 MAX_SECONDS = 15*60
 FADE = .012          # seconds of fade on the sound at each join, so the seams don't click
 

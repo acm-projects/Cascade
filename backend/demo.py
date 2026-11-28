@@ -14,8 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent/'demo'/'hike'
 # the first prompt shows 5 of the edit's 11 clips; "find more like it" (a branch) shows the other 6
-FIRST = [0, 1, 2, 9, 10]          # the intro, the waterfall, the waving, the hands-in, CASCADE on the rock
-BRANCH = [3, 4, 5, 6, 7, 8]       # the bench, filming, the laugh, the red coat, the spin, the hug
+FIRST = list(range(13))           # the opener, CASCADE, the faces, the waterfall, the waving, the collage's people, the race, the jump
+BRANCH = list(range(13, 28))      # the funny moments, the bench and the hug
 STUDIO_SECONDS = 0.8   # (+ the upload request and the page's next check: about 4 s on screen)
 EDIT_SECONDS = 6.5
 TRENDS_SECONDS = 3.0   # Trends on the demo edit
