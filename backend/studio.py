@@ -211,7 +211,7 @@ def prepare_upload(pid, user, raw):
 
 def _parts(raw):
     """Where each original file sits in a joined source: [{'name', 'start', 'end'}], checked (it is server-written)."""
-    if not isinstance(raw, list) or not 1 < len(raw) <= 10:
+    if not isinstance(raw, list) or not 1 < len(raw) <= 30:
         return None
     try:
         return [{'name': str(p['name'])[:200], 'start': float(p['start']), 'end': float(p['end'])} for p in raw]

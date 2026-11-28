@@ -21,7 +21,7 @@ import { edgeTypes } from "../features/studio/edges";
 import { buildGraph, displayClips, sameRef, sessionGroups } from "../features/studio/graph";
 
 const isRunning = (group) => ["queued", "processing"].includes(group.state);
-const MAX_FILES = 10; // the backend joins up to 10 files into one source
+const MAX_FILES = 30; // the backend joins up to 30 files into one source
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // What the assistant "says" about a generation in the chat

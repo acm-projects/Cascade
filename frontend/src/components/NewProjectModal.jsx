@@ -6,7 +6,7 @@ import "./NewProjectModal.css";
 import Icon from "./ui/Icon";
 
 const MAX_NAME = 100;          // the backend's limit
-const MAX_FILES = 10;          // the backend joins up to 10 files into one source
+const MAX_FILES = 30;          // the backend joins up to 30 files into one source
 
 // 1572864 -> "1.5 MB"
 function fileSize(bytes) {

@@ -76,7 +76,7 @@ def normalize_media(path, info=None):
         target.unlink(missing_ok=True)
 
 
-MAX_JOINED_FILES = 10
+MAX_JOINED_FILES = 30
 MAX_JOINED_LONG, MAX_JOINED_SHORT = 1920, 1080   # joined footage is at most 1080p
 
 

@@ -33,8 +33,26 @@ def source_parts():
     return _load('source_parts.json')
 
 
+# every other recording in the hike's source folders (the phone clips, first/second, ...): picking them too is the demo
+EXTRA_NAMES = [
+    "IMG_6227.MOV",
+    "IMG_6228.MOV",
+    "IMG_6229.MOV",
+    "IMG_6230.MOV",
+    "IMG_6231.MOV",
+    "IMG_6232.MOV",
+    "IMG_6233.MOV",
+    "Video_1074791040_DJI_20261125102035_0010_D_MP4_62719618_7000_20261125102034_video_original.MP4",
+    "Video_1074791104_DJI_20261125102240_0011_D_MP4_71868583_8000_20261125102240_video_original.MP4",
+    "Video_1074791296_DJI_20261125102550_0014_D_MP4_1016579242_119000_20261125102550_video_original.mov",
+    "Video_1074791360_DJI_20261125102815_0015_D_MP4_133962978_15000_20261125102814_video_original.MP4",
+    "first.MP4",
+    "second.MOV",
+]
+
+
 def names():
-    return {p['name'] for p in source_parts()}
+    return {p['name'] for p in source_parts()} | set(EXTRA_NAMES)
 
 
 def matches(filenames):
