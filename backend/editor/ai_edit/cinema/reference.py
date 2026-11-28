@@ -19,7 +19,7 @@ TIME = r'(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?'
 ROW = re.compile(r'^\s*\|?\s*\**' + TIME + r'(?:\s*[-–]\s*' + TIME + r')?\**\s*\|?\s*\**\s*'
                  r'(DJI\s*\d{4}|IMG[_ ]?\d{4}|first|second|[\w.-]+\.(?:mp4|mov))\s*[·:|-]?\s*' + TIME + r'(?:\s*[-–]\s*' + TIME + r')?\**\s*\|?\s*(.*)$',
                  re.I | re.M)
-EFFECTS = [(r'cut[- ]?out|cutin|pops? up', 'cutin'), (r'whip', 'whip'), (r'zoom blur|zoom in fast|punch', 'zoom'), (r'dissolve|fade', 'fade'), (r'glitch', 'glitch'),
+EFFECTS = [(r'cut[- ]?out(?!\s+(?:in front|over))|cutin|pops? up', 'cutin'), (r'whip', 'whip'), (r'zoom blur|zoom in fast|punch', 'zoom'), (r'dissolve|fade', 'fade'), (r'glitch', 'glitch'),
            (r'flash of light|white flash', 'flash'), (r'shake', 'shake')]
 
 
