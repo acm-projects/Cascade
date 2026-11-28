@@ -60,7 +60,8 @@ class Shot:
     audio_until: float | None = None  # and where that carried sound stops
     backdrop: tuple | None = None     # (path, source second): the people of this shot are cut out over that moment
     voice_through: float = 0.         # its own sound keeps playing this long after it ends
-    fx: str = ''                      # mixed media: sticker | redcut | scribble | polaroid
+    fx: str = ''                      # sticker | redcut | scribble | polaroid | boomerang | colorize | pan_left | pan_right | spin | freeze
+    freeze_at: float = .5             # (freeze) seconds into the shot where the picture holds
 
 
 @dataclass
@@ -634,8 +635,33 @@ class Composer:
                         frame = self._base(shot, reader, t); held.append(frame.copy())
                     else:
                         frame = held[max(0, min(len(held)-1, 2*half-k-1))].copy() if held else self._base(shot, reader, t)
+                elif shot.fx == 'freeze':   # it plays, then pauses in the air (a jump held at its top)
+                    if t-shot.t0 < shot.freeze_at or self.last is None:
+                        frame = self._base(shot, reader, t)
+                        self.accent_previous[(shot.t0, shot.t1, 'freeze')] = frame.copy()
+                    else:
+                        held = self.accent_previous.get((shot.t0, shot.t1, 'freeze'))
+                        k = _ease(min(1., (t-shot.t0-shot.freeze_at)/.3))
+                        frame = _zoom(held, 1+.06*k) if held is not None else self._base(shot, reader, t)
                 else:
                     frame = self._base(shot, reader, t)
+                since = t-shot.t0
+                if shot.fx == 'colorize':   # black and white first, then the colour floods in
+                    import cv2
+                    grey = cv2.cvtColor(cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY), cv2.COLOR_GRAY2RGB)
+                    c = _ease(min(1., max(0., (since-(shot.t1-shot.t0)*.4)/.18)))
+                    frame = (grey*(1-c)+frame.astype(np.float32)*c).astype(np.uint8)
+                elif shot.fx in ('pan_left', 'pan_right'):   # the camera drifts across the scene
+                    k = since/max(.01, shot.t1-shot.t0)
+                    W0 = frame.shape[1]
+                    drift = (.62-.24*k) if shot.fx == 'pan_left' else (.38+.24*k)
+                    frame = _zoom(frame, 1.16, W0*drift)
+                elif shot.fx == 'spin' and since < .25:   # it lands with a quick spin
+                    import cv2
+                    e = _ease(since/.25)
+                    h0, w0 = frame.shape[:2]
+                    m = cv2.getRotationMatrix2D((w0/2, h0/2), -28*(1-e), 1.35-.35*e)
+                    frame = cv2.warpAffine(frame, m, (w0, h0), borderMode=cv2.BORDER_REFLECT)
                 if shot.fx in ('sticker', 'redcut', 'scribble'):   # mixed media over the people
                     frame = mixed_media(frame, self._matte(frame), shot.fx, t-shot.t0, t)
                 elif shot.fx == 'polaroid':
@@ -870,8 +896,10 @@ class Composer:
                 W, H = look.W, look.H
                 f = look.TIGHT(int(H*.2), 900)
                 sp = self._sprite(('bigword', o.data['text'], H), lambda: look.text_sprite(o.data['text'], f, fill=(255, 255, 255), shadow=.8, tracking=-int(f.size*.03)))
-                k = _ease(min(1., (t-o.t0)/.12))
-                look.paste(frame, sp, W/2, H*.5, alpha=k, scale=1.12-.12*k)
+                k = _ease(min(1., (t-o.t0)/.18))
+                side = -1 if o.data.get('n', 0) % 2 == 0 else 1   # each word slides in from the other side, zooming down
+                drift = (t-o.t0)*W*.02*side                         # and keeps drifting a little while it stays
+                look.paste(frame, sp, W/2+side*(1-k)*W*.18+drift, H*.5, alpha=k, scale=1.3-.3*k+.04*(t-o.t0))
         if self.captions: self.captions.draw(frame, t, mute)
         for o in active:
             if o.kind != 'accent': continue

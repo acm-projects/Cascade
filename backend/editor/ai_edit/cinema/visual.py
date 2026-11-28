@@ -80,7 +80,10 @@ class VisualShot(BaseModel):
     voice_through: float = Field(default=0, ge=0, le=4)   # its own sound keeps playing this long over the next shots
     # mixed media: 'sticker' (a white paper edge around the people), 'redcut' (they land as red paper first),
     # 'scribble' (a hand-drawn outline wiggling around them), 'polaroid' (the shot as an instant photo on paper)
-    fx: Literal['', 'sticker', 'redcut', 'scribble', 'polaroid', 'boomerang'] = ''   # boomerang: forward, then rewinding back
+    # boomerang: forward, then rewinding back; colorize: black and white, then the colour comes in; pan_left / pan_right:
+    # the camera drifts across; spin: it lands with a quick spin; freeze: it pauses at freeze_at (a jump held in the sky)
+    fx: Literal['', 'sticker', 'redcut', 'scribble', 'polaroid', 'boomerang', 'colorize', 'pan_left', 'pan_right', 'spin', 'freeze'] = ''
+    freeze_at: float = Field(default=.5, ge=0, le=10)   # seconds into the shot where a freeze holds
     rip_in: bool = False   # the last picture tears away along a ragged paper edge as this one lands
 
 
@@ -136,6 +139,7 @@ class VisualPlan(BaseModel):
     music_patches: list[tuple[float, float, float]] = Field(default_factory=list, max_length=8)
     music_tail: float = Field(default=.9, ge=.02, le=3)   # how long the song fades at the very end
     blur_out: float = Field(default=0, ge=0, le=3)        # the last moment blurs out into black over this many seconds
+    pitch_downs: list[tuple[float, float]] = Field(default_factory=list, max_length=6)   # (edit second, seconds): the song slows and drops in pitch
     bed: float = Field(default=.35, ge=0, le=1)        # how much of the clips' own sound plays outside the talking shots
     music_under_voice_db: float | None = Field(default=None, ge=-30, le=0)   # the song's level under a talking shot
 
@@ -866,6 +870,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         if v.backdrop >= 0: shots[-1].backdrop = (str(source), v.backdrop)   # the people of this shot over another place
         if v.voice_through: shots[-1].voice_through = v.voice_through
         if v.fx: shots[-1].fx = v.fx
+        if v.fx == 'freeze': shots[-1].freeze_at = v.freeze_at
         if v.rip_in and n: overlays.append(Overlay(t, t+min(.28, dur*.8), 'rip'))
         if v.zoom == 'dive': shots[-1].ease_in = True   # the whole subject first, then the plunge
         if v.silhouette:
@@ -905,7 +910,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
     if plan.blur_out: overlays.append(Overlay(max(0., t-plan.blur_out), t+.01, 'blurout'))
     for k, (word, at) in enumerate(plan.big_words):   # ONE, TWO, THREE: big, white, one at a time
         until = plan.big_words[k+1][1] if k+1 < len(plan.big_words) else (plan.big_words_until or at+.5)
-        overlays.append(Overlay(at, until, 'bigword', {'text': word}))
+        overlays.append(Overlay(at, until, 'bigword', {'text': word, 'n': k}))
     if plan.paper_end:   # the ending wraps back onto the paper, its words returning
         overlays.append(Overlay(max(0., t-plan.paper_end), t+.01, 'paperout',
                                 {'top': plan.paper_top, 'bottom': plan.paper_bottom, 'top_at': 0., 'bottom_at': 0., 'boil': True}))
@@ -1021,6 +1026,15 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
                 ramp = np.linspace(0, 1, f, dtype=np.float32)[:, None]
                 piece[:f] = piece[:f]*ramp+music[a:a+f]*(1-ramp); piece[-f:] = piece[-f:]*ramp[::-1]+music[a+n-f:a+n]*(1-ramp[::-1])
                 music[a:a+n] = piece
+        for at, length in plan.pitch_downs:   # a tape slow-down: the song drops in pitch for a moment, then carries on in time
+            a, n = int(at*score.SR), int(length*score.SR)
+            if a+n <= len(music):
+                src = music[a:a+int(n*.6)].copy()
+                x = np.linspace(0, len(src)-1, n)
+                slow = np.stack([np.interp(x, np.arange(len(src)), src[:, c]) for c in range(src.shape[1])], 1).astype(np.float32)
+                f = min(n//4, int(.02*score.SR)); r = np.linspace(0, 1, f, dtype=np.float32)[:, None]
+                slow[:f] = slow[:f]*r+music[a:a+f]*(1-r); slow[-f:] = slow[-f:]*r[::-1]+music[a+n-f:a+n]*(1-r[::-1])
+                music[a:a+n] = slow
         if plan.music_from:   # a spoken opening first; the song comes in after it
             pad = int(plan.music_from*score.SR)
             music = np.concatenate([np.zeros((pad, 2), np.float32), music])[:want]

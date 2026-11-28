@@ -136,9 +136,13 @@ def build(request, footage, out, end, reference_start=0., pad=.25, ffmpeg='ffmpe
                           backdrop=behind.get(k, -1.), voice_through=r['through'],
                           voice=bool(r['through']) or bool(re.search(r'\bvoice\b|chant|saying', r['note'], re.I)))
         if re.search(r'push in|slow zoom', r['note'], re.I): shot.zoom = 'push'
-        for word, fx in (('boomerang', 'boomerang'), ('forward and back', 'boomerang'), ('sticker', 'sticker'), ('red cut', 'redcut'), ('red paper', 'redcut'), ('scribble', 'scribble'), ('polaroid', 'polaroid')):
+        for word, fx in (('boomerang', 'boomerang'), ('forward and back', 'boomerang'), ('back and forth', 'boomerang'),
+                         ('black and white', 'colorize'), ('pan left', 'pan_left'), ('pan right', 'pan_right'), (r'\bspin', 'spin'),
+                         ('freeze|pause in the (?:sky|air)', 'freeze'), ('sticker', 'sticker'), ('red cut', 'redcut'), ('red paper', 'redcut'), ('scribble', 'scribble'), ('polaroid', 'polaroid')):
             if re.search(word, r['note'], re.I): shot.fx = fx
         if k and re.search(r'\brip\b|torn', r['note'], re.I): shot.rip_in = True
+        at = re.search(r'(?:freeze|pause[^,]*?) at ([\d.]+)', r['note'], re.I)
+        if at: shot.freeze_at = float(at.group(1))
         if k in panels:
             at = [starts[len(moments)+i] for i in panels[k]]
             shot.panels = [round(x, 3) for x in at]
@@ -229,6 +233,8 @@ def sound_of(request):
     if get(r'clip sound'): out['bed'] = float(get(r'clip sound').group(1))
     if re.search(r'fade(?:s)? (?:out|to black) at the end', text, re.I): out['fade_out'] = True
     if re.search(r'music (?:plays )?(?:full |all the way )?to the (?:very )?end', text, re.I): out['music_tail'] = .08
+    downs = re.findall(r'pitch down at ([\d.]+) for ([\d.]+)', text, re.I)
+    if downs: out['pitch_downs'] = [(float(a), float(b)) for a, b in downs]
     blur = re.search(r'blur (?:out|to black) at the end ([\d.]+)', text, re.I)
     if blur: out['blur_out'] = float(blur.group(1))
     patches = re.findall(r'hide the word at ([\d.]+) with the song at ([\d.]+) for ([\d.]+)', text, re.I)
