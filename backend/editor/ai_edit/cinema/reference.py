@@ -228,6 +228,7 @@ def sound_of(request):
     if get(r'music under voices?'): out['music_under_voice_db'] = -float(get(r'music under voices?').group(1))
     if get(r'clip sound'): out['bed'] = float(get(r'clip sound').group(1))
     if re.search(r'fade(?:s)? (?:out|to black) at the end', text, re.I): out['fade_out'] = True
+    if re.search(r'music (?:plays )?(?:full |all the way )?to the (?:very )?end', text, re.I): out['music_tail'] = .08
     patches = re.findall(r'hide the word at ([\d.]+) with the song at ([\d.]+) for ([\d.]+)', text, re.I)
     if patches: out['music_patches'] = [tuple(float(v) for v in p) for p in patches]
     return out

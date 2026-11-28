@@ -134,6 +134,7 @@ class VisualPlan(BaseModel):
     big_words_until: float = 0  # when the last word goes
     # stretches of the song replaced by another stretch of it (a word to hide), beat for beat: (edit second, song second, seconds)
     music_patches: list[tuple[float, float, float]] = Field(default_factory=list, max_length=8)
+    music_tail: float = Field(default=.9, ge=.02, le=3)   # how long the song fades at the very end
     bed: float = Field(default=.35, ge=0, le=1)        # how much of the clips' own sound plays outside the talking shots
     music_under_voice_db: float | None = Field(default=None, ge=-30, le=0)   # the song's level under a talking shot
 
@@ -1024,7 +1025,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         n = len(music)
         if n:
             music[:int(.08*score.SR)] *= np.linspace(0, 1, min(n, int(.08*score.SR)), dtype=np.float32)[:, None]
-            tail = min(n, int(.9*score.SR)); music[n-tail:] *= np.linspace(1, 0, tail, dtype=np.float32)[:, None]
+            tail = min(n, int(plan.music_tail*score.SR)); music[n-tail:] *= np.linspace(1, 0, tail, dtype=np.float32)[:, None]
         events = [e for e in events if e[1] in ('broll', 'bing', 'flash')]   # a real song needs only the whooshes, bings and splashes
     else:
         music = score.compose(main_end, {'silence': None, 'end': main_end, 'hook_end': min(3., main_end)}, plan.mood)
