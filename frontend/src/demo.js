@@ -32,6 +32,7 @@ export function isDemoFiles(files) {
 
 // The prompts typed on stage: they fill the box when it is clicked
 export const DEMO_FIND_PROMPT = "Find short clips from our hike that capture our funniest and sweetest moments as friends. Look for candid reactions, playful group moments, and little details that make the day feel nostalgic.";
+export const DEMO_BRANCH_PROMPT = "I love this one! Find more fun moments like it from our hike.";
 export const DEMO_EDIT_PROMPT = "Combine the clips into a cinematic, colorful horizontal edit around 12 seconds long using our song \u201cAlive Again.\u201d Start with our intro and the title \u201cHIKE WITH CASCADE,\u201d zoom into the waterfall, then show a vertical collage of everyone. End with \u201cone, two, three, Cascade!\u201d and a circular zoom into CASCADE on the rock before fading to black. Make it feel like a nostalgic home video of our team on a little getaway, exploring together and having fun.";
 export const DEMO_SONG = "Alive Again";
 

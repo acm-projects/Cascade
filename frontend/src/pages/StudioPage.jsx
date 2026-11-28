@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEMO_FIND_PROMPT, isDemoFiles } from "../demo";
+import { DEMO_BRANCH_PROMPT, DEMO_FIND_PROMPT, isDemoFiles } from "../demo";
+
+const demoSession = (id) => { try { return localStorage.getItem(`cascade-demo-session:${id}`) === "1"; } catch { return false; } };
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import "./StudioPage.css";
 import TopNav from "../components/TopNav";
@@ -225,6 +227,9 @@ function StudioPage() {
         });
       } else {
         setUploadProgress(0);
+        if (isDemoFiles(pendingFiles)) {   // remembered, so this session's next prompt (the branch) is filled in too
+          try { localStorage.setItem(`cascade-demo-session:${session.id}`, "1"); } catch { /* private window: no pre-fill */ }
+        }
         await api.studioUpload(projectId, session.id, {
           videos: pendingFiles, prompt: text, clipCount, clipLength, requestId: submission.current.id, onProgress: setUploadProgress,
         });
@@ -396,7 +401,8 @@ function StudioPage() {
       <div className="studio-body">
         <ChatPanel messages={messages} onSend={send} disabled={sending} text={draft} onTextChange={setDraft} note={note}
           focusRequest={chatFocus} onStop={stop} onRetry={retry} onRetryBackup={retryBackup} onReuse={setDraft}
-          prefill={!session.source_job && isDemoFiles(pendingFiles) ? DEMO_FIND_PROMPT : undefined}
+          prefill={!session.source_job && isDemoFiles(pendingFiles) ? DEMO_FIND_PROMPT
+            : session.source_job && references.length && demoSession(session.id) ? DEMO_BRANCH_PROMPT : undefined}
           chips={<ReferenceChips chips={chips} leftOut={leftOut} onToggle={toggleChip} onHover={setHighlighted} />} />
 
         <div className="studio-canvas-frame">
