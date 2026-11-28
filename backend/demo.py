@@ -112,9 +112,44 @@ def is_demo_clip(owner):
     return enabled() and bool((owner or {}).get('demo') or is_demo_upload(owner))
 
 
-def is_demo_combine(refs, owners):
-    """Go to Editor with clips picked from a demo Studio job."""
-    return enabled() and bool(refs) and all(is_demo_upload(o) for o in owners)
+def is_demo_combine(refs):
+    """Go to Editor with clips picked from demo Studio jobs."""
+    from backend.core import jobs as job_service
+    if not enabled() or not refs: return False
+    for job_id in {r.job_id for r in refs}:
+        try:
+            if not is_demo_upload(job_service.load_json(job_service.JOBS_DIR/job_id/'owner.json')): return False
+        except Exception:
+            return False
+    return True
+
+
+def combine_parts(pid, user, refs):
+    """Go to Editor in demo mode: the picked clips from the demo Studio jobs (the first prompt and its branch), read
+    in one go per job (each clip's own lookups cost a database round trip apiece). None when these are not demo clips."""
+    from fastapi import HTTPException
+    from backend.core import jobs as job_service
+    if not enabled(): return None
+    jobs = {}
+    for job_id in {r.job_id for r in refs}:
+        folder = job_service.JOBS_DIR/job_id
+        try:
+            owner = job_service.load_json(folder/'owner.json')
+            jobs[job_id] = (folder, job_service.load_json(folder/'results.json')['clips'])
+        except Exception:
+            return None
+        if owner.get('user_id') != user or owner.get('project_id') != pid or not is_demo_upload(owner): return None
+    info = {'has_video': True, 'has_audio': True, 'width': 1920, 'height': 1080, 'media_kind': 'video'}
+    parts = []
+    for r in refs:
+        folder, clips = jobs[r.job_id]
+        if r.clip_index >= len(clips): raise HTTPException(404, 'Clip not found.')
+        clip = clips[r.clip_index]
+        vtt = folder/f'clip_{r.clip_index+1}.vtt'
+        parts.append({'path': folder/f'clip_{r.clip_index+1}.mp4', 'duration': float(clip['end'])-float(clip['start']), 'info': info,
+                      'title': clip.get('title') or f'Clip {r.clip_index+1}', 'captions': vtt.read_text(encoding='utf-8-sig') if vtt.is_file() else '',
+                      'start': float(clip['start']), 'end': float(clip['end'])})
+    return parts
 
 
 def combined_file():
