@@ -888,7 +888,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
                 prev = shots[-2]
                 data['under'] = Shot(t, t+EFFECT_SECONDS[v.effect], prev.kind, prev.path, prev.src+(prev.t1-prev.t0)*prev.rate,
                                      rate=prev.rate, cx=prev.cx, grade=prev.grade)
-            overlays.append(Overlay(t, t+EFFECT_SECONDS.get(v.effect, .32), v.effect if v.effect in ('cutin', 'glowpop', 'fade', 'iris') else 'accent', data))
+            overlays.append(Overlay(t, t+(min(EFFECT_SECONDS[v.effect], dur) if v.effect == 'cutin' else EFFECT_SECONDS.get(v.effect, .32)), v.effect if v.effect in ('cutin', 'glowpop', 'fade', 'iris') else 'accent', data))
             events.append((t, 'broll', 'water' if v.effect == 'ripple' else 'calm'))
         if v.text.strip() and not v.voice:   # (a talking shot's text is its captions)
             word = v.text.strip().upper()

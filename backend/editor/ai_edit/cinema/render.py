@@ -195,6 +195,12 @@ def _zoom(frame, z, cx=None, cy=None):
     return cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
 
 
+def _colour_in(shot, since):
+    """How much colour a black-and-white-to-colour shot has (0..1): it arrives with the picture, a third of the way in."""
+    p = since/max(.01, shot.t1-shot.t0)
+    return 0. if p < .45 else _ease(min(1., (p-.45)/.4))
+
+
 def _ease(x):
     x = min(1, max(0, x))
     return 1-(1-x)**3
@@ -646,10 +652,10 @@ class Composer:
                 else:
                     frame = self._base(shot, reader, t)
                 since = t-shot.t0
-                if shot.fx == 'colorize':   # black and white first, then the colour floods in
+                if shot.fx == 'colorize':   # black and white first, then the colour floods in (with a cut-in's background)
                     import cv2
                     grey = cv2.cvtColor(cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY), cv2.COLOR_GRAY2RGB)
-                    c = _ease(min(1., max(0., (since-(shot.t1-shot.t0)*.4)/.18)))
+                    c = _colour_in(shot, since)
                     frame = (grey*(1-c)+frame.astype(np.float32)*c).astype(np.uint8)
                 elif shot.fx in ('pan_left', 'pan_right'):   # the camera drifts across the scene
                     k = since/max(.01, shot.t1-shot.t0)
@@ -777,6 +783,10 @@ class Composer:
                 prev = self._under(o, frame).astype(np.float32)
                 p = (t-o.t0)/max(.01, o.t1-o.t0)
                 k = 0. if p < .45 else _ease((p-.45)/.55)
+                if shot.fx == 'colorize':   # the whole stage is black and white until the picture comes in
+                    import cv2
+                    g = cv2.cvtColor(cv2.cvtColor(prev.astype(np.uint8), cv2.COLOR_RGB2GRAY), cv2.COLOR_GRAY2RGB).astype(np.float32)
+                    prev = g*(1-k)+prev*k
                 bg = prev*(1-k)+frame*k
                 a = person[..., None] if person is not None else np.full(frame.shape[:2]+(1,), min(1., p*2), np.float32)
                 frame[:] = (bg*(1-a)+frame*a).astype(np.uint8)
