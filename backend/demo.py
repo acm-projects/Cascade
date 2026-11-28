@@ -48,7 +48,12 @@ def is_demo_upload(owner):
 
 def stand_in():
     """The small file kept as the joined source (the real join of the recordings is ~19 GB of footage)."""
-    return ROOT/'source_preview.mp4'
+    return ROOT/'combined.mp4'   # the edit's clips joined, full quality (branches search it for real)
+
+
+def stand_in_parts():
+    """Where each clip sits in the stand-in source, as recordings the clip search keeps clips inside."""
+    return [{'name': p['title'], 'start': p['from'], 'end': p['to']} for p in combined_parts()]
 
 
 def _pace(steps, seconds, report):
@@ -57,15 +62,21 @@ def _pace(steps, seconds, report):
         time.sleep(seconds/len(steps))
 
 
-def find_clips(job_id, folder, progress):
-    """Studio: the clips the edit uses, as if found by the agent. Returns (clips, metadata)."""
-    picked = _load('clips.json')['clips']
-    _pace(['Reading uploaded video...', 'Transcribing the footage with Deepgram...', 'Searching the hike for the moments you asked for...',
+def find_clips(job_id, folder, progress, branch=False):
+    """Studio: the clips the edit uses, as if found by the agent (branch=True: the "more like these" moments a branch
+    finds, from demo/hike/branch). Returns (clips, metadata)."""
+    root = ROOT/'branch' if branch else ROOT
+    picked = json.loads((root/'clips.json').read_text())['clips']
+    _pace(['Reading the clips you picked...', 'Searching the hike for more moments like them...', 'Agent: checking the best matches...',
+           f'Cutting {len(picked)} clips...'] if branch else
+          ['Reading uploaded video...', 'Transcribing the footage with Deepgram...', 'Searching the hike for the moments you asked for...',
            'Agent: checking the best moments...', 'Ranking the clips...', f'Cutting {len(picked)} clips...'], STUDIO_SECONDS*.85, progress)
     clips = []
+    where = combined_parts()   # (times inside the stand-in source, so the Editor agrees with them)
     for n, clip in enumerate(picked, start=1):
-        shutil.copyfile(ROOT/f'clip_{n}.mp4', folder/f'clip_{n}.mp4')
-        shutil.copyfile(ROOT/f'clip_{n}.vtt', folder/f'clip_{n}.vtt')
+        if not branch: clip = {**clip, 'start': where[n-1]['from'], 'end': where[n-1]['to']}
+        shutil.copyfile(root/f'clip_{n}.mp4', folder/f'clip_{n}.mp4')
+        shutil.copyfile(root/f'clip_{n}.vtt', folder/f'clip_{n}.vtt')
         clips.append({**clip, 'clip_id': f'{job_id}:{n-1}', 'media_kind': 'video', 'has_video': True, 'storage': 'local',
                       'backup_state': 'local', 'encode_seconds': 0.1,
                       'clip_url': f'/clips/{job_id}/clip_{n}.mp4', 'captions_url': f'/clips/{job_id}/clip_{n}.vtt'})
