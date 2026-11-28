@@ -167,6 +167,64 @@ def combine_clips(pid: str, body: CombineInput, request: Request):
 
 
 def _demo_parts(pid, user, refs):
+    """Demo mode: clips picked from the demo Studio jobs (the first prompt and its branches), read in one go per job
+    (each clip's own lookups cost a database round trip apiece). None when these are not demo clips."""
+    from backend import demo
+    if not demo.enabled(): return None
+    jobs = {}
+    for job_id in {r.job_id for r in refs}:
+        folder = job_service.JOBS_DIR/job_id
+        try:
+            owner = job_service.load_json(folder/'owner.json')
+            jobs[job_id] = (folder, job_service.load_json(folder/'results.json')['clips'])
+        except Exception:
+            return None
+        if owner.get('user_id') != user or owner.get('project_id') != pid or not demo.is_demo_upload(owner): return None
+    info = {'has_video': True, 'has_audio': True, 'width': 1920, 'height': 1080, 'media_kind': 'video'}
+    parts = []
+    for r in refs:
+        folder, clips = jobs[r.job_id]
+        if r.clip_index >= len(clips): raise HTTPException(404, 'Clip not found.')
+        clip = clips[r.clip_index]
+        vtt = folder/f'clip_{r.clip_index+1}.vtt'
+        parts.append({'path': folder/f'clip_{r.clip_index+1}.mp4', 'duration': float(clip['end'])-float(clip['start']), 'info': info,
+                      'title': clip.get('title') or f'Clip {r.clip_index+1}', 'captions': vtt.read_text(encoding='utf-8-sig') if vtt.is_file() else '',
+                      'start': float(clip['start']), 'end': float(clip['end'])})
+    return parts
+
+
+def timeline(parts):
+    """[{'title', 'from', 'to'}]: each picked clip's place in the joined video, in order."""
+    out, at = [], 0.
+    for p in parts:
+        out.append({'title': p['title'][:120], 'from': round(at, 2), 'to': round(at+p['duration'], 2)})
+        at += p['duration']
+    return out
+
+
+def default_title(titles):
+    title = ' + '.join(t.strip() for t in titles if t.strip())
+    return title if len(title) <= 120 else f'{len(titles)} clips combined'
+
+
+def combine_clips(pid: str, body: CombineInput, request: Request):
+    user = request.state.user_id
+    projects_store.require_project(pid, user)
+    if shutil.which('ffmpeg') is None or shutil.which('ffprobe') is None:
+        raise HTTPException(503, 'FFmpeg and ffprobe must be installed.')
+    seen, refs = set(), []
+    for ref in body.clips:
+        key = (ref.job_id, ref.clip_index)
+        if key not in seen: seen.add(key); refs.append(ref)
+    if len(refs) < 2: raise HTTPException(400, 'Pick at least two different clips to combine.')
+    fast = _demo_parts(pid, user, refs)
+    if fast: return _combine(pid, user, body, refs, fast)
+    with ExitStack() as stack:
+        parts = [_part(pid, user, ref, stack) for ref in refs]
+        return _combine(pid, user, body, refs, parts)
+
+
+def _demo_parts(pid, user, refs):
     """Demo mode: clips picked from one demo Studio job, read in one go (each clip's own lookups cost a database
     round trip apiece). None when these are not demo clips."""
     from backend import demo

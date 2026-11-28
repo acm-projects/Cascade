@@ -13,6 +13,9 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent/'demo'/'hike'
+# the first prompt shows 5 of the edit's 11 clips; "find more like it" (a branch) shows the other 6
+FIRST = [0, 1, 2, 9, 10]          # the intro, the waterfall, the waving, the hands-in, CASCADE on the rock
+BRANCH = [3, 4, 5, 6, 7, 8]       # the bench, filming, the laugh, the red coat, the spin, the hug
 STUDIO_SECONDS = 0.8   # (+ the upload request and the page's next check: about 4 s on screen)
 EDIT_SECONDS = 6.5
 TRENDS_SECONDS = 3.0   # Trends on the demo edit
@@ -65,18 +68,20 @@ def _pace(steps, seconds, report):
 def find_clips(job_id, folder, progress, branch=False):
     """Studio: the clips the edit uses, as if found by the agent (branch=True: the "more like these" moments a branch
     finds, from demo/hike/branch). Returns (clips, metadata)."""
-    root = ROOT/'branch' if branch else ROOT
-    picked = json.loads((root/'clips.json').read_text())['clips']
+    root = ROOT
+    every = json.loads((root/'clips.json').read_text())['clips']
+    chosen = BRANCH if branch else FIRST   # (which of the edit's clips each round shows: 5, then the other 6)
+    picked = [every[i] for i in chosen]
     _pace(['Reading the clips you picked...', 'Searching the hike for more moments like them...', 'Agent: checking the best matches...',
            f'Cutting {len(picked)} clips...'] if branch else
           ['Reading uploaded video...', 'Transcribing the footage with Deepgram...', 'Searching the hike for the moments you asked for...',
            'Agent: checking the best moments...', 'Ranking the clips...', f'Cutting {len(picked)} clips...'], STUDIO_SECONDS*.85, progress)
     clips = []
     where = combined_parts()   # (times inside the stand-in source, so the Editor agrees with them)
-    for n, clip in enumerate(picked, start=1):
-        if not branch: clip = {**clip, 'start': where[n-1]['from'], 'end': where[n-1]['to']}
-        shutil.copyfile(root/f'clip_{n}.mp4', folder/f'clip_{n}.mp4')
-        shutil.copyfile(root/f'clip_{n}.vtt', folder/f'clip_{n}.vtt')
+    for n, (i, clip) in enumerate(zip(chosen, picked), start=1):
+        clip = {**clip, 'start': where[i]['from'], 'end': where[i]['to'], 'edit_index': i}
+        shutil.copyfile(root/f'clip_{i+1}.mp4', folder/f'clip_{n}.mp4')
+        shutil.copyfile(root/f'clip_{i+1}.vtt', folder/f'clip_{n}.vtt')
         clips.append({**clip, 'clip_id': f'{job_id}:{n-1}', 'media_kind': 'video', 'has_video': True, 'storage': 'local',
                       'backup_state': 'local', 'encode_seconds': 0.1,
                       'clip_url': f'/clips/{job_id}/clip_{n}.mp4', 'captions_url': f'/clips/{job_id}/clip_{n}.vtt'})
