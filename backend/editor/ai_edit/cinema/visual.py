@@ -135,6 +135,7 @@ class VisualPlan(BaseModel):
     # stretches of the song replaced by another stretch of it (a word to hide), beat for beat: (edit second, song second, seconds)
     music_patches: list[tuple[float, float, float]] = Field(default_factory=list, max_length=8)
     music_tail: float = Field(default=.9, ge=.02, le=3)   # how long the song fades at the very end
+    blur_out: float = Field(default=0, ge=0, le=3)        # the last moment blurs out into black over this many seconds
     bed: float = Field(default=.35, ge=0, le=1)        # how much of the clips' own sound plays outside the talking shots
     music_under_voice_db: float | None = Field(default=None, ge=-30, le=0)   # the song's level under a talking shot
 
@@ -901,6 +902,7 @@ def make(source, plan, out, progress=None, ffmpeg='ffmpeg', ratio='original', li
         overlays.append(Overlay(0, plan.paper_until, 'paper', data))
         if plan.tear: overlays.append(Overlay(plan.paper_until, plan.paper_until+plan.tear, 'tear'))
     if plan.vintage: overlays.append(Overlay(0, t+1, 'vintage'))
+    if plan.blur_out: overlays.append(Overlay(max(0., t-plan.blur_out), t+.01, 'blurout'))
     for k, (word, at) in enumerate(plan.big_words):   # ONE, TWO, THREE: big, white, one at a time
         until = plan.big_words[k+1][1] if k+1 < len(plan.big_words) else (plan.big_words_until or at+.5)
         overlays.append(Overlay(at, until, 'bigword', {'text': word}))

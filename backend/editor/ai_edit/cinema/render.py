@@ -668,6 +668,13 @@ class Composer:
                         frame = tear(frame, self.accent_previous[key], (t-o.t0)/max(.01, o.t1-o.t0))
                 frame = self._compose(frame, t, active, shot)
                 if any(o.kind == 'vintage' for o in active): frame = vintage(frame, t)
+                for o in active:
+                    if o.kind == 'blurout':   # the ending: the picture softens into a blur and fades to black
+                        import cv2
+                        p = _ease(min(1., (t-o.t0)/max(.01, o.t1-o.t0)))
+                        if p > 0:
+                            soft = cv2.GaussianBlur(frame, (0, 0), 1+p*28)
+                            frame = (soft.astype(np.float32)*(1-p**1.8)).astype(np.uint8)   # (black only at the very end)
                 since = t-shot.t0
                 if shot.kind == 'broll' and since < .16:   # b-roll lands with a short zoom settle and motion blur
                     k = 1-since/.16
